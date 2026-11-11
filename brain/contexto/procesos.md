@@ -41,6 +41,7 @@ El recorrido de un concepto desde que Francisco lo trae hasta que queda en la bi
 **Abierto:** qué parte de este recorrido se rompe más seguido. Todavía no hay historia para saberlo.
 
 ## Cross-refs
+- [[2026-11-10-produccion-docker-e-historial-de-progreso]] — el repositorio se armó respetando la regla de no crear commits
 - [[que-hacemos]] — qué produce este recorrido
 - [[cliente]] — quién lo dispara y lo usa
 - [[voz]] — cómo se escribe lo que sale de aquí

@@ -79,7 +79,15 @@
 
 ---
 
+### despliegue
+- **Path:** `despliegue/`
+- **Descripción:** Producción con Docker: Caddy (HTTPS, contraseña, PDFs) y el servidor Python/SQLite del progreso y su historial. Guía en `despliegue/LEEME.md`.
+
 ## URLs externas
+
+### repo-github
+- **URL:** https://github.com/FranJCastilloC/Matematicas_Studio
+- **Descripción:** Repositorio del proyecto en GitHub, rama `main`.
 
 ### raschka-pml
 - **URL:** https://github.com/rasbt/machine-learning-book

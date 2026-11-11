@@ -47,74 +47,8 @@ def conectar():
     return con
 
 
-# ---------------- mezcla ----------------
-# Cada concepto es {pasos, retos, dias, ultima, vista, notas, total, totalPasos, mod}.
-# La mezcla no pierde nada: une pasos y dias, un reto queda resuelto si lo esta en cualquiera
-# de los dos lados, y para las notas gana el lado modificado mas recientemente.
-
-
-def _num(x):
-    return x if isinstance(x, (int, float)) else 0
-
-
-def mezclar_concepto(a, b):
-    if not isinstance(a, dict):
-        return b
-    if not isinstance(b, dict):
-        return a
-    nuevo, viejo = (a, b) if _num(a.get("mod")) >= _num(b.get("mod")) else (b, a)
-    r = dict(viejo)
-    r.update(nuevo)
-
-    r["pasos"] = sorted(set(viejo.get("pasos") or []) | set(nuevo.get("pasos") or []))
-    r["dias"] = sorted(set(viejo.get("dias") or []) | set(nuevo.get("dias") or []))
-    for clave in ("ultima", "vista"):
-        vals = [x for x in (a.get(clave), b.get(clave)) if x]
-        if vals:
-            r[clave] = max(vals)
-
-    retos = {}
-    ra, rb = a.get("retos") or {}, b.get("retos") or {}
-    for rid in set(ra) | set(rb):
-        x, y = ra.get(rid), rb.get(rid)
-        if not isinstance(x, dict) or not isinstance(y, dict):
-            retos[rid] = x if isinstance(x, dict) else y
-            continue
-        primera = x.get("primera") if x.get("primera") is not None else y.get("primera")
-        retos[rid] = {
-            "intentos": max(_num(x.get("intentos")), _num(y.get("intentos"))),
-            "ok": bool(x.get("ok") or y.get("ok")),
-            "primera": primera,
-        }
-    r["retos"] = retos
-
-    notas = dict(viejo.get("notas") or {})
-    for k, v in (nuevo.get("notas") or {}).items():
-        if v != "" or k not in notas:
-            notas[k] = v
-    r["notas"] = notas
-    if "mod" in a or "mod" in b:
-        r["mod"] = max(_num(a.get("mod")), _num(b.get("mod")))
-    return r
-
-
-def mezclar(guardado, entrante):
-    r = dict(guardado)
-    for cid, c in entrante.items():
-        r[cid] = mezclar_concepto(guardado.get(cid), c)
-    return r
-
-
-def resumen(datos):
-    conceptos = retos_ok = pasos = 0
-    for c in datos.values():
-        if not isinstance(c, dict):
-            continue
-        if c.get("pasos") or c.get("retos"):
-            conceptos += 1
-        pasos += len(c.get("pasos") or [])
-        retos_ok += sum(1 for r in (c.get("retos") or {}).values() if isinstance(r, dict) and r.get("ok"))
-    return {"conceptos": conceptos, "retosOk": retos_ok, "pasos": pasos}
+# La mezcla del progreso (mezclar, resumen) es la misma que usa la API de Vercel: api/index.py.
+from index import mezclar, resumen  # noqa: E402
 
 
 # ---------------- acceso a datos ----------------
@@ -167,7 +101,7 @@ class Manejador(BaseHTTPRequestHandler):
     def do_GET(self):
         ruta = self.path.split("?")[0].rstrip("/")
         if ruta == "/api/salud":
-            return self.responder(200, {"ok": True})
+            return self.responder(200, {"ok": True, "pdf": True})
         with candado:
             con = conectar()
             try:

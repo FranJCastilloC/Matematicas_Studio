@@ -55,6 +55,7 @@ perder la esencia intuitiva de covarianza.
 - Los enlaces `file://` a los PDF solo abren cuando la biblioteca se abre con doble clic.
 
 ## Cross-refs
+- [[2026-11-10-produccion-docker-e-historial-de-progreso]] — los PDF que se citan aquí se sirven en producción detrás de contraseña
 - [[2026-11-05-biblioteca-creada-con-covarianza]] — la sesión anterior, donde se creó la biblioteca y su estándar
 - [[que-hacemos]] — el cuarto pilar, citar los libros, se agregó en esta sesión
 

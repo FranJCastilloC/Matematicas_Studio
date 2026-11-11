@@ -44,3 +44,7 @@
 ## [2026-11-06 08:05] update | 2026-11-06-rutas-ud1-y-algebra-lineal
 - Área: biblioteca
 - Agregado: revisión en navegador de las 19 páginas y las correcciones que salieron de ella
+
+## [2026-11-10 20:42] ingest | 2026-11-10-produccion-docker-e-historial-de-progreso
+- Área: despliegue (área nueva, agregada al enum de CLAUDE.md y al índice)
+- Cross-refs: 2026-11-06-rutas-ud1-y-algebra-lineal, 2026-11-05-biblioteca-creada-con-covarianza, procesos (todas bidireccionales)

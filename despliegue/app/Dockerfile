@@ -1,6 +1,7 @@
 FROM python:3.12.7-slim
 WORKDIR /app
 COPY despliegue/app/servidor.py .
+COPY api/index.py index.py
 ENV RUTA_DB=/datos/progreso.db PUERTO=8000 PYTHONUNBUFFERED=1
 VOLUME /datos
 EXPOSE 8000

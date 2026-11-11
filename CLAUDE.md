@@ -20,6 +20,7 @@ biblioteca/
   conceptos/<id>-*-lab.html  laboratorios extra de un concepto (opcional)
   historial.html          historial del progreso guardado en el servidor (solo en producción)
 brain/fuentes/*.md        mapas de citas de cada libro: qué tema está en qué página (verificados)
+api/index.py, middleware.js, vercel.json, VERCEL.md   producción en Vercel (API del progreso, contraseña, guía)
 despliegue/               producción con Docker: Caddy (HTTPS, contraseña, PDFs) + app Python/SQLite (progreso)
   LEEME.md                cómo desplegar en el VPS, respaldar y probar en local
 matriz_covarianza.py, primer_video.py   escenas de Manim (videos), aparte de la biblioteca
@@ -131,10 +132,16 @@ se vuelve parte del recorrido como un recuadro `.destacado` con predicción, no 
 
 ## Producción
 
-La biblioteca se despliega en un VPS con `despliegue/desplegar.sh` (ver `despliegue/LEEME.md`).
-- `nucleo.js` sincroniza `biblioteca:v1` con `/api/progreso` solo si existe `/api/salud`; sin servidor todo sigue en localStorage.
-  La mezcla (en `despliegue/app/servidor.py`) une pasos, días y retos resueltos, y en las notas gana lo más reciente (`mod`).
-- Los PDF se sirven en `/pdf/` con la ruta relativa a `brain/`. Un libro nuevo en `fuentes.js` se sube solo al desplegar.
+Hay dos formas de desplegar, con la misma API (`/api/salud`, `/api/progreso`, `/api/historial`):
+- **Vercel (la que usa Francisco)**: `git push` a `main`. `vercel.json` sirve `biblioteca/`, `api/index.py` guarda en
+  Upstash Redis y `middleware.js` pide contraseña (`BIBLIOTECA_USUARIO`, `BIBLIOTECA_CLAVE`). Sin PDFs. Guía: `VERCEL.md`.
+- **VPS con Docker**: `despliegue/desplegar.sh` (ver `despliegue/LEEME.md`). Caddy sirve también los PDF en `/pdf/`.
+
+- `nucleo.js` sincroniza `biblioteca:v1` solo si `/api/salud` responde `ok: true`; si no, todo sigue en localStorage.
+  `pdf: true` en la salud indica que el servidor tiene los PDF (solo Docker).
+- La mezcla vive en un solo lugar, `api/index.py` (`mezclar`, `resumen`), y el servidor de Docker la importa.
+  Une pasos, días y retos resueltos, y en las notas gana lo más reciente (`mod`).
+- Si se agrega una ruta a `biblioteca/` fuera de las páginas, no hace falta tocar nada: Vercel sirve la carpeta entera.
 - Para probar con Docker en local: `.env` con `DOMINIO=:80` y `PUERTO_HTTP=8080`. Al terminar, `docker compose down` y borrar `despliegue/datos/`.
 
 ## Git

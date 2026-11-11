@@ -16,7 +16,7 @@
   navegador lo bloquea, la pagina funciona igual pero sin recordar progreso.
 
   Cuando la biblioteca se sirve desde el servidor de produccion (carpeta despliegue/),
-  el progreso tambien se sincroniza con /api/progreso: al cargar se mezcla con lo que
+  el progreso tambien se sincroniza con /api/progreso (Docker en despliegue/ o Vercel con api/index.py): al cargar se mezcla con lo que
   hay guardado, y cada cambio se envia unos segundos despues. Abierta con doble clic o
   con el servidor local de pruebas no hay /api y todo queda solo en el navegador.
   B.nube dice el estado: "local", "sincronizando", "sincronizado" o "error".
@@ -37,7 +37,7 @@
 
   /* ---------------- sincronizacion con el servidor ---------------- */
   var HTTP = location.protocol === "http:" || location.protocol === "https:";
-  var nube = { estado: "local", servidor: false, actualizado: null };
+  var nube = { estado: "local", servidor: false, pdf: false, actualizado: null };
   // origen sin usuario ni clave: fetch rechaza rutas relativas si la pagina se abrio con credenciales en la URL
   var API = HTTP ? location.origin : "";
   var envioPendiente = null;
@@ -110,6 +110,7 @@
     }).then(function (j) {
       if (!j || !j.ok) throw new Error("sin api");
       nube.servidor = true;
+      nube.pdf = !!j.pdf;   // Docker sirve los PDF en /pdf/; Vercel no
       return enviar(true);
     }).catch(function () { avisarNube("local"); });
     // al salir de la pagina con un envio pendiente, se manda de inmediato
@@ -663,12 +664,14 @@
     if (!d.f) return;
     var url = urlPdf(d.f, d.pag);
     if (location.protocol === "file:") { window.open(url, "_blank"); return; }
-    var enServidor = nube.servidor && urlPdfServidor(d.f, d.pag);
+    var enServidor = nube.pdf && urlPdfServidor(d.f, d.pag);
     if (enServidor) { window.open(enServidor, "_blank", "noopener"); return; }
     // servido por http el navegador bloquea file://; se copia la ruta para abrirla a mano
     var txt = d.f.archivo + (d.pag ? "  (pagina " + d.pag + ")" : "");
     function listo(ok) {
-      boton.textContent = ok ? "Ruta copiada. Pégala en Finder o en el navegador." : "Abre la biblioteca con doble clic para que el enlace funcione.";
+      boton.textContent = ok ? "Ruta copiada. Pégala en Finder o en el navegador." :
+        nube.servidor ? "Los PDF no están en el servidor: ábrelo en tu Mac" + (d.pag ? ", página " + d.pag + "." : ".") :
+        "Abre la biblioteca con doble clic para que el enlace funcione.";
       setTimeout(function () { boton.textContent = "Abrir el PDF en esa pagina"; }, 2600);
     }
     try { navigator.clipboard.writeText(txt).then(function () { listo(true); }, function () { listo(false); }); } catch (e) { listo(false); }

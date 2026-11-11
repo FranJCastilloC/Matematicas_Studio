@@ -94,6 +94,7 @@ Trajo como ejemplo `Covarianza fila por fila.html`: le gustó el visual, pero le
 - Resuelto: el pendiente de confirmar voseo o tuteo. Es español neutro con tuteo.
 
 ## Cross-refs
+- [[2026-11-10-produccion-docker-e-historial-de-progreso]] — el progreso en localStorage ahora se sincroniza con un servidor y tiene historial
 - [[2026-11-06-rutas-ud1-y-algebra-lineal]] — la sesión siguiente: rutas completas y citas a los libros
 - [[que-hacemos]] — esta sesión construyó lo que describe ese contexto
 - [[procesos]] — el recorrido que se definió aquí para sumar conceptos

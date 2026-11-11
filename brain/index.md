@@ -4,8 +4,8 @@
 > Para operar este wiki, leer `CLAUDE.md` en este directorio.
 > Al hacer una query, leer este archivo primero para decidir qué nodos abrir.
 
-**Última actualización:** 2026-11-06 07:47
-**Total de nodos:** 2 sesiones | 0 conceptos | 0 ADRs
+**Última actualización:** 2026-11-10 20:42
+**Total de nodos:** 3 sesiones | 0 conceptos | 0 ADRs
 
 ---
 
@@ -26,6 +26,10 @@
 
 - [[2026-11-06-rutas-ud1-y-algebra-lineal]] — ruta UD1 completa y ruta de álgebra lineal de Before ML, con citas a los libros por página
 - [[2026-11-05-biblioteca-creada-con-covarianza]] — se armó la biblioteca, el núcleo compartido y covarianza como primer concepto
+
+### despliegue
+
+- [[2026-11-10-produccion-docker-e-historial-de-progreso]] — producción en VPS con Docker (Caddy, contraseña, PDFs), progreso con historial en SQLite y repo en GitHub
 
 ### media
 

@@ -43,7 +43,7 @@ Mismos campos para los dos tipos. Lo único que cambia es `type` y dónde vive e
 ```yaml
 ---
 type: session                   # session | contexto
-area: <biblioteca | media | pycache>
+area: <biblioteca | despliegue | media | pycache>
 date: YYYY-MM-DD
 slug: <slug-del-nombre-de-archivo-sin-fecha-ni-.md>
 title: "<título humano>"
