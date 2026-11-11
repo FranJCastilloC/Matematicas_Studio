@@ -1,0 +1,1625 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Curva ROC y AUC</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+/* ---------- puntajes (histograma de puntos y montones) ---------- */
+.hist-svg, .roc-svg { width: 100%; height: auto; display: block; user-select: none; -webkit-user-select: none; }
+.hist-svg.mover { touch-action: none; cursor: ew-resize; }
+.hist-svg .grid, .roc-svg .grid { stroke: var(--line-soft); stroke-width: 1; }
+.hist-svg .eje, .roc-svg .eje { stroke: var(--ink-3); stroke-width: 1; }
+.hist-svg .tick, .roc-svg .tick { font: 10px var(--f-mono); fill: var(--ink-3); }
+.hist-svg .eje-tit, .roc-svg .eje-tit { font: 11.5px var(--f-body); fill: var(--ink-2); }
+.hist-svg .carril { font: 500 11.5px var(--f-body); }
+.hist-svg .carril.j { fill: var(--j); }
+.hist-svg .carril.k { fill: var(--k); }
+.hist-svg .dens { stroke-width: 1.5; fill-opacity: .14; }
+.hist-svg .dens.j { fill: var(--j); stroke: var(--j); }
+.hist-svg .dens.k { fill: var(--k); stroke: var(--k); }
+.hist-svg .zona { fill: var(--accent); fill-opacity: .07; }
+.hist-svg .zona-lab { font: 500 10.5px var(--f-mono); fill: var(--accent); }
+.hist-svg .umbral { stroke: var(--accent); stroke-width: 2.5; }
+.hist-svg .asa { fill: var(--accent); stroke: var(--surface); stroke-width: 2; }
+.hist-svg .umbral-lab { font: 500 11px var(--f-mono); fill: var(--accent); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+.hist-svg .dot { stroke-width: 2; }
+.hist-svg .dot.j { fill: var(--j); stroke: var(--j); }
+.hist-svg .dot.k { fill: var(--k); stroke: var(--k); }
+.hist-svg .dot.hueco { fill: var(--surface); }
+.hist-svg .dot.arrastre { cursor: grab; }
+.hist-svg .par-anillo { fill: none; stroke: var(--accent); stroke-width: 2.5; }
+.hist-svg .par-hilo { stroke: var(--accent); stroke-width: 1.6; stroke-dasharray: 4 3; }
+.hist-svg .x10 { font: 600 10.5px var(--f-mono); fill: var(--neg); }
+
+/* ---------- curva ROC ---------- */
+.roc-svg.clic { cursor: pointer; }
+.roc-svg .diag { stroke: var(--ink-3); stroke-dasharray: 5 4; stroke-width: 1.2; }
+.roc-svg .diag-lab { font: 10.5px var(--f-mono); fill: var(--ink-3); }
+.roc-svg .area { fill: var(--pos); fill-opacity: .2; }
+.roc-svg .curva { fill: none; stroke: var(--ink); stroke-width: 2.2; stroke-linejoin: round; }
+.roc-svg .rastro { fill: var(--ink-3); }
+.roc-svg .punto { fill: var(--accent); stroke: var(--surface); stroke-width: 2; }
+.roc-svg .punto-lab { font: 500 11px var(--f-mono); fill: var(--accent); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+.roc-svg .celda.ok { fill: var(--pos); fill-opacity: .34; }
+.roc-svg .celda.mal { fill: var(--neg); fill-opacity: .24; }
+.roc-svg .celda.sel { stroke: var(--accent); stroke-width: 2.5; fill-opacity: .6; }
+.roc-svg .trap { fill: var(--pos); fill-opacity: .22; stroke: var(--pos); stroke-opacity: .5; }
+.roc-svg .trap.act { fill: var(--accent); fill-opacity: .32; stroke: var(--accent); stroke-opacity: 1; }
+.roc-svg .auc-lab { font: 600 13px var(--f-mono); fill: var(--ink); paint-order: stroke; stroke: var(--surface); stroke-width: 4px; }
+
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.esc-head .hint { font-size: 12.5px; color: var(--ink-2); }
+.umbral-row { display: flex; align-items: center; gap: 10px; margin: 4px 0 8px; font-size: 13px; color: var(--ink-2); }
+.umbral-row input[type=range] { flex: 1; min-width: 0; accent-color: var(--accent); }
+.umbral-row b { font-family: var(--f-mono); font-weight: 500; color: var(--accent); min-width: 3.2em; text-align: right; }
+.sep-row { display: flex; align-items: center; gap: 10px; margin: 10px 0; font-size: 13.5px; color: var(--ink-2); flex-wrap: wrap; }
+.sep-row input[type=range] { flex: 1; min-width: 140px; accent-color: var(--accent); }
+.sep-row b { font-family: var(--f-mono); font-weight: 500; color: var(--ink); }
+.esc-sub { font-family: var(--f-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); margin: 14px 0 4px; }
+.roc-info { font-family: var(--f-mono); font-size: 13px; color: var(--ink-2); min-height: 1.6em; font-variant-numeric: tabular-nums; }
+.roc-info b { color: var(--ink); font-weight: 500; }
+.roc-info b.oculto, .conf td.oculto { color: var(--accent); font-weight: 600; }
+
+/* ---------- conteo (matriz de confusion) ---------- */
+.conf-wrap { overflow-x: auto; max-width: 100%; }
+.conf { border-collapse: collapse; font-family: var(--f-mono); font-size: 12.5px; font-variant-numeric: tabular-nums; width: 100%; }
+.conf th { font-weight: 500; color: var(--ink-3); font-size: 11px; padding: 4px 6px; border-bottom: 1px solid var(--line); text-align: center; }
+.conf th.fila { text-align: left; white-space: nowrap; }
+.conf th.fila.j { color: var(--j); }
+.conf th.fila.k { color: var(--k); }
+.conf td { text-align: center; padding: 5px 6px; border-bottom: 1px solid var(--line-soft); color: var(--ink-2); white-space: nowrap; }
+.conf td.bien { color: var(--ok); }
+.conf td.malo { color: var(--bad); }
+.conf td small { color: var(--ink-3); font-size: 10px; margin-right: 3px; }
+.conf td.tasa { color: var(--ink); font-weight: 500; }
+.conteo-simple { font-size: 14px; color: var(--ink-2); display: grid; gap: 4px; }
+.conteo-simple b { font-family: var(--f-mono); font-weight: 500; color: var(--ink); }
+
+.grande { font-family: var(--f-mono); font-size: 14px; color: var(--ink-2); margin: 8px 0 12px; font-variant-numeric: tabular-nums; line-height: 1.7; }
+.grande b { font-size: 17px; color: var(--ink); font-weight: 500; }
+.grande b.oculto { color: var(--accent); }
+.tally { font-family: var(--f-mono); font-size: 13px; color: var(--ink-2); margin-top: 8px; font-variant-numeric: tabular-nums; }
+.tally b { color: var(--ink); font-weight: 500; }
+
+/* ---------- retos propios ---------- */
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.ojo-opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
+.ojo-opts .opt { text-align: center; }
+.objetivos { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.objetivos li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.objetivos .m { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.objetivos li.hecho { color: var(--ink); }
+.objetivos li.hecho .m { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 3px var(--surface); }
+.dos-svg { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 10px; align-items: center; }
+@media (max-width: 560px) { .dos-svg { grid-template-columns: minmax(0, 1fr); } }
+.datos-mano { border-collapse: collapse; font-family: var(--f-mono); font-size: 14px; margin: 4px 0 12px; }
+.datos-mano th, .datos-mano td { padding: 4px 10px; border: 1px solid var(--line); text-align: center; }
+.datos-mano th { color: var(--ink-3); font-weight: 500; font-size: 12px; }
+.datos-mano th.j { color: var(--j); }
+.datos-mano th.k { color: var(--k); }
+
+/* ---------- vida real ---------- */
+.vr-salida { margin: 10px 0 0; padding: 8px 12px; background: var(--surface-2); border-radius: 8px; font-family: var(--f-mono); font-size: 12.5px; line-height: 1.6; min-height: 2.2em; white-space: pre; overflow-x: auto; color: var(--ink); }
+.vr-salida:empty::before { content: "(todavía no imprimió nada)"; color: var(--ink-3); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ Curva ROC y AUC</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Decisión y evaluación · UD2 de SM142004 (regresión logística) y UD3 de SM142001</p>
+    <h1>Curva ROC y AUC: todos los umbrales en un solo dibujo</h1>
+    <p class="lede">
+      Un clasificador como la regresión logística no dice "sí" o "no": da un <b>puntaje</b>. El "sí" lo pones tú al elegir un umbral.
+      Aquí vas a mover ese umbral con la mano y ver que <b>cada umbral es un punto</b>. Todos los puntos juntos forman la curva ROC,
+      y el área bajo ella, la AUC, resume al clasificador sin elegir ningún umbral.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> Un filtro de spam le da a cada correo un puntaje de 0 a 1. Quieres decir qué tan bueno es el filtro, pero todavía no decidiste a partir de qué puntaje un correo se manda a la carpeta de spam. ¿Cómo lo medirías? Escríbelo como te salga, aunque esté mal.</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: miraría si..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>Del umbral a la curva, y de la curva a un número</h2>
+      <p>Siete pasos. Cada uno termina con un chequeo: hasta que no lo resuelves, el siguiente queda cerrado. Equivocarte aquí no resta nada, es parte del método.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="El umbral">
+          <span class="etapa">Paso 1</span>
+          <h3>Veinte correos y una línea</h3>
+          <p>Un filtro de spam le dio un puntaje a 20 correos que ya sabemos clasificar: 10 son <b style="color:var(--j)">spam</b> y 10 son <b style="color:var(--k)">legítimos</b>. Cada punto del escenario es un correo, ubicado según su puntaje.</p>
+          <p>Para decidir, el filtro necesita una línea: todo correo con puntaje <b>igual o mayor</b> que el umbral va a la carpeta de spam. Ahora la línea está en 0.50. Los puntos rellenos son los que quedan marcados como spam; los huecos van a la bandeja de entrada.</p>
+          <p>Mira los dos números debajo del dibujo: cuánto spam atrapa el filtro y cuántos correos legítimos manda a spam por error. A esos errores los vamos a llamar <b>falsas alarmas</b>.</p>
+          <div class="check" id="chk1">
+            <p class="check-tit">Predice antes de tocar</p>
+            <div class="cuerpo"></div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Dos tasas">
+          <span class="etapa">Paso 2</span>
+          <h3>Dos tasas, una por cada tipo de correo</h3>
+          <p>Contar no alcanza para comparar: 7 aciertos de 10 spam no es lo mismo que 7 de 1000. Por eso cada conteo se divide entre el total de <b>su propia clase</b>.</p>
+          <ul>
+            <li><b>Tasa de aciertos</b>: de todo el spam, qué fracción atrapas. Se llama <b>TPR</b>, tasa de verdaderos positivos (también sensibilidad o recall).</li>
+            <li><b>Tasa de falsas alarmas</b>: de todos los legítimos, qué fracción mandas a spam. Se llama <b>FPR</b>, tasa de falsos positivos.</li>
+          </ul>
+          <div class="fbloque"><div class="vivo" id="vivoTasas"></div></div>
+          <p>Con esas dos tasas, un umbral se vuelve un <b>punto</b> en un cuadrado: la FPR en el eje horizontal y la TPR en el vertical. El rincón de arriba a la izquierda, (0, 1), es el sueño: todo el spam atrapado y ninguna falsa alarma.
+          <cite class="cita" data-fuente="rl2" data-pag="15" data-seccion="Curva ROC" data-que="Las fórmulas de TPR y FPR y la figura de las dos campanas (negativos y positivos) cortadas por un umbral vertical que separa TN, FN, FP y TP. Es este mismo escenario. Ojo: la página dice que la ROC evalúa modelos de regresión lineal; es una errata, se refiere a la logística." data-cuando="Al terminar este paso"></cite></p>
+          <div class="check" id="chk2"><p class="check-tit">Calcula con lo que ves</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="La curva">
+          <span class="etapa">Paso 3</span>
+          <h3>Recorrer todos los umbrales arma la curva</h3>
+          <p>Ahora con la notación de la matriz de confusión: TP son los spam marcados, FN los spam que se escapan, FP las falsas alarmas y TN los legítimos que quedan bien.</p>
+          <div class="fbloque">
+            <div data-tex="\text{TPR} = \frac{TP}{TP + FN} \qquad\qquad \text{FPR} = \frac{FP}{FP + TN}" data-display></div>
+            <div class="vivo" id="vivoFormulas"></div>
+          </div>
+          <p>Mueve el umbral y mira cómo el punto deja un rastro gris. Un umbral en 1 no marca nada: punto (0, 0). Un umbral en 0 marca todo: punto (1, 1). Entre medio, el punto solo cambia cuando la línea cruza un correo.</p>
+          <p>Si unes los puntos de todos los umbrales tienes la <b>curva ROC</b>. El material de la unidad lo describe en tres pasos: ordenar por probabilidad, calcular TPR y FPR para cada umbral, y graficar
+          <cite class="cita" data-fuente="rl2" data-pag="16" data-seccion="Curva ROC" data-que="Los 3 pasos para construir la curva y la gráfica de una ROC con AUC = 0.96 y su diagonal. Abajo están la AUC y el coeficiente de Gini." data-cuando="Después de barrer los umbrales"></cite>;
+          las diapositivas lo dicen como "variar continuamente t de 0 a 1"
+          <cite class="cita" data-fuente="rl2diapo" data-pag="21" data-seccion="Barrido del umbral t" data-que="La idea de mover el umbral t de 0 a 1 y graficar TPR y FPR. Comparte la página con la entropía cruzada." data-cuando="Después de barrer los umbrales"></cite>.</p>
+          <div class="check" id="chk3"><p class="check-tit">Predice antes de barrer</p><div class="cuerpo"></div></div>
+          <div class="btn-row" style="margin-top:12px">
+            <button type="button" class="primary" id="btnBarrer" disabled>Barrer todos los umbrales</button>
+            <span class="zhint" id="barrerHint">Responde la predicción para activar el botón.</span>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="El área">
+          <span class="etapa">Paso 4</span>
+          <h3>El área bajo la curva: la AUC</h3>
+          <p>La curva entera es mucha información. Para comparar dos filtros con un solo número se usa el <b>área bajo la curva</b>, la AUC (del inglés <i>area under the curve</i>).</p>
+          <div class="fbloque">
+            <div data-tex="\text{AUC} = \int_0^1 \text{ROC}(x)\,dx" data-display></div>
+            <div class="vivo" id="vivoArea"></div>
+          </div>
+          <p>Es la fórmula tal como la escribe el material de la UD3 de Matemáticas
+          <cite class="cita" data-fuente="ud3" data-pag="35" data-seccion="3.7 Métricas de evaluación" data-que="La ROC como TPR frente a FPR y la AUC como integral de 0 a 1. Solo nombra TPR y FPR: la fórmula de la FPR y el umbral que se mueve no aparecen; los acabas de ver aquí." data-cuando="Al terminar este paso"></cite>.
+          Aquí la curva es una escalera, así que la integral es una suma de rectángulos. Cada cuadradito de la cuadrícula del escenario mide 0.1 por 0.1, o sea 0.01 de área.</p>
+          <p>Los extremos: un filtro perfecto pasa por (0, 1) y tiene AUC = 1. Un filtro que ordena al azar sigue la diagonal y tiene AUC = 0.5
+          <cite class="cita" data-fuente="nield6" data-pag="35" data-seccion="ROC y AUC" data-que="La ROC como forma de resumir muchas matrices de confusión, una por umbral (Figure 6-21), y la comparación de dos modelos por su área (Figure 6-22). Lo llama 'Reciever Operator Characteristics': el nombre correcto es receiver operating characteristic." data-cuando="Al terminar este paso"></cite>.</p>
+          <div class="cita" id="citaHipo" hidden></div>
+          <div class="check" id="chk4"><p class="check-tit">Cuenta cuadraditos</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Contar pares">
+          <span class="etapa">Paso 5</span>
+          <h3>La AUC también es una probabilidad</h3>
+          <p>Hay otra forma de leer el mismo número, sin curvas. Toma un correo spam y uno legítimo, uno de cada montón. El par está <b>bien ordenado</b> si el filtro le dio más puntaje al spam.</p>
+          <div class="check" id="chk5"><p class="check-tit">Predice antes de contar</p><div class="cuerpo"></div></div>
+          <div class="btn-row" style="margin-top:12px">
+            <button type="button" class="primary" id="btnPares" disabled>Mostrar los 100 pares</button>
+            <button type="button" id="btnSortear" disabled>Sortear un par</button>
+          </div>
+          <div class="tally" id="tally"></div>
+          <p>Con 10 spam y 10 legítimos hay 10 × 10 = 100 pares. Cada cuadradito del cuadrado ROC es <b>un par</b>: la columna es un legítimo y la fila un spam, los dos ordenados de mayor a menor puntaje. Toca un cuadradito para ver su par en el dibujo de arriba. Los bien ordenados quedan justo debajo de la escalera: por eso contar pares y medir el área dan lo mismo.</p>
+          <div class="fbloque">
+            <div data-tex="\text{AUC} = P\big(s^{+} > s^{-}\big) = \frac{1}{n_{+}\,n_{-}}\sum_{i=1}^{n_{+}}\sum_{j=1}^{n_{-}} \mathbb{1}\big[s_i^{+} > s_j^{-}\big]" data-display></div>
+          </div>
+          <p>Esta lectura está en las diapositivas de introducción de SM142003
+          <cite class="cita" data-fuente="intro3" data-pag="47" data-ancla="7/7" data-seccion="ROC y AUC" data-que="El umbral de decisión, TPR frente a FPR para todos los umbrales, la diagonal del azar con AUC 0.5, y la AUC como la probabilidad de ordenar un positivo al azar por encima de un negativo al azar." data-cuando="Al terminar este paso"></cite>,
+          pero no en la UD2 de regresión logística, que no explica ni la lectura probabilística ni cómo se calcula el área.</p>
+          <details class="profundizar">
+            <summary>¿Y si un spam y un legítimo tienen el mismo puntaje?</summary>
+            <div>
+              <p>El par empatado cuenta <b>medio</b>: el filtro no lo ordena ni bien ni mal. En la curva, ese empate hace que la TPR y la FPR suban a la vez y aparece un tramo en diagonal. El área bajo ese tramo es un trapecio, no un rectángulo, y vale justo la mitad de los cuadraditos que atraviesa. Por eso los programas calculan el área con la regla del trapecio: así los empates cuentan medio sin hacer nada especial.</p>
+              <p>Esta suma de pares tiene nombre en estadística: es el estadístico U de Mann-Whitney dividido entre <span data-tex="n_{+}\,n_{-}"></span>.</p>
+            </div>
+          </details>
+
+          <div class="destacado" id="destacado">
+            <p class="dest-tit">Una confusión muy común</p>
+            <h4>¿AUC = 0.80 quiere decir que el filtro acierta el 80 % de los correos?</h4>
+            <p>La AUC habla de <b>ordenar pares</b>, para todos los umbrales a la vez. El porcentaje de correos bien clasificados, la exactitud, existe solo cuando ya elegiste un umbral, y cambia con él.</p>
+            <div class="check" id="chk5b"><p class="check-tit">Predice antes de mirar</p><div class="cuerpo"></div></div>
+            <div class="grande" id="vivoExactitud"></div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Separar">
+          <span class="etapa">Paso 6</span>
+          <h3>Separar los montones sube la AUC</h3>
+          <p>Ahora el escenario usa otros 20 correos, para un filtro que puedes mejorar o empeorar a voluntad. La barra <b>separación</b> corre el montón de spam hacia la derecha y el de legítimos hacia la izquierda.</p>
+          <div class="sep-row">
+            <label for="sep">Separación</label>
+            <input type="range" id="sep" min="-0.3" max="0.4" step="0.02" value="0.1" disabled>
+            <b id="sepVal">0.10</b>
+          </div>
+          <div class="grande" id="vivoSep"></div>
+          <p>Cuanto menos se superponen los montones, más pares quedan bien ordenados y más se pega la curva al rincón (0, 1). Las diapositivas muestran tres animaciones de esto con AUC 0.496, 0.732 y 0.926
+          <cite class="cita" data-fuente="rl2diapo" data-pag="24" data-seccion="Animaciones: separación de clases y AUC" data-que="Tres diapositivas seguidas (pp. 24 a 26) con las densidades, la ROC y la curva precisión-recall a medida que las clases se separan: AUC 0.496, 0.732 y 0.926." data-cuando="Después de mover la separación"></cite>.</p>
+          <p><b>Ahora lleva la separación a valores negativos.</b> El spam queda con <i>menos</i> puntaje que los legítimos y la AUC baja de 0.5. Ese filtro no es inútil: ordena al revés. Si inviertes sus puntajes, usando <span data-tex="1 - s"></span>, su AUC pasa a ser <span data-tex="1 - \text{AUC}"></span>.</p>
+          <div class="check" id="chk6"><p class="check-tit">Predice antes de tocar la barra</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Gini y desbalance">
+          <span class="etapa">Paso 7</span>
+          <h3>El coeficiente de Gini y cuándo la ROC engaña</h3>
+          <p>Volvemos al filtro de los primeros pasos. Muchos informes, sobre todo en riesgo de crédito, no reportan la AUC sino el <b>coeficiente de Gini</b>, que la reescala para que el azar valga 0 y el filtro perfecto 1:</p>
+          <div class="fbloque">
+            <div data-tex="\text{Gini} = 2\cdot\text{AUC} - 1" data-display></div>
+            <div class="vivo" id="vivoGini"></div>
+          </div>
+          <p>Así lo define el material de la UD2
+          <cite class="cita" data-fuente="rl2" data-pag="16" data-seccion="AUC y coeficiente de Gini" data-que="La AUC entre 0 y 1 (1 perfecto, 0.5 aleatorio) y el coeficiente de Gini = 2 × AUC − 1." data-cuando="Al leer este paso"></cite>.
+          Cuidado: las diapositivas de la misma unidad muestran otro "Gini", <span data-tex="1 - \sum p_i^2"></span>, que mide la impureza de un nodo en un árbol de decisión
+          <cite class="cita" data-fuente="rl2diapo" data-pag="28" data-seccion="Entropía e índice de Gini" data-que="El índice de Gini de impureza, 1 − Σ p², junto a la entropía. Es de árboles de decisión, no de la ROC, y la diapositiva no avisa que comparte nombre con el coeficiente 2·AUC − 1." data-cuando="Después de este paso, para no mezclarlos"></cite>.
+          Mismo nombre, dos ideas distintas, y el material no lo aclara.</p>
+          <p>La segunda parte es una trampa. La TPR se calcula solo con el spam y la FPR solo con los legítimos. Si los legítimos fueran diez veces más, ninguna de las dos tasas cambia... pero la carpeta de spam se llena de falsas alarmas.</p>
+          <div class="check" id="chk7"><p class="check-tit">Predice antes de tocar el botón</p><div class="cuerpo"></div></div>
+          <div class="btn-row" style="margin-top:12px">
+            <button type="button" class="primary" id="btnX10" disabled>Repetir cada legítimo 10 veces</button>
+          </div>
+          <div class="grande" id="vivoDesb"></div>
+          <p>Por eso las diapositivas dicen que la ROC sirve "especialmente cuando las clases están balanceadas"
+          <cite class="cita" data-fuente="rl2diapo" data-pag="22" data-seccion="Curva ROC y AUC-ROC" data-que="Clasificador perfecto, mejor, peor y aleatorio, la advertencia sobre clases balanceadas, y un ejemplo de densidades superpuestas con AUC = 0.496." data-cuando="Al terminar este paso"></cite>
+          y proponen, con clases desbalanceadas, la <b>curva precisión-recall</b>, que en lugar de la FPR usa la precisión, TP / (TP + FP)
+          <cite class="cita" data-fuente="rl2diapo" data-pag="23" data-seccion="Curva precisión-recall, AUC-PR" data-que="La curva precisión-recall con su línea 'No Skill' y el modelo perfecto, presentada como la opción para clases desbalanceadas." data-cuando="Cuando llegues a la página de umbral, precisión contra recall y desbalance"></cite>.
+          La diapositiva siguiente se titula "Balance de clases", pero en el PDF sus dos filas de gráficas son idénticas: la animación que mostraba el efecto no se conservó. Lo que acabas de ver con el botón es ese efecto.</p>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+        </div>
+        <svg id="hist" tabindex="0" role="img" aria-label="Puntajes de los correos sobre un eje de 0 a 1, con el umbral como una línea vertical. Arrastra o usa las flechas para moverlo."></svg>
+        <div class="umbral-row">
+          <label for="umbral">Umbral</label>
+          <input type="range" id="umbral" min="0" max="1" step="0.01" value="0.5">
+          <b id="umbralVal">0.50</b>
+        </div>
+        <div id="conteo"></div>
+        <div id="rocBloque">
+          <p class="esc-sub">Curva ROC</p>
+          <svg id="roc" role="img" aria-label="Cuadrado ROC: tasa de falsos positivos en el eje horizontal y tasa de verdaderos positivos en el vertical."></svg>
+          <div class="roc-info" id="rocInfo"></div>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>Los mismos 20 correos del recorrido, escritos como lo haría un programa. Primero un bucle recorre los umbrales y guarda un punto por cada uno; después otro bucle suma el área con trapecios; al final se compara con la librería. Elige Python o R y dale a reproducir.</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir</p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="true">Python</button>
+            <button type="button" data-lang="r" aria-pressed="false">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">1 · un punto por umbral</span><span data-f="2">2 · trapecios</span><span data-f="3">3 · la librería</span>
+        </div>
+        <h3 class="mini-tit vr-tit">El umbral sobre los puntajes</h3>
+        <svg id="vrHist" role="img" aria-label="Puntajes con el umbral que se está evaluando"></svg>
+        <div class="vr-cuenta" id="vrCuenta"></div>
+        <h3 class="mini-tit vr-tit">Los puntos guardados en fpr y tpr</h3>
+        <svg id="vrRoc" role="img" aria-label="Puntos de la curva ROC calculados hasta ahora"></svg>
+        <h3 class="mini-tit vr-tit">Lo que imprime</h3>
+        <pre class="vr-salida" id="vrSalida"></pre>
+      </div>
+    </div>
+
+    <p class="vr-nota">En la práctica, la curva y el área salen en una línea: <code>roc_curve(y, p)</code> y <code>roc_auc_score(y, p)</code> en scikit-learn, <code>roc(y, p)</code> y <code>auc(...)</code> con el paquete pROC de R. Raschka arma la ROC de un modelo real con validación cruzada, una curva por partición
+    <cite class="cita" data-fuente="raschka6" data-pag="28" data-pimp="198" data-seccion="Plotting a receiver operating characteristic" data-que="La idea de la ROC al mover el umbral, la diagonal del azar y el rincón perfecto, y el código con roc_curve sobre probas[:, 1] dentro de un StratifiedKFold. Avisa de que usa solo 2 variables y aun así deja un PCA en el pipeline: no reduce nada, solo rota." data-cuando="Después de reproducir el programa hasta el final"></cite>
+    <cite class="cita" data-fuente="raschka6" data-pag="30" data-pimp="200" data-seccion="Plotting a receiver operating characteristic" data-que="La Figure 6.11 con las curvas de cada partición y la media (AUC 0.76), y roc_auc_score como atajo." data-cuando="Después de reproducir el programa hasta el final"></cite>.
+    En el caso real de kNN de SM142003 la curva sale con escalones porque kNN da probabilidades que solo pueden tomar unos pocos valores
+    <cite class="cita" data-fuente="knn3real" data-pag="10" data-ancla="curva-roc-receiver-operating-charecteristic" data-seccion="Curva ROC (Receiver Operating Charecteristic)" data-que="roc_auc y roc_curve de yardstick con autoplot sobre el modelo kNN de diabetes (AUC 0.828), las fórmulas de TPR y FPR, y por qué bajar el umbral sube las dos tasas." data-cuando="Antes del cuestionario de kNN"></cite>.</p>
+
+    <details class="profundizar">
+      <summary>Sin bucles: la AUC contando pares en una línea</summary>
+      <div>
+        <p>Como la AUC es la fracción de pares bien ordenados, se puede calcular comparando todos los spam contra todos los legítimos de una vez. En Python: <code>np.mean(p[y == 1][:, None] &gt; p[y == 0][None, :])</code>. En R: <code>mean(outer(p[y == 1], p[y == 0], "&gt;"))</code>. Las dos dan 0.8 con estos datos.</p>
+        <p>Esa versión hace <span data-tex="n_{+}\,n_{-}"></span> comparaciones. Ordenar los puntajes una vez, como hace el bucle de umbrales, es mucho más rápido cuando hay miles de casos, y por eso es lo que usan las librerías.</p>
+      </div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>La clase en vez del puntaje</h3><span class="estado" data-reto="codigo2"></span></div>
+        <div id="codigo2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>pROC elige la dirección</h3><span class="estado" data-reto="codigo3"></span></div>
+        <div id="codigo3"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: la biblioteca te avisa en el índice cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>¿Cuánto da la AUC?</h3><span class="estado" data-reto="ojo"></span></div>
+        <p class="desc">Cinco filtros distintos. Mira cómo se superponen los dos montones y decide sin calcular. Apruebas con 4 de 5.</p>
+        <div id="ojo"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Construir</span><h3>Arma el filtro</h3><span class="estado" data-reto="constructor"></span></div>
+        <p class="desc">Cuatro spam y cuatro legítimos. Arrastra los puntos hacia los lados hasta cumplir cada objetivo. Se marcan solos.</p>
+        <div class="dos-svg">
+          <svg id="constrHist" role="img" aria-label="Puntajes arrastrables de cuatro spam y cuatro legítimos"></svg>
+          <svg id="constrRoc" role="img" aria-label="Curva ROC del filtro que armas"></svg>
+        </div>
+        <div class="grande" id="constrVivo"></div>
+        <ul class="objetivos" id="objetivos"></ul>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>Cuenta los pares</h3><span class="estado" data-reto="mano"></span></div>
+        <p class="desc">Cuatro spam y cinco legítimos. Con papel, calcula la AUC contando pares bien ordenados antes de pedir pistas.</p>
+        <div id="manoDatos"></div>
+        <div id="mano"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Alguien se equivocó</h3><span class="estado" data-reto="error"></span></div>
+        <p class="desc">Una de las líneas tiene un error. Tócala.</p>
+        <div id="error"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Un filtro al revés</h3><span class="estado" data-reto="prop1"></span></div>
+        <div id="prop1"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Estirar los puntajes</h3><span class="estado" data-reto="prop2"></span></div>
+        <div id="prop2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Leer un punto</h3><span class="estado" data-reto="prop3"></span></div>
+        <div id="prop3"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Los extremos</h3><span class="estado" data-reto="prop4"></span></div>
+        <div id="prop4"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Desbalance</h3><span class="estado" data-reto="prop5"></span></div>
+        <div id="prop5"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Recordar a la fuerza es lo que fija. Arma la fórmula de memoria y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Fórmula de memoria</span><h3>La AUC contando pares</h3><span class="estado" data-reto="formula"></span></div>
+        <p class="desc">Hay piezas de más que no pertenecen. No mires arriba.</p>
+        <div id="formula"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el material</h2>
+      <p class="lecturas-intro">Ya construiste la curva con las manos. Ahora ve a la versión del máster y de los libros y comprueba que la reconoces. Cada entrada dice qué vas a encontrar y en qué momento conviene leerla. Si abres la biblioteca con doble clic, el enlace abre el PDF en esa página.</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> Los 20 correos y sus puntajes son inventados, elegidos para que las cuentas sean limpias: la AUC da 0.80 exacta y el umbral 0.5 deja 7 aciertos y 3 falsas alarmas.
+    Los correos del paso 6 y los de los retos también son inventados. Tu progreso se guarda solo en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+(function () {
+  "use strict";
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var RETOS = ["ojo", "constructor", "mano", "error", "prop1", "prop2", "prop3", "prop4", "prop5", "formula", "codigo1", "codigo2", "codigo3"];
+  var C = B.concepto({ id: "roc-auc", retos: RETOS, pasos: 7 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  var f = B.fmt;
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+
+  /* ---------------- datos y cuentas ---------------- */
+  var SPAM = [0.97, 0.91, 0.86, 0.78, 0.71, 0.64, 0.57, 0.48, 0.36, 0.22];
+  var LEGIT = [0.81, 0.62, 0.52, 0.43, 0.38, 0.29, 0.24, 0.17, 0.11, 0.05];
+
+  function contar(pos, neg, t) {
+    var tp = 0, fp = 0;
+    pos.forEach(function (s) { if (s >= t) tp++; });
+    neg.forEach(function (s) { if (s >= t) fp++; });
+    return { tp: tp, fn: pos.length - tp, fp: fp, tn: neg.length - fp, tpr: tp / pos.length, fpr: fp / neg.length };
+  }
+  function desc(a) { return a.slice().sort(function (x, y) { return y - x; }); }
+  function curva(pos, neg) {
+    var us = desc(pos.concat(neg)).filter(function (v, i, a) { return i === 0 || v !== a[i - 1]; });
+    var pts = [{ t: Infinity, fpr: 0, tpr: 0 }];
+    us.forEach(function (u) { var c = contar(pos, neg, u); pts.push({ t: u, fpr: c.fpr, tpr: c.tpr }); });
+    return pts;
+  }
+  function areaTrap(pts) {
+    var a = 0;
+    for (var k = 1; k < pts.length; k++) a += (pts[k].fpr - pts[k - 1].fpr) * (pts[k].tpr + pts[k - 1].tpr) / 2;
+    return a;
+  }
+  function paresBien(pos, neg) {
+    var s = 0;
+    pos.forEach(function (p) { neg.forEach(function (n) { s += p > n ? 1 : p === n ? 0.5 : 0; }); });
+    return s;
+  }
+  function aucPares(pos, neg) { return paresBien(pos, neg) / (pos.length * neg.length); }
+  function r2(v) { return Math.round(v * 100) / 100; }
+
+  // paso 6: dos montones en forma de campana que se separan. En centesimos: spam pares, legitimos impares, asi nunca empatan.
+  var POFF = [-16, -10, -6, -4, -2, 2, 4, 6, 10, 16];
+  var NOFF = [-15, -11, -7, -3, -1, 1, 3, 7, 11, 15];
+  function sepDatos(h) {
+    return {
+      pos: POFF.map(function (o) { return (50 + h + o) / 100; }),
+      neg: NOFF.map(function (o) { return (50 - h + o) / 100; })
+    };
+  }
+
+  function kde(vals, bw) {
+    return function (x) {
+      var s = 0;
+      vals.forEach(function (v) { var z = (x - v) / bw; s += Math.exp(-0.5 * z * z); });
+      return s / (vals.length * bw * Math.sqrt(2 * Math.PI));
+    };
+  }
+
+  /* ---------------- dibujo: puntajes ---------------- */
+  var NS = "http://www.w3.org/2000/svg";
+  function nodo(tag, at, padre) {
+    var e = document.createElementNS(NS, tag);
+    for (var k in at) e.setAttribute(k, at[k]);
+    if (padre) padre.appendChild(e);
+    return e;
+  }
+  function texto(padre, at, t) { var e = nodo("text", at, padre); e.textContent = t; return e; }
+
+  var HG = { W: 440, H: 236, L: 78, R: 16, base: 112, alto: 92, eje: 118, yP: 160, yN: 198 };
+  function hx(s) { return HG.L + s * (HG.W - HG.L - HG.R); }
+  function hInv(px) { return (px - HG.L) / (HG.W - HG.L - HG.R); }
+
+  // ubica puntos de un carril sin que se pisen (hasta tres filas)
+  function colocar(vals, y0) {
+    var orden = vals.map(function (v, i) { return i; }).sort(function (a, b) { return vals[a] - vals[b]; });
+    var filas = [0, -12, 12], ult = [-1e9, -1e9, -1e9], out = [];
+    orden.forEach(function (i) {
+      var x = hx(vals[i]), elegida = 0, mejor = -1e9;
+      for (var r = 0; r < filas.length; r++) {
+        if (x - ult[r] >= 14) { elegida = r; mejor = null; break; }
+        if (ult[r] < 1e8 && x - ult[r] > mejor) { mejor = x - ult[r]; elegida = r; }
+      }
+      ult[elegida] = x;
+      out[i] = { x: x, y: y0 + filas[elegida] };
+    });
+    return out;
+  }
+
+  // o: {pos, neg, t (null = sin umbral), dens, marcar, par [i, j], mult, arrastre}
+  function dibujarHist(svg, o) {
+    svg.setAttribute("viewBox", "0 0 " + HG.W + " " + HG.H);
+    svg.classList.add("hist-svg");
+    svg.innerHTML = "";
+    var t = o.t;
+    if (t != null) {
+      nodo("rect", { x: hx(t), y: 6, width: Math.max(0, hx(1) - hx(t) + 6), height: HG.H - 22, "class": "zona" }, svg);
+      texto(svg, { x: HG.W - 4, y: HG.H - 4, "class": "zona-lab", "text-anchor": "end" }, "zona marcada como spam");
+    }
+    for (var g = 0; g <= 10; g++) nodo("line", { x1: hx(g / 10), x2: hx(g / 10), y1: 12, y2: HG.eje, "class": "grid" }, svg);
+    if (o.dens !== false) {
+      var fp = kde(o.pos, 0.06), fn = kde(o.neg, 0.06), xs = [], i, tope = 0;
+      for (i = 0; i <= 100; i++) { var x = i / 100; xs.push([x, fp(x), fn(x)]); tope = Math.max(tope, fp(x), fn(x)); }
+      [["k", 2], ["j", 1]].forEach(function (c) {
+        var d = "M" + hx(0) + "," + HG.base;
+        xs.forEach(function (q) { d += " L" + hx(q[0]).toFixed(1) + "," + (HG.base - q[c[1]] / tope * HG.alto).toFixed(1); });
+        d += " L" + hx(1) + "," + HG.base + " Z";
+        nodo("path", { d: d, "class": "dens " + c[0] }, svg);
+      });
+    }
+    nodo("line", { x1: hx(0), x2: hx(1), y1: HG.eje, y2: HG.eje, "class": "eje" }, svg);
+    for (var k = 0; k <= 5; k++) texto(svg, { x: hx(k / 5), y: HG.eje + 14, "class": "tick", "text-anchor": "middle" }, (k / 5).toFixed(1));
+    texto(svg, { x: 8, y: HG.yP + 4, "class": "carril j" }, "spam");
+    texto(svg, { x: 8, y: HG.yN + 4, "class": "carril k" }, "legítimos");
+    if (o.mult && o.mult > 1) texto(svg, { x: 8, y: HG.yN + 18, "class": "x10" }, "× " + o.mult + " cada uno");
+    nodo("line", { x1: hx(0), x2: hx(1), y1: HG.yP, y2: HG.yP, "class": "grid" }, svg);
+    nodo("line", { x1: hx(0), x2: hx(1), y1: HG.yN, y2: HG.yN, "class": "grid" }, svg);
+    var cp = colocar(o.pos, HG.yP), cn = colocar(o.neg, HG.yN);
+    if (o.par) {
+      var a = cp[o.par[0]], b = cn[o.par[1]];
+      nodo("line", { x1: a.x, y1: a.y, x2: b.x, y2: b.y, "class": "par-hilo" }, svg);
+    }
+    function punto(c, s, cls, tipo, i) {
+      var marcado = o.marcar !== false && t != null && s >= t;
+      var at = { cx: c.x, cy: c.y, r: 6.5, "class": "dot " + cls + (marcado || t == null ? "" : " hueco") + (o.arrastre ? " arrastre" : "") };
+      if (o.arrastre) { at["data-c"] = tipo; at["data-i"] = i; }
+      nodo("circle", at, svg);
+    }
+    o.pos.forEach(function (s, i) { punto(cp[i], s, "j", "p", i); });
+    o.neg.forEach(function (s, i) { punto(cn[i], s, "k", "n", i); });
+    if (o.par) {
+      nodo("circle", { cx: cp[o.par[0]].x, cy: cp[o.par[0]].y, r: 11, "class": "par-anillo" }, svg);
+      nodo("circle", { cx: cn[o.par[1]].x, cy: cn[o.par[1]].y, r: 11, "class": "par-anillo" }, svg);
+    }
+    if (t != null) {
+      var ux = hx(t);
+      nodo("line", { x1: ux, x2: ux, y1: 8, y2: HG.H - 16, "class": "umbral" }, svg);
+      nodo("circle", { cx: ux, cy: 10, r: 6, "class": "asa" }, svg);
+      texto(svg, { x: t > 0.72 ? ux - 10 : ux + 10, y: 30, "class": "umbral-lab", "text-anchor": t > 0.72 ? "end" : "start" }, o.tLab || "umbral " + f(t, 2));
+    }
+  }
+
+  /* ---------------- dibujo: cuadrado ROC ---------------- */
+  var RG = { W: 300, H: 286, L: 46, T: 12, S: 228 };
+  function rx(v) { return RG.L + v * RG.S; }
+  function ry(v) { return RG.T + (1 - v) * RG.S; }
+  function polilinea(pts) { return pts.map(function (q) { return rx(q.fpr).toFixed(1) + "," + ry(q.tpr).toFixed(1); }).join(" "); }
+
+  // o: {curva, area, rastro, punto, ocultarPunto, pares {pos, neg}, parSel [fila, col], trapecios n, trapAct, aucLab}
+  function dibujarRoc(svg, o) {
+    svg.setAttribute("viewBox", "0 0 " + RG.W + " " + RG.H);
+    svg.classList.add("roc-svg");
+    svg.innerHTML = "";
+    for (var g = 0; g <= 10; g++) {
+      nodo("line", { x1: rx(g / 10), x2: rx(g / 10), y1: ry(0), y2: ry(1), "class": g === 0 ? "eje" : "grid" }, svg);
+      nodo("line", { x1: rx(0), x2: rx(1), y1: ry(g / 10), y2: ry(g / 10), "class": g === 0 ? "eje" : "grid" }, svg);
+    }
+    for (var k = 0; k <= 5; k++) {
+      texto(svg, { x: rx(k / 5), y: ry(0) + 14, "class": "tick", "text-anchor": "middle" }, (k / 5).toFixed(1));
+      texto(svg, { x: rx(0) - 6, y: ry(k / 5) + 3.5, "class": "tick", "text-anchor": "end" }, (k / 5).toFixed(1));
+    }
+    texto(svg, { x: rx(0.5), y: RG.H - 6, "class": "eje-tit", "text-anchor": "middle" }, "FPR: falsas alarmas");
+    texto(svg, { x: 12, y: ry(0.5), "class": "eje-tit", "text-anchor": "middle", transform: "rotate(-90 12 " + ry(0.5) + ")" }, "TPR: spam atrapado");
+    if (o.pares) {
+      var ps = desc(o.pares.pos), ns = desc(o.pares.neg), np = ps.length, nn = ns.length;
+      ps.forEach(function (sp, i) {
+        ns.forEach(function (sn, j) {
+          var cls = "celda " + (sp > sn ? "ok" : "mal") + (o.parSel && o.parSel[0] === i && o.parSel[1] === j ? " sel" : "");
+          nodo("rect", { x: rx(j / nn) + 0.8, y: ry((i + 1) / np) + 0.8, width: RG.S / nn - 1.6, height: RG.S / np - 1.6, "class": cls, "data-f": i, "data-c": j }, svg);
+        });
+      });
+    }
+    nodo("line", { x1: rx(0), y1: ry(0), x2: rx(1), y2: ry(1), "class": "diag" }, svg);
+    texto(svg, { x: rx(0.62), y: ry(0.56), "class": "diag-lab", transform: "rotate(-45 " + rx(0.62) + " " + ry(0.56) + ")" }, "azar");
+    if (o.curva && o.area) {
+      var poli = o.curva.concat([{ fpr: 1, tpr: 0 }, { fpr: 0, tpr: 0 }]);
+      nodo("polygon", { points: polilinea(poli), "class": "area" }, svg);
+    }
+    if (o.curva && o.trapecios) {
+      for (var q = 1; q <= o.trapecios; q++) {
+        var a = o.curva[q - 1], b = o.curva[q];
+        nodo("polygon", { points: polilinea([a, b, { fpr: b.fpr, tpr: 0 }, { fpr: a.fpr, tpr: 0 }]), "class": "trap" + (q === o.trapAct ? " act" : "") }, svg);
+      }
+    }
+    if (o.rastro) o.rastro.forEach(function (q) { nodo("circle", { cx: rx(q.fpr), cy: ry(q.tpr), r: 3, "class": "rastro" }, svg); });
+    if (o.curva) nodo("polyline", { points: polilinea(o.curva), "class": "curva" }, svg);
+    if (o.aucLab) texto(svg, { x: rx(0.97), y: ry(0.06), "class": "auc-lab", "text-anchor": "end" }, o.aucLab);
+    if (o.punto && !o.ocultarPunto) {
+      var px = rx(o.punto.fpr), py = ry(o.punto.tpr);
+      nodo("circle", { cx: px, cy: py, r: 6, "class": "punto" }, svg);
+      var der = o.punto.fpr < 0.6;
+      texto(svg, { x: px + (der ? 10 : -10), y: py + (o.punto.tpr > 0.9 ? 16 : -8), "class": "punto-lab", "text-anchor": der ? "start" : "end" },
+        "(" + f(o.punto.fpr, 2) + ", " + f(o.punto.tpr, 2) + ")");
+    }
+  }
+
+  /* ---------------- estado del recorrido ---------------- */
+  var CURVA = curva(SPAM, LEGIT), AUC = areaTrap(CURVA);
+  var est = {
+    paso: 0, t: 0.5, h: 5, mult: 1, rastro: {}, barrido: false, barriendo: null,
+    paresVis: false, par: null, sorteos: 0, sorteosOk: 0,
+    chk1: false, chk2: false, chk3: false, chk4: false, chk5: false, chk5b: false, chk6: false, chk7: false
+  };
+  var pasos, chk2;
+
+  var HINTS = [
+    "Responde la predicción para mover el umbral",
+    "Arrastra el umbral y cuenta los legítimos marcados",
+    "Mueve el umbral y mira el rastro del punto",
+    "Cuenta los cuadraditos bajo la escalera",
+    "Toca un cuadradito para ver su par",
+    "Mueve la separación y mira la AUC",
+    "Compara el conteo con y sin el botón"
+  ];
+
+  function datosModo() { return est.paso === 5 ? sepDatos(est.h) : { pos: SPAM, neg: LEGIT }; }
+
+  function anotarRastro(c) {
+    if (est.paso === 1 || est.paso === 2) est.rastro[c.fpr.toFixed(2) + "|" + c.tpr.toFixed(2)] = { fpr: c.fpr, tpr: c.tpr };
+  }
+
+  function render() {
+    var d = datosModo(), c = contar(d.pos, d.neg, est.t), p = est.paso;
+    anotarRastro(c);
+    $("umbralVal").textContent = f(est.t, 2);
+    $("umbral").value = est.t;
+    var par = null;
+    if (p === 4 && est.par) {
+      var ps = desc(SPAM), ns = desc(LEGIT);
+      par = [SPAM.indexOf(ps[est.par[0]]), LEGIT.indexOf(ns[est.par[1]])];
+    }
+    dibujarHist($("hist"), { pos: d.pos, neg: d.neg, t: est.t, par: par, mult: p === 6 ? est.mult : 1 });
+    pintarConteo(c);
+    pintarRoc(d, c);
+    pintarVivos(d, c);
+    if (chk2) chk2.refrescar();
+  }
+
+  function pintarConteo(c) {
+    var p = est.paso, el = $("conteo"), m = p === 6 ? est.mult : 1;
+    if (p === 0) {
+      el.innerHTML = '<div class="conteo-simple">' +
+        '<span>Spam atrapado: <b>' + c.tp + '</b> de 10</span>' +
+        '<span>Falsas alarmas (legítimos en la carpeta de spam): <b>' + c.fp + '</b> de 10</span></div>';
+      return;
+    }
+    var ocultar = p === 1 && !est.chk2;
+    function cel(v, cls, nom) { return '<td class="' + cls + (ocultar && (nom === "FP" || nom === "TN") ? ' oculto' : '') + '"><small>' + nom + '</small>' + (ocultar && (nom === "FP" || nom === "TN") ? "?" : v) + '</td>'; }
+    var h = '<div class="conf-wrap"><table class="conf"><thead><tr><th></th><th>marcado spam</th><th>a la bandeja</th><th>tasa</th></tr></thead><tbody>' +
+      '<tr><th class="fila j">spam (' + 10 + ')</th>' + cel(c.tp, "bien", "TP") + cel(c.fn, "malo", "FN") + '<td class="tasa">TPR ' + f(c.tpr, 2) + '</td></tr>' +
+      '<tr><th class="fila k">legítimos (' + (10 * m) + ')</th>' + cel(c.fp * m, "malo", "FP") + cel(c.tn * m, "bien", "TN") +
+      '<td class="tasa' + (ocultar ? ' oculto' : '') + '">FPR ' + (ocultar ? "?" : f(c.fpr, 2)) + '</td></tr>';
+    if (p === 6) {
+      var prec = c.tp + c.fp * m > 0 ? c.tp / (c.tp + c.fp * m) : 0;
+      h += '<tr><th class="fila">precisión</th><td colspan="3">TP / (TP + FP) = ' + c.tp + ' / ' + (c.tp + c.fp * m) + ' = <b>' + f(prec, 2) + '</b></td></tr>';
+    }
+    el.innerHTML = h + '</tbody></table></div>';
+  }
+
+  function pintarRoc(d, c) {
+    var p = est.paso, svg = $("roc"), info = $("rocInfo");
+    $("rocBloque").hidden = p === 0;
+    if (p === 0) return;
+    var pt = { fpr: c.fpr, tpr: c.tpr };
+    if (p === 1) {
+      dibujarRoc(svg, { punto: pt, ocultarPunto: !est.chk2 });
+      info.innerHTML = est.chk2 ? "Punto del umbral " + f(est.t, 2) + ": (FPR, TPR) = <b>(" + f(c.fpr, 2) + ", " + f(c.tpr, 2) + ")</b>" : 'El punto aparece cuando resuelvas el chequeo: su FPR es <b class="oculto">?</b>';
+      return;
+    }
+    if (p === 2) {
+      var rastro = Object.keys(est.rastro).map(function (k) { return est.rastro[k]; });
+      dibujarRoc(svg, { curva: est.barrido ? CURVA : null, rastro: rastro, punto: pt });
+      info.innerHTML = est.barrido ? "Curva completa: <b>" + CURVA.length + "</b> puntos, uno por cada umbral distinto." : "Puntos visitados: <b>" + rastro.length + "</b>";
+      return;
+    }
+    if (p === 3) {
+      dibujarRoc(svg, { curva: CURVA, area: true, punto: pt });
+      info.innerHTML = "AUC = " + (est.chk4 ? "<b>" + f(AUC, 2) + "</b>" : '<b class="oculto">?</b>');
+      return;
+    }
+    if (p === 4) {
+      dibujarRoc(svg, { curva: CURVA, pares: est.paresVis ? { pos: SPAM, neg: LEGIT } : null, parSel: est.par });
+      svg.classList.toggle("clic", est.paresVis);
+      if (!est.paresVis) { info.innerHTML = "Los pares aparecen cuando resuelvas la predicción y toques el botón."; return; }
+      if (est.par) {
+        var sp = desc(SPAM)[est.par[0]], sn = desc(LEGIT)[est.par[1]];
+        info.innerHTML = "Par: spam <b>" + f(sp, 2) + "</b> contra legítimo <b>" + f(sn, 2) + "</b>, " + (sp > sn ? "bien ordenado" : "mal ordenado");
+      } else info.innerHTML = "Bien ordenados: <b>" + paresBien(SPAM, LEGIT) + "</b> de 100 = <b>" + f(aucPares(SPAM, LEGIT), 2) + "</b>";
+      return;
+    }
+    if (p === 5) {
+      var cu = curva(d.pos, d.neg), a = areaTrap(cu);
+      dibujarRoc(svg, { curva: cu, area: true, punto: pt, aucLab: est.chk6 ? "AUC " + f(a, 2) : "AUC ?" });
+      info.innerHTML = "AUC = " + (est.chk6 ? "<b>" + f(a, 2) + "</b>" : '<b class="oculto">?</b>');
+      return;
+    }
+    dibujarRoc(svg, { curva: CURVA, area: true, punto: pt, aucLab: "AUC " + f(AUC, 2) });
+    info.innerHTML = "AUC = <b>" + f(AUC, 2) + "</b> · Gini = <b>" + f(2 * AUC - 1, 2) + "</b>" + (est.mult > 1 ? " · la curva no se movió" : "");
+  }
+
+  function pintarVivos(d, c) {
+    var oc = !est.chk2;
+    $("vivoTasas").innerHTML = "TPR = spam atrapado / spam = " + c.tp + " / 10 = " + f(c.tpr, 2) +
+      "<br>FPR = falsas alarmas / legítimos = " + (oc ? "?" : c.fp) + " / 10 = " + (oc ? "?" : f(c.fpr, 2));
+    if (est.paso === 2 || est.paso === 3) {
+      $("vivoFormulas").innerHTML = "umbral " + f(est.t, 2) + ": TPR = " + c.tp + " / (" + c.tp + " + " + c.fn + ") = " + f(c.tpr, 2) +
+        " · FPR = " + c.fp + " / (" + c.fp + " + " + c.tn + ") = " + f(c.fpr, 2);
+    }
+    var alturas = desc(LEGIT).map(function (sn) { return SPAM.filter(function (sp) { return sp > sn; }).length / 10; });
+    $("vivoArea").innerHTML = est.chk4
+      ? "AUC = 0.1 × (" + alturas.map(function (v) { return f(v, 1); }).join(" + ") + ") = 0.1 × " + f(alturas.reduce(function (a, b) { return a + b; }, 0), 1) + " = " + f(AUC, 2)
+      : "AUC = suma de las columnas de la escalera = ?";
+    if (est.chk5b) {
+      var cc = contar(SPAM, LEGIT, est.t), mejor = 0, tm = 0;
+      CURVA.forEach(function (q) { var e = (q.tpr * 10 + (1 - q.fpr) * 10) / 20; if (e > mejor) { mejor = e; tm = q.t; } });
+      $("vivoExactitud").innerHTML = "Con el umbral en " + f(est.t, 2) + ": bien clasificados = " + cc.tp + " + " + cc.tn + " = " + (cc.tp + cc.tn) +
+        " de 20, exactitud <b>" + f((cc.tp + cc.tn) / 20, 2) + "</b><br>La mejor exactitud de todos los umbrales es " + f(mejor, 2) + " (umbral " + f(tm, 2) + "), y la AUC sigue en 0.80.";
+    }
+    if (est.paso === 5) {
+      var cu = curva(d.pos, d.neg), a = areaTrap(cu);
+      $("vivoSep").innerHTML = est.chk6 ? "Pares bien ordenados: " + paresBien(d.pos, d.neg) + " de 100 · AUC = <b>" + f(a, 2) + "</b>" +
+        (a < 0.5 ? " · invirtiendo los puntajes: " + f(1 - a, 2) : "") : "AUC = <b class=\"oculto\">?</b>";
+    }
+    $("vivoGini").innerHTML = "Gini = 2 × " + f(AUC, 2) + " − 1 = " + f(2 * AUC - 1, 2);
+    if (est.paso === 6 && est.chk7) {
+      var cg = contar(SPAM, LEGIT, est.t), m = est.mult;
+      $("vivoDesb").innerHTML = m > 1
+        ? "Con 100 legítimos: TPR = " + f(cg.tpr, 2) + ", FPR = " + (cg.fp * m) + " / 100 = " + f(cg.fpr, 2) + ": las mismas tasas, la misma curva y AUC 0.80.<br>" +
+          "Pero en la carpeta de spam hay " + cg.tp + " spam y <b>" + (cg.fp * m) + "</b> legítimos: la precisión cae a <b>" + f(cg.tp + cg.fp * m ? cg.tp / (cg.tp + cg.fp * m) : 0, 2) + "</b>."
+        : "Con 10 legítimos, la carpeta de spam tiene " + cg.tp + " spam y " + cg.fp + " legítimos: precisión " + f(cg.tp + cg.fp ? cg.tp / (cg.tp + cg.fp) : 0, 2) + ".";
+    }
+  }
+
+  function entrar(i) {
+    detenerBarrido();
+    est.paso = i;
+    if (i === 4 || i === 6) est.t = 0.5;
+    $("escHint").textContent = i === 0 && est.chk1 ? "Arrastra el umbral" : HINTS[i];
+    $("umbral").disabled = i === 0 && !est.chk1;
+    $("hist").classList.toggle("mover", !$("umbral").disabled);
+    if (i !== 4) $("roc").classList.remove("clic");
+    render();
+  }
+
+  /* ---------------- mover el umbral ---------------- */
+  function ponerUmbral(v) {
+    if ($("umbral").disabled) return;
+    v = Math.max(0, Math.min(1, Math.round(v * 100) / 100));
+    if (v === est.t) return;
+    est.t = v;
+    render();
+  }
+  $("umbral").addEventListener("input", function () { ponerUmbral(+this.value); });
+  (function () {
+    var svg = $("hist"), arr = false;
+    function valor(e) { var r = svg.getBoundingClientRect(); return hInv((e.clientX - r.left) / r.width * HG.W); }
+    svg.addEventListener("pointerdown", function (e) {
+      if ($("umbral").disabled) return;
+      arr = true;
+      try { svg.setPointerCapture(e.pointerId); } catch (err) { /* nada */ }
+      e.preventDefault();
+      ponerUmbral(valor(e));
+    });
+    svg.addEventListener("pointermove", function (e) { if (arr) ponerUmbral(valor(e)); });
+    svg.addEventListener("pointerup", function () { arr = false; });
+    svg.addEventListener("pointercancel", function () { arr = false; });
+    svg.addEventListener("keydown", function (e) {
+      var d = { ArrowLeft: -0.01, ArrowRight: 0.01, ArrowDown: -0.05, ArrowUp: 0.05 }[e.key];
+      if (!d) return;
+      e.preventDefault();
+      ponerUmbral(est.t + d);
+    });
+  })();
+
+  /* paso 3: barrido */
+  function detenerBarrido() { if (est.barriendo) { clearInterval(est.barriendo); est.barriendo = null; } }
+  $("btnBarrer").addEventListener("click", function () {
+    detenerBarrido();
+    est.t = 1;
+    render();
+    est.barriendo = setInterval(function () {
+      if (est.paso !== 2) { detenerBarrido(); return; }
+      est.t = Math.round((est.t - 0.01) * 100) / 100;
+      if (est.t <= 0) { est.t = 0; est.barrido = true; detenerBarrido(); }
+      render();
+    }, 28);
+  });
+
+  /* paso 5: pares */
+  $("btnPares").addEventListener("click", function () {
+    est.paresVis = true;
+    est.par = null;
+    $("btnSortear").disabled = false;
+    render();
+  });
+  $("btnSortear").addEventListener("click", function () {
+    var i = Math.floor(Math.random() * 10), j = Math.floor(Math.random() * 10);
+    est.par = [i, j];
+    est.sorteos++;
+    if (desc(SPAM)[i] > desc(LEGIT)[j]) est.sorteosOk++;
+    $("tally").innerHTML = "Sorteaste <b>" + est.sorteos + "</b> pares; <b>" + est.sorteosOk + "</b> bien ordenados, una frecuencia de <b>" + f(est.sorteosOk / est.sorteos, 2) +
+      "</b>. Con muchos sorteos se acerca a 0.80.";
+    render();
+  });
+  $("roc").addEventListener("click", function (e) {
+    if (est.paso !== 4 || !est.paresVis) return;
+    var r = e.target.closest ? e.target.closest("rect.celda") : null;
+    if (!r) return;
+    est.par = [+r.getAttribute("data-f"), +r.getAttribute("data-c")];
+    render();
+  });
+
+  /* paso 6: separacion */
+  $("sep").addEventListener("input", function () {
+    est.h = Math.round(+this.value * 50);
+    $("sepVal").textContent = f(est.h / 50, 2);
+    render();
+  });
+
+  /* paso 7: desbalance */
+  $("btnX10").addEventListener("click", function () {
+    est.mult = est.mult === 1 ? 10 : 1;
+    this.textContent = est.mult === 1 ? "Repetir cada legítimo 10 veces" : "Volver a 10 legítimos";
+    this.classList.toggle("on", est.mult > 1);
+    render();
+  });
+
+  /* ---------------- chequeos de cada paso ---------------- */
+  B.opcionMultiple(cuerpo("chk1"), {
+    pregunta: "Todavía no puedes mover la línea. Si la corres hacia la <b>derecha</b> (el filtro se vuelve más exigente), ¿qué pasa con el spam atrapado y con las falsas alarmas?",
+    opciones: [
+      "Los dos bajan (o se quedan igual): atrapas menos spam y también molestas a menos legítimos",
+      "Atrapas más spam y molestas a menos legítimos",
+      "Atrapas menos spam pero molestas a más legítimos",
+      "Los dos suben"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "Un correo queda marcado si su puntaje es mayor o igual que el umbral. Si el umbral sube, ¿puede entrar algún correo nuevo a la zona marcada?",
+      "Correr la línea a la derecha achica la zona marcada para los dos tipos de correo a la vez.",
+      "La zona marcada es lo que está a la derecha de la línea. ¿Se agranda o se achica?"],
+    explicacion: "La zona marcada se achica para los dos montones a la vez: pierdes spam atrapado y ganas tranquilidad en la bandeja. <b>Ningún umbral mejora las dos cosas a la vez.</b> Ahora arrastra la línea, o usa la barra de abajo, y compruébalo.",
+    alResolver: function () {
+      est.chk1 = true;
+      $("umbral").disabled = false;
+      $("hist").classList.add("mover");
+      $("escHint").textContent = "Arrastra el umbral";
+      pasos.completar(0);
+    }
+  });
+
+  chk2 = B.numerico(cuerpo("chk2"), {
+    pregunta: function () { return "Con el umbral en " + f(est.t, 2) + ", ¿cuál es la <b>FPR</b>, la tasa de falsas alarmas? Cuenta en el dibujo los legítimos que quedan marcados."; },
+    respuesta: function () { return contar(SPAM, LEGIT, est.t).fpr; },
+    tolerancia: 0.001,
+    pistas: [
+      "Los legítimos son los puntos verdes del carril de abajo. Cuenta los rellenos: están a la derecha de la línea.",
+      function () { return "Divide ese conteo entre el total de legítimos, que son 10."; }
+    ],
+    diagnostico: function (v, r) {
+      var c = contar(SPAM, LEGIT, est.t);
+      if (Math.abs(v - c.fp) < 1e-9 && c.fp > 1) return "Ese es el número de legítimos marcados. La tasa lo divide entre todos los legítimos.";
+      if (Math.abs(v - (1 - r)) < 1e-9) return "Esa es la fracción de legítimos que quedan en la bandeja. Te pido la de los que se van a spam.";
+      if (Math.abs(v - c.tpr) < 1e-9) return "Esa es la tasa de spam atrapado, la TPR. Mira el carril de los legítimos.";
+      if (c.tp + c.fp > 0 && Math.abs(v - c.fp / (c.tp + c.fp)) < 1e-9) return "Dividiste entre todos los marcados. La FPR divide entre todos los <b>legítimos</b>.";
+      return null;
+    },
+    explicacion: function () { var c = contar(SPAM, LEGIT, est.t); return c.fp + " legítimos marcados de 10: FPR = " + f(c.fpr, 2) + ". Ahora el punto (FPR, TPR) aparece en el cuadrado ROC. Mueve el umbral y mira cómo se desplaza."; },
+    alResolver: function () { est.chk2 = true; render(); pasos.completar(1); }
+  });
+
+  B.opcionMultiple(cuerpo("chk3"), {
+    pregunta: "Vas a bajar el umbral de 1 a 0. Cada vez que la línea cruza un correo <b>spam</b>, el punto de la ROC...",
+    opciones: ["Sube 0.1", "Se corre 0.1 a la derecha", "Se mueve en diagonal", "No se mueve"],
+    correcta: 0,
+    pistas: [null,
+      "A la derecha se mueve cuando aumenta la FPR. ¿Un spam cambia la cuenta de falsas alarmas?",
+      "En diagonal solo se mueve si cruza un spam y un legítimo con el mismo puntaje a la vez.",
+      "Al cruzarlo, ese spam pasa a estar marcado. ¿Cambia la TPR?"],
+    explicacion: "Un spam nuevo suma 1 a TP: la TPR sube 1/10. Un legítimo nuevo suma 1 a FP: el punto se corre 1/10 a la derecha. Por eso la curva es una <b>escalera</b>. <b>Ahora toca el botón</b> y mira cómo se arma.",
+    alResolver: function () {
+      est.chk3 = true;
+      $("btnBarrer").disabled = false;
+      $("barrerHint").textContent = "";
+      pasos.completar(2);
+    }
+  });
+
+  B.numerico(cuerpo("chk4"), {
+    pregunta: "¿Cuánto vale el área bajo la escalera? Cuenta los cuadraditos que quedan debajo (cada uno vale 0.01).",
+    respuesta: function () { return AUC; },
+    tolerancia: 0.005,
+    pistas: [
+      "Ve columna por columna. La primera columna, de FPR 0 a 0.1, tiene 3 cuadraditos debajo de la escalera.",
+      "Las alturas de las 10 columnas son 3, 6, 7, 8, 8, 9, 9, 10, 10 y 10 cuadraditos."
+    ],
+    diagnostico: function (v) {
+      if (Math.abs(v - 80) < 0.5) return "Contaste 80 cuadraditos. Cada uno vale 0.01, así que el área es 80 × 0.01.";
+      if (Math.abs(v - 0.2) < 0.005) return "Ese es el área de arriba de la escalera. La AUC es la de abajo.";
+      if (Math.abs(v - 0.7) < 0.005) return "0.70 es la TPR con umbral 0.5, un solo punto. El área junta todos los umbrales.";
+      return null;
+    },
+    explicacion: function () { return "Las columnas tienen 3 + 6 + 7 + 8 + 8 + 9 + 9 + 10 + 10 + 10 = 80 cuadraditos, y 80 × 0.01 = <b>0.80</b>."; },
+    alResolver: function () { est.chk4 = true; render(); pasos.completar(3); }
+  });
+
+  B.opcionMultiple(cuerpo("chk5"), {
+    pregunta: "Eliges al azar un spam y un legítimo. ¿Con qué probabilidad el filtro le dio más puntaje al spam?",
+    opciones: ["0.80, lo mismo que el área", "0.50, porque se eligen al azar", "0.70, la TPR con umbral 0.5", "No se puede saber sin elegir un umbral"],
+    correcta: 0,
+    pistas: [null,
+      "0.5 sería si el filtro ordenara al azar. Este filtro ordena bastante bien.",
+      "Para comparar dos puntajes no hace falta ningún umbral, así que la respuesta no depende de 0.5.",
+      "Comparar dos puntajes no necesita umbral: basta ver cuál es mayor."],
+    explicacion: "Es la AUC: <b>0.80</b>. <b>Ahora toca el botón</b> y comprueba que 80 de los 100 pares están bien ordenados, justo los que caen bajo la escalera.",
+    alResolver: function () { est.chk5 = true; $("btnPares").disabled = false; cerrarPaso5(); }
+  });
+
+  B.opcionMultiple(cuerpo("chk5b"), {
+    pregunta: "Con el umbral en 0.50, ¿qué fracción de los 20 correos clasifica bien el filtro?",
+    opciones: ["0.70: 14 de 20", "0.80, la AUC", "0.50", "No se puede calcular con estos datos"],
+    correcta: 0,
+    pistas: [null,
+      "La AUC no depende del umbral, la exactitud sí. Cuenta: spam marcados más legítimos que quedan en la bandeja.",
+      "Mira la tabla de conteo del paso 2 con el umbral en 0.50.",
+      "Sí se puede: con el umbral en 0.50 hay 7 spam atrapados y 7 legítimos en la bandeja."],
+    explicacion: "7 spam atrapados más 7 legítimos en la bandeja: 14 de 20, una exactitud de 0.70, no 0.80. Mueve el umbral y mira debajo cómo cambia la exactitud mientras la AUC se queda quieta.",
+    alResolver: function () { est.chk5b = true; render(); cerrarPaso5(); }
+  });
+  function cerrarPaso5() { if (est.chk5 && est.chk5b) pasos.completar(4); }
+
+  B.opcionMultiple(cuerpo("chk6"), {
+    pregunta: "Si los dos montones quedan uno encima del otro (separación 0), la AUC queda...",
+    opciones: ["Cerca de 0.5", "Cerca de 0", "Cerca de 1", "Depende del umbral"],
+    correcta: 0,
+    pistas: [null,
+      "AUC cerca de 0 es ordenar casi todos los pares al revés. Con los montones superpuestos, ¿hay alguna preferencia?",
+      "AUC cerca de 1 pide que casi todo el spam supere a casi todos los legítimos.",
+      "La AUC nunca depende del umbral: resume todos los umbrales a la vez."],
+    explicacion: "Con los montones superpuestos, la mitad de los pares sale bien ordenada y la mitad al revés: 0.5, la diagonal del azar. <b>Ahora mueve la barra</b>: lleva la separación a 0, después a 0.4 y después a −0.3.",
+    alResolver: function () { est.chk6 = true; $("sep").disabled = false; render(); pasos.completar(5); }
+  });
+
+  B.opcionMultiple(cuerpo("chk7"), {
+    pregunta: "Si cada correo legítimo aparece 10 veces (100 legítimos y 10 spam), la AUC...",
+    opciones: ["No cambia", "Sube", "Baja", "Se divide entre 10"],
+    correcta: 0,
+    pistas: [null,
+      "Repetir legítimos no cambia ningún puntaje ni el orden entre spam y legítimos.",
+      "La FPR de cada umbral pasa de 3/10 a 30/100. ¿Cambió?",
+      "La FPR es una fracción dentro de los legítimos: multiplicar arriba y abajo por 10 no la cambia."],
+    explicacion: "Las dos tasas se calculan dentro de cada clase, así que la curva y la AUC no se mueven. <b>Ahora toca el botón</b> y mira la precisión.",
+    alResolver: function () { est.chk7 = true; $("btnX10").disabled = false; render(); pasos.completar(6); }
+  });
+
+  pasos = B.pasos($("recorrido"), {
+    concepto: C,
+    alEntrar: entrar,
+    alTerminar: function () { location.hash = "retos"; }
+  });
+  if (pasos.hecho(0)) est.chk1 = true;
+  if (pasos.hecho(1)) est.chk2 = true;
+  if (pasos.hecho(2)) { est.chk3 = true; $("btnBarrer").disabled = false; $("barrerHint").textContent = ""; }
+  if (pasos.hecho(3)) est.chk4 = true;
+  if (pasos.hecho(4)) { est.chk5 = est.chk5b = true; $("btnPares").disabled = false; }
+  if (pasos.hecho(5)) { est.chk6 = true; $("sep").disabled = false; }
+  if (pasos.hecho(6)) { est.chk7 = true; $("btnX10").disabled = false; }
+  entrar(0);
+
+  /* ---------------- hipotesis inicial ---------------- */
+  (function () {
+    var ta = $("hipotesis"), t = null;
+    ta.value = B.nota("roc-auc", "hipotesis");
+    function cita() {
+      var v = ta.value.trim(), el = $("citaHipo");
+      el.hidden = !v;
+      if (v) { el.textContent = ""; el.appendChild(document.createTextNode("Al principio escribiste: «" + v + "». La AUC mide al filtro sin elegir umbral. ¿Se parece a tu idea? ¿Qué te faltaba?")); }
+    }
+    cita();
+    ta.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { B.nota("roc-auc", "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; cita(); }, 500);
+    });
+  })();
+
+  /* ---------------- marcadores de estado de retos ---------------- */
+  function pintarEstados() {
+    [].forEach.call(document.querySelectorAll("[data-reto]"), function (el) {
+      var ok = C.retoOk(el.getAttribute("data-reto"));
+      el.textContent = ok ? "resuelto" : "pendiente";
+      el.classList.toggle("ok", ok);
+    });
+  }
+  C.alCambiar(pintarEstados);
+
+  /* ---------------- reto: ojo clinico ---------------- */
+  function gauss() {
+    var u = 0, v = 0;
+    while (u === 0) u = Math.random();
+    while (v === 0) v = Math.random();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+  var BANDAS = {
+    reves: { d: -0.07, min: 0, max: 0.28, txt: "Menos de 0.3" },
+    azar: { d: 0, min: 0.42, max: 0.58, txt: "Cerca de 0.5" },
+    media: { d: 0.06, min: 0.68, max: 0.82, txt: "Alrededor de 0.75" },
+    alta: { d: 0.16, min: 0.92, max: 1, txt: "Más de 0.9" }
+  };
+  function filtro(tipo) {
+    var b = BANDAS[tipo], pos, neg;
+    for (var t = 0; t < 400; t++) {
+      pos = []; neg = [];
+      for (var i = 0; i < 10; i++) {
+        pos.push(Math.max(0.02, Math.min(0.98, r2(0.5 + b.d + 0.12 * gauss()))));
+        neg.push(Math.max(0.02, Math.min(0.98, r2(0.5 - b.d + 0.12 * gauss()))));
+      }
+      var a = aucPares(pos, neg);
+      if (a >= b.min && a <= b.max) break;
+    }
+    return { pos: pos, neg: neg };
+  }
+  (function () {
+    var cont = $("ojo");
+    cont.innerHTML = '<div class="ronda"></div><div class="dos-svg"><svg role="img" aria-label="Puntajes de un filtro"></svg><svg role="img" aria-label="Curva ROC del filtro"></svg></div>' +
+      '<div class="ojo-opts">' + ["reves", "azar", "media", "alta"].map(function (k) { return '<button type="button" class="opt" data-a="' + k + '">' + BANDAS[k].txt + '</button>'; }).join("") + '</div>' +
+      '<div class="fb" aria-live="polite"></div><div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    var svgs = cont.querySelectorAll("svg"), tipos, ronda, aciertos, respondida, datos;
+    function nueva() {
+      var extra = ["media", "alta", "azar"][Math.floor(Math.random() * 3)];
+      tipos = B.mezclar(["reves", "azar", "media", "alta", extra]);
+      ronda = 0; aciertos = 0;
+      mostrar();
+    }
+    function mostrar() {
+      respondida = false;
+      datos = filtro(tipos[ronda]);
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 5 · aciertos " + aciertos;
+      dibujarHist(svgs[0], { pos: datos.pos, neg: datos.neg, t: null });
+      dibujarRoc(svgs[1], {});
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (b) { b.disabled = false; b.className = "opt"; });
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+    }
+    cont.querySelector(".ojo-opts").addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || respondida) return;
+      respondida = true;
+      var tipo = tipos[ronda], ok = b.getAttribute("data-a") === tipo, a = aucPares(datos.pos, datos.neg);
+      if (ok) aciertos++;
+      b.classList.add(ok ? "ok" : "mal");
+      if (!ok) cont.querySelector('[data-a="' + tipo + '"]').classList.add("ok");
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (x) { x.disabled = true; });
+      dibujarRoc(svgs[1], { curva: curva(datos.pos, datos.neg), area: true, aucLab: "AUC " + f(a, 2) });
+      var porque = tipo === "reves" ? "El spam quedó con menos puntaje que los legítimos: el filtro ordena al revés. Invirtiendo sus puntajes tendría AUC " + f(1 - a, 2) + "."
+        : tipo === "azar" ? "Los montones están casi encimados: la curva va pegada a la diagonal."
+        : tipo === "media" ? "Hay separación, pero los montones se superponen en el medio."
+        : "Los montones casi no se tocan: la curva se pega al rincón de arriba a la izquierda.";
+      cont.querySelector(".fb").innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No.</span> ') + "AUC = " + f(a, 2) + ". " + porque;
+      var sig = cont.querySelector(".sig");
+      sig.hidden = false;
+      if (ronda === 4) {
+        var aprobo = aciertos >= 4;
+        C.reto("ojo", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertos + " de 5" + (aprobo ? ". Aprobado." : ". Necesitas 4 para aprobar.");
+        sig.textContent = "Otra tanda";
+      } else sig.textContent = "Siguiente ronda";
+    });
+    cont.querySelector(".sig").addEventListener("click", function () { if (ronda === 4) nueva(); else { ronda++; mostrar(); } });
+    nueva();
+  })();
+
+  /* ---------------- reto: constructor ---------------- */
+  (function () {
+    var D = { pos: [0.2, 0.45, 0.6, 0.85], neg: [0.3, 0.5, 0.7, 0.9] };
+    var OBJ = [
+      { t: "AUC = 1: un filtro perfecto.", ok: function (a) { return Math.abs(a - 1) < 1e-9; } },
+      { t: "AUC = 0.75 exacta: 12 de los 16 pares bien ordenados.", ok: function (a) { return Math.abs(a - 0.75) < 1e-9; } },
+      { t: "AUC = 0.25: un filtro que ordena al revés.", ok: function (a) { return Math.abs(a - 0.25) < 1e-9; } }
+    ];
+    var logrados = [false, false, false], avisado = false, ul = $("objetivos"), svg = $("constrHist"), arr = null;
+    OBJ.forEach(function (o) { var li = document.createElement("li"); li.innerHTML = '<span class="m"></span><span>' + o.t + '</span>'; ul.appendChild(li); });
+    function pintar() {
+      var a = aucPares(D.pos, D.neg);
+      dibujarHist(svg, { pos: D.pos, neg: D.neg, t: null, dens: false, arrastre: true });
+      dibujarRoc($("constrRoc"), { curva: curva(D.pos, D.neg), area: true, aucLab: "AUC " + f(a, 2) });
+      $("constrVivo").innerHTML = "Pares bien ordenados: <b>" + paresBien(D.pos, D.neg) + "</b> de 16 · AUC = <b>" + f(a, 4) + "</b>";
+      OBJ.forEach(function (o, i) { if (!logrados[i] && o.ok(a)) logrados[i] = true; ul.children[i].classList.toggle("hecho", logrados[i]); });
+      if (!avisado && logrados.every(Boolean)) { avisado = true; C.reto("constructor", true); }
+    }
+    svg.style.touchAction = "none";
+    svg.addEventListener("pointerdown", function (e) {
+      var c = e.target.getAttribute && e.target.getAttribute("data-c");
+      if (!c) return;
+      arr = { c: c, i: +e.target.getAttribute("data-i") };
+      try { svg.setPointerCapture(e.pointerId); } catch (err) { /* nada */ }
+      e.preventDefault();
+    });
+    svg.addEventListener("pointermove", function (e) {
+      if (!arr) return;
+      var r = svg.getBoundingClientRect(), v = r2(hInv((e.clientX - r.left) / r.width * HG.W));
+      v = Math.max(0.01, Math.min(0.99, v));
+      var lista = arr.c === "p" ? D.pos : D.neg;
+      if (lista[arr.i] === v) return;
+      lista[arr.i] = v;
+      pintar();
+    });
+    svg.addEventListener("pointerup", function () { arr = null; });
+    svg.addEventListener("pointercancel", function () { arr = null; });
+    pintar();
+  })();
+
+  /* ---------------- reto: a mano ---------------- */
+  (function () {
+    var D;
+    function generar() {
+      for (;;) {
+        var usados = {}, todos = [];
+        while (todos.length < 9) { var v = 5 + Math.floor(Math.random() * 91); if (!usados[v]) { usados[v] = 1; todos.push(v / 100); } }
+        var pos = todos.slice(0, 4), neg = todos.slice(4);
+        var a = aucPares(pos, neg);
+        if (a < 0.3 || a > 0.95) continue;
+        D = { pos: pos, neg: neg, a: a, n: paresBien(pos, neg) };
+        break;
+      }
+      $("manoDatos").innerHTML = '<table class="datos-mano"><tr><th class="j">spam</th><td>' + D.pos.map(function (v) { return f(v, 2); }).join("</td><td>") + '</td><td></td></tr>' +
+        '<tr><th class="k">legítimos</th><td>' + D.neg.map(function (v) { return f(v, 2); }).join("</td><td>") + '</td></tr></table>';
+    }
+    function cuentaPorSpam() { return D.pos.map(function (p) { return D.neg.filter(function (n) { return p > n; }).length; }); }
+    var cfg = {
+      pregunta: "¿Cuánto vale la AUC? Puedes escribirla como decimal o como fracción.",
+      respuesta: function () { return D.a; },
+      tolerancia: 0.001,
+      pistas: [
+        "Hay 4 × 5 = 20 pares. Para cada spam, cuenta cuántos legítimos tienen menos puntaje que él.",
+        function () { return "Por spam (en el orden de la tabla): " + cuentaPorSpam().join(", ") + "."; },
+        function () { return "En total " + D.n + " pares bien ordenados de 20."; }
+      ],
+      diagnostico: function (v) {
+        if (Math.abs(v - D.n) < 1e-9) return "Ese es el número de pares bien ordenados. Falta dividir entre los 20 pares.";
+        if (Math.abs(v - (1 - D.a)) < 1e-9) return "Contaste los pares mal ordenados: el legítimo por encima del spam.";
+        if (Math.abs(v - D.n / 9) < 1e-9) return "Dividiste entre 4 + 5. Los pares son 4 × 5.";
+        return null;
+      },
+      explicacion: function () { return "Pares bien ordenados por spam: " + cuentaPorSpam().join(" + ") + " = " + D.n + ". AUC = " + D.n + " / 20 = <b>" + f(D.a, 2) + "</b>."; },
+      reintentable: true,
+      textoReintentar: "Otro ejercicio",
+      antesDeReintentar: generar,
+      alResolver: function (ok) { C.reto("mano", ok); }
+    };
+    generar();
+    B.numerico($("mano"), cfg);
+  })();
+
+  /* ---------------- reto: cazar el error ---------------- */
+  B.cazarError($("error"), {
+    variantes: [
+      {
+        intro: "Un filtro con umbral 0.6 da TP = 6, FN = 4, FP = 2, TN = 8. Alguien ubicó su punto en la ROC así:",
+        lineas: ["\\text{spam} = TP + FN = 10", "\\text{TPR} = 6/(6+4) = 0.60", "\\text{FPR} = 2/(2+6) = 0.25", "\\text{punto} = (0.25,\\ 0.60)"],
+        erronea: 2,
+        explicacion: "La FPR divide entre todos los legítimos, FP + TN = 10, no entre los marcados como spam. FPR = 2/10 = 0.20 y el punto es (0.20, 0.60). Lo que calculó, 2/8, es 1 menos la precisión."
+      },
+      {
+        intro: "Spam con puntajes 0.9, 0.6 y 0.4; legítimos con 0.7, 0.3 y 0.2. Alguien calculó la AUC contando pares:",
+        lineas: ["0.9 \\text{ supera a } 0.7,\\ 0.3,\\ 0.2:\\ 3 \\text{ pares}", "0.6 \\text{ supera a } 0.3,\\ 0.2:\\ 2 \\text{ pares}",
+          "0.4 \\text{ supera a } 0.7,\\ 0.3,\\ 0.2:\\ 3 \\text{ pares}", "\\text{total} = 8 \\text{ de } 3 \\times 3 = 9", "\\text{AUC} = 8/9 \\approx 0.89"],
+        erronea: 2,
+        explicacion: "0.4 no supera a 0.7. Son 2 pares, el total es 7 y la AUC es 7/9 ≈ 0.78."
+      },
+      {
+        intro: "Un modelo de regresión logística tiene AUC = 0.85. Alguien reportó su coeficiente de Gini así:",
+        lineas: ["\\text{AUC} = 0.85", "\\text{Gini} = 1 - \\text{AUC}^2", "\\text{Gini} = 1 - 0.7225 = 0.2775", "\\text{conclusión: el modelo discrimina poco}"],
+        erronea: 1,
+        explicacion: "Mezcló los dos Gini. El de la ROC es 2·AUC − 1 = 0.70: un modelo que discrimina bien. La fórmula 1 − Σp² es el índice de Gini de impureza de los árboles de decisión, otra idea con el mismo nombre."
+      }
+    ],
+    alResolver: function (ok) { C.reto("error", ok); }
+  });
+
+  /* ---------------- retos: propiedades ---------------- */
+  function prop(id, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple($(id), cfg);
+  }
+  prop("prop1", {
+    pregunta: "Un modelo tiene AUC = 0.30 en datos que nunca vio. ¿Qué conviene concluir?",
+    opciones: [
+      "Ordena al revés: invirtiendo sus puntajes tendría AUC 0.70",
+      "Es peor que tirar una moneda y no sirve para nada",
+      "Acierta el 30 % de los casos",
+      "Hay que bajar el umbral hasta que la AUC suba"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "Una moneda no tiene ninguna información. Este modelo se equivoca de forma sistemática, y eso es información.",
+      "La AUC no es un porcentaje de aciertos: es la fracción de pares bien ordenados.",
+      "La AUC no depende del umbral: lo resume entero."],
+    explicacion: "Si un par sale mal ordenado con $s$, sale bien con $1 - s$: la AUC pasa a $1 - 0.30 = 0.70$. Antes de hacerlo, revisa si no se te cruzaron las etiquetas de las clases."
+  });
+  prop("prop2", {
+    pregunta: "Elevas al cuadrado todos los puntajes del filtro (todos están entre 0 y 1). La AUC...",
+    opciones: ["No cambia", "Baja, porque los puntajes se achican", "Se eleva al cuadrado", "Sube"],
+    correcta: 0,
+    pistas: [null,
+      "Se achican todos, pero ¿cambia cuál es mayor en cada par?",
+      "La AUC cuenta pares bien ordenados. ¿Cambió el orden?",
+      "Si el orden de los puntajes no cambia, ningún par cambia de bien a mal ordenado."],
+    explicacion: "La AUC solo mira el <b>orden</b> de los puntajes. Cualquier función creciente (cuadrado entre 0 y 1, logaritmo, pasar de log-odds a probabilidad) deja la misma curva y la misma AUC. Por eso da igual usar la probabilidad de la logística o su expresión lineal."
+  });
+  prop("prop3", {
+    pregunta: "La curva ROC de un filtro pasa por el punto (0.2, 0.9). Eso significa que...",
+    opciones: [
+      "Hay un umbral que atrapa el 90 % del spam y manda a spam el 20 % de los legítimos",
+      "El filtro acierta el 90 % de los correos",
+      "Con umbral 0.2 la TPR es 0.9",
+      "El 20 % del spam se escapa"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "Un punto de la ROC son dos tasas, una por clase, no un porcentaje de todos los correos.",
+      "El punto no dice qué umbral es: dice FPR y TPR.",
+      "La TPR es 0.9, así que se escapa el 10 % del spam."],
+    explicacion: "Cada punto es (FPR, TPR) de algún umbral: 90 % del spam atrapado al costo de 20 % de falsas alarmas. El valor del umbral no se ve en la curva."
+  });
+  prop("prop4", {
+    pregunta: "Un umbral tan alto que no marca ningún correo como spam corresponde al punto...",
+    opciones: ["(0, 0)", "(1, 1)", "(0, 1)", "(1, 0)"],
+    correcta: 0,
+    pistas: [null,
+      "(1, 1) es marcar todo: atrapas todo el spam y todos los legítimos son falsas alarmas.",
+      "(0, 1) es el filtro perfecto, no el que no marca nada.",
+      "(1, 0) sería marcar todos los legítimos y ningún spam."],
+    explicacion: "Sin marcados, TP = 0 y FP = 0: TPR = 0 y FPR = 0. Toda curva ROC empieza en (0, 0) y termina en (1, 1)."
+  });
+  prop("prop5", {
+    pregunta: "En detección de fraude hay 1 fraude por cada 1000 operaciones. Dos modelos tienen AUC 0.95 y 0.96. ¿Qué te dice eso de cuántas alarmas falsas vas a revisar?",
+    opciones: [
+      "Poco: con tanto desbalance, una FPR pequeña son muchísimas alarmas; hay que mirar la precisión o la curva precisión-recall",
+      "Que casi no habrá alarmas falsas, porque la AUC es altísima",
+      "Que el de 0.96 tiene un 1 % menos de alarmas falsas",
+      "Nada, porque la AUC no se puede usar con desbalance"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "Con 999 operaciones legítimas por cada fraude, una FPR de 0.05 son unas 50 alarmas falsas por cada fraude.",
+      "La AUC no se traduce en un número de alarmas: depende del umbral y de cuántos negativos hay.",
+      "Sí se puede usar para ordenar modelos; lo que no dice es cuántas alarmas falsas tendrás."],
+    explicacion: "Como en el paso 7: la ROC no ve el desbalance. Una FPR de 0.05 parece poco, pero con 999 legítimos por fraude son unas 50 alarmas falsas por cada fraude verdadero. La precisión y la curva precisión-recall sí lo muestran."
+  });
+
+  /* ---------------- formula de memoria ---------------- */
+  B.ordenar($("formula"), {
+    piezas: ["\\text{AUC}", "=", "\\dfrac{1}{n_{+}\\,n_{-}}", "\\displaystyle\\sum_{i}\\sum_{j}", "\\mathbb{1}\\big[s_i^{+} > s_j^{-}\\big]"],
+    distractores: ["\\dfrac{1}{n_{+} + n_{-}}", "\\mathbb{1}\\big[s_i^{+} < s_j^{-}\\big]", "2\\,\\text{AUC} - 1"],
+    soluciones: [[0, 1, 2, 3, 4]],
+    explicacion: "Recorre todos los pares (un spam y un legítimo), cuenta 1 si el spam tiene más puntaje y divide entre el número de pares, $n_{+} \\cdot n_{-}$.",
+    alResolver: function (ok) { C.reto("formula", ok); }
+  });
+
+  /* ---------------- vida real: el algoritmo en codigo ---------------- */
+  (function () {
+    // cada linea: [id semantico, texto]. El id une la misma instruccion en los dos lenguajes.
+    var CODIGO = {
+      py: [
+        ["import", "import numpy as np"],
+        ["import", "from sklearn.metrics import roc_curve, roc_auc_score"],
+        [null, ""],
+        [null, "# puntaje del filtro y clase real (1 = spam, 0 = legítimo)"],
+        ["p", "p = np.array([0.97, 0.91, 0.86, 0.78, 0.71, 0.64, 0.57, 0.48, 0.36, 0.22,"],
+        ["p", "              0.81, 0.62, 0.52, 0.43, 0.38, 0.29, 0.24, 0.17, 0.11, 0.05])"],
+        ["y", "y = np.array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1,"],
+        ["y", "              0, 0, 0, 0, 0, 0, 0, 0, 0, 0])"],
+        ["P", "P = np.sum(y == 1)                    # cuántos spam hay"],
+        ["N", "N = np.sum(y == 0)                    # cuántos legítimos hay"],
+        [null, ""],
+        ["umbrales", "umbrales = np.r_[np.inf, np.sort(p)[::-1]]   # del más exigente al menos"],
+        ["vacias", "fpr, tpr = [], []"],
+        ["for_t", "for t in umbrales:                    # 1. un punto por umbral"],
+        ["marcado", "    marcado = p >= t"],
+        ["tp", "    tp = np.sum(marcado & (y == 1))"],
+        ["fp", "    fp = np.sum(marcado & (y == 0))"],
+        ["tpr", "    tpr.append(tp / P)"],
+        ["fpr", "    fpr.append(fp / N)"],
+        [null, ""],
+        ["area0", "area = 0.0"],
+        ["for_k", "for k in range(1, len(fpr)):          # 2. trapecios entre puntos vecinos"],
+        ["base", "    base = fpr[k] - fpr[k - 1]"],
+        ["altura", "    altura = (tpr[k] + tpr[k - 1]) / 2"],
+        ["acum", "    area += base * altura"],
+        [null, ""],
+        ["imp_area", "print(round(area, 4))"],
+        ["lib", "print(round(roc_auc_score(y, p), 4))  # 3. la librería"],
+        ["comparar", "fs, ts, _ = roc_curve(y, p, drop_intermediate=False)"],
+        ["comparar", "print(np.allclose(fs, fpr), np.allclose(ts, tpr))"]
+      ],
+      r: [
+        ["import", "suppressPackageStartupMessages(library(pROC))"],
+        [null, ""],
+        [null, "# puntaje del filtro y clase real (1 = spam, 0 = legítimo)"],
+        ["p", "p <- c(0.97, 0.91, 0.86, 0.78, 0.71, 0.64, 0.57, 0.48, 0.36, 0.22,"],
+        ["p", "       0.81, 0.62, 0.52, 0.43, 0.38, 0.29, 0.24, 0.17, 0.11, 0.05)"],
+        ["y", "y <- c(1, 1, 1, 1, 1, 1, 1, 1, 1, 1,"],
+        ["y", "       0, 0, 0, 0, 0, 0, 0, 0, 0, 0)"],
+        ["P", "P <- sum(y == 1)                      # cuántos spam hay"],
+        ["N", "N <- sum(y == 0)                      # cuántos legítimos hay"],
+        [null, ""],
+        ["umbrales", "umbrales <- c(Inf, sort(p, decreasing = TRUE))   # del más exigente al menos"],
+        ["vacias", "fpr <- c(); tpr <- c()"],
+        ["for_t", "for (t in umbrales) {                 # 1. un punto por umbral"],
+        ["marcado", "  marcado <- p >= t"],
+        ["tp", "  tp <- sum(marcado & y == 1)"],
+        ["fp", "  fp <- sum(marcado & y == 0)"],
+        ["tpr", "  tpr <- c(tpr, tp / P)"],
+        ["fpr", "  fpr <- c(fpr, fp / N)"],
+        [null, "}"],
+        [null, ""],
+        ["area0", "area <- 0"],
+        ["for_k", "for (k in 2:length(fpr)) {            # 2. trapecios entre puntos vecinos"],
+        ["base", "  base <- fpr[k] - fpr[k - 1]"],
+        ["altura", "  altura <- (tpr[k] + tpr[k - 1]) / 2"],
+        ["acum", "  area <- area + base * altura"],
+        [null, "}"],
+        [null, ""],
+        ["imp_area", "print(round(area, 4))"],
+        ["lib", "r <- roc(y, p, quiet = TRUE)          # 3. la librería"],
+        ["lib", "print(auc(r))"],
+        ["comparar", "print(all.equal(rev(r$sensitivities), tpr))"]
+      ]
+    };
+    var SALIDA = { py: ["0.8", "0.8", "True True"], r: ["[1] 0.8", "Area under the curve: 0.8", "[1] TRUE"] };
+    var P_ = SPAM.concat(LEGIT), Y = SPAM.map(function () { return 1; }).concat(LEGIT.map(function () { return 0; }));
+    var U = [Infinity].concat(desc(P_));
+
+    /* eventos: una foto del estado despues de ejecutar cada linea */
+    var EV = [];
+    (function () {
+      var fase = 0, n = 0, ntpr = 0, area = 0;
+      function foto(id, extra) {
+        EV.push(Object.assign({ id: id, fase: fase, n: n, ntpr: ntpr, area: area, u: null, tp: null, fp: null, k: null, base: null, altura: null, salida: 0 }, extra || {}));
+      }
+      foto("import"); foto("p"); foto("y"); foto("P"); foto("N"); foto("umbrales"); foto("vacias");
+      fase = 1;
+      U.forEach(function (t, u) {
+        foto("for_t", { u: u });
+        foto("marcado", { u: u });
+        var c = contar(SPAM, LEGIT, t);
+        foto("tp", { u: u, tp: c.tp });
+        foto("fp", { u: u, tp: c.tp, fp: c.fp });
+        ntpr++;
+        foto("tpr", { u: u, tp: c.tp, fp: c.fp });
+        n++;
+        foto("fpr", { u: u, tp: c.tp, fp: c.fp });
+      });
+      fase = 2;
+      foto("area0");
+      for (var k = 1; k < CURVA.length; k++) {
+        foto("for_k", { k: k });
+        var base = CURVA[k].fpr - CURVA[k - 1].fpr;
+        foto("base", { k: k, base: base });
+        var altura = (CURVA[k].tpr + CURVA[k - 1].tpr) / 2;
+        foto("altura", { k: k, base: base, altura: altura });
+        area += base * altura;
+        foto("acum", { k: k, base: base, altura: altura });
+      }
+      fase = 3;
+      foto("imp_area", { salida: 1 });
+      foto("lib", { salida: 2 });
+      foto("comparar", { salida: 3, fin: true });
+    })();
+
+    function tTxt(u, py) { return u === 0 ? (py ? "inf" : "Inf") : f(U[u], 2); }
+    function narrar(e, ctx) {
+      var py = ctx.lang() === "py", ix = ctx.ix;
+      switch (e.id) {
+        case "import": return py ? "Carga NumPy y, de scikit-learn, las dos funciones con las que se compara al final." : "Carga el paquete <b>pROC</b> sin los avisos de inicio. R base no trae curvas ROC.";
+        case "p": return "Los 20 puntajes del recorrido: primero los 10 spam, después los 10 legítimos.";
+        case "y": return "La clase real de cada correo: 1 es spam (positivo), 0 es legítimo (negativo).";
+        case "P": return "Cuenta los positivos: <b>P = 10</b>. Es el denominador de la TPR.";
+        case "N": return "Cuenta los negativos: <b>N = 10</b>. Es el denominador de la FPR.";
+        case "umbrales": return "Los umbrales a probar: <b>" + (py ? "inf" : "Inf") + "</b>, que no marca nada, y después cada puntaje de mayor a menor. Son <b>21</b>.";
+        case "vacias": return "Dos listas vacías que van a guardar la FPR y la TPR de cada umbral.";
+        case "for_t": return "Toma el umbral de la posición <b>" + ix(e.u) + "</b> de la lista: t = <b>" + tTxt(e.u, py) + "</b>.";
+        case "marcado": return "Para cada correo, ¿su puntaje es mayor o igual que " + tTxt(e.u, py) + "? Queda un vector de verdadero y falso.";
+        case "tp": return "Spam marcados: <b>TP = " + e.tp + "</b>.";
+        case "fp": return "Legítimos marcados, las falsas alarmas: <b>FP = " + e.fp + "</b>.";
+        case "tpr": return "Guarda TPR = " + e.tp + " / 10 = <b>" + f(e.tp / 10, 1) + "</b>.";
+        case "fpr": return "Guarda FPR = " + e.fp + " / 10 = <b>" + f(e.fp / 10, 1) + "</b>. Ya hay <b>" + e.n + "</b> puntos.";
+        case "area0": return "El área empieza en cero.";
+        case "for_k": return "Tramo entre el punto " + ix(e.k - 1) + " y el punto " + ix(e.k) + ".";
+        case "base": return "Base del trapecio: cuánto avanzó la FPR, <b>" + f(e.base, 1) + "</b>." + (e.base === 0 ? " Es un escalón vertical: no suma área." : "");
+        case "altura": return "Altura media: el promedio de las dos TPR, <b>" + f(e.altura, 2) + "</b>.";
+        case "acum": return "Suma base × altura = " + f(e.base * e.altura, 2) + ". El área va en <b>" + f(e.area, 2) + "</b>.";
+        case "imp_area": return "Imprime el área calculada a mano: <b>" + SALIDA[ctx.lang()][0] + "</b>.";
+        case "lib": return py ? "La función de scikit-learn, <b>roc_auc_score(y, p)</b>, da lo mismo: <b>0.8</b>."
+          : "<b>roc(y, p)</b> arma la curva y <b>auc(r)</b> da su área: <b>0.8</b>, igual que a mano.";
+        case "comparar": return py ? "<b>roc_curve</b> con <b>drop_intermediate=False</b> devuelve los mismos 21 puntos: <b>True True</b>."
+          : "pROC guarda las sensibilidades del umbral más bajo al más alto; con <b>rev</b> quedan en nuestro orden y coinciden con tpr: <b>TRUE</b>.";
+      }
+      return "";
+    }
+    function visual(e, anterior, ctx) {
+      var u = e && e.fase === 1 ? e.u : null;
+      dibujarHist($("vrHist"), {
+        pos: SPAM, neg: LEGIT, t: u === null ? null : U[u] > 1 ? 1 : U[u], dens: false, marcar: u !== null && e.id !== "for_t",
+        tLab: u === 0 ? "umbral " + (ctx.lang() === "py" ? "inf" : "Inf") : null
+      });
+      var pts = CURVA.slice(0, e ? e.n : 0);
+      var enArea = e && e.fase >= 2;
+      dibujarRoc($("vrRoc"), {
+        rastro: pts, curva: enArea ? CURVA : null,
+        trapecios: e && e.fase === 2 && e.k ? e.k : e && e.fase === 3 ? CURVA.length - 1 : 0, trapAct: e && e.fase === 2 ? e.k : null,
+        aucLab: enArea ? "área " + f(e.area, 2) : null
+      });
+      $("vrCuenta").innerHTML = !e ? "" : e.id === "fpr" ? "punto " + e.n + ": (FPR, TPR) = (" + f(e.fp / 10, 1) + ", " + f(e.tp / 10, 1) + ")"
+        : e.id === "acum" ? "trapecio " + e.k + ": " + f(e.base, 1) + " × " + f(e.altura, 2) + " = " + f(e.base * e.altura, 2) + " · área = <b>" + f(e.area, 2) + "</b>"
+        : e.fase === 1 && e.tp !== null ? "TP = <b>" + e.tp + "</b>" + (e.fp !== null ? " · FP = <b>" + e.fp + "</b>" : "") : "";
+      $("vrSalida").textContent = e ? SALIDA[ctx.lang()].slice(0, e.salida).join("\n") : "";
+    }
+    B.vidaReal($("vidareal"), {
+      codigo: CODIGO,
+      eventos: EV,
+      narrar: narrar,
+      vars: function (e, ctx) {
+        var v = [];
+        if (e && e.fase === 1 && e.u !== null) v.push('<span>t = <b>' + tTxt(e.u, ctx.lang() === "py") + '</b></span>');
+        if (e && e.tp !== null && e.fase === 1) v.push('<span class="vj">tp = <b>' + e.tp + '</b></span>');
+        if (e && e.fp !== null && e.fase === 1) v.push('<span class="vk">fp = <b>' + e.fp + '</b></span>');
+        if (e && e.k !== null) v.push('<span>k = <b>' + ctx.ix(e.k) + '</b></span>');
+        if (e && e.fase >= 2) v.push('<span>area = <b>' + f(e.area, 2) + '</b></span>');
+        v.push('<span>puntos guardados: <b>' + (e ? e.n : 0) + '</b></span>');
+        return v;
+      },
+      visual: visual,
+      demora: function (e) {
+        if (!e) return 600;
+        return { for_t: 420, marcado: 300, tp: 300, fp: 300, tpr: 260, fpr: 480, for_k: 220, base: 260, altura: 260, acum: 520 }[e.id] || 1000;
+      }
+    });
+
+    /* chequeo de prediccion y trampas reales */
+    B.numerico(cuerpo("vrPred"), {
+      pregunta: "El primer bucle guarda un punto por umbral. ¿Cuántos puntos va a tener la curva al terminar?",
+      respuesta: 21,
+      tolerancia: 0,
+      pistas: [
+        "Hay un umbral por cada puntaje distinto. ¿Cuántos correos hay?",
+        "Además de los 20 puntajes, la lista empieza con un umbral infinito, que no marca nada y da el punto (0, 0)."
+      ],
+      diagnostico: function (v) {
+        if (v === 20) return "Te falta el umbral infinito del principio, el que da el punto (0, 0).";
+        if (v === 10 || v === 11) return "Los umbrales salen de los 20 puntajes, no solo de los spam.";
+        return null;
+      },
+      explicacion: "20 puntajes distintos más el umbral infinito: <b>21</b> puntos, de (0, 0) a (1, 1). Ahora dale a reproducir y mira cómo se van guardando.",
+      alResolver: function (ok) { C.reto("codigo1", ok); }
+    });
+    prop("codigo2", {
+      pregunta: "En vez del puntaje, le pasas a la función la clase ya decidida con umbral 0.5: <code>roc_auc_score(y, (p &gt;= 0.5).astype(int))</code>. ¿Qué devuelve?",
+      opciones: [
+        "0.7: con dos valores posibles la curva tiene un solo codo, en (0.3, 0.7)",
+        "0.8, lo mismo que con el puntaje",
+        "Un error, porque pide probabilidades",
+        "1.0, porque las clases ya están decididas"
+      ],
+      correcta: 0,
+      pistas: [null,
+        "Con solo 0 y 1 hay un único umbral útil. ¿Puede recorrer los 21 puntos?",
+        "No avisa nada: acepta cualquier número y por eso la trampa pasa desapercibida.",
+        "Decidir la clase no la vuelve correcta: sigue habiendo 3 falsas alarmas y 3 spam escapados."],
+      explicacion: "Corrido de verdad, Python imprime <code>0.7</code> y R, con <code>auc(roc(y, as.numeric(p &gt;= 0.5), quiet = TRUE))</code>, imprime <code>Area under the curve: 0.7</code>. La curva va de (0, 0) a (0.3, 0.7) y de ahí a (1, 1): el área es (0.7 + 1 − 0.3) / 2 = 0.7. Al convertir en clases tiras la información del orden. Pásale siempre el puntaje, por ejemplo <code>predict_proba(X)[:, 1]</code>."
+    });
+    prop("codigo3", {
+      pregunta: "Usas un filtro al revés, con puntajes <code>1 - p</code>. En Python, <code>roc_auc_score(y, 1 - p)</code> da 0.2. ¿Qué da en R <code>auc(roc(y, 1 - p))</code>?",
+      opciones: [
+        "0.8: pROC elige solo la dirección de la comparación y la invierte",
+        "0.2, lo mismo que en Python",
+        "Un error, porque la AUC no puede ser menor que 0.5",
+        "0.5"
+      ],
+      correcta: 0,
+      pistas: [null,
+        "Por defecto <code>roc()</code> usa <code>direction = \"auto\"</code>: mira qué grupo tiene la mediana más alta.",
+        "No da error: decide algo por su cuenta y te lo avisa con un mensaje.",
+        "El filtro no es aleatorio: ordena todo al revés de forma consistente."],
+      explicacion: "Corrido de verdad, R avisa <code>Setting direction: controls &gt; cases</code> y da <code>Area under the curve: 0.8</code>. Con <code>roc(y, 1 - p, direction = \"&lt;\")</code> da 0.2, como Python. Si comparas modelos, fija <code>direction</code> y <code>levels</code> a mano: con la dirección automática un modelo que ordena al revés parece bueno."
+    });
+  })();
+
+  /* ---------------- tarjetas ---------------- */
+  B.tarjetas($("tarjetas"), [
+    ["¿Qué es la <b>TPR</b>?", "De todos los positivos, la fracción que el modelo marca como positivos: $TP/(TP+FN)$. También se llama sensibilidad o recall."],
+    ["¿Qué es la <b>FPR</b>?", "De todos los negativos, la fracción que el modelo marca como positivos: $FP/(FP+TN)$. Es 1 menos la especificidad."],
+    ["¿Qué es un punto de la curva ROC?", "Un umbral: su par (FPR, TPR). La curva une los puntos de todos los umbrales, de (0, 0) a (1, 1)."],
+    ["La AUC en una frase, sin hablar de áreas", "La probabilidad de que un positivo al azar tenga más puntaje que un negativo al azar."],
+    ["¿Qué AUC tiene un modelo que ordena al azar? ¿Y uno con AUC 0.2?", "0.5, la diagonal. Uno con 0.2 ordena al revés: invirtiendo sus puntajes da 0.8."],
+    ["¿Qué es el coeficiente de Gini de la ROC?", "$2\\cdot\\text{AUC} - 1$: 0 para el azar y 1 para el perfecto. No es el índice de Gini $1 - \\sum p_i^2$ de los árboles."],
+    ["¿Por qué la ROC no ve el desbalance de clases?", "TPR y FPR se calculan dentro de cada clase. Multiplicar los negativos no las cambia, pero la precisión sí cae. Para eso está la curva precisión-recall."],
+    ["¿Qué pasa si le das a la AUC la clase predicha en vez del puntaje?", "Solo queda un umbral: la curva tiene un único codo y la AUC baja (0.70 en vez de 0.80 aquí)."]
+  ]);
+
+  /* ---------------- conexiones ---------------- */
+  B.conexiones("roc-auc");
+})();
+</script>
+</body>
+</html>

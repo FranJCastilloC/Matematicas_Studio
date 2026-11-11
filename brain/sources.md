@@ -50,27 +50,27 @@
 ## PDFs de Francisco (en su carpeta brain, fuera de este proyecto)
 
 ### ud1-teoria
-- **Path:** `/Users/franciscocastillo/brain/Academic/Master IA UAX/SM142001 - Matematicas y estadistica para la IA/UD1. Estadística descriptiva y análisis/SM142001_MUIA_UD1_CONTENIDO TEÓRICO-2.pdf`
+- **Path:** `/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142001 - Matematicas y estadistica para la IA/UD1. Estadística descriptiva y análisis/SM142001_MUIA_UD1_CONTENIDO TEÓRICO-2.pdf`
 - **Descripción:** Contenido teórico oficial de la UD1 (30 páginas). Mapa en `brain/fuentes/ud1.md`.
 
 ### ud1-diapositivas
-- **Path:** `/Users/franciscocastillo/brain/Academic/Master IA UAX/SM142001 - Matematicas y estadistica para la IA/UD1. Estadística descriptiva y análisis/V2k8es-Unidad_1.pdf`
+- **Path:** `/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142001 - Matematicas y estadistica para la IA/UD1. Estadística descriptiva y análisis/V2k8es-Unidad_1.pdf`
 - **Descripción:** Diapositivas de la UD1 (56). Único lugar con el box plot y la regla 1.5·IQR; PCA con Iris en R.
 
 ### raschka-cap5
-- **Path:** `/Users/franciscocastillo/brain/Machine Learning/Dimensional Reduction/Cap05 - Compressing Data via Dimensionality Reduction.pdf`
+- **Path:** `/Users/franciscocastillo/brain/02-Biblioteca/Machine-Learning/PyTorch-Scikit-Learn/Cap05 - Compressing Data via Dimensionality Reduction.pdf`
 - **Descripción:** PCA, LDA y t-SNE con Wine. Página PDF = impresa − 138.
 
 ### nield-cap3 y nield-cap4
-- **Path:** `/Users/franciscocastillo/brain/Math/Essential Math for Data Science/03 Cap 3 ...pdf` y `04 Cap 4 Linear Algebra.pdf`
+- **Path:** `/Users/franciscocastillo/brain/02-Biblioteca/Matematicas/Essential-Math/03 Cap 3 ...pdf` y `04 Cap 4 Linear Algebra.pdf`
 - **Descripción:** Estadística descriptiva con Python puro; álgebra lineal con NumPy. Sin numeración impresa (early release).
 
 ### brasil-vol1
-- **Path:** `/Users/franciscocastillo/brain/Math/Before ML Vol 1 - Linear Algebra/` (índice, cap. 5 Matrix Decomposition, cap. 6 PCA; el cap. 4 con "The Eigen Stuff" existe pero no se leyó)
+- **Path:** `/Users/franciscocastillo/brain/02-Biblioteca/Matematicas/Before-ML-Vol1-LinearAlgebra/` (índice, cap. 5 Matrix Decomposition, cap. 6 PCA; el cap. 4 con "The Eigen Stuff" existe pero no se leyó)
 - **Descripción:** Eigendecomposition y SVD a mano; PCA desde el álgebra con el ejemplo del casino.
 
 ### jansen-cap13
-- **Path:** `/Users/franciscocastillo/brain/Finance/Machine-Learning-For-Finance/Cap13 - Data-Driven Risk Factors and Asset Allocation with Unsupervised Learning.pdf`
+- **Path:** `/Users/franciscocastillo/brain/02-Biblioteca/Finanzas-ML/ML4T/Cap13 - Data-Driven Risk Factors and Asset Allocation with Unsupervised Learning.pdf`
 - **Descripción:** PCA sobre retornos de acciones: el mercado como PC1 y eigenportfolios. Página PDF = impresa − 406.
 
 ### ud1-resumen-francisco

@@ -1,0 +1,1539 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Validación cruzada</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+/* ---------- plano de dispersion ---------- */
+.plano-svg { width: 100%; height: auto; display: block; user-select: none; -webkit-user-select: none; }
+.plano-svg .grid { stroke: var(--line-soft); stroke-width: 1; }
+.plano-svg .grid.eje { stroke: var(--ink-3); }
+.plano-svg .tick { font: 10px var(--f-mono); fill: var(--ink-3); }
+.plano-svg .eje-tit { font: 11.5px var(--f-body); fill: var(--ink-2); }
+.plano-svg .pt .hit { fill: transparent; }
+.plano-svg .pt .dot { fill: var(--ink); stroke: var(--surface); stroke-width: 2; }
+.plano-svg .pt.prueba .dot { fill: var(--accent); stroke: var(--surface); }
+.plano-svg .pt.prueba .aro { fill: none; stroke: var(--accent); stroke-width: 1.6; }
+.plano-svg.clic .pt { cursor: pointer; }
+.plano-svg .recta { stroke: var(--pos); stroke-width: 2.2; fill: none; }
+.plano-svg .recta.final { stroke: var(--ink); stroke-dasharray: 6 4; }
+.plano-svg .curva { stroke: var(--pos); stroke-width: 2; fill: none; }
+.plano-svg .resid { stroke: var(--accent); stroke-width: 1.4; stroke-dasharray: 3 2; }
+.plano-svg .leyenda { font: 11px var(--f-mono); fill: var(--ink-2); }
+
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.esc-head .hint { font-size: 12.5px; color: var(--ink-2); }
+.esc-vista[hidden] { display: none; }
+.esc-linea { font-family: var(--f-mono); font-size: 13px; color: var(--ink-2); margin: 8px 0 0; font-variant-numeric: tabular-nums; min-height: 1.4em; }
+.esc-linea b { color: var(--ink); font-weight: 500; }
+.esc-linea b.acc { color: var(--accent); }
+
+/* ---------- tira de datos y vueltas ---------- */
+.tira { display: grid; grid-template-columns: 58px repeat(20, minmax(0, 1fr)) 64px; gap: 2px; align-items: center; margin-top: 10px; font-family: var(--f-mono); font-size: 10.5px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.tira .lab { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tira .err { text-align: right; white-space: nowrap; color: var(--ink-2); }
+.tira .err b { color: var(--ink); font-weight: 500; }
+.tira .c { height: 16px; border-radius: 3px; background: var(--cell-zero); }
+.tira .c.ent { background: color-mix(in oklab, var(--ink-3) 30%, var(--surface)); }
+.tira .c.prueba { background: var(--accent); }
+.tira .c.blq0 { background: color-mix(in oklab, var(--j) 30%, var(--surface)); }
+.tira .c.blq1 { background: color-mix(in oklab, var(--j) 62%, var(--surface)); }
+.tira .c.idx { background: none; height: auto; text-align: center; font-size: 8.5px; overflow: hidden; }
+.tira .fila-on .lab, .tira .lab.on { color: var(--accent); font-weight: 600; }
+.tira-wrap { overflow-x: auto; }
+.ctrl { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 10px; }
+.ctrl .seg-lab { margin-left: 0; }
+.ctrl button.on { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+
+/* ---------- holdout repetido ---------- */
+.lista-err { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; font-family: var(--f-mono); font-size: 11.5px; }
+.lista-err span { padding: 2px 6px; border-radius: 5px; background: var(--surface-2); color: var(--ink-2); }
+.lista-err span.ult { background: var(--accent-soft); color: var(--accent); }
+
+/* ---------- clases y estratificacion ---------- */
+.bloques { display: grid; gap: 5px; margin-top: 10px; }
+.bloque-f { display: grid; grid-template-columns: 70px repeat(4, 30px) 1fr; gap: 4px; align-items: center; font-family: var(--f-mono); font-size: 12px; color: var(--ink-2); }
+.bloque-f .c, .clases .c { height: 24px; border-radius: 4px; display: grid; place-items: center; font-size: 10px; font-family: var(--f-mono); }
+.cl-a { background: var(--j); color: var(--surface); }
+.cl-b { background: var(--cell-zero); color: var(--ink-3); box-shadow: inset 0 0 0 1px var(--line); }
+.bloque-f .cuenta { padding-left: 6px; }
+.bloque-f .cuenta.cero { color: var(--bad); font-weight: 600; }
+.clases { display: grid; grid-template-columns: repeat(20, minmax(0, 1fr)); gap: 2px; margin-top: 6px; }
+
+/* ---------- curva de hiperparametro ---------- */
+.desliza { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-family: var(--f-mono); font-size: 13px; color: var(--ink-2); }
+.desliza input { flex: 1; min-width: 0; }
+.desliza b { color: var(--ink); font-weight: 500; min-width: 2ch; }
+
+/* ---------- vida real ---------- */
+.vr-salida { margin: 10px 0 0; padding: 8px 12px; background: var(--surface-2); border-radius: 8px; font-family: var(--f-mono); font-size: 12px; line-height: 1.55; min-height: 3.2em; white-space: pre; overflow-x: auto; color: var(--ink); }
+.vr-salida .ph { color: var(--ink-3); }
+.tabla-wrap { overflow-x: auto; margin-top: 8px; }
+.tabla { width: 100%; border-collapse: collapse; font-family: var(--f-mono); font-size: 12px; font-variant-numeric: tabular-nums; }
+.tabla th { font-weight: 500; color: var(--ink-3); font-size: 11px; text-align: right; padding: 4px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.tabla td { text-align: right; padding: 3px 8px; border-bottom: 1px solid var(--line-soft); color: var(--ink-2); white-space: nowrap; }
+.tabla td:first-child, .tabla th:first-child { text-align: left; }
+.tabla td.nuevo { color: var(--accent); font-weight: 600; }
+.barras { display: grid; gap: 4px; margin-top: 8px; }
+.barra-e { display: grid; grid-template-columns: 54px minmax(0, 1fr) 54px; gap: 8px; align-items: center; font-family: var(--f-mono); font-size: 12px; color: var(--ink-2); }
+.barra-e .t { height: 10px; background: var(--surface-2); border-radius: 3px; overflow: hidden; }
+.barra-e .t i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+.barra-e b { text-align: right; font-weight: 500; color: var(--ink); }
+
+/* ---------- retos propios ---------- */
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.plan { display: grid; grid-template-columns: 64px repeat(12, minmax(0, 1fr)); gap: 2px; align-items: center; margin-top: 10px; font-family: var(--f-mono); font-size: 10.5px; color: var(--ink-3); }
+.plan .c { height: 18px; border-radius: 3px; background: color-mix(in oklab, var(--ink-3) 30%, var(--surface)); }
+.plan .c.prueba { background: var(--accent); }
+.plan .c.idx { background: none; text-align: center; height: auto; }
+.plan .c.marca { box-shadow: 0 0 0 2px var(--bad); }
+.ojo-opts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 12px; }
+.ojo-opts .opt { text-align: center; font-size: 13px; }
+.constr { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 3px; margin-top: 8px; }
+.constr button { padding: 0; height: 44px; border-radius: 6px; font-family: var(--f-mono); font-size: 12px; display: grid; place-items: center; line-height: 1.1; }
+.constr button small { font-size: 9px; opacity: .8; }
+.objetivos { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.objetivos li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.objetivos .m { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.objetivos li.hecho { color: var(--ink); }
+.objetivos li.hecho .m { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 3px var(--surface); }
+.datos-mano { border-collapse: collapse; font-family: var(--f-mono); font-size: 14px; margin: 4px 0 12px; }
+.datos-mano th, .datos-mano td { padding: 4px 14px; border: 1px solid var(--line); text-align: center; }
+.datos-mano th { color: var(--ink-3); font-weight: 500; font-size: 12px; }
+@media (max-width: 520px) {
+  .tira { grid-template-columns: 40px repeat(20, minmax(0, 1fr)) 50px; gap: 1px; }
+  .plan { grid-template-columns: 50px repeat(12, minmax(0, 1fr)); }
+  .bloque-f { grid-template-columns: 56px repeat(4, 26px) 1fr; }
+  .ojo-opts { grid-template-columns: 1fr; }
+  .tira .c.idx { font-size: 7px; }
+  .constr { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ Validación cruzada</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Decisión y evaluación · UD0 de SM142003 y UD3 de SM142001</p>
+    <h1>Validación cruzada: turnarse para ser el examen</h1>
+    <p class="lede">
+      Un modelo se mide con datos que no vio. Pero si separas un solo grupo para medir, el número que sale depende de la suerte de ese grupo.
+      La validación cruzada reparte los datos en <b>k bloques</b> y hace que <b>cada bloque sea el examen una vez</b>: k errores, y su promedio.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> Entrenaste un modelo con 20 datos y quieres saber qué tan bien va a predecir datos nuevos. Pero no tienes datos nuevos. ¿Cómo lo medirías? Escríbelo como te salga, aunque esté mal.</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: guardaría algunos datos para..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>De un examen con suerte a k exámenes</h2>
+      <p>Siete pasos. Cada uno termina con un chequeo: hasta que no lo resuelves, el siguiente queda cerrado. Equivocarte aquí no resta nada, es parte del método.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="Un solo examen">
+          <span class="etapa">Paso 1</span>
+          <h3>Guarda 4 datos para el examen</h3>
+          <p>Tienes 20 datos: cada punto del plano es una pareja (x, y). El modelo es una recta. Para saber si predice bien, la idea natural es <b>esconderle algunos datos</b>: entrenar la recta con el resto y ver cuánto se equivoca con los escondidos.</p>
+          <p>Toca 4 puntos del plano. Esos son tu <b style="color:var(--accent)">examen</b>: la recta se va a ajustar con los otros 16, sin verlos.</p>
+          <div class="check" id="chk1">
+            <p class="check-tit">Predice antes de ver nada</p>
+            <div class="cuerpo"></div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="La suerte del examen">
+          <span class="etapa">Paso 2</span>
+          <h3>Repetir el examen con otros 4</h3>
+          <p>Esto que hiciste tiene nombre: <b>holdout</b>, o conjunto de validación. Se parten los datos una vez, 16 para entrenar y 4 para medir. Ahora deja que el azar elija los 4. Cada clic es una partición nueva y un error nuevo.</p>
+          <p>El error que se mide es el <b>error cuadrático medio</b> de los 4 datos del examen: para cada uno, cuánto se aleja de la recta (la línea punteada violeta), al cuadrado, y se promedia.</p>
+          <div class="fbloque"><div data-tex="\text{MSE}_{\text{prueba}} = \frac{1}{4}\sum_{i \in \text{prueba}} \big(y_i - \hat{y}_i\big)^2" data-display></div></div>
+          <p>Fíjate en la lista: con los mismos datos, el mismo modelo y el mismo procedimiento, el número salta. La diapositiva de remuestreo de la UD0 lo dice así: el enfoque de un solo conjunto de validación tiene <b>alta variabilidad</b>
+            <cite class="cita" data-fuente="intro3" data-pag="25" data-ancla="resampling-methods" data-seccion="4.4 Resampling methods" data-que="Por qué el error de entrenamiento engaña, el enfoque de un conjunto de validación (sub-train más holdout) y su alta variabilidad." data-cuando="Después de hacer varias particiones al azar"></cite>. Raschka lo plantea igual en la página del holdout, que vas a ver citada en el paso 3: la estimación depende mucho de cómo se parte.</p>
+          <details class="profundizar">
+            <summary>¿Por qué 80/20 y no 50/50?</summary>
+            <div>
+              <p>Hay un tira y afloja. Más datos de entrenamiento dan un modelo más parecido al que vas a usar al final. Más datos de prueba dan una medición más estable. Con 20 datos, 4 de prueba son muy pocos: un solo punto raro mueve todo el promedio.</p>
+              <p>La UD0 recomienda 70/30 u 80/20 <cite class="cita" data-fuente="intro3" data-pag="20" data-ancla="5/5" data-seccion="4.3 Data splitting: proporciones" data-que="Las proporciones 70/30 y 80/20, y la advertencia sobre pasar del 80 % en entrenamiento o del 40 % en prueba." data-cuando="Cuando quieras ver de dónde salen las proporciones"></cite>.
+                Ojo con una frase de esa diapositiva: dice que más del 80 % en entrenamiento arriesga sobreajuste. La proporción no causa sobreajuste; lo que se pierde con un examen chico es la capacidad de <b>medir</b> bien. Es justo lo que estás viendo en la lista.</p>
+            </div>
+          </details>
+          <div class="check" id="chk2"><p class="check-tit">Calcula con tus datos</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="k bloques">
+          <span class="etapa">Paso 3</span>
+          <h3>Que todos pasen por el examen</h3>
+          <p>La solución es no depender de un solo examen. Se parte la tira de 20 datos en <span data-tex="k"></span> bloques del mismo tamaño. En cada <b>vuelta</b> un bloque es el examen y los otros <span data-tex="k-1"></span> entrenan. Después de <span data-tex="k"></span> vueltas, todos los bloques fueron examen.</p>
+          <p>En el escenario, la tira de arriba muestra los bloques. Cada fila de abajo es una vuelta: en <b style="color:var(--accent)">violeta</b> el examen, en gris el entrenamiento. Usa el selector para cambiar <span data-tex="k"></span>.</p>
+          <p>Así lo define la UD0: k grupos de tamaño parecido, ajustar en k − 1, validar en el restante, k veces <cite class="cita" data-fuente="intro3" data-pag="27" data-ancla="5/12" data-seccion="4.4.1 k-fold cross validation" data-que="La definición de k-fold, que cada observación se valida una sola vez y las Figures 11 y 12 con 10 bloques sobre 32 observaciones." data-cuando="Después de correr las 5 vueltas"></cite>,
+            y Raschka lo describe con las mismas piezas: k bloques sin reemplazo, k modelos y k estimaciones <cite class="cita" data-fuente="raschka6" data-pag="6" data-pimp="176" data-seccion="K-fold cross-validation" data-que="Justo antes, la desventaja del holdout (Figure 6.2). Después, la definición de k-fold con k − 1 bloques para entrenar y 1 para evaluar, y el recuadro sobre muestreo con y sin reemplazo." data-cuando="Después de correr las 5 vueltas"></cite>.</p>
+          <div class="check" id="chk3"><p class="check-tit">Predice antes de correr las vueltas</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Promedio y dispersión">
+          <span class="etapa">Paso 4</span>
+          <h3>k errores, un promedio y su dispersión</h3>
+          <p>Cada vuelta deja un error <span data-tex="E_i"></span>. El resultado de la validación cruzada es su promedio:</p>
+          <div class="fbloque">
+            <div data-tex="E_{CV} = \frac{1}{k}\sum_{i=1}^{k} E_i" data-display></div>
+            <div class="vivo" id="vivoMedia"></div>
+          </div>
+          <p>Y no se reporta solo: se acompaña de la <b>desviación estándar</b> de los <span data-tex="k"></span> errores, que dice cuánto cambian de una vuelta a otra. En la práctica se escribe "2.68 ± 1.76".</p>
+          <p>En la UD3 la fórmula aparece con una errata <cite class="cita" data-fuente="ud3" data-pag="32" data-seccion="Validación cruzada k-fold" data-que="La validación cruzada como herramienta para ajustar λ, la profundidad de un árbol o el k de kNN, y la fórmula del error promedio." data-cuando="Al terminar este paso"></cite>:
+            escribe <span data-tex="\frac{1}{k}\sum_{k=1}^{k}E_i"></span>, con el mismo símbolo <span data-tex="k"></span> como índice y como número de bloques, y el sumando con <span data-tex="E_i"></span>. Se lee bien si cambias el índice a <span data-tex="i"></span>, como arriba.</p>
+          <details class="profundizar">
+            <summary>¿Qué k elegir? Y qué es LOOCV</summary>
+            <div>
+              <p>Con <span data-tex="k = n"></span> cada bloque tiene un solo dato: es <b>dejar uno fuera</b> (LOOCV). Pruébalo con el selector en 20. Cada modelo entrena con 19 datos, casi todos, así que el error estimado es poco pesimista. Pero los 20 modelos son casi idénticos entre sí y el cálculo cuesta 20 ajustes.</p>
+              <p>Con k chico (2) cada modelo entrena con la mitad: el error sale pesimista, porque el modelo final tendrá el doble de datos. Por eso lo habitual es k = 5 o 10. La UD0 lo resume en una diapositiva <cite class="cita" data-fuente="intro3" data-pag="28" data-ancla="5/13" data-seccion="Elegir k en CV" data-que="k = 5 o 10, LOOCV como k = n, que 10 bloques rinden parecido a LOOCV y la validación cruzada repetida." data-cuando="Después de probar k = 2, 5, 10 y 20 con el selector"></cite>
+                y Raschka lo explica con la referencia a Kohavi <cite class="cita" data-fuente="raschka6" data-pag="7" data-pimp="177" data-seccion="K-fold cross-validation" data-que="La fórmula E = (1/10) Σ Eᵢ, por qué k = 10, que k grande da menos sesgo pesimista pero más varianza y costo, y que al final se reentrena con todo." data-cuando="Después de probar el selector"></cite>.</p>
+            </div>
+          </details>
+          <div class="cita" id="citaHipo" hidden></div>
+          <div class="check" id="chk4"><p class="check-tit">Calcula con los datos en vivo</p><div class="cuerpo"></div></div>
+
+          <div class="destacado" id="destacado">
+            <p class="dest-tit">Una confusión muy común</p>
+            <h4>Hiciste 5 vueltas y tienes 5 rectas. ¿Con cuál te quedas?</h4>
+            <p>Las cinco rectas son parecidas pero distintas: cada una vio 16 datos. La validación cruzada no elige una de ellas. <b>Mide el procedimiento</b> ("ajustar una recta con unos 16 datos") y te dice qué error esperar de él.</p>
+            <div class="check" id="chk4b"><p class="check-tit">Predice antes de tocar el botón</p><div class="cuerpo"></div></div>
+            <div class="btn-row" style="margin-top:14px">
+              <button type="button" class="primary" id="btnFinal" disabled>Ajustar el modelo final</button>
+              <span class="zhint" id="finalHint">Responde la predicción para activar el botón.</span>
+            </div>
+            <p class="esc-linea" id="finalCuenta"></p>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Estratificar">
+          <span class="etapa">Paso 5</span>
+          <h3>Bloques que se parecen al total</h3>
+          <p>Ahora los 20 datos tienen una etiqueta: 5 son de una <b style="color:var(--j)">clase rara</b> y 15 de una clase común. Es lo que pasa con fraudes, enfermedades o clientes que se van: la clase que importa es la escasa.</p>
+          <p>Mira los bloques en orden: un bloque tiene 2 de la clase rara y otro tiene 0. Ese bloque sin clase rara es un examen que no puede medir si el modelo la reconoce. Y una vuelta que entrena con pocos ejemplos raros aprende peor que el modelo final. Prueba también "Al azar" varias veces.</p>
+          <p>La <b>validación cruzada estratificada</b> reparte cada clase por separado, para que cada bloque tenga la misma proporción que el total. La UD0 la presenta como esencial en clasificación desbalanceada
+            <cite class="cita" data-fuente="intro3" data-pag="23" data-ancla="5/8" data-seccion="4.3.2 Stratified sampling" data-que="El muestreo estratificado conserva la distribución de Y en cada parte; en regresión se estratifica por cuantiles de Y; ejemplo de attrition 16/84." data-cuando="Después de comparar los tres repartos"></cite>,
+            y Raschka muestra el bucle con <code>StratifiedKFold</code> y las cuentas de cada clase por bloque <cite class="cita" data-fuente="raschka6" data-pag="8" data-pimp="178" data-seccion="K-fold cross-validation (stratified)" data-que="La versión estratificada, el bucle con StratifiedKFold(n_splits=10) y la distribución de clases [256 153] en cada bloque." data-cuando="Al terminar este paso"></cite>.</p>
+          <div class="check" id="chk5"><p class="check-tit">Predice antes de tocar "Estratificada"</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Elegir hiperparámetros">
+          <span class="etapa">Paso 6</span>
+          <h3>Usar la validación cruzada para elegir</h3>
+          <p>Volvemos a los 20 puntos, pero ahora el modelo es <b>kNN para regresión</b>: para predecir en un x, promedia la y de sus <span data-tex="v"></span> vecinos más cercanos (aquí lo llamamos <span data-tex="v"></span> para no confundirlo con los <span data-tex="k"></span> bloques). El número de vecinos no se aprende de los datos: se fija antes. Es un <b>hiperparámetro</b>.</p>
+          <p>Mueve el deslizador. Para cada <span data-tex="v"></span> se corre una validación cruzada de 5 bloques y se marca su error en el gráfico, junto con el error sobre los mismos datos de entrenamiento.</p>
+          <p>La UD3 dice exactamente esto: la validación cruzada sirve para ajustar λ, la profundidad de un árbol o el k de kNN. La UD0 lo llama búsqueda en rejilla: un modelo por cada valor, cada uno evaluado con validación cruzada
+            <cite class="cita" data-fuente="intro3" data-pag="39" data-ancla="6/8" data-seccion="Grid search" data-que="La búsqueda en rejilla: un modelo por combinación de hiperparámetros, cada uno evaluado con k-fold; la Figure 17 con 8 modelos." data-cuando="Después de recorrer todos los valores del deslizador"></cite>.</p>
+          <div class="check" id="chk6"><p class="check-tit">Explora y responde</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Fuga de información">
+          <span class="etapa">Paso 7</span>
+          <h3>El examen no se puede filtrar</h3>
+          <p>Todo lo anterior supone una regla: <b>nada del bloque de prueba puede tocar el entrenamiento</b>. Y hay una forma muy común de romperla sin darse cuenta: preprocesar antes de partir.</p>
+          <p>En la página de estandarización viste que se resta la media y se divide entre la desviación. Si calculas esa media con los 20 datos y después partes, la media ya "vio" los datos del examen. El escenario compara, para la vuelta que elijas, la media y la desviación calculadas con todo y solo con el entrenamiento.</p>
+          <p>Con una recta la diferencia es chica. Con pasos más agresivos, como elegir las variables más correlacionadas con y usando todos los datos, la fuga hace que el error de validación salga muy optimista. La regla es una sola: <b>cada transformación se aprende dentro de cada vuelta, solo con los datos de entrenamiento</b>. La UD0 nombra la fuga de datos como uno de los riesgos del proceso de modelado
+            <cite class="cita" data-fuente="intro3" data-pag="17" data-ancla="a-strategic-approach" data-seccion="4.2 A strategic approach" data-que="El enfoque general: gastar bien los datos, preprocesar, evitar la fuga de datos (data leakage), ajustar hiperparámetros y evaluar." data-cuando="Al terminar este paso"></cite>.</p>
+          <p>Hay una segunda fuga, más sutil. En el paso 6 elegiste el mejor de 12 valores con la validación cruzada. Ese error mínimo ya no es una medición limpia: lo elegiste por ser el menor. Para medir el procedimiento completo, elección incluida, se usa la <b>validación cruzada anidada</b>: un bucle de afuera mide y uno de adentro elige. Aquí solo la nombramos
+            <cite class="cita" data-fuente="raschka6" data-pag="22" data-pimp="192" data-seccion="Algorithm selection with nested cross-validation" data-que="El bucle externo y el interno, la Figure 6.8 con 5 bloques externos y 2 internos, y el código con GridSearchCV dentro de cross_val_score." data-cuando="Cuando quieras ir un paso más allá"></cite>.
+            Raschka la llama "5×2 cross-validation"; en otros textos ese nombre se usa para otra cosa (5 repeticiones de una validación de 2 bloques).</p>
+          <div class="check" id="chk7"><p class="check-tit">Antes de terminar</p><div class="cuerpo"></div></div>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+        </div>
+
+        <div class="esc-vista" id="vPlano">
+          <svg id="plano" role="img" aria-label="Diagrama de dispersión de los 20 datos"></svg>
+          <p class="esc-linea" id="planoLinea"></p>
+        </div>
+
+        <div class="esc-vista" id="vHold" hidden>
+          <div class="ctrl">
+            <button type="button" class="primary" id="btnHold">Una partición al azar</button>
+            <button type="button" id="btnHold10">10 particiones más</button>
+            <button type="button" class="ghost" id="btnHoldReset">Borrar</button>
+          </div>
+          <p class="esc-linea" id="holdCuenta"></p>
+          <div class="lista-err" id="holdLista"></div>
+        </div>
+
+        <div class="esc-vista" id="vTira" hidden>
+          <div class="ctrl">
+            <span class="seg-lab">Bloques k</span>
+            <div class="seg" id="selK" role="group" aria-label="Número de bloques"></div>
+          </div>
+          <div class="ctrl" id="ctrlVueltas">
+            <button type="button" class="primary" id="btnVuelta">Siguiente vuelta</button>
+            <button type="button" id="btnTodas">Todas las vueltas</button>
+            <span class="zhint" id="vueltaHint"></span>
+          </div>
+          <div class="tira-wrap"><div class="tira" id="tira"></div></div>
+        </div>
+
+        <div class="esc-vista" id="vClases" hidden>
+          <p class="esc-linea">Los 20 datos con su clase (<b style="color:var(--j)">rara</b> o común):</p>
+          <div class="clases" id="clases"></div>
+          <div class="ctrl">
+            <button type="button" id="btnOrden" class="on">Bloques en orden</button>
+            <button type="button" id="btnAzar">Al azar</button>
+            <button type="button" id="btnEstrat" disabled>Estratificada</button>
+          </div>
+          <div class="bloques" id="bloques"></div>
+          <p class="esc-linea" id="clasesLinea"></p>
+        </div>
+
+        <div class="esc-vista" id="vKnn" hidden>
+          <div class="desliza"><span>vecinos v</span><input type="range" id="rngV" min="1" max="12" step="1" value="1" aria-label="Número de vecinos"><b id="vVal">1</b></div>
+          <svg id="curvaKnn" role="img" aria-label="Error de validación cruzada y de entrenamiento según el número de vecinos"></svg>
+          <p class="esc-linea" id="knnLinea"></p>
+        </div>
+
+        <div class="esc-vista" id="vFuga" hidden>
+          <div class="ctrl">
+            <span class="seg-lab">Vuelta</span>
+            <div class="seg" id="selFuga" role="group" aria-label="Vuelta"></div>
+          </div>
+          <svg id="rectaFuga" role="img" aria-label="Recta numérica de x con la media calculada de dos formas"></svg>
+          <div class="tabla-wrap"><table class="tabla" id="tablaFuga"></table></div>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>La validación cruzada de 5 bloques del paso 4, escrita como lo haría un programa, con los mismos 20 datos. El bucle de afuera recorre las vueltas; adentro, la recta se ajusta solo con el entrenamiento. Al final se compara con la función de la librería.</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir</p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="true">Python</button>
+            <button type="button" data-lang="r" aria-pressed="false">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">1 · los datos</span><span data-f="2">2 · las vueltas</span><span data-f="3">3 · la librería</span>
+        </div>
+        <h3 class="mini-tit vr-tit" id="vrTiraTit">Los 20 datos, por posición</h3>
+        <div class="tira-wrap"><div class="tira" id="vrTira"></div></div>
+        <h3 class="mini-tit vr-tit" id="vrTablaTit">El bloque de prueba</h3>
+        <div class="tabla-wrap"><table class="tabla" id="vrTabla"></table></div>
+        <h3 class="mini-tit vr-tit">errores</h3>
+        <div class="barras" id="vrBarras"></div>
+        <h3 class="mini-tit vr-tit">Salida en la consola</h3>
+        <div class="vr-salida" id="vrSalida"></div>
+      </div>
+    </div>
+
+    <p class="vr-nota">En la práctica el bucle es una línea: <code>cross_val_score(modelo, X, y, cv=5)</code> en scikit-learn, o <code>train(..., trControl = trainControl(method = "cv", number = 5))</code> con caret. Raschka usa exactamente esa llamada, con <code>cv=10</code>, y la compara con su propio bucle <cite class="cita" data-fuente="raschka6" data-pag="9" data-pimp="179" data-seccion="K-fold cross-validation: cross_val_score" data-que="cross_val_score(estimator=pipe_lr, X=X_train, y=y_train, cv=10), el mismo 0.950 +/- 0.014 que su bucle, y n_jobs=-1 para usar todos los procesadores." data-cuando="Después de reproducir el programa hasta el final"></cite>. Escribirlo una vez sirve para ver qué hay dentro y para no caer en las trampas de abajo.</p>
+
+    <details class="profundizar">
+      <summary>Por qué el código de R compara contra los RMSE al cuadrado</summary>
+      <div>
+        <p>caret guarda en <code>ajuste$resample</code> el RMSE de cada vuelta: 0.637, 1.970, 1.075, 2.051 y 1.939. Al cuadrado son los mismos MSE del bucle. Pero el número que muestra el resumen, <code>ajuste$results$RMSE</code>, es <b>el promedio de las cinco raíces</b>: 1.535. La raíz del promedio de los MSE es <span data-tex="\sqrt{2.682} = 1.638"></span>. No es un error de caret: son dos formas distintas de resumir, y conviene saber cuál estás leyendo.</p>
+        <p>Su columna <code>Rsquared</code> tampoco es el R² de scikit-learn: caret usa el cuadrado de la correlación entre y y la predicción, que nunca es negativo.</p>
+      </div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Bloques en orden</h3><span class="estado" data-reto="codigo2"></span></div>
+        <div id="codigo2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Un error con signo menos</h3><span class="estado" data-reto="codigo3"></span></div>
+        <div id="codigo3"></div>
+      </article>
+    </div>
+    <p class="vr-nota">Esta trampa ya engañó a un libro: Nield calcula la validación cruzada con <code>cross_val_score</code> y la imprime como "MSE", pero sin <code>scoring</code> lo que devuelve es R² <cite class="cita" data-fuente="nield5" data-pag="66" data-seccion="Cross-validation (Example 5-22)" data-que="La validación cruzada de 3 bloques con KFold(n_splits=3) y cross_val_score sobre la regresión lineal. El texto llama MSE a lo que en realidad es R²." data-cuando="Después de resolver la trampa del signo menos"></cite>.</p>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: la biblioteca te avisa en el índice cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>¿Es una validación cruzada?</h3><span class="estado" data-reto="ojo"></span></div>
+        <p class="desc">Cada fila es una vuelta y cada columna un dato; en violeta, el examen. Decide de un vistazo si el plan es correcto. Apruebas con 4 de 5.</p>
+        <div id="ojo"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Construir</span><h3>Arma 4 bloques estratificados</h3><span class="estado" data-reto="constructor"></span></div>
+        <p class="desc">12 datos, 4 de la clase rara (azules). Toca cada dato para cambiarle el bloque (1, 2, 3, 4 o sin bloque). Los objetivos se marcan solos.</p>
+        <div class="constr" id="constr"></div>
+        <ul class="objetivos" id="objetivos"></ul>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>Dejar uno fuera, con lápiz</h3><span class="estado" data-reto="mano"></span></div>
+        <p class="desc">Cuatro datos y el modelo más simple que existe: predecir con la media del entrenamiento. Haz la validación cruzada dejando uno fuera (k = 4) y da el MSE promedio.</p>
+        <div id="manoDatos"></div>
+        <div id="mano"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Alguien se equivocó</h3><span class="estado" data-reto="error"></span></div>
+        <p class="desc">Una de las líneas tiene un error. Tócala.</p>
+        <div id="error"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Contar modelos</h3><span class="estado" data-reto="prop1"></span></div>
+        <div id="prop1"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Subir k</h3><span class="estado" data-reto="prop2"></span></div>
+        <div id="prop2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>El modelo que se usa</h3><span class="estado" data-reto="prop3"></span></div>
+        <div id="prop3"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>El mejor de doce</h3><span class="estado" data-reto="prop4"></span></div>
+        <div id="prop4"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Recordar a la fuerza es lo que fija. Arma la fórmula de memoria y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Fórmula de memoria</span><h3>Arma la fórmula pieza por pieza</h3><span class="estado" data-reto="formula"></span></div>
+        <p class="desc">Hay piezas de más que no pertenecen, entre ellas la errata de la UD3. No mires arriba.</p>
+        <div id="formula"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el libro</h2>
+      <p class="lecturas-intro">Ya construiste la idea con las manos. Ahora ve a la versión técnica y comprueba que la reconoces. Cada entrada dice qué vas a encontrar y en qué momento conviene leerla. Si abres la biblioteca con doble clic, el enlace abre el PDF o la diapositiva en ese lugar.</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> Los 20 puntos (x, y), las clases rara y común y los datos de los retos son inventados, elegidos para que se vea
+    bien la variación entre bloques. Los números de la Parte 2 son la salida real de Python 3.13.5 con NumPy 2.1.3 y scikit-learn 1.6.1, y de R 4.6.1 con caret 7.0.1.
+    Tu progreso se guarda solo en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+(function () {
+  "use strict";
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var RETOS = ["ojo", "constructor", "mano", "error", "prop1", "prop2", "prop3", "prop4", "formula", "codigo1", "codigo2", "codigo3"];
+  var C = B.concepto({ id: "validacion-cruzada", retos: RETOS, pasos: 7 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  var f = B.fmt;
+
+  /* ---------------- los datos y las cuentas ---------------- */
+  var X = [4, 9, 13, 14, 15, 17, 11, 16, 2, 7, 1, 8, 5, 19, 6, 20, 18, 3, 10, 12];
+  var Y = [4, 6, 8, 9, 10, 12, 10, 11, 4, 6, 2, 8, 4, 10, 7, 10, 13, 4, 5, 6];
+  var N = X.length;
+  // clase rara (true) para la vista estratificada
+  var RARA = [1, 2, 6, 7, 13];
+
+  function rango(a, b) { var r = []; for (var i = a; i < b; i++) r.push(i); return r; }
+  function resto(idx) { return rango(0, N).filter(function (i) { return idx.indexOf(i) < 0; }); }
+  function media(a) { return a.reduce(function (s, v) { return s + v; }, 0) / a.length; }
+  function desvio(a) { var m = media(a); return Math.sqrt(a.reduce(function (s, v) { return s + (v - m) * (v - m); }, 0) / (a.length - 1)); }
+  function ajustar(idx) {
+    var mx = media(idx.map(function (i) { return X[i]; })), my = media(idx.map(function (i) { return Y[i]; }));
+    var sxy = 0, sxx = 0;
+    idx.forEach(function (i) { sxy += (X[i] - mx) * (Y[i] - my); sxx += (X[i] - mx) * (X[i] - mx); });
+    var b = sxy / sxx;
+    return { a: my - b * mx, b: b };
+  }
+  function mseEn(idx, mod) {
+    return media(idx.map(function (i) { var e = Y[i] - (mod.a + mod.b * X[i]); return e * e; }));
+  }
+  function kfold(k) {
+    var m = N / k, out = [];
+    for (var j = 0; j < k; j++) {
+      var p = rango(j * m, (j + 1) * m), t = resto(p), mod = ajustar(t);
+      out.push({ prueba: p, entreno: t, mod: mod, mse: mseEn(p, mod) });
+    }
+    return out;
+  }
+  // kNN para regresion: empates de distancia se resuelven por posicion
+  function knn(ent, x0, v) {
+    var o = ent.slice().sort(function (i, j) { var d = Math.abs(X[i] - x0) - Math.abs(X[j] - x0); return d !== 0 ? d : i - j; });
+    return media(o.slice(0, v).map(function (i) { return Y[i]; }));
+  }
+  function cvKnn(v) {
+    var errs = kfold(5).map(function (vu) {
+      return media(vu.prueba.map(function (i) { var e = Y[i] - knn(vu.entreno, X[i], v); return e * e; }));
+    });
+    return media(errs);
+  }
+  function trainKnn(v) {
+    var todos = rango(0, N);
+    return media(todos.map(function (i) { var e = Y[i] - knn(todos, X[i], v); return e * e; }));
+  }
+  var KNN = rango(1, 13).map(function (v) { return { v: v, cv: cvKnn(v), tr: trainKnn(v) }; });
+  var MEJOR_V = KNN.reduce(function (b, r) { return r.cv < b.cv ? r : b; }).v;
+  function barajar(a) {
+    a = a.slice();
+    for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = a[i]; a[i] = a[j]; a[j] = t; }
+    return a;
+  }
+
+  /* ---------------- plano de dispersion ---------------- */
+  var NS = "http://www.w3.org/2000/svg";
+  function nodo(tag, at, padre) {
+    var e = document.createElementNS(NS, tag);
+    for (var k in at) e.setAttribute(k, at[k]);
+    if (padre) padre.appendChild(e);
+    return e;
+  }
+  function texto(padre, at, t) { var e = nodo("text", at, padre); e.textContent = t; return e; }
+
+  var PW = 440, PH = 300, PM = { l: 40, r: 12, t: 12, b: 38 };
+  function px(v) { return PM.l + v / 21 * (PW - PM.l - PM.r); }
+  function py(v) { return PH - PM.b - v / 14 * (PH - PM.t - PM.b); }
+  var svgP = $("plano");
+  svgP.setAttribute("viewBox", "0 0 " + PW + " " + PH);
+  svgP.classList.add("plano-svg");
+  // cfg: prueba[], mod {a,b}, final {a,b}, curva [[x,y]], resid bool, clic bool
+  function dibujarPlano(cfg) {
+    svgP.innerHTML = "";
+    svgP.classList.toggle("clic", !!cfg.clic);
+    var g = nodo("g", {}, svgP), t;
+    for (t = 0; t <= 20; t += 2) {
+      nodo("line", { x1: px(t), x2: px(t), y1: py(0), y2: py(14), "class": "grid" + (t === 0 ? " eje" : "") }, g);
+      texto(g, { x: px(t), y: py(0) + 15, "text-anchor": "middle", "class": "tick" }, t);
+    }
+    for (t = 0; t <= 14; t += 2) {
+      nodo("line", { x1: px(0), x2: px(21), y1: py(t), y2: py(t), "class": "grid" + (t === 0 ? " eje" : "") }, g);
+      texto(g, { x: px(0) - 7, y: py(t) + 3.5, "text-anchor": "end", "class": "tick" }, t);
+    }
+    texto(g, { x: px(10.5), y: PH - 6, "text-anchor": "middle", "class": "eje-tit" }, "x");
+    texto(g, { x: 12, y: py(7), "text-anchor": "middle", "class": "eje-tit", transform: "rotate(-90 12 " + py(7) + ")" }, "y");
+    var prueba = cfg.prueba || [];
+    if (cfg.mod) {
+      nodo("line", { x1: px(0.5), y1: py(cfg.mod.a + cfg.mod.b * 0.5), x2: px(20.5), y2: py(cfg.mod.a + cfg.mod.b * 20.5), "class": "recta" }, svgP);
+      if (cfg.resid) prueba.forEach(function (i) {
+        nodo("line", { x1: px(X[i]), x2: px(X[i]), y1: py(Y[i]), y2: py(cfg.mod.a + cfg.mod.b * X[i]), "class": "resid" }, svgP);
+      });
+    }
+    if (cfg.final) nodo("line", { x1: px(0.5), y1: py(cfg.final.a + cfg.final.b * 0.5), x2: px(20.5), y2: py(cfg.final.a + cfg.final.b * 20.5), "class": "recta final" }, svgP);
+    if (cfg.curva) nodo("polyline", { points: cfg.curva.map(function (q) { return px(q[0]).toFixed(1) + "," + py(q[1]).toFixed(1); }).join(" "), "class": "curva" }, svgP);
+    var gp = nodo("g", {}, svgP);
+    for (var i = 0; i < N; i++) {
+      var en = prueba.indexOf(i) >= 0;
+      var q = nodo("g", { "class": "pt" + (en ? " prueba" : ""), "data-i": i }, gp);
+      nodo("circle", { cx: px(X[i]), cy: py(Y[i]), r: 13, "class": "hit" }, q);
+      if (en) nodo("circle", { cx: px(X[i]), cy: py(Y[i]), r: 8.5, "class": "aro" }, q);
+      nodo("circle", { cx: px(X[i]), cy: py(Y[i]), r: 5, "class": "dot" }, q);
+    }
+  }
+
+  /* ---------------- estado del recorrido ---------------- */
+  var est = {
+    paso: 0, eleccion: [], chk1: false, hold: [], ultHold: null,
+    k: 5, vistas: 0, vuelta: -1, chk3: false, chk4: false, chk4b: false, final: false,
+    reparto: "orden", chk5: false, v: 1, visitados: {}, fuga: 0
+  };
+  var pasos, chk2, chk4;
+  var VISTAS = ["vPlano", "vHold", "vTira", "vClases", "vKnn", "vFuga"];
+  function mostrarVistas(lista) { VISTAS.forEach(function (v) { $(v).hidden = lista.indexOf(v) < 0; }); }
+
+  /* paso 1: elegir el examen */
+  svgP.addEventListener("click", function (e) {
+    if (est.paso !== 0) return;
+    var g = e.target.closest(".pt");
+    if (!g) return;
+    var i = +g.getAttribute("data-i"), k = est.eleccion.indexOf(i);
+    if (k >= 0) est.eleccion.splice(k, 1);
+    else if (est.eleccion.length < 4) est.eleccion.push(i);
+    pintarPaso1();
+  });
+  function pintarPaso1() {
+    var listo = est.eleccion.length === 4, ver = listo && est.chk1;
+    var mod = ver ? ajustar(resto(est.eleccion)) : null;
+    dibujarPlano({ prueba: est.eleccion, mod: mod, resid: ver, clic: true });
+    var L = $("planoLinea");
+    if (!listo) L.innerHTML = "Elegidos: <b>" + est.eleccion.length + "</b> de 4. Toca un punto elegido para soltarlo.";
+    else if (!est.chk1) L.innerHTML = "Tienes tus 4. Responde la predicción para ver tu error.";
+    else L.innerHTML = "Recta con los otros 16: ŷ = " + f(mod.a, 3) + " + " + f(mod.b, 3) + "x · error en tus 4: <b class=\"acc\">MSE = " + f(mseEn(est.eleccion, mod), 3) + "</b>";
+  }
+
+  /* paso 2: holdout repetido */
+  function unaParticion() {
+    var p = barajar(rango(0, N)).slice(0, 4).sort(function (a, b) { return a - b; });
+    var mod = ajustar(resto(p));
+    est.ultHold = { prueba: p, mod: mod, mse: mseEn(p, mod) };
+    est.hold.push(est.ultHold.mse);
+  }
+  function pintarHold() {
+    var u = est.ultHold;
+    dibujarPlano(u ? { prueba: u.prueba, mod: u.mod, resid: true } : {});
+    $("planoLinea").innerHTML = u ? "Última partición: <b class=\"acc\">MSE = " + f(u.mse, 3) + "</b>" : "Toca \"Una partición al azar\".";
+    $("holdCuenta").innerHTML = "Particiones: <b>" + est.hold.length + "</b>" + (est.hold.length && est.hold.length < 10 ? " · haz al menos 10 para el chequeo" : "");
+    var ord = est.hold.map(function (v, i) { return [v, i]; }).sort(function (a, b) { return a[0] - b[0]; });
+    $("holdLista").innerHTML = ord.map(function (q) { return '<span' + (q[1] === est.hold.length - 1 ? ' class="ult"' : '') + '>' + f(q[0], 2) + '</span>'; }).join("");
+    if (chk2) chk2.refrescar();
+  }
+  $("btnHold").addEventListener("click", function () { unaParticion(); pintarHold(); });
+  $("btnHold10").addEventListener("click", function () { for (var i = 0; i < 10; i++) unaParticion(); pintarHold(); });
+  $("btnHoldReset").addEventListener("click", function () { est.hold = []; est.ultHold = null; pintarHold(); });
+
+  /* pasos 3 y 4: k bloques */
+  [2, 5, 10, 20].forEach(function (k) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.textContent = k;
+    b.setAttribute("aria-pressed", k === est.k ? "true" : "false");
+    b.addEventListener("click", function () {
+      est.k = k;
+      [].forEach.call($("selK").children, function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+      est.vistas = est.paso === 2 ? 0 : k;
+      est.vuelta = est.paso === 2 ? -1 : 0;
+      pintarTira();
+      if (chk4) chk4.refrescar();
+    });
+    $("selK").appendChild(b);
+  });
+  function pintarTira() {
+    var V = kfold(est.k), m = N / est.k, h = "";
+    var todas = est.paso >= 3;
+    if (todas) est.vistas = est.k;
+    h += '<span class="lab">bloque</span>';
+    for (var i = 0; i < N; i++) h += '<span class="c blq' + (Math.floor(i / m) % 2) + '" title="dato ' + (i + 1) + ', bloque ' + (Math.floor(i / m) + 1) + '"></span>';
+    h += '<span class="err">E<sub>i</sub></span>';
+    for (var j = 0; j < est.k; j++) {
+      var visto = j < est.vistas, on = j === est.vuelta;
+      h += '<span class="lab' + (on ? " on" : "") + '">vuelta ' + (j + 1) + '</span>';
+      for (i = 0; i < N; i++) {
+        var cls = !visto ? "" : V[j].prueba.indexOf(i) >= 0 ? "prueba" : "ent";
+        h += '<span class="c ' + cls + '"></span>';
+      }
+      h += '<span class="err">' + (visto ? "<b>" + f(V[j].mse, 3) + "</b>" : "") + '</span>';
+    }
+    $("tira").innerHTML = h;
+    var bloqueado = est.paso === 2 && !est.chk3;
+    $("ctrlVueltas").hidden = est.paso !== 2;
+    $("btnVuelta").disabled = bloqueado || est.vistas >= est.k;
+    $("btnTodas").disabled = bloqueado || est.vistas >= est.k;
+    $("vueltaHint").textContent = bloqueado ? "Responde la predicción para empezar las vueltas." : "";
+    var vu = est.vuelta >= 0 && est.vuelta < est.k ? V[est.vuelta] : null;
+    if (est.paso === 3 && est.final) {
+      var F = ajustar(rango(0, N));
+      dibujarPlano({ prueba: [], final: F });
+      $("planoLinea").innerHTML = "Modelo final con los 20: ŷ = " + f(F.a, 3) + " + " + f(F.b, 3) + "x";
+    } else if (vu) {
+      dibujarPlano({ prueba: vu.prueba, mod: vu.mod, resid: true });
+      $("planoLinea").innerHTML = "Vuelta " + (est.vuelta + 1) + " de " + est.k + ": examen con " + m + " dato" + (m > 1 ? "s" : "") + ", recta con " + (N - m) + " · <b class=\"acc\">E = " + f(vu.mse, 3) + "</b>";
+    } else {
+      dibujarPlano({});
+      $("planoLinea").innerHTML = "k = " + est.k + ": " + est.k + " bloques de " + m + " dato" + (m > 1 ? "s" : "") + ".";
+    }
+    pintarMedia(V);
+  }
+  // en el paso 4 se puede tocar una fila para ver esa vuelta
+  $("tira").addEventListener("click", function (e) {
+    var c = e.target.closest(".c, .lab");
+    if (!c || est.paso !== 3) return;
+    var hijos = [].slice.call($("tira").children), pos = hijos.indexOf(c), fila = Math.floor(pos / 22) - 1;
+    if (fila >= 0 && fila < est.k) { est.vuelta = fila; quitarFinal(); pintarTira(); }
+  });
+  $("btnVuelta").addEventListener("click", function () {
+    if (est.vistas >= est.k) return;
+    est.vuelta = est.vistas;
+    est.vistas++;
+    pintarTira();
+  });
+  $("btnTodas").addEventListener("click", function () { est.vistas = est.k; est.vuelta = est.k - 1; pintarTira(); });
+  function pintarMedia(V) {
+    var errs = V.map(function (v) { return v.mse; });
+    var suma = errs.reduce(function (s, v) { return s + v; }, 0);
+    var lista = est.k <= 5 ? errs.map(function (v) { return f(v, 3); }).join(" + ") : f(errs[0], 3) + " + " + f(errs[1], 3) + " + … + " + f(errs[est.k - 1], 3);
+    $("vivoMedia").innerHTML = "k = " + est.k + ": E<sub>CV</sub> = (" + lista + ") / " + est.k + " = " + (est.chk4 ? "<b>" + f(suma / est.k, 3) + "</b>" : "?") +
+      "<br>desviación de los " + est.k + " errores = " + (est.chk4 ? f(desvio(errs), 3) : "?");
+  }
+
+  /* destacado: el modelo final */
+  function quitarFinal() { est.final = false; $("btnFinal").textContent = "Ajustar el modelo final"; $("btnFinal").classList.remove("on"); $("finalCuenta").innerHTML = ""; }
+  $("btnFinal").addEventListener("click", function () {
+    est.final = !est.final;
+    this.textContent = est.final ? "Ver las rectas de cada vuelta" : "Ajustar el modelo final";
+    this.classList.toggle("on", est.final);
+    var F = ajustar(rango(0, N));
+    $("finalCuenta").innerHTML = est.final
+      ? "Una recta nueva con los 20 datos: <b>ŷ = " + f(F.a, 3) + " + " + f(F.b, 3) + "x</b>. Su error esperado en datos nuevos es el de la validación cruzada, " + f(media(kfold(5).map(function (v) { return v.mse; })), 3) + " con k = 5."
+      : "";
+    if (est.paso === 3) pintarTira();
+  });
+
+  /* paso 5: clases */
+  function repartoClases(modo) {
+    var bl = [];
+    if (modo === "orden") bl = rango(0, N).map(function (i) { return Math.floor(i / 4); });
+    else if (modo === "azar") { var o = barajar(rango(0, N)); bl = new Array(N); o.forEach(function (i, p) { bl[i] = Math.floor(p / 4); }); }
+    else {
+      bl = new Array(N);
+      var ra = 0, co = 0;
+      for (var i = 0; i < N; i++) { if (RARA.indexOf(i) >= 0) bl[i] = (ra++) % 5; else bl[i] = (co++) % 5; }
+    }
+    return bl;
+  }
+  var BL = repartoClases("orden");
+  (function () {
+    $("clases").innerHTML = rango(0, N).map(function (i) { return '<span class="c ' + (RARA.indexOf(i) >= 0 ? "cl-a" : "cl-b") + '">' + (i + 1) + '</span>'; }).join("");
+  })();
+  function pintarClases() {
+    var h = "", ceros = 0;
+    for (var b = 0; b < 5; b++) {
+      var miembros = rango(0, N).filter(function (i) { return BL[i] === b; });
+      var r = miembros.filter(function (i) { return RARA.indexOf(i) >= 0; }).length;
+      if (r === 0) ceros++;
+      h += '<div class="bloque-f"><span>bloque ' + (b + 1) + '</span>' + miembros.map(function (i) { return '<span class="c ' + (RARA.indexOf(i) >= 0 ? "cl-a" : "cl-b") + '">' + (i + 1) + '</span>'; }).join("") +
+        '<span class="cuenta' + (r === 0 ? " cero" : "") + '">rara: ' + r + ' de 4 (' + (r * 25) + ' %)</span></div>';
+    }
+    $("bloques").innerHTML = h;
+    $("clasesLinea").innerHTML = "En el total, la clase rara es 5 de 20: <b>25 %</b>." + (ceros ? " Hay <b>" + ceros + "</b> bloque" + (ceros > 1 ? "s" : "") + " sin clase rara." : " Ningún bloque queda sin clase rara.");
+  }
+  function elegirReparto(modo, btn) {
+    est.reparto = modo;
+    BL = repartoClases(modo);
+    ["btnOrden", "btnAzar", "btnEstrat"].forEach(function (id) { $(id).classList.toggle("on", $(id) === btn); });
+    pintarClases();
+  }
+  $("btnOrden").addEventListener("click", function () { elegirReparto("orden", this); });
+  $("btnAzar").addEventListener("click", function () { elegirReparto("azar", this); });
+  $("btnEstrat").addEventListener("click", function () { elegirReparto("estrat", this); });
+
+  /* paso 6: hiperparametro */
+  var svgK = $("curvaKnn"), KW = 440, KH = 200, KM = { l: 40, r: 12, t: 14, b: 34 };
+  svgK.setAttribute("viewBox", "0 0 " + KW + " " + KH);
+  svgK.classList.add("plano-svg");
+  function kx(v) { return KM.l + (v - 0.5) / 12 * (KW - KM.l - KM.r); }
+  function ky(e) { return KH - KM.b - e / 7 * (KH - KM.t - KM.b); }
+  function pintarKnn() {
+    var v = est.v;
+    est.visitados[v] = true;
+    $("vVal").textContent = v;
+    var ent = rango(0, N), curva = [];
+    for (var x0 = 0.5; x0 <= 20.5001; x0 += 0.125) curva.push([x0, knn(ent, x0, v)]);
+    dibujarPlano({ curva: curva });
+    $("planoLinea").innerHTML = "Curva de kNN con v = " + v + " vecinos, ajustada con los 20 datos.";
+    svgK.innerHTML = "";
+    var g = nodo("g", {}, svgK), t;
+    for (t = 0; t <= 7; t++) {
+      nodo("line", { x1: kx(0.5), x2: kx(12.5), y1: ky(t), y2: ky(t), "class": "grid" + (t === 0 ? " eje" : "") }, g);
+      texto(g, { x: kx(0.5) - 6, y: ky(t) + 3.5, "text-anchor": "end", "class": "tick" }, t);
+    }
+    for (t = 1; t <= 12; t++) texto(g, { x: kx(t), y: ky(0) + 14, "text-anchor": "middle", "class": "tick" }, t);
+    texto(g, { x: kx(6.5), y: KH - 4, "text-anchor": "middle", "class": "eje-tit" }, "vecinos v");
+    nodo("line", { x1: kx(v), x2: kx(v), y1: ky(0), y2: ky(7), stroke: "var(--accent)", "stroke-dasharray": "3 3" }, svgK);
+    KNN.forEach(function (r) {
+      if (!est.visitados[r.v]) return;
+      nodo("circle", { cx: kx(r.v), cy: ky(r.tr), r: 4, fill: "var(--surface)", stroke: "var(--ink-3)", "stroke-width": 1.6 }, svgK);
+      nodo("circle", { cx: kx(r.v), cy: ky(r.cv), r: 4.5, fill: "var(--accent)" }, svgK);
+    });
+    texto(svgK, { x: kx(12.4), y: KM.t + 6, "text-anchor": "end", "class": "leyenda" }, "lleno: validación cruzada · hueco: entrenamiento");
+    var r = KNN[v - 1];
+    $("knnLinea").innerHTML = "v = " + v + ": error de validación cruzada <b class=\"acc\">" + f(r.cv, 3) + "</b> · error de entrenamiento <b>" + f(r.tr, 3) + "</b>";
+  }
+  $("rngV").addEventListener("input", function () { est.v = +this.value; pintarKnn(); });
+
+  /* paso 7: fuga */
+  [1, 2, 3, 4, 5].forEach(function (j) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.textContent = j;
+    b.setAttribute("aria-pressed", j === 1 ? "true" : "false");
+    b.addEventListener("click", function () {
+      est.fuga = j - 1;
+      [].forEach.call($("selFuga").children, function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+      pintarFuga();
+    });
+    $("selFuga").appendChild(b);
+  });
+  var svgF = $("rectaFuga"), FW = 440, FH = 120;
+  svgF.setAttribute("viewBox", "0 0 " + FW + " " + FH);
+  svgF.classList.add("plano-svg");
+  function fx(v) { return 20 + v / 21 * (FW - 40); }
+  function pintarFuga() {
+    var p = rango(est.fuga * 4, est.fuga * 4 + 4), t = resto(p);
+    var xa = rango(0, N).map(function (i) { return X[i]; }), xt = t.map(function (i) { return X[i]; });
+    var ma = media(xa), sa = desvio(xa), mt = media(xt), st = desvio(xt);
+    dibujarPlano({ prueba: p });
+    $("planoLinea").innerHTML = "Vuelta " + (est.fuga + 1) + ": el examen son los datos " + (p[0] + 1) + " a " + (p[3] + 1) + ".";
+    svgF.innerHTML = "";
+    nodo("line", { x1: fx(0), x2: fx(21), y1: 60, y2: 60, "class": "grid eje" }, svgF);
+    for (var u = 0; u <= 20; u += 2) texto(svgF, { x: fx(u), y: 78, "text-anchor": "middle", "class": "tick" }, u);
+    for (var i = 0; i < N; i++) {
+      var en = p.indexOf(i) >= 0;
+      nodo("circle", { cx: fx(X[i]), cy: 60, r: en ? 5.5 : 4, fill: en ? "var(--accent)" : "var(--ink-3)" }, svgF);
+    }
+    nodo("line", { x1: fx(ma), x2: fx(ma), y1: 22, y2: 60, stroke: "var(--bad)", "stroke-width": 2 }, svgF);
+    texto(svgF, { x: fx(ma), y: 16, "text-anchor": "middle", "class": "leyenda" }, "con los 20: " + f(ma, 3));
+    nodo("line", { x1: fx(mt), x2: fx(mt), y1: 60, y2: 98, stroke: "var(--ok)", "stroke-width": 2 }, svgF);
+    texto(svgF, { x: fx(mt), y: 112, "text-anchor": "middle", "class": "leyenda" }, "solo entrenamiento: " + f(mt, 3));
+    var x0 = X[p[0]];
+    $("tablaFuga").innerHTML = "<thead><tr><th>calculado con</th><th>media</th><th>desviación</th><th>z del dato " + (p[0] + 1) + " (x = " + x0 + ")</th></tr></thead><tbody>" +
+      "<tr><td>los 20 (fuga)</td><td>" + f(ma, 3) + "</td><td>" + f(sa, 3) + "</td><td>" + f((x0 - ma) / sa, 3) + "</td></tr>" +
+      "<tr><td>los 16 de entrenamiento</td><td>" + f(mt, 3) + "</td><td>" + f(st, 3) + "</td><td>" + f((x0 - mt) / st, 3) + "</td></tr></tbody>";
+  }
+
+  /* ---------------- modos del escenario ---------------- */
+  var HINTS = [
+    "Toca 4 puntos para el examen.",
+    "Cada clic, una partición nueva.",
+    "Cada fila es una vuelta.",
+    "Toca una fila para ver esa vuelta.",
+    "Compara los tres repartos.",
+    "Mueve el deslizador por todos los valores.",
+    "Elige una vuelta."
+  ];
+  function entrar(i) {
+    est.paso = i;
+    $("escHint").textContent = HINTS[i];
+    if (i === 0) { mostrarVistas(["vPlano"]); pintarPaso1(); }
+    else if (i === 1) { mostrarVistas(["vPlano", "vHold"]); pintarHold(); }
+    else if (i === 2) { mostrarVistas(["vPlano", "vTira"]); est.final = false; if (est.vistas >= est.k) est.vuelta = Math.min(est.vuelta, est.k - 1); pintarTira(); }
+    else if (i === 3) { mostrarVistas(["vPlano", "vTira"]); if (est.vuelta < 0) est.vuelta = 0; pintarTira(); }
+    else if (i === 4) { mostrarVistas(["vClases"]); pintarClases(); }
+    else if (i === 5) { mostrarVistas(["vPlano", "vKnn"]); pintarKnn(); }
+    else { mostrarVistas(["vPlano", "vFuga"]); pintarFuga(); }
+  }
+
+  /* ---------------- chequeos de cada paso ---------------- */
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+
+  B.opcionMultiple(cuerpo("chk1"), {
+    pregunta: "Todavía sin ver tu error: si otra persona elige <b>otros 4 puntos</b> para el examen, con los mismos 20 datos y la misma recta, su error medido será...",
+    opciones: [
+      "Puede ser varias veces más grande o más chico que el tuyo",
+      "Casi igual al tuyo: el modelo es el mismo",
+      "Exactamente igual: una recta no depende de qué datos se esconden",
+      "Siempre más chico, porque el azar elige mejor que una persona"
+    ],
+    correcta: 0,
+    pistas: [null, "La recta casi no cambia, es cierto. Pero el examen sí: ¿todos los puntos están igual de cerca de la recta?",
+      "Si escondes otros 4, la recta se ajusta con otros 16 datos. Y además mides en otros puntos.",
+      "El azar no sabe nada de los datos. Puede elegir justo los puntos más alejados de la recta."],
+    explicacion: "Hay puntos pegados a la recta y puntos lejos. Si tu examen cae en los lejanos, el error sale grande; si cae en los cercanos, chico. <b>Mira tu error en el escenario</b> y después pasa al paso 2 para repetir el examen muchas veces.",
+    alResolver: function () { est.chk1 = true; if (est.paso === 0) pintarPaso1(); pasos.completar(0); }
+  });
+
+  function rangoHold() { return Math.max.apply(null, est.hold) - Math.min.apply(null, est.hold); }
+  chk2 = B.numerico(cuerpo("chk2"), {
+    pregunta: function () {
+      return est.hold.length < 10
+        ? "Haz al menos 10 particiones. Después: ¿cuánto vale la diferencia entre el error más grande y el más chico de tu lista?"
+        : "Tienes " + est.hold.length + " particiones. ¿Cuánto vale la diferencia entre el error más grande y el más chico de tu lista? (con 2 decimales)";
+    },
+    respuesta: function () { return est.hold.length >= 10 ? rangoHold() : NaN; },
+    tolerancia: 0.011,
+    pistas: ["La lista está ordenada de menor a mayor: el primero es el más chico y el último el más grande.",
+      function () { return est.hold.length >= 10 ? "Es $" + f(Math.max.apply(null, est.hold), 2) + " - " + f(Math.min.apply(null, est.hold), 2) + "$." : "Primero haz 10 particiones."; }],
+    diagnostico: function () { return est.hold.length < 10 ? "Primero haz al menos 10 particiones con los botones del escenario." : null; },
+    explicacion: function () {
+      if (est.hold.length < 10) return "Haz 10 particiones y vuelve a intentarlo.";
+      var mx = Math.max.apply(null, est.hold), mn = Math.min.apply(null, est.hold);
+      return f(mx, 2) + " − " + f(mn, 2) + " = " + f(mx - mn, 2) + ". El mayor es " + (mn > 0 ? f(mx / mn, 1) + " veces" : "muchas veces") + " el menor. Mismo modelo, mismos datos: lo único que cambió fue qué 4 datos tocaron de examen. Un solo número así no es confiable.";
+    },
+    alResolver: function () { pasos.completar(1); }
+  });
+
+  B.opcionMultiple(cuerpo("chk3"), {
+    pregunta: "Con k = 5, antes de correr las vueltas: al terminar las 5, cada dato habrá estado en el examen...",
+    opciones: ["Exactamente una vez", "Cuatro veces", "Una vez o ninguna, depende del azar", "Cinco veces, una por vuelta"],
+    correcta: 0,
+    pistas: [null, "Cuatro es la cantidad de vueltas en que un dato <b>entrena</b>.", "Los bloques no se sortean en cada vuelta: se arman una vez y se turnan.", "En cada vuelta el examen es un solo bloque, no todos."],
+    explicacion: "Los bloques no se pisan y cada uno es examen una vez, así que cada dato se evalúa exactamente una vez y entrena en las otras 4. <b>Ahora corre las vueltas</b> y mira cómo la mancha violeta baja en diagonal.",
+    alResolver: function () { est.chk3 = true; if (est.paso === 2) pintarTira(); pasos.completar(2); }
+  });
+
+  chk4 = B.numerico(cuerpo("chk4"), {
+    pregunta: function () { return "Con k = " + est.k + ", los " + est.k + " errores están a la derecha de cada vuelta. ¿Cuánto vale $E_{CV}$? (con 3 decimales)"; },
+    respuesta: function () { return media(kfold(est.k).map(function (v) { return v.mse; })); },
+    tolerancia: 0.0015,
+    pistas: ["Suma todos los errores de la columna $E_i$.", function () { var e = kfold(est.k).map(function (v) { return v.mse; }); return "La suma da " + f(e.reduce(function (s, v) { return s + v; }, 0), 3) + ". Divide entre k."; }],
+    diagnostico: function (v) {
+      var e = kfold(est.k).map(function (q) { return q.mse; }), s = e.reduce(function (a, b) { return a + b; }, 0);
+      if (Math.abs(v - s) < 0.002) return "Esa es la suma. Falta dividir entre k.";
+      if (Math.abs(v - s / N) < 0.002 && est.k !== N) return "Dividiste entre n = 20. El promedio es de los k errores, así que se divide entre k.";
+      return null;
+    },
+    explicacion: function () {
+      var e = kfold(est.k).map(function (v) { return v.mse; });
+      return "$E_{CV} = " + f(media(e), 3) + "$, con desviación " + f(desvio(e), 3) + ". La desviación es grande comparada con el promedio: las vueltas no se parecen entre sí, y por eso promediar es mucho mejor que confiar en una sola. Prueba otros k con el selector.";
+    },
+    alResolver: function () { est.chk4 = true; pintarTira(); cerrarPaso4(); }
+  });
+
+  B.opcionMultiple(cuerpo("chk4b"), {
+    pregunta: "Para predecir datos nuevos, ¿qué modelo usas al terminar la validación cruzada?",
+    opciones: [
+      "Uno nuevo, ajustado con los 20 datos",
+      "El de la vuelta con menor error",
+      "El de la última vuelta",
+      "Cualquiera de los 5: son iguales"
+    ],
+    correcta: 0,
+    pistas: [null, "La vuelta con menor error tuvo suerte con su examen, como viste en el paso 2.", "La última vuelta no tiene nada especial: el orden de los bloques es arbitrario.", "Mira las rectas de las vueltas en el escenario: son parecidas, no iguales."],
+    explicacion: "La validación cruzada midió cuánto se equivoca <b>ajustar una recta</b> con estos datos. Al final se ajusta una vez más con todos, que tiene más información que cualquiera de las cinco. Raschka lo dice igual: se reentrena con todo el entrenamiento. <b>Ahora toca el botón.</b>",
+    alResolver: function () {
+      est.chk4b = true;
+      $("btnFinal").disabled = false;
+      $("finalHint").textContent = "";
+      cerrarPaso4();
+    }
+  });
+  function cerrarPaso4() { if (est.chk4 && est.chk4b) pasos.completar(3); }
+
+  B.numerico(cuerpo("chk5"), {
+    pregunta: "Hay 5 datos de la clase rara entre 20 y se arman 5 bloques de 4. En una partición estratificada, ¿cuántos datos de la clase rara le tocan a cada bloque?",
+    respuesta: 1,
+    tolerancia: 0,
+    pistas: ["Estratificar es repartir cada clase por separado, de forma pareja entre los bloques.", "Son 5 raros para 5 bloques."],
+    diagnostico: function (v) {
+      if (v === 4) return "4 es el tamaño de cada bloque. ¿Cuántos de esos 4 son de la clase rara?";
+      if (v === 0.25) return "0.25 es la proporción. La pregunta pide cuántos datos.";
+      if (v === 3) return "3 es la cantidad de la clase común en cada bloque.";
+      return null;
+    },
+    explicacion: "5 raros entre 5 bloques: 1 por bloque, y 3 comunes. Cada bloque queda con 25 % de clase rara, igual que el total. <b>Ahora toca \"Estratificada\"</b> y compruébalo.",
+    alResolver: function () { est.chk5 = true; $("btnEstrat").disabled = false; pasos.completar(4); }
+  });
+
+  B.numerico(cuerpo("chk6"), {
+    pregunta: "Recorre los 12 valores del deslizador. ¿Qué número de vecinos $v$ da el <b>menor error de validación cruzada</b>?",
+    respuesta: MEJOR_V,
+    tolerancia: 0,
+    pistas: ["Mira solo los puntos llenos (violeta). Los huecos son el error de entrenamiento.",
+      "El mínimo está entre 3 y 6. Compara esos valores con atención: dos están muy cerca."],
+    diagnostico: function (v) {
+      if (v === 1) return "Con 1 vecino el error de <b>entrenamiento</b> vale 0: cada punto es su propio vecino. Por eso no se elige con el entrenamiento. Mira los puntos llenos.";
+      if (v === 4) return "Muy cerca. Compara el error de 4 con el de 5 en la línea de abajo del gráfico.";
+      return null;
+    },
+    explicacion: function () {
+      var r = KNN[MEJOR_V - 1], r4 = KNN[3];
+      return "$v = " + MEJOR_V + "$, con error " + f(r.cv, 3) + " (v = 4 da " + f(r4.cv, 3) + "). Con pocos vecinos la curva persigue cada punto: varianza alta. Con muchos se aplana: sesgo alto. El error de entrenamiento habría elegido $v = 1$, el peor para datos nuevos.";
+    },
+    alResolver: function () { pasos.completar(5); }
+  });
+
+  B.opcionMultiple(cuerpo("chk7"), {
+    pregunta: "Vas a estandarizar las variables y evaluar con validación cruzada de 5 bloques. ¿Dónde va la estandarización?",
+    opciones: [
+      "Dentro de cada vuelta: media y desviación del entrenamiento, aplicadas también al examen",
+      "Antes de partir, con todos los datos, para que todos queden en la misma escala",
+      "Dentro de cada vuelta, con la media y desviación del examen para el examen",
+      "En ningún lado: la validación cruzada ya corrige la escala"
+    ],
+    correcta: 0,
+    pistas: [null, "Mira la tabla del escenario: la media con los 20 incluye a los datos del examen.",
+      "El examen no puede usar sus propias estadísticas: en la vida real llega un dato a la vez, sin media propia.",
+      "La validación cruzada solo mide. No transforma nada."],
+    explicacion: "Lo que aprende el preprocesamiento (media, desviación, qué variables elegir) es parte del modelo, así que se aprende con el entrenamiento de cada vuelta y se aplica igual al examen. En scikit-learn esto se logra metiendo el escalador y el modelo en un <code>Pipeline</code> y pasándole el pipeline a <code>cross_val_score</code>.",
+    alResolver: function () { pasos.completar(6); }
+  });
+
+  pasos = B.pasos($("recorrido"), {
+    concepto: C,
+    alEntrar: entrar,
+    alTerminar: function () { location.hash = "retos"; }
+  });
+  est.chk1 = pasos.hecho(0);
+  est.chk3 = pasos.hecho(2);
+  if (pasos.hecho(3)) { est.chk4 = true; est.chk4b = true; $("btnFinal").disabled = false; $("finalHint").textContent = ""; }
+  if (pasos.hecho(4)) { est.chk5 = true; $("btnEstrat").disabled = false; }
+  entrar(0);
+
+  /* ---------------- hipotesis inicial ---------------- */
+  (function () {
+    var ta = $("hipotesis"), t = null;
+    ta.value = B.nota("validacion-cruzada", "hipotesis");
+    function cita() {
+      var v = ta.value.trim(), el = $("citaHipo");
+      el.hidden = !v;
+      if (v) { el.textContent = ""; el.appendChild(document.createTextNode("Al principio escribiste: «" + v + "». ¿Se parece a lo que construimos? ¿Pensaste en turnar el examen?")); }
+    }
+    cita();
+    ta.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { B.nota("validacion-cruzada", "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; cita(); }, 500);
+    });
+  })();
+
+  /* ---------------- marcadores de estado de retos ---------------- */
+  function pintarEstados() {
+    [].forEach.call(document.querySelectorAll("[data-reto]"), function (el) {
+      var ok = C.retoOk(el.getAttribute("data-reto"));
+      el.textContent = ok ? "resuelto" : "pendiente";
+      el.classList.toggle("ok", ok);
+    });
+  }
+  C.alCambiar(pintarEstados);
+
+  /* ---------------- reto: ojo clinico ---------------- */
+  (function () {
+    var cont = $("ojo");
+    cont.innerHTML = '<div class="ronda"></div><div class="plan" id="ojoPlan"></div>' +
+      '<div class="ojo-opts"><button type="button" class="opt" data-a="ok">Correcta</button><button type="button" class="opt" data-a="nunca">Un dato nunca es examen</button><button type="button" class="opt" data-a="dos">Un dato es examen dos veces</button></div>' +
+      '<div class="fb" aria-live="polite"></div><div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    var tipos, ronda, aciertos, respondida, plan, raro;
+    function generar(tipo) {
+      // 4 vueltas, 12 datos: cada dato recibe un bloque al azar (3 por bloque)
+      var o = barajar(rango(0, 12)), bl = new Array(12);
+      o.forEach(function (i, p) { bl[i] = Math.floor(p / 3); });
+      var M = [0, 1, 2, 3].map(function (r) { return rango(0, 12).map(function (i) { return bl[i] === r; }); });
+      raro = null;
+      var d = Math.floor(Math.random() * 12);
+      if (tipo === "nunca") { M[bl[d]][d] = false; raro = d; }
+      else if (tipo === "dos") { var otra = (bl[d] + 1 + Math.floor(Math.random() * 3)) % 4; M[otra][d] = true; raro = d; }
+      return M;
+    }
+    function nueva() {
+      var extra = Math.random() < 0.5 ? "nunca" : "dos";
+      tipos = B.mezclar(["ok", "ok", "nunca", "dos", extra]);
+      ronda = 0; aciertos = 0;
+      mostrar();
+    }
+    function pintarPlan(marcar) {
+      var h = '<span></span>' + rango(0, 12).map(function (i) { return '<span class="c idx">' + (i + 1) + '</span>'; }).join("");
+      plan.forEach(function (fila, r) {
+        h += '<span>vuelta ' + (r + 1) + '</span>' + fila.map(function (v, i) { return '<span class="c' + (v ? " prueba" : "") + (marcar && i === raro ? " marca" : "") + '"></span>'; }).join("");
+      });
+      $("ojoPlan").innerHTML = h;
+    }
+    function mostrar() {
+      respondida = false;
+      plan = generar(tipos[ronda]);
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 5 · aciertos " + aciertos;
+      pintarPlan(false);
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (b) { b.disabled = false; b.className = "opt"; });
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+    }
+    cont.querySelector(".ojo-opts").addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || respondida) return;
+      respondida = true;
+      var tipo = tipos[ronda], ok = b.getAttribute("data-a") === tipo;
+      if (ok) aciertos++;
+      b.classList.add(ok ? "ok" : "mal");
+      if (!ok) cont.querySelector('[data-a="' + tipo + '"]').classList.add("ok");
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (x) { x.disabled = true; });
+      pintarPlan(true);
+      var porque = tipo === "ok" ? "Cada columna tiene exactamente una celda violeta: cada dato es examen una vez."
+        : tipo === "nunca" ? "La columna " + (raro + 1) + " no tiene violeta: ese dato entrena siempre y nunca se mide. Además su vuelta tiene un examen más chico."
+        : "La columna " + (raro + 1) + " tiene dos celdas violeta: ese dato pesa dos veces en el promedio.";
+      cont.querySelector(".fb").innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No.</span> ') + porque;
+      var sig = cont.querySelector(".sig");
+      sig.hidden = false;
+      if (ronda === 4) {
+        var aprobo = aciertos >= 4;
+        C.reto("ojo", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertos + " de 5" + (aprobo ? ". Aprobado." : ". Necesitas 4 para aprobar.");
+        sig.textContent = "Otra tanda";
+      } else {
+        sig.textContent = "Siguiente ronda";
+      }
+    });
+    cont.querySelector(".sig").addEventListener("click", function () {
+      if (ronda === 4) nueva(); else { ronda++; mostrar(); }
+    });
+    nueva();
+  })();
+
+  /* ---------------- reto: constructor ---------------- */
+  (function () {
+    var RAROS = [0, 1, 5, 6];
+    var asig = rango(0, 12).map(function () { return 0; });   // 0 = sin bloque, 1..4 = bloque
+    var OBJ = [
+      { t: "Todos los datos tienen bloque.", ok: function () { return asig.every(function (a) { return a > 0; }); } },
+      { t: "Cada bloque tiene 3 datos.", ok: function () { return [1, 2, 3, 4].every(function (b) { return asig.filter(function (a) { return a === b; }).length === 3; }); } },
+      { t: "Cada bloque tiene exactamente 1 dato de la clase rara.", ok: function () { return [1, 2, 3, 4].every(function (b) { return RAROS.filter(function (i) { return asig[i] === b; }).length === 1; }); } }
+    ];
+    var ul = $("objetivos"), avisado = false;
+    OBJ.forEach(function (o) { var li = document.createElement("li"); li.innerHTML = '<span class="m"></span><span>' + o.t + '</span>'; ul.appendChild(li); });
+    function pintar() {
+      $("constr").innerHTML = asig.map(function (a, i) {
+        return '<button type="button" data-i="' + i + '" class="' + (RAROS.indexOf(i) >= 0 ? "cl-a" : "cl-b") + '" aria-label="Dato ' + (i + 1) + ', bloque ' + (a || "ninguno") + '">' +
+          '<span>' + (a ? "B" + a : "–") + '<br><small>' + (i + 1) + '</small></span></button>';
+      }).join("");
+      var todos = true;
+      OBJ.forEach(function (o, i) { var ok = o.ok(); ul.children[i].classList.toggle("hecho", ok); if (!ok) todos = false; });
+      if (todos && !avisado) { avisado = true; C.reto("constructor", true); }
+    }
+    $("constr").addEventListener("click", function (e) {
+      var b = e.target.closest("button");
+      if (!b) return;
+      var i = +b.getAttribute("data-i");
+      asig[i] = (asig[i] + 1) % 5;
+      pintar();
+    });
+    pintar();
+  })();
+
+  /* ---------------- reto: a mano ---------------- */
+  (function () {
+    var D;
+    function generar() {
+      for (;;) {
+        var r = Math.floor(Math.random() * 3), ys = [];
+        for (var i = 0; i < 4; i++) ys.push(r + 3 * Math.floor(Math.random() * 5));
+        if (new Set(ys).size < 3) continue;
+        var S = ys.reduce(function (a, b) { return a + b; }, 0);
+        var pred = ys.map(function (y) { return (S - y) / 3; });
+        var err = ys.map(function (y, i) { return (y - pred[i]) * (y - pred[i]); });
+        D = { ys: ys, S: S, pred: pred, err: err, cv: media(err), medTodos: S / 4 };
+        break;
+      }
+      $("manoDatos").innerHTML = '<table class="datos-mano"><tr><th>dato</th><th>1</th><th>2</th><th>3</th><th>4</th></tr>' +
+        '<tr><th>y</th><td>' + D.ys.join("</td><td>") + '</td></tr></table>';
+    }
+    function lst(a) { return a.map(function (v) { return Number.isInteger(v) ? f(v, 0) : f(v, 2); }).join(", "); }
+    var cfg = {
+      pregunta: "¿Cuánto vale el MSE promedio de las 4 vueltas? (con 2 decimales si hace falta)",
+      respuesta: function () { return D.cv; },
+      tolerancia: 0.011,
+      pistas: [
+        "Vuelta 1: dejas fuera el dato 1, predices con la media de los otros 3 y mides $(y_1 - \\hat{y}_1)^2$. Igual con los demás.",
+        function () { return "Predicciones (media de los otros 3): " + lst(D.pred) + "."; },
+        function () { return "Errores al cuadrado: " + lst(D.err) + ". Promédialos."; }
+      ],
+      diagnostico: function (v) {
+        var s = D.err.reduce(function (a, b) { return a + b; }, 0);
+        if (Math.abs(v - s) < 0.011) return "Esa es la suma de los 4 errores. Falta dividir entre k = 4.";
+        var mal = media(D.ys.map(function (y) { return (y - D.medTodos) * (y - D.medTodos); }));
+        if (Math.abs(v - mal) < 0.011) return "Predijiste con la media de los 4. Eso es usar el dato del examen para entrenar: la media tiene que salir de los otros 3.";
+        return null;
+      },
+      explicacion: function () { return "Predicciones " + lst(D.pred) + "; errores al cuadrado " + lst(D.err) + "; promedio " + f(D.cv, 2) + "."; },
+      reintentable: true,
+      textoReintentar: "Otro ejercicio",
+      antesDeReintentar: generar,
+      alResolver: function (ok) { C.reto("mano", ok); }
+    };
+    generar();
+    B.numerico($("mano"), cfg);
+  })();
+
+  /* ---------------- reto: cazar el error ---------------- */
+  B.cazarError($("error"), {
+    variantes: [
+      {
+        intro: "Validación cruzada con n = 20 datos y k = 4 bloques. Alguien resumió así:",
+        lineas: ["k = 4,\\; n = 20", "\\text{cada bloque tiene } 20/4 = 5 \\text{ datos}", "E_1, E_2, E_3, E_4 = 2,\\; 4,\\; 3,\\; 7",
+          "\\textstyle\\sum E_i = 16", "E_{CV} = 16/20 = 0.8"],
+        erronea: 4,
+        explicacion: "El promedio es de los k errores, no de los n datos: $E_{CV} = 16/4 = 4$. Cada $E_i$ ya es un promedio dentro de su bloque."
+      },
+      {
+        intro: "Dejar uno fuera (LOOCV) con n = 30 datos. Alguien lo describió así:",
+        lineas: ["k = n = 30 \\text{ vueltas}", "\\text{cada modelo entrena con } 29 \\text{ datos}", "\\text{cada examen tiene } 1 \\text{ dato}",
+          "\\text{en total se ajustan } 30 \\text{ modelos}", "\\text{cada dato se evalúa } 29 \\text{ veces}"],
+        erronea: 4,
+        explicacion: "Cada dato es examen una sola vez, en su vuelta. En las otras 29 vueltas entrena. Es la misma regla que en cualquier k-fold."
+      },
+      {
+        intro: "Plan para evaluar un modelo con 100 datos estandarizados. ¿Qué paso arruina la medición?",
+        lineas: ["\\text{Partir los 100 datos en 5 bloques}", "\\text{Calcular } \\bar{x} \\text{ y } s \\text{ con los 100 datos}",
+          "\\text{En cada vuelta, estandarizar con esos } \\bar{x} \\text{ y } s", "\\text{Entrenar con 4 bloques y medir en el quinto}", "\\text{Promediar los 5 errores}"],
+        erronea: 1,
+        explicacion: "La media y la desviación incluyen los datos del examen: hay fuga. Se calculan dentro de cada vuelta, solo con los 4 bloques de entrenamiento, y se aplican al quinto."
+      }
+    ],
+    alResolver: function (ok) { C.reto("error", ok); }
+  });
+
+  /* ---------------- retos: propiedades ---------------- */
+  function prop(id, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple($(id), cfg);
+  }
+  prop("prop1", {
+    pregunta: "Haces validación cruzada dejando uno fuera con $n = 100$ datos. ¿Cuántos modelos ajustas, sin contar el final?",
+    opciones: ["100", "1", "99", "10"],
+    correcta: 0,
+    pistas: [null, "Uno solo sería un holdout. En LOOCV, ¿cuántas vueltas hay?", "99 es la cantidad de datos con que entrena cada modelo.", "10 serían las vueltas de un 10-fold."],
+    explicacion: "LOOCV es $k = n$: una vuelta por dato, 100 modelos de 99 datos cada uno. Por eso es caro con datos grandes."
+  });
+  prop("prop2", {
+    pregunta: "Con los mismos datos, pasas de $k = 5$ a $k = 10$. ¿Qué pasa?",
+    opciones: [
+      "Cada modelo entrena con más datos: el error estimado es menos pesimista, y el cálculo cuesta el doble",
+      "Cada examen tiene más datos, así que la medición es más estable",
+      "No cambia nada: el promedio de los errores es el mismo",
+      "Cada modelo entrena con menos datos, así que el error sube"
+    ],
+    correcta: 0,
+    pistas: [null, "Con más bloques, cada bloque es más chico. ¿El examen crece o se achica?", "Toca el selector de k en el paso 4: el promedio cambia.", "Con 10 bloques, cada modelo entrena con 9 de 10 partes. Con 5, con 4 de 5."],
+    explicacion: "Entrenar con 90 % en vez de 80 % se parece más al modelo final, así que el error sale menos pesimista. A cambio son 10 ajustes en vez de 5. Raschka lo resume así: k grande, menos sesgo y más costo."
+  });
+  prop("prop3", {
+    pregunta: "La validación cruzada de 5 bloques te dio $E_{CV} = 2.68$. ¿Qué número esperas como error del modelo final, entrenado con todo?",
+    opciones: [
+      "Alrededor de 2.68, quizás un poco menos porque entrena con más datos",
+      "El error de la mejor vuelta",
+      "Cero, porque el modelo final ya vio todos los datos",
+      "2.68 multiplicado por 5"
+    ],
+    correcta: 0,
+    pistas: [null, "La mejor vuelta tuvo suerte con su examen.", "Ese sería el error de entrenamiento. En datos nuevos no será cero.", "El promedio ya junta las 5 vueltas. No hay que multiplicar."],
+    explicacion: "$E_{CV}$ estima el error en datos nuevos del procedimiento. El modelo final entrena con 20 datos en vez de 16, así que, si algo, se equivoca un poco menos."
+  });
+  prop("prop4", {
+    pregunta: "Pruebas 12 valores de un hiperparámetro con validación cruzada, eliges el de menor error y reportas ese error. Ese número...",
+    opciones: [
+      "Es optimista: lo elegiste por ser el menor. Hace falta un examen aparte o validación cruzada anidada",
+      "Es exacto, porque cada error salió de datos que el modelo no vio",
+      "Es pesimista, porque cada modelo entrenó con menos datos",
+      "Es exacto si usaste estratificación"
+    ],
+    correcta: 0,
+    pistas: [null, "Cada error, por separado, sí es limpio. ¿Y el mínimo de 12 errores con ruido?", "Ese sesgo pesimista existe, pero aquí hay uno más fuerte en sentido contrario.", "Estratificar arregla la proporción de clases, no la elección."],
+    explicacion: "Elegir el mínimo de 12 números con ruido favorece al que tuvo suerte. Para medir el procedimiento completo, elección incluida, se usa un bucle de afuera (validación anidada) o un conjunto de prueba que no se tocó."
+  });
+
+  /* ---------------- formula de memoria ---------------- */
+  B.ordenar($("formula"), {
+    piezas: ["E_{CV}", "=", "\\dfrac{1}{k}", "\\displaystyle\\sum_{i=1}^{k}", "E_i"],
+    distractores: ["\\dfrac{1}{n}", "\\displaystyle\\sum_{k=1}^{k}", "\\dfrac{1}{k-1}", "^{2}"],
+    soluciones: [[0, 1, 2, 3, 4]],
+    explicacion: "El promedio de los $k$ errores, uno por vuelta. El índice es $i$: la versión con $\\sum_{k=1}^{k}$ es la errata de la UD3.",
+    alResolver: function (ok) { C.reto("formula", ok); }
+  });
+
+  /* ---------------- vida real ---------------- */
+  (function () {
+    var CODIGO = {
+      py: [
+        ["import", "import numpy as np"],
+        ["import", "from sklearn.linear_model import LinearRegression"],
+        ["import", "from sklearn.model_selection import KFold, cross_val_score"],
+        [null, ""],
+        ["datos", "x = np.array([4, 9, 13, 14, 15, 17, 11, 16, 2, 7,"],
+        ["datos", "              1, 8, 5, 19, 6, 20, 18, 3, 10, 12], dtype=float)"],
+        ["datos", "y = np.array([4, 6, 8, 9, 10, 12, 10, 11, 4, 6,"],
+        ["datos", "              2, 8, 4, 10, 7, 10, 13, 4, 5, 6], dtype=float)"],
+        ["dims", "n, k = len(x), 5"],
+        ["m", "m = n // k                        # datos por bloque"],
+        [null, ""],
+        ["errores", "errores = []"],
+        ["forf", "for f in range(k):                # una vuelta por bloque"],
+        ["prueba", "    prueba = np.arange(f * m, (f + 1) * m)"],
+        ["entreno", "    entreno = np.setdiff1d(np.arange(n), prueba)"],
+        ["xe", "    xe, ye = x[entreno], y[entreno]"],
+        ["b", "    b = np.sum((xe - xe.mean()) * (ye - ye.mean())) / np.sum((xe - xe.mean()) ** 2)"],
+        ["a", "    a = ye.mean() - b * xe.mean()"],
+        ["pred", "    pred = a + b * x[prueba]      # el modelo nunca vio estos datos"],
+        ["mse", "    mse = np.mean((y[prueba] - pred) ** 2)"],
+        ["append", "    errores.append(mse)"],
+        ["print", "    print(f, round(mse, 3))"],
+        [null, ""],
+        ["final", "print(\"CV:\", round(np.mean(errores), 3), \"+/-\", round(np.std(errores, ddof=1), 3))"],
+        ["lib", "notas = cross_val_score(LinearRegression(), x.reshape(-1, 1), y,"],
+        ["lib", "                        cv=KFold(n_splits=k), scoring=\"neg_mean_squared_error\")"],
+        ["verificar", "print(np.isclose(np.mean(errores), -notas.mean()))"]
+      ],
+      r: [
+        ["import", "library(caret)"],
+        ["datos", "x <- c(4, 9, 13, 14, 15, 17, 11, 16, 2, 7,"],
+        ["datos", "       1, 8, 5, 19, 6, 20, 18, 3, 10, 12)"],
+        ["datos", "y <- c(4, 6, 8, 9, 10, 12, 10, 11, 4, 6,"],
+        ["datos", "       2, 8, 4, 10, 7, 10, 13, 4, 5, 6)"],
+        ["dims", "n <- length(x); k <- 5"],
+        ["m", "m <- n %/% k                      # datos por bloque"],
+        [null, ""],
+        ["errores", "errores <- numeric(k)"],
+        ["forf", "for (f in 1:k) {                  # una vuelta por bloque"],
+        ["prueba", "  prueba <- ((f - 1) * m + 1):(f * m)"],
+        ["entreno", "  entreno <- setdiff(1:n, prueba)"],
+        ["xe", "  xe <- x[entreno]; ye <- y[entreno]"],
+        ["b", "  b <- sum((xe - mean(xe)) * (ye - mean(ye))) / sum((xe - mean(xe))^2)"],
+        ["a", "  a <- mean(ye) - b * mean(xe)"],
+        ["pred", "  pred <- a + b * x[prueba]       # el modelo nunca vio estos datos"],
+        ["mse", "  mse <- mean((y[prueba] - pred)^2)"],
+        ["append", "  errores[f] <- mse"],
+        ["print", "  cat(f, round(mse, 3), \"\\n\")"],
+        [null, "}"],
+        [null, ""],
+        ["final", "cat(\"CV:\", round(mean(errores), 3), \"+/-\", round(sd(errores), 3), \"\\n\")"],
+        ["lib", "bloques <- lapply(1:k, function(f) setdiff(1:n, ((f - 1) * m + 1):(f * m)))"],
+        ["lib", "ajuste <- train(y ~ x, data = data.frame(x, y), method = \"lm\","],
+        ["lib", "                trControl = trainControl(method = \"cv\", index = bloques))"],
+        ["verificar", "all.equal(mean(errores), mean(ajuste$resample$RMSE^2))"]
+      ]
+    };
+    // salida real de cada programa (stdout), tal cual
+    var SALIDA = {
+      py: ["0 0.406", "1 3.882", "2 1.156", "3 4.205", "4 3.761", "CV: 2.682 +/- 1.763", "True"],
+      r: ["1 0.406 ", "2 3.882 ", "3 1.156 ", "4 4.205 ", "5 3.761 ", "CV: 2.682 +/- 1.763 ", "[1] TRUE"]
+    };
+    var K = 5, M = 4, VU = kfold(K);
+    var NIVEL = { forf: 0, prueba: 1, entreno: 2, xe: 3, b: 4, a: 5, pred: 6, mse: 7, append: 8, print: 9 };
+
+    var EV = [];
+    (function () {
+      var errs = [], sal = 0, fase = 1;
+      function foto(id, extra) { EV.push(Object.assign({ id: id, fase: fase, f: null, nivel: -1, errs: errs.slice(), sal: sal }, extra || {})); }
+      foto("import"); foto("datos"); foto("dims"); foto("m"); foto("errores");
+      fase = 2;
+      for (var j = 0; j < K; j++) {
+        ["forf", "prueba", "entreno", "xe", "b", "a", "pred", "mse", "append", "print"].forEach(function (id) {
+          if (id === "append") errs.push(VU[j].mse);
+          if (id === "print") sal++;
+          foto(id, { f: j, nivel: NIVEL[id] });
+        });
+      }
+      fase = 3;
+      sal++; foto("final", { fin: true });
+      foto("lib", { fin: true });
+      sal++; foto("verificar", { fin: true });
+    })();
+
+    function narrar(e, ctx) {
+      var py = ctx.lang() === "py", ix = ctx.ix, vu = e.f !== null ? VU[e.f] : null;
+      switch (e.id) {
+        case "import": return py ? "Carga NumPy y, de scikit-learn, la regresión lineal y las herramientas de validación cruzada. Solo se usan al final, para comparar."
+          : "Carga caret, que se usa al final para comparar. Al cargarla, R avisa que también carga ggplot2 y lattice.";
+        case "datos": return "Los 20 datos del recorrido, en el mismo orden: el orden importa, porque los bloques se arman por posición.";
+        case "dims": return "<b>n = 20</b> datos y <b>k = 5</b> bloques.";
+        case "m": return "Cada bloque tiene <b>m = 20 / 5 = 4</b> datos. " + (py ? "<code>//</code>" : "<code>%/%</code>") + " es la división entera.";
+        case "errores": return py ? "Una lista vacía para guardar los 5 errores." : "Un vector de 5 ceros para guardar los 5 errores.";
+        case "forf": return "Empieza la vuelta <b>f = " + ix(e.f) + "</b>. El bloque " + ix(e.f) + " va a ser el examen.";
+        case "prueba": return "Las posiciones del examen: <b>" + vu.prueba.map(ix).join(", ") + "</b>." + (py ? " En Python se cuenta desde 0 y el final de arange no se incluye." : " En R se cuenta desde 1 y el final de : sí se incluye.");
+        case "entreno": return "Las otras <b>16</b> posiciones entrenan: todas menos las del examen.";
+        case "xe": return "Toma solo los x e y de entrenamiento. Desde aquí, el modelo no ve el examen.";
+        case "b": return "La pendiente de mínimos cuadrados con los 16: <b>b = " + f(vu.mod.b, 3) + "</b>.";
+        case "a": return "La ordenada al origen: <b>a = " + f(vu.mod.a, 3) + "</b>. La recta de esta vuelta es ŷ = " + f(vu.mod.a, 3) + " + " + f(vu.mod.b, 3) + "x.";
+        case "pred": return "Predice los 4 datos del examen con esa recta. Mira la tabla: x, y real y predicción.";
+        case "mse": return "El error de la vuelta: el promedio de los 4 errores al cuadrado, <b>" + f(vu.mse, 3) + "</b>.";
+        case "append": return "Guarda el error de la vuelta " + ix(e.f) + ". Van <b>" + e.errs.length + "</b> de 5.";
+        case "print": return "Imprime <b>" + ctx.esc(SALIDA[ctx.lang()][e.f]) + "</b>: la vuelta y su error.";
+        case "final": return "El promedio de los 5 errores, <b>2.682</b>, y su desviación, <b>1.763</b>. " +
+          (py ? "Con <code>ddof=1</code>, porque <code>np.std</code> divide entre n por defecto y <code>sd</code> de R entre n − 1." : "<code>sd</code> divide entre n − 1; en Python hizo falta <code>ddof=1</code> para dar lo mismo.");
+        case "lib": return py ? "La librería hace las mismas 5 vueltas. <code>KFold</code> sin barajar toma los bloques en orden, como el bucle. Con <code>neg_mean_squared_error</code> devuelve los errores con signo menos: −0.406, −3.882, −1.156, −4.205 y −3.761."
+          : "caret repite las vueltas con los mismos bloques: <code>index</code> le dice qué filas entrenan en cada vuelta. Guarda el RMSE de cada vuelta en <code>ajuste$resample</code>.";
+        case "verificar": return py ? "Compara el promedio del bucle con el de la librería, cambiando el signo: <b>True</b>."
+          : "Eleva al cuadrado cada RMSE de caret y promedia: <b>TRUE</b>. Ojo: el resumen de caret promedia las raíces (1.535), no es la raíz del promedio (1.638).";
+      }
+      return "";
+    }
+    function visual(e, anterior, ctx) {
+      var ix = ctx.ix, vu = e && e.f !== null ? VU[e.f] : null;
+      var marcar = vu && e.nivel >= 1;
+      var h = '<span class="lab">' + (vu ? "vuelta " + ix(e.f) : "datos") + '</span>';
+      for (var i = 0; i < N; i++) h += '<span class="c ' + (!marcar ? "" : vu.prueba.indexOf(i) >= 0 ? "prueba" : e.nivel >= 2 ? "ent" : "") + '"></span>';
+      h += '<span class="err"></span><span class="lab">pos.</span>';
+      for (i = 0; i < N; i++) h += '<span class="c idx">' + ix(i) + '</span>';
+      h += '<span></span>';
+      $("vrTira").innerHTML = h;
+      $("vrTiraTit").textContent = vu ? "Vuelta " + ix(e.f) + ": examen en violeta, entrenamiento en gris" : "Los 20 datos, por posición";
+      var t = "";
+      if (vu && e.nivel >= 1) {
+        t = "<thead><tr><th>pos.</th><th>x</th><th>y</th><th>predicción</th><th>(y − pred)²</th></tr></thead><tbody>";
+        vu.prueba.forEach(function (i) {
+          var p = vu.mod.a + vu.mod.b * X[i], e2 = (Y[i] - p) * (Y[i] - p);
+          t += "<tr><td>" + ix(i) + "</td><td>" + X[i] + "</td><td>" + Y[i] + "</td><td" + (e.id === "pred" ? ' class="nuevo"' : "") + ">" + (e.nivel >= 6 ? f(p, 3) : "") + "</td>" +
+            "<td" + (e.id === "mse" ? ' class="nuevo"' : "") + ">" + (e.nivel >= 7 ? f(e2, 3) : "") + "</td></tr>";
+        });
+        t += "</tbody>";
+      }
+      $("vrTabla").innerHTML = t;
+      $("vrBarras").innerHTML = e && e.errs.length ? e.errs.map(function (v, j) {
+        return '<div class="barra-e"><span>vuelta ' + ix(j) + '</span><span class="t"><i style="width:' + (v / 4.5 * 100).toFixed(1) + '%"></i></span><b>' + f(v, 3) + '</b></div>';
+      }).join("") : '<span class="esc-linea">todavía vacío</span>';
+      var sal = e ? SALIDA[ctx.lang()].slice(0, e.sal) : [];
+      $("vrSalida").innerHTML = sal.length ? sal.map(ctx.esc).join("\n") : '<span class="ph">(nada impreso todavía)</span>';
+    }
+    B.vidaReal($("vidareal"), {
+      codigo: CODIGO,
+      eventos: EV,
+      narrar: narrar,
+      vars: function (e, ctx) {
+        var v = [], ix = ctx.ix;
+        if (e && e.f !== null) v.push('<span>f = <b>' + ix(e.f) + '</b></span>');
+        if (e && e.f !== null && e.nivel >= 4) v.push('<span>b = <b>' + f(VU[e.f].mod.b, 3) + '</b></span>');
+        if (e && e.f !== null && e.nivel >= 5) v.push('<span>a = <b>' + f(VU[e.f].mod.a, 3) + '</b></span>');
+        if (e && e.f !== null && e.nivel >= 7) v.push('<span>mse = <b>' + f(VU[e.f].mse, 3) + '</b></span>');
+        var np = e ? EV.slice(0, EV.indexOf(e) + 1).filter(function (q) { return q.id === "pred"; }).length * M : 0;
+        v.push('<span>predicciones hechas: <b>' + np + '</b></span>');
+        return v;
+      },
+      visual: visual,
+      demora: function (e) { return !e ? 600 : e.id === "forf" ? 1100 : e.id === "print" ? 900 : e.id === "pred" || e.id === "mse" ? 1000 : 650; }
+    });
+
+    B.numerico(cuerpo("vrPred"), {
+      pregunta: "La línea <code>pred = a + b * x[prueba]</code> calcula varias predicciones cada vez que corre. ¿Cuántas predicciones hace en total, sumando todas las vueltas?",
+      respuesta: 20,
+      tolerancia: 0,
+      pistas: ["Cuenta cuántas veces corre la línea (una por vuelta) y cuántos datos predice cada vez.", "Son 5 vueltas con un examen de 4 datos."],
+      diagnostico: function (v) {
+        if (v === 4) return "Esas son las de una vuelta. ¿Cuántas vueltas hay?";
+        if (v === 5) return "Esas son las veces que corre la línea. Cada vez predice un bloque entero.";
+        if (v === 80) return "80 sería si predijera los 16 de entrenamiento. Solo predice el examen.";
+        if (v === 100) return "Solo predice los datos del examen, no los 20 en cada vuelta.";
+        return null;
+      },
+      explicacion: "5 vueltas por 4 datos: <b>20</b>. Una predicción por dato, cada una hecha por un modelo que no vio ese dato. Es la propiedad del paso 3 dicha en código. Ahora reproduce y mira el contador.",
+      alResolver: function (ok) { C.reto("codigo1", ok); }
+    });
+    prop("codigo2", {
+      pregunta: "Tus datos vienen ordenados por clase: primero todos los de la clase 0, después la 1 y después la 2 (como el dataset Iris). Usas <code>KFold(n_splits=3)</code> sin <code>shuffle=True</code>. ¿Qué pasa?",
+      opciones: [
+        "Cada bloque de examen es una clase entera que el modelo nunca vio al entrenar: la exactitud sale 0 en las tres vueltas",
+        "Nada: KFold baraja los datos por defecto",
+        "Da un error porque los bloques no están balanceados",
+        "La exactitud sale un poco más baja, nada grave"
+      ],
+      correcta: 0,
+      pistas: [null, "Mira el código de la Parte 2: KFold sin barajar arma los bloques por posición, igual que el bucle.",
+        "KFold no revisa las clases. No falla: hace la cuenta y devuelve un número.",
+        "Piensa en la primera vuelta: el examen son las 50 flores de la clase 0. ¿Cuántas de esa clase vio el modelo?"],
+      explicacion: "Lo comprobamos con Iris y una regresión logística: <code>KFold(3)</code> sin barajar da <b>[0. 0. 0.]</b>; con <code>shuffle=True, random_state=0</code> da 0.98, 0.96 y 0.96. Si pasas <code>cv=3</code> con un clasificador, scikit-learn usa <code>StratifiedKFold</code> y te salva. En R, <code>trainControl(method = \"cv\")</code> arma los bloques al azar y, si y es un factor, estratificados por clase."
+    });
+    prop("codigo3", {
+      pregunta: "Con los datos de la Parte 2, <code>cross_val_score(LinearRegression(), X, y, cv=KFold(5))</code>, sin <code>scoring</code>, devuelve <b>[0.89, −4.647, 0.769, 0.32, 0.699]</b>. ¿Qué son esos números?",
+      opciones: [
+        "R² de cada vuelta: es la métrica por defecto de un regresor, y puede ser negativo",
+        "Los MSE de cada vuelta",
+        "Los MSE con signo menos",
+        "Correlaciones entre x e y en cada bloque"
+      ],
+      correcta: 0,
+      pistas: [null, "Los MSE no pueden ser negativos: son promedios de cuadrados.",
+        "Con <code>scoring=\"neg_mean_squared_error\"</code> salen −0.406, −3.882... Estos son otros.",
+        "Una correlación no baja de −1."],
+      explicacion: "Sin <code>scoring</code>, un regresor usa R². En la vuelta 2 da −4.647 porque los 4 datos del examen casi no varían entre sí y la recta los predice peor que su propia media. Para MSE hay que pedir <code>scoring=\"neg_mean_squared_error\"</code>, que devuelve negativos porque scikit-learn siempre maximiza: se les cambia el signo."
+    });
+  })();
+
+  /* ---------------- tarjetas ---------------- */
+  B.tarjetas($("tarjetas"), [
+    ["¿Por qué no basta con una sola partición en entrenamiento y examen?", "Porque el error medido depende de qué datos tocaron de examen: con los mismos datos y el mismo modelo, puede cambiar varias veces."],
+    ["En k-fold, ¿cuántas veces es examen cada dato?", "Exactamente una. Entrena en las otras $k - 1$ vueltas."],
+    ["¿Qué es $E_{CV}$?", "El promedio de los $k$ errores, $\\frac{1}{k}\\sum_{i=1}^{k} E_i$. Se reporta junto con su desviación."],
+    ["¿Qué es LOOCV?", "Validación cruzada con $k = n$: cada examen es un solo dato. Poco pesimista, pero cuesta $n$ ajustes."],
+    ["¿Para qué sirve estratificar?", "Para que cada bloque tenga la misma proporción de clases que el total. Es clave con clases desbalanceadas."],
+    ["Terminada la validación cruzada, ¿qué modelo usas?", "Uno nuevo, entrenado con todos los datos. La validación cruzada midió el procedimiento, no eligió una de las $k$ copias."],
+    ["¿Dónde se estandariza?", "Dentro de cada vuelta, con la media y la desviación del entrenamiento. Hacerlo antes de partir filtra información del examen."],
+    ["¿Qué devuelve <code>cross_val_score</code> con un regresor si no pides <code>scoring</code>?", "R², no MSE. Para el MSE se pide <code>neg_mean_squared_error</code> y se le cambia el signo."]
+  ]);
+
+  /* ---------------- conexiones ---------------- */
+  B.conexiones("validacion-cruzada");
+})();
+</script>
+</body>
+</html>

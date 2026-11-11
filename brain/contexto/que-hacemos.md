@@ -40,10 +40,14 @@ del libro, pero "con el mismo tono y nivel intuitivo".
 
 ## Qué hay hoy
 
-- La biblioteca vive en `biblioteca/`, organizada por rutas de estudio. La primera ruta es la UD1 del máster (estadística descriptiva
-  y análisis): once conceptos, de media y mediana hasta PCA, LDA y t-SNE.
-- Las fuentes que se citan están en la carpeta brain de Francisco (fuera del proyecto): el material de la UD1, Raschka cap. 5,
-  Nield caps. 3 y 4, Brasil vol. 1 caps. 5 y 6, Jansen cap. 13. Sus mapas de citas están en `brain/fuentes/`.
+- El 11 de noviembre de 2026 Francisco pidió cubrir todo lo que tiene que estudiar (la carpeta `~/brain`), con una regla:
+  "esto no es una biblioteca de materias si no de conceptos", con enfoque matemático. Lo no matemático (IA empresarial, bases de
+  datos, redes) no tiene páginas; las materias solo se citan para atar ("dónde te lo enseñaron").
+- La biblioteca vive en `biblioteca/`, organizada en 20 rutas matemáticas agrupadas en Fundamentos (la escalera completa de
+  `~/brain/03-Matematicas`), Cálculo, Álgebra lineal, Probabilidad y estadística, y Aprendizaje automático.
+  El catálogo tiene el mapa completo: 186 conceptos, 19 construidos y 167 planeados en 5 tandas ordenadas por las fechas del campus.
+- Las fuentes que se citan están en `~/brain` (fuera del proyecto). Hay mapas de citas en `brain/fuentes/` para el material de la UD1,
+  Raschka cap. 5, Nield caps. 3 y 4, Brasil vol. 1 y Jansen cap. 13; cada tanda mapea las fuentes nuevas antes de construir.
 - La carpeta también tiene escenas de Manim que generan videos, y sus renders en `media/`.
 
 **Abierto:** qué papel juegan los videos de Manim ahora que existe la biblioteca. ¿Se siguen haciendo, o la biblioteca los reemplaza?

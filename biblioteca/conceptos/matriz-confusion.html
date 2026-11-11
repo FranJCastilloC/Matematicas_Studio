@@ -1,0 +1,1527 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Matriz de confusión, precisión, recall y F1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+/* ---------- la matriz con fichas ---------- */
+.mz-svg { width: 100%; height: auto; display: block; user-select: none; -webkit-user-select: none; }
+.mz-svg .celda { fill: var(--surface-2); stroke: var(--line); stroke-width: 1; transition: opacity .3s, fill .3s; }
+.mz-svg .celda.diag { fill: color-mix(in oklab, var(--ok) 7%, var(--surface-2)); }
+.mz-svg .celda.error { fill: color-mix(in oklab, var(--bad) 7%, var(--surface-2)); }
+.mz-svg .celda.clic { cursor: pointer; }
+.mz-svg .celda.sel { stroke: var(--ink); stroke-width: 2; }
+.mz-svg.pool .celda, .mz-svg.pool .cel-lab, .mz-svg.pool .eje-lab { opacity: .12; }
+.mz-svg .cel-lab { font: 600 12px var(--f-mono); fill: var(--ink); pointer-events: none; transition: opacity .3s; }
+.mz-svg .cel-lab tspan.nom { font: 400 10.5px var(--f-body); fill: var(--ink-2); }
+.mz-svg .cel-num { font: 500 13px var(--f-mono); fill: var(--ink); text-anchor: end; pointer-events: none; }
+.mz-svg .eje-lab { font: 11px var(--f-body); fill: var(--ink-2); transition: opacity .3s; }
+.mz-svg .eje-tit { font: 600 10.5px var(--f-mono); fill: var(--ink-3); letter-spacing: .06em; text-transform: uppercase; }
+.mz-svg .ficha { stroke-width: 1.6; transition: transform .75s cubic-bezier(.3,.75,.3,1), fill .3s, stroke .3s; pointer-events: none; }
+.mz-svg .ficha.real1 { fill: var(--c); stroke: var(--c); }
+.mz-svg .ficha.real0 { fill: var(--surface); stroke: var(--c); }
+.mz-svg .ficha.ok { --c: var(--ok); }
+.mz-svg .ficha.bad { --c: var(--bad); }
+.mz-svg .ficha.neutro { --c: var(--ink-2); }
+.mz-svg .foco { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-dasharray: 7 4; pointer-events: none; }
+.mz-svg .caro { fill: none; stroke: var(--accent); stroke-width: 3; pointer-events: none; }
+.mz-svg .caro-lab { font: 600 10.5px var(--f-mono); fill: var(--accent); text-anchor: end; pointer-events: none; }
+.mz-svg .pool-lab { font: 12px var(--f-body); fill: var(--ink-2); text-anchor: middle; }
+
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+.esc-head .hint { font-size: 12.5px; color: var(--ink-2); }
+.esc-sub { font-size: 13px; color: var(--ink-2); margin: 0 0 6px; }
+.esc-sub b { color: var(--ink); font-weight: 500; }
+.leyenda { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--ink-2); margin: 6px 0 0; }
+.leyenda i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; border: 1.6px solid var(--ink-2); }
+.leyenda i.lleno { background: var(--ink-2); }
+.leyenda i.ok { background: var(--ok); border-color: var(--ok); }
+.leyenda i.bad { background: var(--bad); border-color: var(--bad); }
+
+.ctl { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 10px 0 0; }
+.ctl[hidden] { display: none; }
+.ctl .seg-lab { margin-left: 0; }
+.umbral-box { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; margin-top: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; }
+.umbral-box[hidden] { display: none; }
+.umbral-box label { font-size: 12.5px; color: var(--ink-2); }
+.umbral-box b { font-family: var(--f-mono); font-weight: 500; color: var(--accent); font-variant-numeric: tabular-nums; }
+.umbral-box input { width: 100%; accent-color: var(--accent); }
+.umbral-box .regla { grid-column: 1 / -1; font-size: 12px; color: var(--ink-3); }
+
+/* ---------- panel de metricas ---------- */
+.metricas { display: grid; gap: 6px; margin-top: 12px; }
+.met { display: grid; grid-template-columns: 82px minmax(0, 1fr) 56px; align-items: center; gap: 4px 10px; padding: 6px 8px; border-radius: 8px; border: 1px solid transparent; font-size: 12.5px; color: var(--ink-2); }
+.met.foco { border-color: var(--accent); background: var(--accent-soft); }
+.met .nom { color: var(--ink); font-weight: 500; }
+.met .cuenta { font-family: var(--f-mono); font-size: 12px; font-variant-numeric: tabular-nums; }
+.met .barra { grid-column: 1 / 3; height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; display: flex; }
+.met .barra i { display: block; height: 100%; transition: width .35s; }
+.met .barra i.ok { background: var(--ok); }
+.met .barra i.bad { background: var(--bad); }
+.met .barra i.val { background: var(--accent); }
+.met .barra i.ari { background: var(--ink-3); }
+.met b { grid-row: 1 / 3; grid-column: 3; justify-self: end; font-family: var(--f-mono); font-size: 16px; font-weight: 500; color: var(--ink); font-variant-numeric: tabular-nums; }
+.met b.oculto { color: var(--accent); }
+.met b.indef { font-size: 11.5px; color: var(--bad); text-align: right; }
+.lectura { font-size: 13.5px; color: var(--ink-2); min-height: 2.6em; margin: 10px 0 0; }
+.lectura b { color: var(--ink); font-weight: 500; }
+
+.problemas { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }
+.problemas button.on, .ctl button.on { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.prob-txt { font-size: 14px; color: var(--ink-2); min-height: 4.5em; padding: 10px 12px; border-radius: 8px; background: var(--surface-2); }
+.prob-txt b { color: var(--ink); font-weight: 500; }
+.comparar { font-family: var(--f-mono); font-size: 13px; color: var(--ink-2); margin-top: 10px; line-height: 1.7; font-variant-numeric: tabular-nums; }
+.comparar b { color: var(--ink); font-weight: 500; }
+.comparar b.mal { color: var(--bad); }
+
+/* ---------- vida real ---------- */
+.vr-fichas { display: grid; grid-template-columns: repeat(20, minmax(0, 1fr)); gap: 3px; margin: 6px 0 10px; }
+.vr-fichas span { aspect-ratio: 1; border-radius: 50%; border: 1.5px solid var(--line); background: var(--surface); transition: background .15s, border-color .15s; }
+.vr-fichas span.r1 { background: var(--line); }
+.vr-fichas span.TP, .vr-fichas span.TN { border-color: var(--ok); }
+.vr-fichas span.FP, .vr-fichas span.FN { border-color: var(--bad); }
+.vr-fichas span.r1.TP { background: var(--ok); }
+.vr-fichas span.r1.FN { background: var(--bad); }
+.vr-fichas span.on { box-shadow: 0 0 0 2px var(--accent); }
+.vr-cont { display: grid; grid-template-columns: 70px repeat(2, minmax(0, 1fr)); gap: 4px; max-width: 360px; font-family: var(--f-mono); font-size: 12px; }
+.vr-cont .lab { color: var(--ink-3); display: grid; place-items: center; text-align: center; font-size: 11px; }
+.vr-cont .c { padding: 8px 6px; border-radius: 6px; text-align: center; background: var(--surface-2); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.vr-cont .c b { display: block; font-size: 18px; color: var(--ink); font-weight: 500; }
+.vr-cont .c.on { box-shadow: 0 0 0 2px var(--accent); }
+.vr-cont .c.ok b { color: var(--ok); }
+.vr-cont .c.bad b { color: var(--bad); }
+.vr-salida { margin: 10px 0 0; padding: 8px 10px; background: var(--surface-2); border-radius: 8px; font-family: var(--f-mono); font-size: 11.5px; line-height: 1.45; white-space: pre; overflow-x: auto; min-height: 3em; color: var(--ink); }
+.vr-salida .nuevo { color: var(--accent); }
+
+/* ---------- retos propios ---------- */
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.ojo-opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
+.ojo-opts .opt { text-align: center; }
+.objetivos { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.objetivos li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.objetivos .m { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.objetivos li.hecho { color: var(--ink); }
+.objetivos li.hecho .m { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 3px var(--surface); }
+.datos-mano { border-collapse: collapse; font-family: var(--f-mono); font-size: 14px; margin: 4px 0 12px; }
+.datos-mano th, .datos-mano td { padding: 5px 12px; border: 1px solid var(--line); text-align: center; }
+.datos-mano th { color: var(--ink-3); font-weight: 500; font-size: 12px; }
+.grande { font-family: var(--f-mono); font-size: 13px; color: var(--ink-2); margin: 8px 0; font-variant-numeric: tabular-nums; }
+.grande b { color: var(--ink); font-weight: 500; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ Matriz de confusión</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Decisión y evaluación · UD3 de Matemáticas, UD0 de Clasificaciones y UD2 de Logística</p>
+    <h1>Matriz de confusión, precisión, recall y F1</h1>
+    <p class="lede">
+      Un clasificador acierta y se equivoca de dos maneras distintas cada vez. Aquí vas a ver <b>cien casos como fichas que caen en cuatro casillas</b>,
+      y cada métrica va a ser solo una forma de mirar esas casillas: una fila, una columna o la diagonal.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> Un test de cribado acierta con 80 de cada 100 pacientes. ¿Te parece un buen test? ¿Qué más querrías saber antes de usarlo en un hospital? Escríbelo como te salga.</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: querría saber si..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>De cien fichas a cuatro números</h2>
+      <p>Siete pasos. Cada uno termina con un chequeo: hasta que no lo resuelves, el siguiente queda cerrado. Equivocarte aquí no resta nada, es parte del método.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="¿99 % es bueno?">
+          <span class="etapa">Paso 1</span>
+          <h3>Un detector que acierta 99 de cada 100</h3>
+          <p>Un banco revisa 100 transacciones de un día. Una sola es fraude: es la ficha llena del escenario. Las otras 99 son normales: fichas huecas.</p>
+          <p>Un programador entrega un detector de fraude y presume: <b>"acierta con 99 de cada 100 transacciones"</b>. Lo que no cuenta es cómo funciona por dentro: a todas les dice "no es fraude", sin mirar nada.</p>
+          <div class="check" id="chk1">
+            <p class="check-tit">Predice antes de ver</p>
+            <div class="cuerpo"></div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Las cuatro casillas">
+          <span class="etapa">Paso 2</span>
+          <h3>Cuatro casillas: dos formas de acertar y dos de fallar</h3>
+          <p>Cambiamos de problema. Un test de cribado revisa a 100 pacientes inventados: 20 tienen la enfermedad (fichas llenas) y 80 están sanos (fichas huecas). El test dice "enfermo" o "sano" a cada uno.</p>
+          <p>Cada ficha cae en una casilla según dos preguntas: <b>¿qué es en realidad?</b> (la fila) y <b>¿qué dijo el test?</b> (la columna). Salen cuatro casillas, y sus nombres en inglés son los que vas a ver en todos lados:</p>
+          <ul>
+            <li><b>TP</b>, verdadero positivo: enfermo, y el test dijo enfermo.</li>
+            <li><b>FN</b>, falso negativo: enfermo, pero el test dijo sano. Se le escapó.</li>
+            <li><b>FP</b>, falso positivo: sano, pero el test dijo enfermo. Una falsa alarma.</li>
+            <li><b>TN</b>, verdadero negativo: sano, y el test dijo sano.</li>
+          </ul>
+          <p>El truco para no confundirlos: <b>la segunda palabra es lo que dijo el test</b> (positivo o negativo) y <b>la primera dice si acertó</b> (verdadero o falso). Las fichas verdes cayeron en la diagonal, donde el test acertó; las rojas, fuera de ella. Toca cada casilla del escenario para leerla.</p>
+          <p>Así la dibuja el material de la UD3, con la clase real en las filas, la predicción en las columnas y el positivo primero
+            <cite class="cita" data-fuente="ud3" data-pag="35" data-seccion="3.7 Métricas de evaluación: matriz de confusión" data-que="La matriz de 2 × 2 con filas = clase real y columnas = predicción, en el orden [TP FN; FP TN], y un ejemplo médico. Las cuatro casillas se definen en esta misma página." data-cuando="Al terminar este paso"></cite>,
+            y lo mismo hace la UD2 de regresión logística
+            <cite class="cita" data-fuente="rl2" data-pag="13" data-seccion="Matriz de confusión" data-que="TP, TN, FP y FN definidos en palabras y la tabla de 2 × 2 con filas = reales y columnas = predichos, Positivo primero (TP arriba a la izquierda)." data-cuando="Al terminar este paso"></cite>.
+            Ese orden no es universal: en el paso 7 vas a ver que scikit-learn usa el orden contrario.</p>
+          <div class="check" id="chk2"><p class="check-tit">Antes de seguir</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Exactitud">
+          <span class="etapa">Paso 3</span>
+          <h3>Exactitud: la diagonal entre el total</h3>
+          <p>La primera métrica es la que usó el programador del fraude: de todos los casos, ¿qué fracción cayó en la diagonal? En inglés se llama <i>accuracy</i>; en español, <b>exactitud</b>.</p>
+          <div class="fbloque">
+            <div data-tex="\text{Exactitud} = \frac{TP + TN}{TP + FP + FN + TN}" data-display></div>
+            <div class="vivo" id="vivoExact"></div>
+          </div>
+          <p>En el escenario, la línea punteada violeta rodea la matriz entera (el denominador) y la barra cuenta en verde la diagonal y en rojo el resto.</p>
+          <p>El material de la UD3 escribe esta misma fórmula, pero con otro nombre
+            <cite class="cita" data-fuente="ud3" data-pag="34" data-seccion="3.7 Métricas de evaluación" data-que="La fórmula (TP + TN)/(TP + FP + FN + TN) bajo el título &quot;Precisión (Accuracy)&quot;. Es la exactitud: el nombre está mal, y en el paso 6 vas a ver por qué importa." data-cuando="Después del chequeo de este paso"></cite>.
+            Los casos de kNN de la UD3 de Clasificaciones hacen lo mismo y llaman "precisión" a la accuracy
+            <cite class="cita" data-fuente="knn3basico" data-pag="7" data-ancla="evaluación-del-modelo" data-seccion="7 Evaluación del modelo" data-que="La tabla table(Predicted, Actual) con 25/0/0/25 y una accuracy del 100 %, que el texto llama precisión. Además se mide sobre los mismos puntos de entrenamiento." data-cuando="Cuando repases kNN"></cite>.
+            Cuando leas "precisión" en el material, mira la fórmula antes de fiarte del nombre.</p>
+          <div class="check" id="chk3"><p class="check-tit">Calcula con los datos</p><div class="cuerpo"></div></div>
+          <div class="destacado" id="trampaExact" hidden>
+            <p class="dest-tit">La trampa</p>
+            <h4>La exactitud engaña cuando una clase es rara</h4>
+            <p>Usa el botón <b>Fraude</b> del escenario. El detector que no mira nada tiene más exactitud (0.99) que el test de cribado (0.80), que sí encuentra enfermos. Con 1 fraude entre 100, decir "no" a todo ya da 99 %. Cuanto más rara es la clase positiva, más alta sale la exactitud de un modelo inútil.</p>
+            <p>Nield cuenta la misma historia con un modelo que acierta el 98 % y no sirve para nada
+              <cite class="cita" data-fuente="nield6" data-pag="29" data-seccion="Confusion Matrices" data-que="El ejemplo de &quot;Michael&quot; y &quot;Samantha&quot;: 98 % de exactitud con un modelo inútil (Figure 6-17), los datos desbalanceados y por qué la exactitud es mala medida. Sigue hasta la p. 33." data-cuando="Al terminar este paso"></cite>.
+              Por eso hacen falta las dos métricas que siguen: miran solo una fila o una columna, no la matriz entera.</p>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Precisión">
+          <span class="etapa">Paso 4</span>
+          <h3>Precisión: de los que dije positivo, ¿cuántos lo eran?</h3>
+          <p>Ahora miramos <b>solo la columna "dijo enfermo"</b>. Ahí están todos los pacientes a los que el test les dio la mala noticia. La pregunta es cuántos de ellos de verdad estaban enfermos.</p>
+          <div class="fbloque">
+            <div data-tex="\text{Precisión} = \frac{TP}{TP + FP}" data-display></div>
+            <div class="vivo" id="vivoPrec"></div>
+          </div>
+          <p>La precisión castiga las <b>falsas alarmas</b> (FP). No le importa cuántos enfermos se escaparon: esos están en la otra columna, fuera de la línea punteada. Otros nombres que vas a encontrar: valor predictivo positivo, PPV.</p>
+          <p>La UD2 de logística pone las cinco métricas juntas, cada una en su caja
+            <cite class="cita" data-fuente="rl2" data-pag="14" data-seccion="Métricas" data-que="Accuracy (TP + TN)/Total, Precisión TP/(TP + FP), Recall TP/(TP + FN), Especificidad TN/(TN + FP) y F1 como &quot;promedio armónico&quot;. Es la versión correcta de las definiciones." data-cuando="Al terminar los pasos 4 y 5"></cite>,
+            y la UD0 de Clasificaciones las calcula con números: con TP = 100, FP = 10, FN = 5 y TN = 50 la precisión es 100/110 = 0.91
+            <cite class="cita" data-fuente="intro3" data-pag="46" data-ancla="7/6" data-seccion="6.2.2 Clasificadores binarios" data-que="La Figure 19 con 165 casos: accuracy 150/165 = 0.91, precision 100/110 = 0.91, recall 100/105 = 0.95 y specificity 50/60 = 0.83. Un buen ejemplo para repetir a mano." data-cuando="Al terminar el paso 5"></cite>.</p>
+          <div class="check" id="chk4"><p class="check-tit">Calcula con los datos</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Recall">
+          <span class="etapa">Paso 5</span>
+          <h3>Recall: de los positivos de verdad, ¿cuántos encontré?</h3>
+          <p>Ahora miramos <b>solo la fila "es enfermo"</b>: los 20 que de verdad tienen la enfermedad. La pregunta es cuántos de ellos atrapó el test.</p>
+          <div class="fbloque">
+            <div data-tex="\text{Recall} = \frac{TP}{TP + FN}" data-display></div>
+            <div class="vivo" id="vivoRec"></div>
+          </div>
+          <p>El recall castiga los <b>casos que se escapan</b> (FN). Se llama también <b>sensibilidad</b> o tasa de verdaderos positivos (TPR). Fíjate: precisión y recall comparten el numerador, TP. Solo cambia contra qué se compara: la columna o la fila.</p>
+          <p>Raschka las define una al lado de la otra y dice cuándo importa cada una: recall alto para no perder tumores malignos, precisión alta para no alarmar de más
+            <cite class="cita" data-fuente="raschka6" data-pag="26" data-pimp="196" data-seccion="Optimizing the precision and recall of a classification model" data-que="REC = TP/(FN + TP) y PRE = TP/(TP + FP), qué se gana y qué se pierde con cada una, y F1 como media armónica. Ojo: una frase dice &quot;TP and TN rates&quot; donde debería decir TPR y FPR." data-cuando="Al terminar los pasos 5 y 6"></cite>.</p>
+          <div class="check" id="chk5"><p class="check-tit">Calcula con los datos</p><div class="cuerpo"></div></div>
+          <p>Hasta ahora el test decía "enfermo" a todo paciente con un puntaje de riesgo mayor que <b>0.5</b>. Ese corte se llama <b>umbral</b>, y lo puedes mover. Antes, predice:</p>
+          <div class="check" id="chk5b"><p class="check-tit">Predice antes de mover</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="F1">
+          <span class="etapa">Paso 6</span>
+          <h3>F1: un solo número que no deja esconder a ninguna de las dos</h3>
+          <p>Precisión y recall tiran para lados opuestos. Si quieres resumirlas en un número, la idea obvia es promediarlas. Pero el promedio de siempre tiene un problema: mueve el umbral a <b>0.9</b>. La precisión llega a 1 y el recall cae a 0.20; el promedio da 0.60, como si el test fuera decente, y no lo es: deja escapar a 16 de los 20 enfermos.</p>
+          <p>El <b>F1</b> usa la <b>media armónica</b>, que siempre queda cerca de la más baja de las dos:</p>
+          <div class="fbloque">
+            <div data-tex="F_1 = 2\cdot\frac{\text{Precisión}\cdot\text{Recall}}{\text{Precisión} + \text{Recall}} = \frac{2\,TP}{2\,TP + FP + FN}" data-display></div>
+            <div class="vivo" id="vivoF1"></div>
+          </div>
+          <p>En el escenario tienes las dos barras juntas: la gris es el promedio común y la violeta el F1. Mueve el umbral y mira cómo el F1 se hunde apenas una de las dos se hunde.</p>
+          <details class="profundizar">
+            <summary>¿Por qué la media armónica y no otra?</summary>
+            <div>
+              <p>La media armónica de dos números es el inverso del promedio de sus inversos: <span data-tex="F_1 = \dfrac{2}{1/P + 1/R}"></span>. Si uno de los dos es muy chico, su inverso es enorme y arrastra todo.</p>
+              <p>Hay una lectura más concreta. Haciendo la cuenta sale <span data-tex="F_1 = \dfrac{TP}{TP + \tfrac{1}{2}(FP + FN)}"></span>: es como una precisión en la que cada error, sea falsa alarma o caso escapado, cuenta medio. Por eso tiene sentido promediar así: las dos métricas tienen el mismo numerador TP y solo difieren en el denominador.</p>
+              <p>Lo que el F1 nunca mira es TN. Con muchísimos negativos eso es una ventaja (no se infla como la exactitud), pero también un límite: Raschka presenta el MCC, que usa las cuatro casillas.</p>
+            </div>
+          </details>
+          <div class="check" id="chk6"><p class="check-tit">Calcula con los datos</p><div class="cuerpo"></div></div>
+
+          <div class="destacado" id="destacado">
+            <p class="dest-tit">Una confusión del material</p>
+            <h4>¿Qué "precisión" va dentro del F1?</h4>
+            <p>La UD3 de Matemáticas define "Precisión (Accuracy)" como <span data-tex="\frac{TP+TN}{TP+FP+FN+TN}"></span>, que es la exactitud del paso 3, y en la página siguiente escribe el F1 con "Precisión" dentro
+              <cite class="cita" data-fuente="ud3" data-pag="35" data-seccion="3.7 Métricas de evaluación: F1-score" data-que="F1 = 2 · Precisión · Recall/(Precisión + Recall), útil con clases desbalanceadas. La precisión TP/(TP + FP) que debería ir ahí no se define en ningún lugar del documento." data-cuando="Después de responder la predicción de este recuadro"></cite>.
+              La precisión <span data-tex="\frac{TP}{TP+FP}"></span> no aparece nunca en ese documento. El F1 correcto usa esa, la del paso 4. La UD2 de logística sí la escribe bien.</p>
+            <div class="check" id="chk6b"><p class="check-tit">Predice antes de calcular</p><div class="cuerpo"></div></div>
+            <div class="comparar" id="compararF1"></div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="¿Qué métrica importa?">
+          <span class="etapa">Paso 7</span>
+          <h3>Qué métrica importa depende de qué error duele más</h3>
+          <p>No hay una métrica mejor que otra. Hay errores que cuestan más que otros, y eso decide. Elige un problema:</p>
+          <div class="problemas" id="problemas"></div>
+          <div class="prob-txt" id="probTxt"></div>
+          <div class="check" id="chk7"><p class="check-tit">Antes de seguir</p><div class="cuerpo"></div></div>
+          <p>El problema "kNN de la UD3" es real: son las 100 biopsias de prueba que clasifica el kNN de las diapositivas de Clasificaciones, con TN = 61, TP = 37, FN = 2 y FP = 0
+            <cite class="cita" data-fuente="knn3" data-pag="27" data-ancla="evaluating-model-performance" data-seccion="4.5 Evaluating model performance" data-que="La matriz con gmodels::CrossTable o caret::confusionMatrix: TN = 61, TP = 37, FN = 2 (marcado como el error más caro) y FP = 0, accuracy 98 %. La diapositiva 28 sigue con sensibilidad, especificidad, precisión y F1." data-cuando="Al elegir el problema kNN"></cite>,
+            y la diapositiva siguiente (la 28) saca sensibilidad 37/39 = 94.9 %, precisión 37/37 = 100 % y F1 de casi 97.4 %.
+            Compruébalo en el escenario.</p>
+          <p><b>El orden de las casillas.</b> Usa el botón <b>Orden de scikit-learn</b> del escenario. scikit-learn ordena las clases de menor a mayor, así que con etiquetas 0 y 1 pone primero la clase 0: arriba a la izquierda queda TN, no TP. Raschka trabaja con ese orden en el código, aunque su figura genérica pone los positivos primero
+            <cite class="cita" data-fuente="raschka6" data-pag="25" data-pimp="195" data-seccion="Reading a confusion matrix" data-que="La Figure 6.10 con filas = etiqueta real y columnas = predicha, la clase 0 arriba: TN 71, FP 1, FN 2, TP 40. Y las fórmulas de ERR y ACC." data-cuando="Después de usar el botón de orden"></cite>.
+            El material del máster tampoco es constante: la diapositiva 19 de la UD2 de logística pone el positivo primero y la siguiente pone el negativo primero
+            <cite class="cita" data-fuente="rl2diapo" data-pag="20" data-seccion="Predicciones duras y blandas; matriz con nombres" data-que="La matriz con filas Actual y columnas Predicted en orden Negativo (0), Positivo (1), con FP = error tipo I y FN = error tipo II, y todas las métricas con sus otros nombres (TPR, PPV, FNR, TNR, FPR). La p. 19 usa el orden contrario." data-cuando="Al terminar este paso"></cite>.
+            Antes de leer una matriz, busca siempre qué hay en las filas, qué hay en las columnas y en qué orden.</p>
+          <div class="cita" id="citaHipo" hidden></div>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+        </div>
+        <p class="esc-sub" id="escSub"></p>
+        <svg id="matriz" role="img" aria-label="Matriz de confusión con una ficha por caso"></svg>
+        <div class="leyenda" id="leyenda">
+          <span><i class="lleno"></i>positivo de verdad</span><span><i></i>negativo de verdad</span>
+          <span><i class="ok"></i>acierto</span><span><i class="bad"></i>error</span>
+        </div>
+        <div class="umbral-box" id="umbralBox" hidden>
+          <label for="umbral">Umbral</label>
+          <input type="range" id="umbral" min="0" max="10" step="1" value="5">
+          <b id="umbralVal">0.5</b>
+          <span class="regla" id="umbralRegla"></span>
+        </div>
+        <div class="ctl" id="ctlDatos" hidden>
+          <span class="seg-lab">Datos</span>
+          <button type="button" data-d="cribado">Cribado</button>
+          <button type="button" data-d="fraude">Fraude</button>
+        </div>
+        <div class="ctl" id="ctlOrden" hidden>
+          <button type="button" id="btnOrden">Orden de scikit-learn</button>
+        </div>
+        <div class="metricas" id="metricas"></div>
+        <p class="lectura" id="lectura"></p>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>El mismo cribado del recorrido, con el umbral en 0.5, escrito como lo haría un programa: recorre los 100 pacientes, mete cada uno en su casilla y al final saca las métricas. Después compara con lo que da la librería. Elige Python o R y dale a reproducir.</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir</p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="true">Python</button>
+            <button type="button" data-lang="r" aria-pressed="false">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">1 · los datos</span><span data-f="2">2 · contar</span><span data-f="3">3 · las métricas</span><span data-f="4">4 · la librería</span>
+        </div>
+        <h3 class="mini-tit vr-tit">Los 100 pacientes, en orden</h3>
+        <div class="vr-fichas" id="vrFichas"></div>
+        <h3 class="mini-tit vr-tit">Los cuatro contadores (filas: real; columnas: predicho; positivo primero)</h3>
+        <div class="vr-cont" id="vrCont"></div>
+        <h3 class="mini-tit vr-tit">Lo que imprime</h3>
+        <div class="vr-salida" id="vrSalida"></div>
+      </div>
+    </div>
+
+    <p class="vr-nota">En la práctica nadie escribe el bucle. En Python, <code>confusion_matrix(y_real, y_pred)</code> da la matriz y <code>classification_report</code> todas las métricas a la vez; en R base, <code>table()</code> cuenta las casillas, y en la UD3 de kNN usan <code>gmodels::CrossTable</code> o <code>caret::confusionMatrix</code>. Escribirlo una vez sirve para leer bien lo que imprimen, que es donde están las trampas de abajo. Nield usa <code>confusion_matrix</code> en su Example 6-17, pero el comentario de su código dice que el resultado es [[TP FN] [FP TN]], y no es así: con etiquetas 0 y 1 scikit-learn devuelve [[TN FP] [FN TP]]
+      <cite class="cita" data-fuente="nield6" data-pag="33" data-seccion="Confusion Matrices, Example 6-17" data-que="confusion_matrix sobre el conjunto de prueba. El comentario del código describe mal el orden de la matriz: compáralo con la salida de arriba ([[65 15] [5 15]])." data-cuando="Después de reproducir el programa hasta el final"></cite>.</p>
+
+    <details class="profundizar">
+      <summary>La versión sin bucle: contar con comparaciones de vectores</summary>
+      <div>
+        <p>Cada casilla es una suma de una comparación de vectores. En Python con NumPy: <code>tp = np.sum((y_real == 1) &amp; (y_pred == 1))</code>, y lo mismo cambiando los 1 por 0 para las otras tres. En R: <code>tp &lt;- sum(y_real == 1 &amp; y_pred == 1)</code>.</p>
+        <p>Es exactamente el bucle: la comparación produce un vector de verdaderos y falsos, uno por paciente, y la suma cuenta los verdaderos.</p>
+      </div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>¿Dónde quedó TP?</h3><span class="estado" data-reto="codigo2"></span></div>
+        <div id="codigo2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>El orden de los argumentos en R</h3><span class="estado" data-reto="codigo3"></span></div>
+        <div id="codigo3"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>¿Cuál es la clase positiva?</h3><span class="estado" data-reto="codigo4"></span></div>
+        <div id="codigo4"></div>
+        <p class="desc" style="margin-top:10px">La UD0 de Clasificaciones avisa de lo mismo en R: muchas funciones toman como positivo el primer nivel del factor, que es el primero en orden alfabético
+          <cite class="cita" data-fuente="intro3" data-pag="44" data-ancla="7/4" data-seccion="6.2.1 Matriz de confusión" data-que="TP, TN, FP y FN con el ejemplo de los cupones, y la advertencia de definir el nivel positivo porque en R muchas funciones toman el primer nivel del factor." data-cuando="Después de resolver esta trampa"></cite>.</p>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: la biblioteca te avisa en el índice cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>¿Qué es más alto?</h3><span class="estado" data-reto="ojo"></span></div>
+        <p class="desc">Cinco matrices sin números. Mira las fichas rojas y decide sin calcular: ¿la precisión o el recall? Apruebas con 4 de 5.</p>
+        <div id="ojo"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Construir</span><h3>Mueve el umbral</h3><span class="estado" data-reto="constructor"></span></div>
+        <p class="desc">El cribado del recorrido. Mueve el umbral hasta cumplir cada objetivo. Se marcan solos.</p>
+        <svg id="matrizConstr" role="img" aria-label="Matriz de confusión del reto de construir"></svg>
+        <div class="umbral-box">
+          <label for="umbralConstr">Umbral</label>
+          <input type="range" id="umbralConstr" min="0" max="10" step="1" value="5">
+          <b id="umbralConstrVal">0.5</b>
+        </div>
+        <div class="grande" id="constrVivo"></div>
+        <ul class="objetivos" id="objetivos"></ul>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>El F1 con lápiz</h3><span class="estado" data-reto="mano"></span></div>
+        <p class="desc">Una matriz nueva cada vez. Haz la cuenta en papel antes de pedir pistas.</p>
+        <div id="manoDatos"></div>
+        <div id="mano"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Alguien se equivocó</h3><span class="estado" data-reto="error"></span></div>
+        <p class="desc">Una de las líneas tiene un error. Tócala.</p>
+        <div id="error"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Decir que sí a todos</h3><span class="estado" data-reto="prop1"></span></div>
+        <div id="prop1"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>La casilla olvidada</h3><span class="estado" data-reto="prop2"></span></div>
+        <div id="prop2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Precisión perfecta</h3><span class="estado" data-reto="prop3"></span></div>
+        <div id="prop3"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Subir el umbral</h3><span class="estado" data-reto="prop4"></span></div>
+        <div id="prop4"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Otros nombres</h3><span class="estado" data-reto="prop5"></span></div>
+        <div id="prop5"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Recordar a la fuerza es lo que fija. Arma la fórmula de memoria y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Fórmula de memoria</span><h3>Arma el F1 pieza por pieza</h3><span class="estado" data-reto="formula"></span></div>
+        <p class="desc">Hay piezas de más que no pertenecen. No mires arriba.</p>
+        <div id="formula"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el material</h2>
+      <p class="lecturas-intro">Ya viste las cuatro casillas con las manos. Ahora ve a la versión técnica y comprueba que la reconoces, con un ojo puesto en las erratas: el nombre "precisión" y el orden de la matriz cambian de un documento a otro. Cada entrada dice qué vas a encontrar y en qué momento conviene leerla. Si abres la biblioteca con doble clic, el enlace abre el PDF en esa página.</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> Las 100 transacciones del fraude y los 100 pacientes del cribado son inventados, elegidos para que las cuentas den limpias
+    (exactitud 0.80, precisión 0.50, recall 0.75 y F1 0.60 con el umbral en 0.5). La única matriz real es la del kNN de la UD3 de Clasificaciones
+    (TN 61, TP 37, FN 2, FP 0), tomada de sus diapositivas. Tu progreso se guarda en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+(function () {
+  "use strict";
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var RETOS = ["ojo", "constructor", "mano", "error", "prop1", "prop2", "prop3", "prop4", "prop5", "formula", "codigo1", "codigo2", "codigo3", "codigo4"];
+  var C = B.concepto({ id: "matriz-confusion", retos: RETOS, pasos: 7 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  var f = B.fmt;
+  function tx(v, d) { return f(v, d).replace("−", "-"); }
+
+  /* ---------------- los datos ---------------- */
+  // cribado: 20 enfermos y 80 sanos, cada uno con un puntaje de riesgo; el test dice enfermo si puntaje > umbral
+  var NIVELES = [0.95, 0.85, 0.75, 0.65, 0.55, 0.45, 0.35, 0.25, 0.15, 0.05];
+  var POS_N = [4, 4, 3, 2, 2, 2, 2, 1, 0, 0];
+  var NEG_N = [0, 1, 2, 4, 8, 10, 15, 15, 15, 10];
+  function cribado(nombres) {
+    var casos = [];
+    NIVELES.forEach(function (s, k) {
+      for (var a = 0; a < POS_N[k]; a++) casos.push({ r: 1, s: s });
+      for (var b = 0; b < NEG_N[k]; b++) casos.push({ r: 0, s: s });
+    });
+    return { id: "cribado", casos: casos, P: 20, N: 80, umbral: true, nombres: nombres || { P: "enfermo", N: "sano", Pp: "enfermos", Np: "sanos" } };
+  }
+  function fijo(id, tp, fn, fp, tn, nombres) {
+    var casos = [], k;
+    for (k = 0; k < tp; k++) casos.push({ r: 1, p: 1 });
+    for (k = 0; k < fn; k++) casos.push({ r: 1, p: 0 });
+    for (k = 0; k < fp; k++) casos.push({ r: 0, p: 1 });
+    for (k = 0; k < tn; k++) casos.push({ r: 0, p: 0 });
+    return { id: id, casos: casos, P: tp + fn, N: fp + tn, umbral: false, nombres: nombres };
+  }
+  var DATOS = {
+    cribado: cribado(),
+    spam: cribado({ P: "spam", N: "legítimo", Pp: "correos de spam", Np: "legítimos" }),
+    fraude: fijo("fraude", 0, 1, 0, 99, { P: "fraude", N: "normal", Pp: "fraudes", Np: "normales" }),
+    knn: fijo("knn", 37, 2, 0, 61, { P: "maligno", N: "benigno", Pp: "malignos", Np: "benignos" })
+  };
+  // en el fraude, la ficha llena queda en medio de la nube y no al principio
+  (function () { var c = DATOS.fraude.casos; var x = c.shift(); c.splice(43, 0, x); })();
+
+  function predice(d, c, u) { return d.umbral ? (c.s > u ? 1 : 0) : c.p; }
+  function celdaDe(r, p) { return r === 1 ? (p === 1 ? "TP" : "FN") : (p === 1 ? "FP" : "TN"); }
+  function contar(d, u) {
+    var m = { TP: 0, FP: 0, FN: 0, TN: 0 };
+    d.casos.forEach(function (c) { m[celdaDe(c.r, predice(d, c, u))]++; });
+    return metricas(m);
+  }
+  function metricas(m) {
+    var n = m.TP + m.FP + m.FN + m.TN;
+    m.n = n;
+    m.exact = (m.TP + m.TN) / n;
+    m.prec = m.TP + m.FP > 0 ? m.TP / (m.TP + m.FP) : null;
+    m.rec = m.TP + m.FN > 0 ? m.TP / (m.TP + m.FN) : null;
+    m.f1 = 2 * m.TP + m.FP + m.FN > 0 ? 2 * m.TP / (2 * m.TP + m.FP + m.FN) : null;
+    m.ari = m.prec !== null && m.rec !== null ? (m.prec + m.rec) / 2 : null;
+    return m;
+  }
+
+  /* ---------------- la matriz con fichas (SVG) ---------------- */
+  var NS = "http://www.w3.org/2000/svg";
+  function nodo(tag, at, padre) {
+    var e = document.createElementNS(NS, tag);
+    for (var k in at) e.setAttribute(k, at[k]);
+    if (padre) padre.appendChild(e);
+    return e;
+  }
+  function texto(padre, at, t) { var e = nodo("text", at, padre); e.textContent = t; return e; }
+  var NOMBRE = { TP: "verdaderos positivos", FP: "falsos positivos", FN: "falsos negativos", TN: "verdaderos negativos" };
+
+  function crearMatriz(svg, o) {
+    var W = 440, L = 74, T = 46, G = 6, CW = (W - L - 6 - G) / 2, ESP = 14;
+    var st = { datos: null, u: 0.5, orden: "PN", pool: false, foco: null, sel: null, caro: null, numeros: o.numeros !== false, clic: !!o.alSel };
+    var gFondo = nodo("g", {}, svg), gFoco = nodo("g", {}, svg), gFichas = nodo("g", {}, svg);
+    var fichas = [], datosDibujados = null, ultimaPool = null;
+    svg.classList.add("mz-svg");
+
+    function geo() {
+      var d = st.datos;
+      var filas = { P: Math.max(1, Math.ceil(d.P / 10)), N: Math.max(1, Math.ceil(d.N / 10)) };
+      var ord = st.orden === "PN" ? ["P", "N"] : ["N", "P"];
+      var y = T, fy = {}, cx = {};
+      ord.forEach(function (c, k) {
+        var h = 28 + filas[c] * ESP + 4;
+        fy[c] = { y: y, h: h };
+        y += h + G;
+        cx[c] = L + k * (CW + G);
+      });
+      return { ord: ord, fy: fy, cx: cx, H: y - G + 8 };
+    }
+    function rectCelda(g, nombre) {
+      var r = nombre === "TP" || nombre === "FN" ? "P" : "N", p = nombre === "TP" || nombre === "FP" ? "P" : "N";
+      return { x: g.cx[p], y: g.fy[r].y, w: CW, h: g.fy[r].h };
+    }
+    function fondo(g, m) {
+      gFondo.innerHTML = "";
+      var nom = st.datos.nombres;
+      texto(gFondo, { x: L + CW + G / 2, y: 13, "class": "eje-tit", "text-anchor": "middle" }, "Lo que dijo el modelo");
+      texto(gFondo, { x: 4, y: T - 8, "class": "eje-tit" }, "En realidad");
+      g.ord.forEach(function (c) {
+        texto(gFondo, { x: g.cx[c] + CW / 2, y: 32, "class": "eje-lab", "text-anchor": "middle" }, "dijo " + nom[c] + (c === "P" ? " (+)" : " (−)"));
+        var ty = g.fy[c].y + g.fy[c].h / 2;
+        texto(gFondo, { x: L - 8, y: ty - 2, "class": "eje-lab", "text-anchor": "end" }, "es " + nom[c]);
+        texto(gFondo, { x: L - 8, y: ty + 12, "class": "eje-lab", "text-anchor": "end" }, c === "P" ? "(positivo)" : "(negativo)");
+      });
+      ["TP", "FN", "FP", "TN"].forEach(function (k) {
+        var r = rectCelda(g, k);
+        var cel = nodo("rect", { x: r.x, y: r.y, width: r.w, height: r.h, rx: 7,
+          "class": "celda " + (k === "TP" || k === "TN" ? "diag" : "error") + (st.clic ? " clic" : "") + (st.sel === k ? " sel" : "") }, gFondo);
+        if (st.clic) cel.addEventListener("click", function () { st.sel = k; dibujar(); o.alSel(k); });
+        var t = nodo("text", { x: r.x + 8, y: r.y + 17, "class": "cel-lab" }, gFondo);
+        t.appendChild(document.createTextNode(k + " "));
+        var ts = nodo("tspan", { "class": "nom" }, t);
+        ts.textContent = NOMBRE[k];
+        if (st.numeros && !st.pool) texto(gFondo, { x: r.x + r.w - 8, y: r.y + 17, "class": "cel-num" }, String(m[k]));
+      });
+      if (st.pool) {
+        texto(gFondo, { x: L + CW + G / 2, y: g.H - 2, "class": "pool-lab" }, "Todavía no se clasificó ninguna");
+      }
+    }
+    function focos(g) {
+      gFoco.innerHTML = "";
+      if (st.pool) return;
+      function caja(x, y, w, h) { nodo("rect", { x: x - 3, y: y - 3, width: w + 6, height: h + 6, rx: 9, "class": "foco" }, gFoco); }
+      var tot = 2 * CW + G;
+      var fP = g.fy.P, cP = g.cx.P;
+      var y0 = Math.min(g.fy.P.y, g.fy.N.y), alto = g.fy.P.h + g.fy.N.h + G;
+      if (st.foco === "exact") caja(L, y0, tot, alto);
+      if (st.foco === "prec" || st.foco === "f1") caja(cP, y0, CW, alto);
+      if (st.foco === "rec" || st.foco === "f1") caja(L, fP.y, tot, fP.h);
+      if (st.caro) {
+        var r = rectCelda(g, st.caro);
+        nodo("rect", { x: r.x + 1.5, y: r.y + 1.5, width: r.w - 3, height: r.h - 3, rx: 6, "class": "caro" }, gFoco);
+        texto(gFoco, { x: r.x + r.w - 8, y: r.y + r.h - 7, "class": "caro-lab" }, "el error caro");
+      }
+    }
+    function crearFichas() {
+      gFichas.innerHTML = "";
+      fichas = st.datos.casos.map(function (c) {
+        return nodo("circle", { cx: 0, cy: 0, r: 4.6, "class": "ficha real" + c.r }, gFichas);
+      });
+      datosDibujados = st.datos;
+      return true;
+    }
+    function posiciones(g) {
+      var cuenta = { TP: 0, FP: 0, FN: 0, TN: 0 };
+      var off = (CW - 10 * ESP) / 2 + ESP / 2;
+      var pool = st.pool;
+      if (pool !== ultimaPool) {
+        fichas.forEach(function (el) { el.style.transitionDelay = (pool ? 0 : Math.random() * 0.45).toFixed(2) + "s"; });
+      } else {
+        fichas.forEach(function (el) { el.style.transitionDelay = "0s"; });
+      }
+      ultimaPool = pool;
+      st.datos.casos.forEach(function (c, i) {
+        var el = fichas[i], x, y;
+        if (pool) {
+          var x0 = L + (2 * CW + G) / 2 - 5 * ESP + ESP / 2;
+          x = x0 + (i % 10) * ESP;
+          y = T + 10 + Math.floor(i / 10) * ESP;
+          el.setAttribute("class", "ficha real" + c.r + " neutro");
+        } else {
+          var k = celdaDe(c.r, predice(st.datos, c, st.u));
+          var r = rectCelda(g, k), j = cuenta[k]++;
+          x = r.x + off + (j % 10) * ESP;
+          y = r.y + 28 + ESP / 2 + Math.floor(j / 10) * ESP;
+          el.setAttribute("class", "ficha real" + c.r + (k === "TP" || k === "TN" ? " ok" : " bad"));
+        }
+        el.style.transform = "translate(" + x.toFixed(1) + "px," + y.toFixed(1) + "px)";
+      });
+    }
+    function dibujar() {
+      if (!st.datos) return;
+      var nuevas = datosDibujados !== st.datos && crearFichas();
+      if (nuevas) fichas.forEach(function (el) { el.style.transition = "none"; });
+      var g = geo();
+      var alto = Math.max(g.H, st.pool ? T + 10 * ESP + 30 : 0);
+      svg.setAttribute("viewBox", "0 0 " + W + " " + alto.toFixed(0));
+      svg.classList.toggle("pool", st.pool);
+      var m = contar(st.datos, st.u);
+      fondo(g, m);
+      focos(g);
+      posiciones(g);
+      if (nuevas) {
+        svg.getBoundingClientRect();
+        requestAnimationFrame(function () { fichas.forEach(function (el) { el.style.transition = ""; }); });
+      }
+    }
+    return {
+      set: function (cambios) { Object.assign(st, cambios); dibujar(); },
+      estado: function () { return st; },
+      cuentas: function () { return contar(st.datos, st.u); }
+    };
+  }
+
+  /* ---------------- panel de metricas ---------------- */
+  var ETIQ = { exact: "Exactitud", prec: "Precisión", rec: "Recall", f1: "F1", ari: "Promedio común" };
+  function filaMetrica(k, m, foco, oculto) {
+    var cuenta, barra, v = m[k];
+    if (k === "exact") {
+      cuenta = "(" + m.TP + " + " + m.TN + ") / " + m.n;
+      barra = '<i class="ok" style="width:' + ((m.TP + m.TN) / m.n * 100).toFixed(1) + '%"></i><i class="bad" style="width:' + ((m.FP + m.FN) / m.n * 100).toFixed(1) + '%"></i>';
+    } else if (k === "prec") {
+      cuenta = m.TP + " / (" + m.TP + " + " + m.FP + ")";
+      var dp = m.TP + m.FP;
+      barra = dp ? '<i class="ok" style="width:' + (m.TP / dp * 100).toFixed(1) + '%"></i><i class="bad" style="width:' + (m.FP / dp * 100).toFixed(1) + '%"></i>' : "";
+    } else if (k === "rec") {
+      cuenta = m.TP + " / (" + m.TP + " + " + m.FN + ")";
+      var dr = m.TP + m.FN;
+      barra = dr ? '<i class="ok" style="width:' + (m.TP / dr * 100).toFixed(1) + '%"></i><i class="bad" style="width:' + (m.FN / dr * 100).toFixed(1) + '%"></i>' : "";
+    } else if (k === "f1") {
+      cuenta = "2·" + m.TP + " / (2·" + m.TP + " + " + m.FP + " + " + m.FN + ")";
+      barra = v !== null ? '<i class="val" style="width:' + (v * 100).toFixed(1) + '%"></i>' : "";
+    } else {
+      cuenta = m.ari !== null ? "(" + f(m.prec) + " + " + f(m.rec) + ") / 2" : "sin precisión no hay promedio";
+      barra = v !== null ? '<i class="ari" style="width:' + (v * 100).toFixed(1) + '%"></i>' : "";
+    }
+    var val = oculto ? '<b class="oculto">?</b>' : v === null ? '<b class="indef">0/0, sin definir</b>' : '<b>' + f(v, k === "ari" ? 3 : 2) + '</b>';
+    return '<div class="met' + (foco ? " foco" : "") + '"><span class="nom">' + ETIQ[k] + '</span><span class="cuenta">' + cuenta + '</span>' +
+      '<span class="barra">' + barra + '</span>' + val + '</div>';
+  }
+
+  /* ---------------- estado del recorrido ---------------- */
+  var est = { paso: 0, datos: "fraude", u: 0.5, orden: "PN", respondio1: false, chk3: false, chk4: false, chk5: false, chk5b: false, chk6: false, chk6b: false, chk7: false, problema: "cribado" };
+  var pasos;
+  var CARO = { cribado: "FN", spam: "FP", fraude: "FN", knn: "FN" };
+
+  var MODOS = [
+    { met: [], hint: "Responde la predicción para ver caer las fichas" },
+    { met: [], hint: "Toca una casilla para leerla" },
+    { met: ["exact"], foco: "exact", hint: "La línea punteada rodea lo que divide" },
+    { met: ["exact", "prec"], foco: "prec", hint: "La columna de los que el test llamó enfermos" },
+    { met: ["exact", "prec", "rec"], foco: "rec", hint: "La fila de los enfermos de verdad" },
+    { met: ["prec", "rec", "ari", "f1"], foco: "f1", hint: "Mueve el umbral y mira las dos barras de abajo" },
+    { met: ["exact", "prec", "rec", "f1"], foco: null, hint: "Elige un problema en el texto del paso" }
+  ];
+
+  var mat = crearMatriz($("matriz"), { alSel: leerCelda });
+
+  function oculto(k) {
+    if (k === "exact") return !est.chk3;
+    if (k === "prec") return !est.chk4;
+    if (k === "rec") return !est.chk5;
+    if (k === "f1") return !est.chk6;
+    return false;
+  }
+  function refrescar() {
+    var m = MODOS[est.paso], d = DATOS[est.datos];
+    var pool = est.paso === 0 && !est.respondio1;
+    mat.set({ datos: d, u: est.u, orden: est.orden, pool: pool, foco: m.foco || null,
+      caro: est.paso === 6 && est.chk7 ? CARO[est.problema] : null });
+    var c = mat.cuentas();
+    $("metricas").innerHTML = m.met.map(function (k) { return filaMetrica(k, c, k === m.foco || (m.foco === "f1" && k === "f1"), oculto(k)); }).join("");
+    var nom = d.nombres;
+    if (pool) $("escSub").innerHTML = "<b>100 transacciones</b>: 1 fraude (ficha llena) y 99 normales (fichas huecas).";
+    else if (est.paso === 0) $("escSub").innerHTML = "Aciertos: <b>" + (c.TP + c.TN) + " de " + c.n + "</b>. Fraudes atrapados: <b>" + c.TP + " de " + (c.TP + c.FN) + "</b>.";
+    else $("escSub").innerHTML = "<b>" + c.n + " casos</b>: " + (c.TP + c.FN) + " " + (c.TP + c.FN === 1 ? nom.P : nom.Pp) + " de verdad y " + (c.FP + c.TN) + " " + nom.Np + "." +
+      (d.umbral ? " El modelo dice " + nom.P + " si el puntaje pasa de " + f(est.u, 1) + "." : d.id === "fraude" ? " El detector dice normal a todo." : " Predicciones del kNN de la UD3.");
+    $("escHint").textContent = m.hint;
+    var umbralVisible = d.umbral && (est.paso === 4 ? est.chk5b : est.paso >= 5);
+    $("umbralBox").hidden = !umbralVisible;
+    $("umbral").value = Math.round(est.u * 10);
+    $("umbralVal").textContent = f(est.u, 1);
+    $("umbralRegla").textContent = "Dice " + nom.P + " si el puntaje de riesgo es mayor que " + f(est.u, 1) + ".";
+    $("ctlDatos").hidden = !(est.paso === 2 && est.chk3);
+    [].forEach.call($("ctlDatos").querySelectorAll("button"), function (b) { b.classList.toggle("on", b.getAttribute("data-d") === est.datos); });
+    $("ctlOrden").hidden = est.paso !== 6;
+    $("btnOrden").classList.toggle("on", est.orden === "NP");
+    $("btnOrden").textContent = est.orden === "NP" ? "Volver al orden del material (positivo primero)" : "Orden de scikit-learn";
+    $("leyenda").hidden = false;
+    pintarVivos(c);
+  }
+  function pintarVivos(c) {
+    $("vivoExact").textContent = "(" + c.TP + " + " + c.TN + ") / " + c.n + " = " + (est.chk3 ? f(c.exact) : "?");
+    $("vivoPrec").textContent = c.TP + " / (" + c.TP + " + " + c.FP + ") = " + (c.prec === null ? "0/0, sin definir" : est.chk4 ? f(c.prec) : "?");
+    $("vivoRec").textContent = c.TP + " / (" + c.TP + " + " + c.FN + ") = " + (c.rec === null ? "0/0, sin definir" : est.chk5 ? f(c.rec) : "?");
+    $("vivoF1").textContent = "2·" + c.TP + " / (2·" + c.TP + " + " + c.FP + " + " + c.FN + ") = " + (c.f1 === null ? "sin definir" : est.chk6 ? f(c.f1) : "?");
+  }
+  function leerCelda(k) {
+    var d = DATOS[est.datos], nom = d.nombres, c = mat.cuentas();
+    var txt = {
+      TP: "son " + nom.P + " y el modelo dijo " + nom.P + ". Acertó.",
+      FN: "son " + nom.P + " pero el modelo dijo " + nom.N + ". Se le escaparon: el modelo dijo negativo y se equivocó.",
+      FP: "son " + nom.N + " pero el modelo dijo " + nom.P + ". Falsas alarmas: dijo positivo y se equivocó.",
+      TN: "son " + nom.N + " y el modelo dijo " + nom.N + ". Acertó."
+    };
+    $("lectura").innerHTML = "<b>" + k + ", " + NOMBRE[k] + " (" + c[k] + ")</b>: " + txt[k];
+  }
+
+  function entrar(i) {
+    est.paso = i;
+    if (i === 0) est.datos = "fraude";
+    else if (i === 6) est.datos = est.problema;
+    else est.datos = "cribado";
+    if (i < 4) est.u = 0.5;
+    if (i !== 6) est.orden = "PN";
+    $("lectura").innerHTML = i === 1 ? "Toca cualquiera de las cuatro casillas." : "";
+    mat.set({ sel: null });
+    refrescar();
+  }
+
+  $("umbral").addEventListener("input", function () { est.u = +this.value / 10; refrescar(); });
+  $("ctlDatos").addEventListener("click", function (e) {
+    var b = e.target.closest("button");
+    if (!b) return;
+    est.datos = b.getAttribute("data-d");
+    refrescar();
+  });
+  $("btnOrden").addEventListener("click", function () { est.orden = est.orden === "PN" ? "NP" : "PN"; refrescar(); });
+
+  /* paso 7: problemas */
+  var PROBLEMAS = [
+    ["cribado", "Cribado de cáncer", "El positivo es <b>enfermo</b>. Un falso negativo es un enfermo que se va a casa tranquilo y no se trata a tiempo. Un falso positivo es un susto y una prueba más. El error caro es el <b>FN</b>, y la métrica que lo vigila es el <b>recall</b>: en un cribado se acepta bajar la precisión para no dejar escapar a nadie."],
+    ["spam", "Filtro de spam", "Mismos números, otro problema: el positivo es <b>spam</b>. Un falso negativo es un spam que llega a la bandeja: molesto, se borra. Un falso positivo es un correo legítimo, quizá una oferta de trabajo, que termina en la carpeta de spam y nadie lo lee. ¿Cuál duele más?"],
+    ["fraude", "Detector de fraude", "El positivo es <b>fraude</b>, y es rarísimo: 1 de cada 100. La exactitud no sirve, como viste en el paso 1. Aquí importa sobre todo el <b>recall</b> (cada fraude escapado es dinero perdido), vigilando que la precisión no se hunda (cada falsa alarma bloquea la tarjeta de un cliente). Por eso en estos problemas se reporta el F1 o se miran las dos."],
+    ["knn", "kNN de la UD3", "Datos reales del máster: 100 biopsias de prueba, el positivo es <b>maligno</b>. La diapositiva marca el FN como el error más caro: un tumor maligno clasificado como benigno. El kNN tiene 2 de esos. Calcula con el escenario: recall 37/39, precisión 37/37."]
+  ];
+  (function () {
+    var cont = $("problemas");
+    PROBLEMAS.forEach(function (p) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.textContent = p[1];
+      b.setAttribute("data-p", p[0]);
+      b.addEventListener("click", function () { elegirProblema(p[0]); });
+      cont.appendChild(b);
+    });
+  })();
+  function elegirProblema(id) {
+    est.problema = id;
+    est.datos = id;
+    var p = PROBLEMAS.filter(function (x) { return x[0] === id; })[0];
+    $("probTxt").innerHTML = p[2] + (id === "spam" && !est.chk7 ? " Responde el chequeo de abajo." : id === "spam" ? " El caro es el <b>FP</b>, y lo vigila la <b>precisión</b>." : "");
+    [].forEach.call($("problemas").children, function (b) { b.classList.toggle("on", b.getAttribute("data-p") === id); });
+    if (est.paso === 6) refrescar();
+  }
+  elegirProblema("cribado");
+
+  /* ---------------- chequeos de cada paso ---------------- */
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+
+  B.opcionMultiple(cuerpo("chk1"), {
+    pregunta: "Acierta con 99 de 100. ¿Es un buen detector de fraude?",
+    opciones: [
+      "Sí: 99 % es casi perfecto",
+      "No sirve: es justo lo que daría no mirar nada, y no atrapa ningún fraude",
+      "Depende: habría que probarlo con más transacciones",
+      "Es regular: 99 % suena bien, pero lo ideal es 100 %"
+    ],
+    correcta: 1,
+    revelarTras: 1,
+    pistas: ["", null, "", ""],
+    explicacion: "Mira el escenario: las 99 normales caen en la casilla de abajo a la derecha y el único fraude cae en la de arriba a la derecha, <b>se le escapó</b>. El 99 % sale solo de que casi todas las transacciones son normales. Un número alto de aciertos puede esconder que el modelo falla en lo único que te importaba.",
+    alResolver: function () { est.respondio1 = true; refrescar(); pasos.completar(0); }
+  });
+
+  B.opcionMultiple(cuerpo("chk2"), {
+    pregunta: "Otro problema: un filtro de correo donde el positivo es <b>spam</b>. Un correo de tu jefe termina en la carpeta de spam. ¿Qué es?",
+    opciones: ["FP, falso positivo", "FN, falso negativo", "TN, verdadero negativo", "TP, verdadero positivo"],
+    correcta: 0,
+    mezclar: true,
+    pistas: [null, "La segunda palabra es lo que dijo el filtro. Al mandarlo a spam, ¿dijo positivo o negativo?", "El filtro se equivocó con ese correo. ¿Puede ser verdadero?", "El correo de tu jefe no es spam, y el filtro se equivocó."],
+    explicacion: "El filtro dijo positivo (spam) y se equivocó: <b>falso positivo</b>. Es lo mismo que una paciente sana a la que el test le dijo enfermo: en el cribado hay 15 así, en la fila de los sanos y la columna \"dijo enfermo\".",
+    alResolver: function () { pasos.completar(1); }
+  });
+
+  var REF = contar(DATOS.cribado, 0.5);
+  B.numerico(cuerpo("chk3"), {
+    pregunta: "Con el cribado del escenario (umbral 0.5), ¿cuánto vale la exactitud? Escríbela como fracción o decimal.",
+    respuesta: REF.exact,
+    tolerancia: 0.006,
+    pistas: ["La diagonal son las dos casillas verdes: TP y TN.", "Es $(15 + 65) / 100$."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 80) < 0.01) return "Eso es en porcentaje. Escríbela como fracción de 1: entre 0 y 1.";
+      if (Math.abs(v - 0.65) < 0.006 || Math.abs(v - 0.15) < 0.006) return "Te falta una de las dos casillas de la diagonal.";
+      if (Math.abs(v - 0.2) < 0.006) return "Esa es la fracción de errores. La exactitud cuenta los aciertos.";
+      return null;
+    },
+    explicacion: "$(15 + 65) / 100 = 0.80$. Este es el \"acierta con 80 de cada 100\" del principio de la página. Ahora prueba el botón <b>Fraude</b> del escenario y lee el recuadro de abajo.",
+    alResolver: function () { est.chk3 = true; $("trampaExact").hidden = false; refrescar(); pasos.completar(2); }
+  });
+
+  B.numerico(cuerpo("chk4"), {
+    pregunta: "Con el umbral en 0.5, ¿cuánto vale la precisión del test?",
+    respuesta: REF.prec,
+    tolerancia: 0.006,
+    pistas: ["Mira solo la columna \"dijo enfermo\": TP y FP.", "Es $15 / (15 + 15)$."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 0.75) < 0.006) return "Dividiste entre $TP + FN$: esa es la fila de los enfermos, el paso que viene. La precisión mira la columna.";
+      if (Math.abs(v - 0.8) < 0.006) return "Esa es la exactitud. La precisión solo mira a los que el test llamó enfermos.";
+      if (Math.abs(v - 0.15) < 0.006) return "Dividiste entre el total. La precisión divide solo entre la columna \"dijo enfermo\".";
+      return null;
+    },
+    explicacion: "$15 / (15 + 15) = 0.50$. La mitad de los pacientes a los que el test asustó estaban sanos. La exactitud de 0.80 no dejaba ver esto.",
+    alResolver: function () { est.chk4 = true; refrescar(); pasos.completar(3); }
+  });
+
+  function cerrar5() { if (est.chk5 && est.chk5b) pasos.completar(4); }
+  B.numerico(cuerpo("chk5"), {
+    pregunta: "Con el umbral en 0.5, ¿cuánto vale el recall?",
+    respuesta: REF.rec,
+    tolerancia: 0.006,
+    pistas: ["Mira solo la fila \"es enfermo\": TP y FN.", "Es $15 / (15 + 5)$."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 0.5) < 0.006) return "Esa es la precisión: dividiste entre la columna. El recall divide entre la fila de los enfermos de verdad.";
+      if (Math.abs(v - 0.25) < 0.006) return "Esa es la fracción que se escapó, $FN / (TP + FN)$. El recall cuenta los que encontró.";
+      return null;
+    },
+    explicacion: "$15 / (15 + 5) = 0.75$. El test encuentra a 3 de cada 4 enfermos. Mismo numerador que la precisión, otro denominador.",
+    alResolver: function () { est.chk5 = true; refrescar(); cerrar5(); }
+  });
+
+  B.opcionMultiple(cuerpo("chk5b"), {
+    pregunta: "Si subes el umbral de 0.5 a 0.8, el test es más exigente para decir \"enfermo\". ¿Qué pasa?",
+    opciones: [
+      "La precisión sube y el recall baja",
+      "Las dos suben: el test es más cuidadoso",
+      "La precisión baja y el recall sube",
+      "No cambia nada: los pacientes son los mismos"
+    ],
+    correcta: 0,
+    mezclar: true,
+    pistas: [null, "Con un umbral más alto, ¿a más o a menos enfermos les dice enfermo?",
+      "Al revés: con un umbral alto el test dice enfermo a menos gente. ¿Qué casilla se vacía?",
+      "Los pacientes son los mismos, pero lo que dice el test cambia."],
+    explicacion: "Con un umbral alto el test solo dice \"enfermo\" a los casos más claros: caen las falsas alarmas (sube la precisión), pero más enfermos se escapan (baja el recall). <b>Ahora mueve el umbral</b> del escenario y míralo: en 0.8 la precisión es 0.89 y el recall 0.40.",
+    alResolver: function () { est.chk5b = true; refrescar(); cerrar5(); }
+  });
+
+  function cerrar6() { if (est.chk6 && est.chk6b) pasos.completar(5); }
+  B.numerico(cuerpo("chk6"), {
+    pregunta: "Con el umbral en 0.5 (precisión 0.50, recall 0.75), ¿cuánto vale el F1?",
+    respuesta: REF.f1,
+    tolerancia: 0.006,
+    pistas: ["Multiplica las dos y divide entre su suma. Después, por 2.", "Es $2 \\cdot 0.50 \\cdot 0.75 / (0.50 + 0.75) = 0.75 / 1.25$."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 0.625) < 0.006) return "Ese es el promedio común, $(0.50 + 0.75)/2$. El F1 usa la media armónica.";
+      if (Math.abs(v - 0.3) < 0.006) return "Te faltó multiplicar por 2.";
+      return null;
+    },
+    explicacion: "$2 \\cdot 0.50 \\cdot 0.75 / 1.25 = 0.60$. O con las casillas: $2 \\cdot 15 / (30 + 15 + 5) = 30 / 50$. El promedio común daba 0.625: aquí casi coinciden porque las dos métricas están cerca. Mueve el umbral a 0.9 y mira cómo se separan.",
+    alResolver: function () { est.chk6 = true; refrescar(); cerrar6(); }
+  });
+
+  B.opcionMultiple(cuerpo("chk6b"), {
+    pregunta: "Alguien sigue la UD3 al pie de la letra: mete en el F1 la exactitud del cribado (0.80) en vez de la precisión (0.50), con el mismo recall 0.75. Su F1...",
+    opciones: [
+      "Sale más alto que el correcto, y el test parece mejor de lo que es",
+      "Sale igual, porque el F1 no depende de esa métrica",
+      "Sale más bajo que el correcto",
+      "No se puede calcular"
+    ],
+    correcta: 0,
+    mezclar: true,
+    pistas: [null, "El F1 depende de las dos métricas que le das. Cambiar una lo cambia.",
+      "Le estás dando un número más grande (0.80 en vez de 0.50). ¿Qué hace eso con una media?",
+      "Se puede calcular: son solo dos números entre 0 y 1."],
+    explicacion: "Con la exactitud en vez de la precisión, el F1 sale en 0.77, bastante más alto que el correcto: el error infla el resultado justo en los problemas desbalanceados, que son donde el F1 debía proteger. Mira la cuenta abajo.",
+    alResolver: function () {
+      est.chk6b = true;
+      var P = REF.prec, R = REF.rec, A = REF.exact;
+      $("compararF1").innerHTML = "F1 correcto: 2 · " + f(P) + " · " + f(R) + " / (" + f(P) + " + " + f(R) + ") = <b>" + (est.chk6 ? f(2 * P * R / (P + R)) : "? (resuélvelo en el chequeo de arriba)") + "</b><br>" +
+        "F1 con la exactitud: 2 · " + f(A) + " · " + f(R) + " / (" + f(A) + " + " + f(R) + ") = <b class=\"mal\">" + f(2 * A * R / (A + R), 3) + "</b>";
+      cerrar6();
+    }
+  });
+
+  B.opcionMultiple(cuerpo("chk7"), {
+    pregunta: "En el filtro de spam (el positivo es <b>spam</b>), ¿qué error duele más y qué métrica lo vigila?",
+    opciones: [
+      "El falso positivo, un correo legítimo enviado a spam. Lo vigila la precisión",
+      "El falso negativo, un spam en la bandeja. Lo vigila el recall",
+      "Los dos duelen igual, así que basta la exactitud",
+      "El verdadero negativo, porque es la casilla más grande"
+    ],
+    correcta: 0,
+    mezclar: true,
+    pistas: [null, "Un spam en la bandeja se borra en un segundo. ¿Y un correo importante que nunca viste?",
+      "Si duelen distinto, la exactitud los mezcla como si fueran iguales.",
+      "TN son aciertos. No son errores."],
+    explicacion: "Perder un correo legítimo es peor que ver un spam, así que se cuida la <b>precisión</b>: de lo que mando a spam, que casi todo lo sea. En el cribado y en el fraude pasa al revés: el caro es el FN y se cuida el <b>recall</b>. El escenario marca ahora el error caro de cada problema.",
+    alResolver: function () { est.chk7 = true; elegirProblema(est.problema); refrescar(); pasos.completar(6); }
+  });
+
+  pasos = B.pasos($("recorrido"), {
+    concepto: C,
+    alEntrar: entrar,
+    alTerminar: function () { location.hash = "retos"; }
+  });
+  (function () {
+    if (pasos.hecho(0)) est.respondio1 = true;
+    if (pasos.hecho(2)) { est.chk3 = true; $("trampaExact").hidden = false; }
+    if (pasos.hecho(3)) est.chk4 = true;
+    if (pasos.hecho(4)) { est.chk5 = true; est.chk5b = true; }
+    if (pasos.hecho(5)) { est.chk6 = true; est.chk6b = true; }
+    if (pasos.hecho(6)) est.chk7 = true;
+  })();
+  entrar(0);
+
+  /* ---------------- hipotesis inicial ---------------- */
+  (function () {
+    var ta = $("hipotesis"), t = null;
+    ta.value = B.nota("matriz-confusion", "hipotesis");
+    function cita() {
+      var v = ta.value.trim(), el = $("citaHipo");
+      el.hidden = !v;
+      if (v) { el.textContent = ""; el.appendChild(document.createTextNode("Al principio escribiste: «" + v + "». Ese test de 80 de cada 100 era el cribado: precisión 0.50 y recall 0.75. ¿Preguntaste por los enfermos que se escapan o por las falsas alarmas?")); }
+    }
+    cita();
+    ta.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { B.nota("matriz-confusion", "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; cita(); }, 500);
+    });
+  })();
+
+  /* ---------------- marcadores de estado de retos ---------------- */
+  function pintarEstados() {
+    [].forEach.call(document.querySelectorAll("[data-reto]"), function (el) {
+      var ok = C.retoOk(el.getAttribute("data-reto"));
+      el.textContent = ok ? "resuelto" : "pendiente";
+      el.classList.toggle("ok", ok);
+    });
+  }
+  C.alCambiar(pintarEstados);
+
+  function azar(a, b) { return a + Math.floor(Math.random() * (b - a + 1)); }
+
+  /* ---------------- reto: ojo clinico ---------------- */
+  (function () {
+    var cont = $("ojo");
+    cont.innerHTML = '<div class="ronda"></div><svg role="img" aria-label="Matriz de confusión sin números"></svg>' +
+      '<div class="ojo-opts"><button type="button" class="opt" data-a="prec">Precisión más alta</button><button type="button" class="opt" data-a="rec">Recall más alto</button></div>' +
+      '<div class="fb" aria-live="polite"></div><div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    var m = crearMatriz(cont.querySelector("svg"), { numeros: false });
+    var ronda, aciertos, respondida, actual;
+    function generar() {
+      for (;;) {
+        var P = azar(12, 40), tp = azar(Math.ceil(P * 0.35), P - 2), fn = P - tp, fp = azar(1, 30), tn = 100 - P - fp;
+        if (tn < 20 || Math.abs(fp - fn) < 5) continue;
+        return fijo("ojo", tp, fn, fp, tn, { P: "positivo", N: "negativo" });
+      }
+    }
+    function nueva() { ronda = 0; aciertos = 0; mostrar(); }
+    function mostrar() {
+      respondida = false;
+      actual = generar();
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 5 · aciertos " + aciertos;
+      m.set({ datos: actual, numeros: false });
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (b) { b.disabled = false; b.className = "opt"; });
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+    }
+    cont.querySelector(".ojo-opts").addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || respondida) return;
+      respondida = true;
+      var c = m.cuentas(), correcta = c.prec > c.rec ? "prec" : "rec", ok = b.getAttribute("data-a") === correcta;
+      if (ok) aciertos++;
+      b.classList.add(ok ? "ok" : "mal");
+      if (!ok) cont.querySelector('[data-a="' + correcta + '"]').classList.add("ok");
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (x) { x.disabled = true; });
+      m.set({ numeros: true });
+      cont.querySelector(".fb").innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No.</span> ') +
+        "FP = " + c.FP + " y FN = " + c.FN + ": precisión " + f(c.prec) + ", recall " + f(c.rec) + ". " +
+        "Las dos comparten TP, así que gana la que tiene menos errores en su denominador: " + (c.FP < c.FN ? "hay menos falsas alarmas que casos escapados." : "hay menos casos escapados que falsas alarmas.");
+      var sig = cont.querySelector(".sig");
+      sig.hidden = false;
+      if (ronda === 4) {
+        var aprobo = aciertos >= 4;
+        C.reto("ojo", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertos + " de 5" + (aprobo ? ". Aprobado." : ". Necesitas 4 para aprobar.");
+        sig.textContent = "Otra tanda";
+      } else {
+        sig.textContent = "Siguiente ronda";
+      }
+    });
+    cont.querySelector(".sig").addEventListener("click", function () { if (ronda === 4) nueva(); else { ronda++; mostrar(); } });
+    nueva();
+  })();
+
+  /* ---------------- reto: constructor ---------------- */
+  (function () {
+    var m = crearMatriz($("matrizConstr"), {});
+    var OBJ = [
+      { t: "Recall de al menos 0.95: que casi ningún enfermo se escape.", ok: function (c) { return c.rec !== null && c.rec >= 0.95; } },
+      { t: "Precisión de al menos 0.85: que casi todas las alarmas sean reales.", ok: function (c) { return c.prec !== null && c.prec >= 0.85; } },
+      { t: "El F1 más alto que se puede lograr con estos pacientes. Ojo: dos umbrales vecinos casi empatan.", ok: function (c) { return c.f1 !== null && c.f1 >= 0.6499; } }
+    ];
+    var logrados = [false, false, false], avisado = false;
+    var ul = $("objetivos");
+    OBJ.forEach(function (o) { var li = document.createElement("li"); li.innerHTML = '<span class="m"></span><span>' + o.t + '</span>'; ul.appendChild(li); });
+    function pintar() {
+      var u = +$("umbralConstr").value / 10;
+      $("umbralConstrVal").textContent = f(u, 1);
+      m.set({ datos: DATOS.cribado, u: u });
+      var c = m.cuentas();
+      function v(x) { return x === null ? "sin definir" : f(x, 3); }
+      $("constrVivo").innerHTML = "precisión <b>" + v(c.prec) + "</b> · recall <b>" + v(c.rec) + "</b> · F1 <b>" + v(c.f1) + "</b>";
+      OBJ.forEach(function (o, i) { if (!logrados[i] && o.ok(c)) logrados[i] = true; ul.children[i].classList.toggle("hecho", logrados[i]); });
+      if (!avisado && logrados.every(Boolean)) { avisado = true; C.reto("constructor", true); }
+    }
+    $("umbralConstr").addEventListener("input", pintar);
+    pintar();
+  })();
+
+  /* ---------------- reto: a mano ---------------- */
+  (function () {
+    var D;
+    function generar() {
+      for (;;) {
+        var tp = azar(4, 30), fp = azar(1, 20), fn = azar(1, 20), tn = azar(20, 80);
+        var P = tp / (tp + fp), R = tp / (tp + fn);
+        if (Math.abs(P * 20 - Math.round(P * 20)) > 1e-9 || Math.abs(R * 20 - Math.round(R * 20)) > 1e-9) continue;
+        if (Math.abs(P - R) < 0.1) continue;
+        D = metricas({ TP: tp, FP: fp, FN: fn, TN: tn });
+        break;
+      }
+      $("manoDatos").innerHTML = '<table class="datos-mano"><tr><th></th><th>dijo +</th><th>dijo −</th></tr>' +
+        '<tr><th>es +</th><td>TP = ' + D.TP + '</td><td>FN = ' + D.FN + '</td></tr>' +
+        '<tr><th>es −</th><td>FP = ' + D.FP + '</td><td>TN = ' + D.TN + '</td></tr></table>';
+    }
+    var cfg = {
+      pregunta: "¿Cuánto vale el F1 de esta matriz? Con dos decimales basta.",
+      respuesta: function () { return D.f1; },
+      tolerancia: 0.006,
+      pistas: [
+        function () { return "Precisión $= " + D.TP + " / (" + D.TP + " + " + D.FP + ") = " + tx(D.prec) + "$."; },
+        function () { return "Recall $= " + D.TP + " / (" + D.TP + " + " + D.FN + ") = " + tx(D.rec) + "$."; },
+        function () { return "Atajo con las casillas: $F_1 = 2TP / (2TP + FP + FN) = " + (2 * D.TP) + " / " + (2 * D.TP + D.FP + D.FN) + "$."; }
+      ],
+      diagnostico: function (v) {
+        if (Math.abs(v - D.ari) < 0.006) return "Ese es el promedio común de precisión y recall. El F1 es la media armónica.";
+        if (Math.abs(v - D.exact) < 0.006) return "Esa es la exactitud. El F1 no usa TN.";
+        if (Math.abs(v - D.prec) < 0.006 || Math.abs(v - D.rec) < 0.006) return "Esa es una sola de las dos métricas. El F1 combina las dos.";
+        return null;
+      },
+      explicacion: function () { return "Precisión " + f(D.prec) + ", recall " + f(D.rec) + ", y $F_1 = 2 \\cdot " + tx(D.prec) + " \\cdot " + tx(D.rec) + " / (" + tx(D.prec) + " + " + tx(D.rec) + ") = " + tx(D.f1, 3) + "$. Queda más cerca de la menor de las dos."; },
+      reintentable: true,
+      textoReintentar: "Otra matriz",
+      antesDeReintentar: generar,
+      alResolver: function (ok) { C.reto("mano", ok); }
+    };
+    generar();
+    B.numerico($("mano"), cfg);
+  })();
+
+  /* ---------------- reto: cazar el error ---------------- */
+  B.cazarError($("error"), {
+    variantes: [
+      {
+        intro: "Matriz con TP = 12, FP = 4, FN = 8 y TN = 76. Alguien calculó:",
+        lineas: ["\\text{Exactitud} = (12 + 76)/100 = 0.88", "\\text{Precisión} = 12/(12 + 4) = 0.75", "\\text{Recall} = 12/(12 + 8) = 0.60",
+          "F_1 = (0.75 + 0.60)/2 = 0.675"],
+        erronea: 3,
+        explicacion: "Usó el promedio común. El F1 es la media armónica: $2 \\cdot 0.75 \\cdot 0.60 / 1.35 \\approx 0.667$. O con casillas: $24 / (24 + 4 + 8) = 24/36$."
+      },
+      {
+        intro: "Matriz con TP = 18, FP = 6, FN = 2 y TN = 74. Alguien calculó:",
+        lineas: ["\\text{Exactitud} = (18 + 74)/100 = 0.92", "\\text{Precisión} = 18/(18 + 2) = 0.90", "\\text{Recall} = 18/(18 + 2) = 0.90",
+          "F_1 = 2 \\cdot 0.90 \\cdot 0.90/1.80 = 0.90"],
+        erronea: 1,
+        explicacion: "La precisión divide entre la columna \"dijo positivo\", $TP + FP$: $18/24 = 0.75$. Dividió entre $TP + FN$, que es el recall. Con la precisión bien, el F1 queda en $36/44 \\approx 0.818$."
+      },
+      {
+        intro: "Matriz con TP = 15, FP = 15, FN = 5 y TN = 65, siguiendo la notación de la UD3:",
+        lineas: ["\\text{Exactitud} = (15 + 65)/100 = 0.80", "\\text{Recall} = 15/(15 + 5) = 0.75",
+          "F_1 = 2 \\cdot 0.80 \\cdot 0.75/(0.80 + 0.75) \\approx 0.774", "\\text{El test es bueno: } F_1 > 0.75"],
+        erronea: 2,
+        explicacion: "Metió la exactitud donde va la precisión, como invita a hacer la UD3 al llamar \"Precisión\" a la exactitud. La precisión es $15/30 = 0.50$ y el F1 correcto es $0.60$. La última línea se cae con el error."
+      }
+    ],
+    alResolver: function (ok) { C.reto("error", ok); }
+  });
+
+  /* ---------------- retos: propiedades ---------------- */
+  function prop(id, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple($(id), cfg);
+  }
+  prop("prop1", {
+    pregunta: "Un modelo dice \"positivo\" a todos los casos. En una muestra con 20 % de positivos, su recall y su precisión valen...",
+    opciones: ["Recall 1 y precisión 0.20", "Recall 0.20 y precisión 1", "Los dos valen 1", "Los dos valen 0.20"],
+    correcta: 0,
+    pistas: [null, "Si dice positivo a todos, ¿se le escapa algún positivo?", "Dice positivo a los negativos también. ¿Puede ser perfecta la precisión?", "Si no se le escapa nadie, el recall no puede ser bajo."],
+    explicacion: "No se le escapa nadie (FN = 0, recall 1), pero de todo lo que llamó positivo solo el 20 % lo era: la precisión es la proporción de positivos. Por eso el recall solo no basta: se gana gratis diciendo que sí a todo."
+  });
+  prop("prop2", {
+    pregunta: "¿Qué casilla no aparece en ninguna de estas tres: precisión, recall y F1?",
+    opciones: ["TN", "TP", "FP", "FN"],
+    correcta: 0,
+    pistas: [null, "TP está en los tres numeradores.", "FP está en el denominador de la precisión.", "FN está en el denominador del recall."],
+    explicacion: "Ninguna de las tres mira los verdaderos negativos. Por eso no se inflan cuando hay miles de negativos fáciles, como le pasa a la exactitud con el fraude."
+  });
+  prop("prop3", {
+    pregunta: "Un detector tiene precisión 1 y recall 0.20. ¿Cuánto vale su F1?",
+    opciones: ["Aproximadamente 0.33", "0.60", "0.20", "1"],
+    correcta: 0,
+    pistas: [null, "0.60 es el promedio común. ¿El F1 es ese promedio?", "Cerca, pero la media armónica de dos números distintos queda por encima del menor.", "Una precisión perfecta no alcanza si se escapan 4 de cada 5."],
+    explicacion: "$2 \\cdot 1 \\cdot 0.2 / 1.2 = 0.333$. Es lo que da el umbral 0.9 en el cribado. La media armónica queda pegada a la menor."
+  });
+  prop("prop4", {
+    pregunta: "Subes el umbral de un clasificador. ¿Qué puede pasar con el recall?",
+    opciones: ["Baja o se queda igual, nunca sube", "Sube o se queda igual, nunca baja", "Puede subir o bajar", "Siempre se queda igual"],
+    correcta: 0,
+    pistas: [null, "Con un umbral más alto el modelo dice positivo a menos casos. ¿Puede encontrar más positivos así?",
+      "Los positivos de verdad no cambian. Solo cambia a cuántos de ellos les dice que sí.", "Mueve el umbral en el escenario o en el reto de construir y mira."],
+    explicacion: "El denominador $TP + FN$ es fijo (los positivos de verdad) y TP solo puede bajar al exigir más. La precisión, en cambio, no es monótona: suele subir, pero puede bajar en algún tramo."
+  });
+  prop("prop5", {
+    pregunta: "En los materiales, \"sensibilidad\", \"TPR\" y \"recall\" son...",
+    opciones: ["Tres nombres de lo mismo, $TP/(TP + FN)$", "La precisión, con otros nombres", "La especificidad, $TN/(TN + FP)$", "Métricas distintas que se promedian en el F1"],
+    correcta: 0,
+    pistas: [null, "La precisión se llama también PPV, valor predictivo positivo.", "La especificidad mira a los negativos de verdad. ¿Estos nombres miran a los positivos?", "El F1 combina solo dos: precisión y recall."],
+    explicacion: "Recall, sensibilidad y tasa de verdaderos positivos (TPR) son la misma fila de la matriz. La especificidad es su gemela para los negativos, $TN/(TN + FP)$, y la curva ROC usa TPR contra $1 -$ especificidad."
+  });
+
+  /* ---------------- formula de memoria ---------------- */
+  B.ordenar($("formula"), {
+    piezas: ["F_1", "=", "2", "\\cdot", "\\dfrac{\\text{Precisión}\\cdot\\text{Recall}}{\\text{Precisión}+\\text{Recall}}"],
+    distractores: ["\\dfrac{\\text{Precisión}+\\text{Recall}}{2}", "\\dfrac{TP+TN}{n}", "\\tfrac{1}{2}"],
+    soluciones: [[0, 1, 2, 3, 4]],
+    explicacion: "La media armónica de precisión y recall. Con las casillas: $F_1 = 2TP / (2TP + FP + FN)$.",
+    alResolver: function (ok) { C.reto("formula", ok); }
+  });
+
+  /* ---------------- vida real: el algoritmo en codigo ---------------- */
+  (function () {
+    var CODIGO = {
+      py: [
+        ["import", "from sklearn.metrics import confusion_matrix, classification_report"],
+        [null, ""],
+        [null, "# 1 = enfermo (positivo), 0 = sano. 100 pacientes inventados"],
+        ["yreal", "y_real = [1] * 20 + [0] * 80"],
+        ["ypred", "y_pred = [1] * 15 + [0] * 5 + [1] * 15 + [0] * 65"],
+        [null, ""],
+        ["cero", "tp = fp = fn = tn = 0"],
+        ["fori", "for i in range(len(y_real)):"],
+        ["cTP", "    if y_real[i] == 1 and y_pred[i] == 1:"],
+        ["iTP", "        tp += 1"],
+        ["cFP", "    elif y_real[i] == 0 and y_pred[i] == 1:"],
+        ["iFP", "        fp += 1"],
+        ["cFN", "    elif y_real[i] == 1 and y_pred[i] == 0:"],
+        ["iFN", "        fn += 1"],
+        ["cTN", "    else:"],
+        ["iTN", "        tn += 1"],
+        [null, ""],
+        ["exact", "exactitud = (tp + tn) / len(y_real)"],
+        ["prec", "precision = tp / (tp + fp)"],
+        ["rec", "recall = tp / (tp + fn)"],
+        ["f1", "f1 = 2 * precision * recall / (precision + recall)"],
+        ["print1", "print(tp, fp, fn, tn)"],
+        ["print2", "print(exactitud, precision, recall, f1)"],
+        [null, ""],
+        ["libCM", "print(confusion_matrix(y_real, y_pred))"],
+        ["libRep", "print(classification_report(y_real, y_pred))"]
+      ],
+      r: [
+        [null, "# 1 = enfermo (positivo), 0 = sano. 100 pacientes inventados"],
+        ["yreal", "y_real <- c(rep(1, 20), rep(0, 80))"],
+        ["ypred", "y_pred <- c(rep(1, 15), rep(0, 5), rep(1, 15), rep(0, 65))"],
+        [null, ""],
+        ["cero", "tp <- 0; fp <- 0; fn <- 0; tn <- 0"],
+        ["fori", "for (i in seq_along(y_real)) {"],
+        ["cTP", "  if (y_real[i] == 1 && y_pred[i] == 1) {"],
+        ["iTP", "    tp <- tp + 1"],
+        ["cFP", "  } else if (y_real[i] == 0 && y_pred[i] == 1) {"],
+        ["iFP", "    fp <- fp + 1"],
+        ["cFN", "  } else if (y_real[i] == 1 && y_pred[i] == 0) {"],
+        ["iFN", "    fn <- fn + 1"],
+        ["cTN", "  } else {"],
+        ["iTN", "    tn <- tn + 1"],
+        [null, "  }"],
+        [null, "}"],
+        [null, ""],
+        ["exact", "exactitud <- (tp + tn) / length(y_real)"],
+        ["prec", "precision <- tp / (tp + fp)"],
+        ["rec", "recall <- tp / (tp + fn)"],
+        ["f1", "f1 <- 2 * precision * recall / (precision + recall)"],
+        ["print1", "print(c(tp, fp, fn, tn))"],
+        ["print2", "print(c(exactitud, precision, recall, f1))"],
+        [null, ""],
+        ["libCM", "t <- table(real = y_real, pred = y_pred)"],
+        ["libCM", "print(t)"],
+        ["libRep", "print(t[\"1\", \"1\"] / sum(t[, \"1\"]))   # precisión leída de la tabla"]
+      ]
+    };
+    // salida exacta de cada lenguaje (python3 con scikit-learn 1.6.1, R 4.6.1)
+    var SALIDA = {
+      py: {
+        print1: "15 15 5 65",
+        print2: "0.8 0.5 0.75 0.6",
+        libCM: "[[65 15]\n [ 5 15]]",
+        libRep: "              precision    recall  f1-score   support\n\n" +
+          "           0       0.93      0.81      0.87        80\n" +
+          "           1       0.50      0.75      0.60        20\n\n" +
+          "    accuracy                           0.80       100\n" +
+          "   macro avg       0.71      0.78      0.73       100\n" +
+          "weighted avg       0.84      0.80      0.81       100\n"
+      },
+      r: {
+        print1: "[1] 15 15  5 65",
+        print2: "[1] 0.80 0.50 0.75 0.60",
+        libCM: "    pred\nreal  0  1\n   0 65 15\n   1  5 15",
+        libRep: "[1] 0.5"
+      }
+    };
+    var YR = [], YP = [], k;
+    for (k = 0; k < 100; k++) { YR.push(k < 20 ? 1 : 0); YP.push(k < 15 || (k >= 20 && k < 35) ? 1 : 0); }
+    var CEL = YR.map(function (r, i) { return celdaDe(r, YP[i]); });
+    var ORDEN_C = ["TP", "FP", "FN", "TN"];
+
+    var EV = [];
+    (function () {
+      var cnt = { TP: 0, FP: 0, FN: 0, TN: 0 }, fase = 1, sal = [];
+      function foto(id, extra) {
+        EV.push(Object.assign({ id: id, fase: fase, cnt: Object.assign({}, cnt), i: null, sal: sal.slice(), hecho: -1 }, extra || {}));
+      }
+      foto("import");
+      foto("yreal");
+      foto("ypred");
+      fase = 2;
+      foto("cero", { hecho: -1 });
+      for (var i = 0; i < 100; i++) {
+        var c = CEL[i];
+        foto("fori", { i: i, hecho: i - 1 });
+        foto("c" + c, { i: i, hecho: i - 1, celda: c, salto: ORDEN_C.indexOf(c) });
+        cnt[c]++;
+        foto("i" + c, { i: i, hecho: i, celda: c });
+      }
+      fase = 3;
+      ["exact", "prec", "rec", "f1"].forEach(function (id) { foto(id, { hecho: 99 }); });
+      sal.push("print1"); foto("print1", { hecho: 99 });
+      sal.push("print2"); foto("print2", { hecho: 99 });
+      fase = 4;
+      sal.push("libCM"); foto("libCM", { hecho: 99, fin: true });
+      sal.push("libRep"); foto("libRep", { hecho: 99, fin: true });
+    })();
+
+    var MF = metricas({ TP: 15, FP: 15, FN: 5, TN: 65 });
+    var CONDS = {
+      TP: "y_real[i] == 1 y y_pred[i] == 1",
+      FP: "y_real[i] == 0 y y_pred[i] == 1",
+      FN: "y_real[i] == 1 y y_pred[i] == 0"
+    };
+    function narrar(e, ctx) {
+      var py = ctx.lang() === "py", ix = ctx.ix;
+      switch (e.id) {
+        case "import": return py ? "Importa dos funciones de scikit-learn: la matriz de confusión y el informe con todas las métricas. Las usamos al final para comparar." : "En R no hace falta importar nada: <b>table()</b> viene con R base.";
+        case "yreal": return "La verdad: los primeros 20 pacientes están enfermos (1) y los 80 siguientes sanos (0).";
+        case "ypred": return "Lo que dijo el test con el umbral en 0.5: enfermo a los 15 primeros, sano a 5 enfermos, enfermo a 15 sanos y sano a los 65 restantes.";
+        case "cero": return "Cuatro contadores en cero, uno por casilla.";
+        case "fori": return "Paciente <b>i = " + ix(e.i) + "</b>: real " + YR[e.i] + ", predicho " + YP[e.i] + ".";
+        case "cTP": case "cFP": case "cFN": case "cTN":
+          var antes = e.salto ? " Las " + (e.salto === 1 ? "condición anterior dio" : e.salto + " condiciones anteriores dieron") + " falso." : "";
+          return (e.celda === "TN" ? "Ninguna condición se cumplió, así que entra al <b>else</b>: real 0 y predicho 0." : "Se cumple <b>" + CONDS[e.celda] + "</b>.") + antes;
+        case "iTP": case "iFP": case "iFN": case "iTN":
+          return "Suma 1 a <b>" + e.celda.toLowerCase() + "</b>, que queda en <b>" + e.cnt[e.celda] + "</b>. Es una ficha más en la casilla " + e.celda + ".";
+        case "exact": return "Exactitud: (" + MF.TP + " + " + MF.TN + ") / 100 = <b>" + f(MF.exact) + "</b>.";
+        case "prec": return "Precisión: " + MF.TP + " / (" + MF.TP + " + " + MF.FP + ") = <b>" + f(MF.prec) + "</b>. " + (py ? "La variable se llama <b>precision</b>, sin tilde, porque así se escriben los nombres en código." : "Sin tilde en el nombre de la variable.");
+        case "rec": return "Recall: " + MF.TP + " / (" + MF.TP + " + " + MF.FN + ") = <b>" + f(MF.rec) + "</b>.";
+        case "f1": return "F1: 2 · 0.5 · 0.75 / 1.25 = <b>" + f(MF.f1) + "</b>.";
+        case "print1": return "Imprime los cuatro contadores en el orden tp, fp, fn, tn.";
+        case "print2": return py ? "Imprime las cuatro métricas. Python escribe 0.8 y no 0.80: no rellena con ceros." : "Imprime las cuatro métricas. R las alinea con dos decimales.";
+        case "libCM": return py ? "La matriz de scikit-learn: <b>[[65 15] [5 15]]</b>. Son tus mismos números, pero con la clase 0 primero: arriba a la izquierda está <b>TN = 65</b>, no TP. Filas = real, columnas = predicho."
+          : "La tabla de R: filas = real y columnas = pred porque así se pasaron los argumentos. También pone el 0 primero: arriba a la izquierda está <b>TN = 65</b>.";
+        case "libRep": return py ? "El informe de scikit-learn. La fila <b>1</b> es la del positivo: precisión 0.50, recall 0.75, F1 0.60, iguales a las del bucle. La fila 0 repite las cuentas tomando al sano como positivo, y <b>accuracy</b> es la exactitud."
+          : "La precisión leída de la tabla: la casilla [\"1\", \"1\"] (TP) entre la suma de la columna \"1\" (todo lo que se predijo 1). Da <b>0.5</b>, igual que el bucle.";
+      }
+      return "";
+    }
+    function visual(e, anterior, ctx) {
+      var py = !ctx || ctx.lang() === "py";
+      var h = "";
+      for (var i = 0; i < 100; i++) {
+        var cls = "r" + YR[i];
+        if (e && i <= e.hecho) cls += " " + CEL[i];
+        if (e && e.i === i) cls += " on";
+        h += '<span class="' + cls + '" title="paciente ' + (py ? i : i + 1) + '"></span>';
+      }
+      $("vrFichas").innerHTML = h;
+      var cnt = e ? e.cnt : { TP: 0, FP: 0, FN: 0, TN: 0 };
+      var foco = e && e.celda ? e.celda : null;
+      function celda(kk) {
+        return '<span class="c ' + (kk === "TP" || kk === "TN" ? "ok" : "bad") + (foco === kk ? " on" : "") + '">' + kk.toLowerCase() + '<b>' + (e && e.fase >= 2 ? cnt[kk] : "") + '</b></span>';
+      }
+      $("vrCont").innerHTML = '<span class="lab"></span><span class="lab">pred 1</span><span class="lab">pred 0</span>' +
+        '<span class="lab">real 1</span>' + celda("TP") + celda("FN") +
+        '<span class="lab">real 0</span>' + celda("FP") + celda("TN");
+      var lang = ctx ? ctx.lang() : "py";
+      var s = e ? e.sal : [];
+      $("vrSalida").innerHTML = s.map(function (id, j) {
+        var t = ctx.esc(SALIDA[lang][id]);
+        return j === s.length - 1 && e.id === id ? '<span class="nuevo">' + t + '</span>' : t;
+      }).join("\n");
+    }
+    var LENTO = { 0: 1, 1: 1, 15: 1, 20: 1, 35: 1 };
+    B.vidaReal($("vidareal"), {
+      codigo: CODIGO,
+      eventos: EV,
+      narrar: narrar,
+      vars: function (e, ctx) {
+        var v = [];
+        if (e && e.i !== null) v.push('<span>i = <b>' + ctx.ix(e.i) + '</b></span>');
+        if (e && e.fase >= 2) ["TP", "FP", "FN", "TN"].forEach(function (kk) { v.push('<span>' + kk.toLowerCase() + ' = <b>' + e.cnt[kk] + '</b></span>'); });
+        return v;
+      },
+      visual: visual,
+      demora: function (e) {
+        if (!e) return 600;
+        if (e.i !== null) return LENTO[e.i] ? 750 : 45;
+        return e.id === "libRep" || e.id === "libCM" ? 1600 : 1000;
+      }
+    });
+
+    /* chequeo de prediccion y trampas reales */
+    B.numerico(cuerpo("vrPred"), {
+      pregunta: "¿Cuántas veces se va a ejecutar la línea que suma 1 a <code>tn</code> hasta terminar el bucle?",
+      respuesta: 65,
+      tolerancia: 0,
+      pistas: ["Esa línea corre una vez por cada paciente que cae en la casilla TN.", "Hay 80 sanos, pero a algunos el test les dijo enfermo. ¿Cuántos?"],
+      diagnostico: function (v) {
+        if (v === 80) return "80 son todos los sanos. Pero a 15 de ellos el test les dijo enfermo: esos van a fp.";
+        if (v === 100) return "El bucle corre 100 veces, pero esa línea solo cuando se llega al último caso.";
+        if (v === 4 || v === 1) return "Piensa en cuántas veces se ejecuta durante todo el bucle, no cuántas veces aparece escrita.";
+        return null;
+      },
+      explicacion: "Los 80 sanos menos las 15 falsas alarmas: <b>65</b>. Ahora dale a reproducir y mira cómo se llenan los contadores. Los primeros pacientes van lentos y el resto rápido; con <b>Ir al final</b> saltas a la comparación con la librería.",
+      alResolver: function (ok) { C.reto("codigo1", ok); }
+    });
+    prop("codigo2", {
+      pregunta: "<code>confusion_matrix(y_real, y_pred)</code> imprimió <code>[[65 15] [ 5 15]]</code>. ¿Qué es el 65 de arriba a la izquierda?",
+      opciones: [
+        "TN: scikit-learn ordena las etiquetas de menor a mayor y pone la clase 0 primero",
+        "TP: la casilla de arriba a la izquierda siempre es TP",
+        "FN: los argumentos están al revés",
+        "El total de sanos"
+      ],
+      correcta: 0,
+      pistas: [null, "Eso vale para el orden de la UD3, no para scikit-learn. En el cribado, ¿cuántos TP hay?",
+        "Los argumentos están bien: primero lo real y después lo predicho. Mira cuántos FN hay en el cribado.",
+        "Los sanos son 80. 65 es una parte de ellos."],
+      explicacion: "Con etiquetas 0 y 1 la matriz es <b>[[TN FP] [FN TP]]</b>: filas = real, columnas = predicho, y la clase 0 primero. El comentario del Example 6-17 de Nield dice [[TP FN] [FP TN]], que es el orden de la UD3, no el de scikit-learn. Para fijar el orden: <code>confusion_matrix(y_real, y_pred, labels=[1, 0])</code>."
+    });
+    prop("codigo3", {
+      pregunta: "En R escribes <code>table(y_pred, y_real)</code>, con los argumentos al revés. ¿Qué cambia?",
+      opciones: [
+        "La tabla sale traspuesta: las filas son lo predicho, y FP y FN cambian de lugar",
+        "Nada: table() reconoce cuál es la verdad",
+        "Da un error porque los vectores están en otro orden",
+        "Cambian los números de TP y TN"
+      ],
+      correcta: 0,
+      pistas: [null, "table() no sabe cuál vector es la verdad: pone el primero en las filas.", "Los dos vectores tienen el mismo largo. No hay error.",
+        "La diagonal no cambia al trasponer. ¿Qué se mueve?"],
+      explicacion: "Lo comprobé en R: con <code>table(y_pred, y_real)</code> la fila 0 queda <code>65 5</code> y la fila 1 <code>15 15</code>. El 15 que antes estaba en la fila \"real 0\" (FP) ahora está en la columna \"real 0\". Si lees la precisión por filas sin mirar los nombres, calculas el recall. Los casos de kNN de la UD3 usan <code>table(Predicted, Actual)</code>: las filas son lo predicho."
+    });
+    prop("codigo4", {
+      pregunta: "Cambias las etiquetas: <code>y_real</code> y <code>y_pred</code> ahora tienen \"enfermo\" y \"sano\" en vez de 1 y 0. ¿Qué hace <code>f1_score(y_real, y_pred)</code>?",
+      opciones: [
+        "Lanza un error: busca la clase positiva 1, que ya no existe, y hay que pasar pos_label=\"enfermo\"",
+        "Da 0.60, igual que antes",
+        "Elige \"sano\" como positiva porque es la clase más grande",
+        "Da el F1 promedio de las dos clases"
+      ],
+      correcta: 0,
+      pistas: [null, "scikit-learn no adivina cuál es la positiva. Por defecto busca pos_label=1.",
+        "No elige por tamaño. Tiene un valor por defecto para la clase positiva.", "El promedio solo se calcula si se lo pides con average."],
+      explicacion: "Lo comprobé: <code>ValueError: pos_label=1 is not a valid label</code>. Con <code>pos_label=\"enfermo\"</code> da 0.6. Y ojo: <code>confusion_matrix</code> con esas etiquetas no falla, pero ordena alfabéticamente: \"enfermo\" va primero y sale [[15 5] [15 65]], con TP arriba a la izquierda. El orden depende de cómo se llamen las clases."
+    });
+  })();
+
+  /* ---------------- tarjetas ---------------- */
+  B.tarjetas($("tarjetas"), [
+    ["¿Qué dicen las dos palabras de \"falso positivo\"?", "\"Positivo\" es lo que dijo el modelo; \"falso\", que se equivocó. Es un negativo de verdad al que se le dijo positivo: una falsa alarma."],
+    ["Precisión, en palabras", "De todos los que el modelo llamó positivos, ¿qué fracción lo era? $TP/(TP + FP)$. Es la columna \"dijo positivo\"."],
+    ["Recall, en palabras", "De todos los positivos de verdad, ¿qué fracción encontró? $TP/(TP + FN)$. Es la fila \"es positivo\". También: sensibilidad, TPR."],
+    ["¿Por qué la exactitud engaña con clases desbalanceadas?", "Porque decir siempre la clase mayoritaria ya da una exactitud alta: 99 % con 1 fraude entre 100, sin atrapar ninguno."],
+    ["¿Por qué el F1 usa la media armónica?", "Porque queda pegada a la menor de las dos: con precisión 1 y recall 0.2 da 0.33, no 0.6. No deja esconder una métrica mala."],
+    ["¿Qué orden usa <code>confusion_matrix</code> de scikit-learn con etiquetas 0 y 1?", "Filas = real, columnas = predicho, la clase 0 primero: [[TN FP] [FN TP]]. La UD3 y la UD2 dibujan el positivo primero."],
+    ["¿Qué llama \"Precisión\" la UD3 de Matemáticas?", "A la exactitud, $(TP + TN)/n$. La precisión de verdad es $TP/(TP + FP)$, y es la que va dentro del F1."],
+    ["En un cribado de cáncer, ¿qué error es el caro y qué métrica lo vigila?", "El falso negativo, un enfermo que se va sin diagnóstico. Lo vigila el recall."]
+  ]);
+
+  /* ---------------- conexiones ---------------- */
+  B.conexiones("matriz-confusion");
+})();
+</script>
+</body>
+</html>

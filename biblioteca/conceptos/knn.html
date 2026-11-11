@@ -1,0 +1,1644 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>kNN y regiones de decisión</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+/* ---------- plano de vecinos ---------- */
+.plano-svg { width: 100%; height: auto; display: block; user-select: none; -webkit-user-select: none; }
+.plano-svg.mueve { touch-action: none; cursor: crosshair; }
+.plano-svg .grid { stroke: var(--line-soft); stroke-width: 1; }
+.plano-svg .grid.eje { stroke: var(--ink-3); }
+.plano-svg .tick { font: 10px var(--f-mono); fill: var(--ink-3); }
+.plano-svg .eje-tit { font: 11.5px var(--f-body); fill: var(--ink-2); }
+.plano-svg .rg { stroke: none; }
+.plano-svg .rg.F { fill: var(--pos); fill-opacity: .17; }
+.plano-svg .rg.V { fill: var(--neg); fill-opacity: .17; }
+.plano-svg .rg.E { fill: var(--ink-3); fill-opacity: .22; }
+.plano-svg .ln-t { stroke: var(--ink-3); stroke-width: 1; opacity: .45; }
+.plano-svg .ln { stroke-width: 2.4; }
+.plano-svg .ln.F { stroke: var(--pos); }
+.plano-svg .ln.V { stroke: var(--neg); }
+.plano-svg .anillo { fill: var(--accent); fill-opacity: .06; stroke: var(--accent); stroke-width: 1.6; stroke-dasharray: 5 4; }
+.plano-svg .pt { stroke: var(--surface); stroke-width: 1.8; }
+.plano-svg .pt.F { fill: var(--pos); }
+.plano-svg .pt.V { fill: var(--neg); }
+.plano-svg .pt.vec { stroke: var(--ink); stroke-width: 2.2; }
+.plano-svg .plab { font: 10px var(--f-mono); fill: var(--ink-2); pointer-events: none; paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+.plano-svg .dlab { font: 500 11px var(--f-mono); fill: var(--ink); pointer-events: none; paint-order: stroke; stroke: var(--surface); stroke-width: 3.5px; }
+.plano-svg .qpt circle { fill: var(--surface); stroke: var(--accent); stroke-width: 3; }
+.plano-svg .qpt.F circle { fill: var(--pos); }
+.plano-svg .qpt.V circle { fill: var(--neg); }
+.plano-svg .qpt text { font: 600 12px var(--f-mono); fill: var(--accent); pointer-events: none; }
+.plano-svg.mueve .qpt { cursor: grab; }
+
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.esc-head .hint { font-size: 12.5px; color: var(--ink-2); }
+.leyenda { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 8px; font-size: 12.5px; color: var(--ink-2); }
+.leyenda i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+.leyenda i.F { background: var(--pos); }
+.leyenda i.V { background: var(--neg); }
+.leyenda i.Q { background: var(--surface); box-shadow: inset 0 0 0 2.5px var(--accent); }
+
+.ctrls { display: grid; gap: 8px; margin-top: 10px; }
+.ctrl { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; color: var(--ink-2); }
+.ctrl[hidden], .leyenda[hidden], #planoBox[hidden], #grafBox[hidden] { display: none; }
+.ctrl input[type="range"] { flex: 1 1 140px; min-width: 120px; accent-color: var(--accent); }
+.ctrl .kval { font-family: var(--f-mono); font-size: 14px; color: var(--ink); min-width: 4.5ch; }
+.ctrl button { font-size: 12px; padding: 5px 10px; }
+.ctrl button.on { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+
+.voto { margin-top: 10px; padding: 9px 12px; border: 1px dashed var(--line); border-radius: 8px; font-family: var(--f-mono); font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; line-height: 1.6; }
+.voto:empty { display: none; }
+.voto b { color: var(--ink); font-weight: 500; }
+.voto b.F { color: var(--pos); }
+.voto b.V { color: var(--neg); }
+.voto b.oculto { color: var(--accent); }
+
+.tabla-wrap { overflow-x: auto; margin-top: 10px; }
+.tabla { width: 100%; border-collapse: collapse; font-family: var(--f-mono); font-size: 12px; font-variant-numeric: tabular-nums; }
+.tabla th { font-weight: 500; color: var(--ink-3); font-size: 11px; text-align: right; padding: 4px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.tabla td { text-align: right; padding: 3px 8px; border-bottom: 1px solid var(--line-soft); color: var(--ink-2); white-space: nowrap; }
+.tabla td.pl, .tabla th:first-child { text-align: left; color: var(--ink-3); }
+.tabla tr.dentro td { background: var(--accent-soft); color: var(--ink); }
+.tabla td.F { color: var(--pos); font-weight: 500; }
+.tabla td.V { color: var(--neg); font-weight: 500; }
+.tabla td.oculto { color: var(--accent); font-weight: 600; }
+
+.vivo-p { font-family: var(--f-mono); font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; margin: 8px 0 12px; padding: 10px 12px; border: 1px dashed var(--line); border-radius: 8px; line-height: 1.65; }
+.vivo-p b { color: var(--ink); font-weight: 500; }
+
+/* ---------- grafico de exactitud ---------- */
+.graf-svg { width: 100%; height: auto; display: block; }
+.graf-svg .grid { stroke: var(--line-soft); }
+.graf-svg .tick { font: 10px var(--f-mono); fill: var(--ink-3); }
+.graf-svg .eje-tit { font: 11.5px var(--f-body); fill: var(--ink-2); }
+.graf-svg .cv { fill: none; stroke: var(--accent); stroke-width: 2.4; }
+.graf-svg .cv-pt { fill: var(--accent); }
+.graf-svg .tr { fill: none; stroke: var(--ink-3); stroke-width: 2; stroke-dasharray: 6 4; }
+.graf-svg .tr-pt { fill: var(--ink-3); }
+.graf-svg .val { font: 500 10.5px var(--f-mono); fill: var(--ink); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+.graf-svg .val.tr-l { fill: var(--ink-3); }
+.graf-svg .mejor { fill: var(--accent); fill-opacity: .1; }
+.leyenda i.cv { background: var(--accent); border-radius: 2px; height: 3px; vertical-align: 3px; width: 16px; }
+.leyenda i.tr { background: var(--ink-3); border-radius: 2px; height: 3px; vertical-align: 3px; width: 16px; }
+
+/* ---------- vida real ---------- */
+.vr-tabla td.F { color: var(--pos); }
+.vr-tabla td.V { color: var(--neg); }
+.vr-tabla tr.top td { background: var(--accent-soft); }
+.vr-tabla tr.on td { box-shadow: inset 0 0 0 1.5px var(--accent); }
+.vr-salida { margin: 10px 0 0; padding: 8px 12px; background: var(--surface-2); border-radius: 8px; font-family: var(--f-mono); font-size: 12.5px; white-space: pre; overflow-x: auto; min-height: 2.6em; color: var(--ink); }
+.vr-mini { max-width: 260px; margin-top: 8px; }
+
+/* ---------- retos propios ---------- */
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.ojo-opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
+.ojo-opts .opt { text-align: center; }
+.objetivos { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.objetivos li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.objetivos .m { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.objetivos li.hecho { color: var(--ink); }
+.objetivos li.hecho .m { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 3px var(--surface); }
+.datos-mano { border-collapse: collapse; font-family: var(--f-mono); font-size: 14px; margin: 4px 0 12px; }
+.datos-mano th, .datos-mano td { padding: 4px 12px; border: 1px solid var(--line); text-align: center; }
+.datos-mano th { color: var(--ink-3); font-weight: 500; font-size: 12px; }
+.grande { font-family: var(--f-mono); font-size: 13.5px; color: var(--ink-2); margin: 8px 0 4px; font-variant-numeric: tabular-nums; line-height: 1.6; }
+.grande b { color: var(--ink); font-weight: 500; }
+.grande b.F { color: var(--pos); }
+.grande b.V { color: var(--neg); }
+.pred-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ kNN</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Aprendizaje automático · UD3 kNN de SM142003, Raschka cap. 3</p>
+    <h1>kNN y regiones de decisión: dime con quién andas</h1>
+    <p class="lede">
+      El clasificador más sencillo que existe: para decidir qué es un punto nuevo, <b>mira a sus k vecinos más cercanos y hace una votación</b>.
+      No hay fórmula que ajustar ni parámetros que aprender. Todo lo decide una regla, la distancia, y un número, la k. Vas a ver cómo esa k cambia la forma de las fronteras.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> Tienes una lista de alimentos que alguien ya clasificó como fruta o verdura, con dos notas de 0 a 10: qué tan dulce y qué tan crujiente es cada uno. Llega un alimento nuevo con sus dos notas. Usando solo los que ya conoces, ¿cómo decidirías qué es? Escríbelo como te salga.</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: lo compararía con..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>Clasificar preguntándole a los vecinos</h2>
+      <p>Siete pasos. Cada uno termina con un chequeo: hasta que no lo resuelves, el siguiente queda cerrado. Equivocarte aquí no resta nada, es parte del método.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="La pregunta">
+          <span class="etapa">Paso 1</span>
+          <h3>¿Fruta o verdura?</h3>
+          <p>En el plano hay 13 alimentos que alguien ya clasificó. A cada uno le puso dos notas de 0 a 10: <b>dulzor</b> (eje horizontal) y <b>crocancia</b>, qué tan crujiente es (eje vertical). Los puntos <b style="color:var(--pos)">teal</b> son frutas, los <b style="color:var(--neg)">coral</b> son verduras.</p>
+          <p>Llega un alimento nuevo, el círculo violeta con el signo de pregunta. Nadie te dice qué es. Solo tienes los 13 que ya conoces.</p>
+          <div class="check" id="chk1">
+            <p class="check-tit">Antes de seguir</p>
+            <p class="q">Mira el plano sin hacer cuentas. ¿Qué dirías que es el alimento nuevo?</p>
+            <div class="pred-btns">
+              <button type="button" class="opt" data-a="F">Fruta</button>
+              <button type="button" class="opt" data-a="V">Verdura</button>
+            </div>
+            <div class="fb" aria-live="polite"></div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="El más cercano">
+          <span class="etapa">Paso 2</span>
+          <h3>Preguntarle a un solo vecino</h3>
+          <p>La idea de kNN cabe en una frase: <b>un punto se parece a los que tiene cerca</b>. La versión más simple, con k = 1, le da al punto nuevo la clase de su vecino más cercano. Nada más.</p>
+          <p>Fíjate en lo que <b>no</b> hace: no ajusta ninguna recta, no calcula pesos, no "entrena". Guarda los 13 alimentos tal cual y, cuando llega uno nuevo, mide la distancia a todos. Por eso se le llama <b>aprendizaje perezoso</b>: entrenar es instantáneo y todo el trabajo queda para el momento de predecir
+            <cite class="cita" data-fuente="knn3" data-pag="6" data-ancla="why-k-nn-is-lazy" data-seccion="2.1 Why k-NN is lazy" data-que="Por qué kNN es perezoso: no construye un modelo, guarda los casos tal cual (rote learning), entrenar es rápido y predecir es lento. También por qué es no paramétrico." data-cuando="Al terminar este paso"></cite>.</p>
+          <p>La distancia es la de siempre, la de la regla: la longitud del segmento. Si para ir de un punto a otro te mueves 3 a la derecha y 4 hacia arriba, por Pitágoras la distancia es <span data-tex="\sqrt{3^2+4^2}=5"></span>.</p>
+          <div class="vivo-p" id="vivo2"></div>
+          <p>Toca el plano o arrastra el punto nuevo. Las líneas grises van a los 13 alimentos; la gruesa, al más cercano. Mira cómo el color que le toca cambia de golpe cuando otro vecino pasa a ser el más cercano.</p>
+          <div class="check" id="chk2"><p class="check-tit">Calcula con los datos en vivo</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="k vecinos">
+          <span class="etapa">Paso 3</span>
+          <h3>Preguntarle a k vecinos y votar</h3>
+          <p>Un solo vecino puede engañar. En el paso 1, el más cercano era V1, una verdura muy dulce y crujiente (piensa en un pimiento rojo) metida entre las frutas. La solución es preguntarle a varios: los <b>k</b> más cercanos votan y gana la clase con más votos.</p>
+          <p>Ya puedes escribirlo con símbolos. Cada alimento es un vector <span data-tex="\mathbf{x}_a = (x_{a1}, x_{a2})"></span> con sus <span data-tex="p = 2"></span> notas. La distancia euclídea entre dos alimentos es Pitágoras con todas las coordenadas:</p>
+          <div class="fbloque">
+            <div data-tex="d(\mathbf{x}_a,\mathbf{x}_b) = \Big(\sum_{j=1}^{p} (x_{aj}-x_{bj})^2\Big)^{1/2}" data-display></div>
+            <div class="vivo" id="vivo3"></div>
+          </div>
+          <p>Y la regla de decisión es la moda de las clases de los k vecinos:</p>
+          <div class="fbloque"><div data-tex="\hat{y}(\mathbf{x}) = \operatorname{moda}\{\,y_{(1)},\, y_{(2)},\, \dots,\, y_{(k)}\,\}" data-display></div></div>
+          <p>Son los cuatro pasos de la diapositiva 5: elegir k, calcular las distancias, tomar las k más pequeñas y votar
+            <cite class="cita" data-fuente="knn3" data-pag="5" data-ancla="how-k-nn-works" data-seccion="2 How k-NN works" data-que="kNN como método no paramétrico y basado en instancias, con sus cuatro pasos: elegir k, calcular distancias (euclídea), tomar los k más cercanos y votar por mayoría." data-cuando="Al terminar este paso"></cite>.
+            La misma fórmula, con la moda escrita igual, está en la teoría de la UD3 de Matemáticas
+            <cite class="cita" data-fuente="ud3" data-pag="26" data-seccion="3.4 kNN" data-que="La distancia euclídea d(x, x') y la regla Clase(x) = modo{Clase(x₁), ..., Clase(x_k)}, más la Tabla 3 de ventajas y desventajas. Ojo: el texto dice que la Tabla 3 tiene las métricas, pero tiene ventajas y desventajas." data-cuando="Cuando prepares el cuestionario"></cite>.</p>
+          <p><b>Una errata que te conviene conocer.</b> En la diapositiva 12 las fórmulas de la euclídea y de la Manhattan restan <span data-tex="x_{aj} - y_{bj}"></span>. Debe ser <span data-tex="x_{aj} - x_{bj}"></span>: las dos observaciones son <span data-tex="\mathbf{x}_a"></span> y <span data-tex="\mathbf{x}_b"></span>, como dice el texto de la misma diapositiva. La <span data-tex="y"></span> en ese material es la clase, no una coordenada
+            <cite class="cita" data-fuente="knn3" data-pag="12" data-ancla="distance-metric" data-seccion="3.2 Distance metric" data-que="La euclídea (L2) y la Manhattan (L1) como fórmulas, y que en regresión kNN promedia la respuesta de los k vecinos. Léelo sabiendo que donde dice y_bj va x_bj." data-cuando="Después de leer esta errata"></cite>.</p>
+          <details class="profundizar">
+            <summary>Otra forma de medir: Manhattan y Minkowski</summary>
+            <div>
+              <p>La distancia <b>Manhattan</b> suma las diferencias en valor absoluto, como si caminaras por las calles de una ciudad en cuadrícula: <span data-tex="d_1 = \sum_j |x_{aj}-x_{bj}|"></span>. Las dos son casos de la distancia de <b>Minkowski</b>, <span data-tex="d_p = \big(\sum_j |x_{aj}-x_{bj}|^p\big)^{1/p}"></span>: con <span data-tex="p = 1"></span> es Manhattan, con <span data-tex="p = 2"></span> es la euclídea. Usa el botón <b>Manhattan</b> del escenario: el vecindario deja de ser un círculo y pasa a ser un rombo, y el orden de los vecinos puede cambiar.</p>
+              <p>Las diapositivas solo nombran Minkowski (y coseno) sin dar la fórmula. Raschka sí la escribe, y es la métrica por defecto de scikit-learn <cite class="cita" data-fuente="raschka3" data-pag="49" data-pimp="101" data-seccion="K-nearest neighbors – a lazy learning algorithm" data-que="La distancia de Minkowski con el parámetro p (p = 2 euclídea, p = 1 Manhattan) y el aviso de estandarizar para que cada variable pese lo mismo." data-cuando="Cuando quieras la versión técnica de las métricas"></cite>. Más sobre normas en la página de Normas y distancias.</p>
+            </div>
+          </details>
+          <div class="cita" id="citaHipo" hidden></div>
+          <div class="check" id="chk3"><p class="check-tit">Antes de seguir</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Empates y pesos">
+          <span class="etapa">Paso 4</span>
+          <h3>Empates y voto ponderado</h3>
+          <p>Con k = 4 el punto nuevo tiene dos frutas y dos verduras entre sus vecinos: <b>empate</b>. Con dos clases y k par siempre puede pasar. Hay dos salidas.</p>
+          <p><b>La primera: usar k impar.</b> Con dos clases, un número impar de votos no se puede partir en dos mitades iguales. Por eso el ejemplo del cáncer de mama elige k = 21 y no 22.</p>
+          <p><b>La segunda: que no todos los votos valgan lo mismo.</b> Un vecino que está pegado debería pesar más que uno que apenas entró al grupo. En el <b>voto ponderado</b> cada vecino vota con peso <span data-tex="w = 1/d"></span>, y gana la clase con más peso total
+            <cite class="cita" data-fuente="knn3" data-pag="11" data-ancla="4/3" data-seccion="3.1.3 Weighted voting" data-que="Pesar el voto por la distancia: los vecinos cercanos influyen más. La diapositiva dice que ayuda sobre todo con k grande, pero no da la fórmula; la más común es w = 1/d." data-cuando="Después de activar el voto ponderado"></cite>:</p>
+          <div class="fbloque"><div data-tex="\text{puntaje}(c) = \sum_{i=1}^{k} \frac{1}{d(\mathbf{x}, \mathbf{x}_{(i)})}\;\big[\,y_{(i)} = c\,\big]" data-display></div></div>
+          <p>Activa <b>Voto ponderado</b> en el escenario y mira cómo los votos se convierten en pesos.</p>
+          <div class="check" id="chk4"><p class="check-tit">Calcula antes de mirar</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Regiones">
+          <span class="etapa">Paso 5</span>
+          <h3>Pintar el plano entero: las regiones de decisión</h3>
+          <p>Ahora en vez de un punto nuevo imagina miles: uno en cada rincón del plano. Cada uno se pinta del color que le daría kNN. El resultado son las <b>regiones de decisión</b>, y la línea donde cambia el color es la <b>frontera</b>. Las celdas grises son empates.</p>
+          <p>Mueve la k. Con <b>k = 1</b> la frontera es quebrada y aparece una isla coral alrededor de V1: el modelo le cree ciegamente a cada punto, incluido el raro. Eso es <b>sobreajuste</b>: varianza alta. Con k grande la frontera se suaviza y la isla desaparece, pero si te pasas el modelo se vuelve ciego a los detalles: <b>sesgo</b> alto
+            <cite class="cita" data-fuente="knn3" data-pag="9" data-ancla="the-role-of-k-in-k-nn" data-seccion="3.1.1 The role of k in k-NN" data-que="k controla el compromiso entre sesgo y varianza: k = 1 es sensible a etiquetas mal puestas y k = n predice siempre la clase mayoritaria. La Figure 2 muestra la frontera con k grande." data-cuando="Después de mover la k de punta a punta"></cite>.</p>
+          <p>El ejemplo básico de la unidad dibuja exactamente esto en R: una rejilla de 100 × 100 puntos, <code>knn</code> sobre la rejilla y <code>geom_tile</code> para pintar
+            <cite class="cita" data-fuente="knn3basico" data-pag="8" data-ancla="áreas-de-decisión-del-modelo-knn" data-seccion="8 Áreas de decisión del modelo KNN" data-que="El código que arma la rejilla con expand.grid, clasifica cada punto con class::knn (k = 3) y pinta las regiones con geom_tile sobre los datos moons." data-cuando="Cuando quieras hacer este dibujo con tus propios datos"></cite>.</p>
+          <div class="check" id="chk5"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Escalar">
+          <span class="etapa">Paso 6</span>
+          <h3>Escalar: la distancia la gana el número más grande</h3>
+          <p>Hasta ahora las dos notas iban de 0 a 10. Imagina que otra persona anota el dulzor de 0 a 100. Los alimentos son los mismos y el dibujo no cambia ni un píxel. Pero kNN no ve el dibujo: ve números.</p>
+          <div class="vivo-p" id="vivo6"></div>
+          <p>Una diferencia de dulzor ahora vale diez veces más en la cuenta que la misma diferencia de crocancia. La diapositiva 13 lo muestra con un caso extremo: dulzor y crocancia de 1 a 10 junto al picante en unidades Scoville, de 0 a 1 000 000. La distancia sería, en la práctica, solo picante
+            <cite class="cita" data-fuente="knn3" data-pag="13" data-ancla="feature-scaling" data-seccion="3.3.1 Why scale" data-que="El ejemplo del dulzor, la crocancia y el picante en Scoville: sin escalar, la variable de números grandes decide sola quién es vecino de quién." data-cuando="Después de tocar los dos botones"></cite>.</p>
+          <p>La cura es la de la página de Estandarización y normalización: llevar todas las variables a la misma regla. Con <b>z-score</b>, <span data-tex="z = (x-\mu)/\sigma"></span>; con <b>min-max</b>, <span data-tex="x' = (x-\min)/(\max-\min)"></span>. Y una regla de oro: la media, el desvío, el mínimo y el máximo se calculan con el <b>entrenamiento</b> y se usan iguales para los datos nuevos.</p>
+          <p>Escalar arregla el problema de las unidades. Con muchas variables aparece otro distinto: todas las distancias se parecen y el vecino más cercano deja de estar cerca. Eso es la página de Distancias y maldición de la dimensión.</p>
+          <div class="check" id="chk6"><p class="check-tit">Predice antes de tocar los botones</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Elegir k">
+          <span class="etapa">Paso 7</span>
+          <h3>Elegir k con validación cruzada, y kNN para números</h3>
+          <p>¿Qué k usar? No se adivina: se mide. La <b>validación cruzada</b> aparta una parte de los datos, clasifica esa parte con el resto y cuenta los aciertos; después rota la parte apartada y promedia
+            <cite class="cita" data-fuente="intro3" data-pag="27" data-ancla="5/12" data-seccion="4.4.1 k-fold cross-validation" data-que="k-fold: k grupos de tamaño parecido, ajustar con k − 1 y validar con el que queda, k veces; cada observación se valida una vez y el error es el promedio." data-cuando="Al terminar este paso"></cite>.
+            Aquí, con solo 13 alimentos, se aparta <b>uno por vez</b>: 13 rondas. Se llama dejar uno fuera (LOOCV).</p>
+          <p>Ojo con un choque de nombres: la k de "k-fold" es el número de grupos, y no tiene nada que ver con la k de kNN, que es el número de vecinos.</p>
+          <p>El gráfico muestra la exactitud de cada k impar. Gana <b>k = 3</b>: es el k más chico con la mejor exactitud. Coincide con la regla rápida de la diapositiva 10, <span data-tex="k \approx \sqrt{n} = \sqrt{13} \approx 3.6"></span>, redondeada a un impar
+            <cite class="cita" data-fuente="knn3" data-pag="10" data-ancla="4/2" data-seccion="3.1.2 Practical guidance" data-que="La regla k ≈ √n, con n el número de casos de entrenamiento, y la nota de que con muchos datos el valor exacto de k importa menos." data-cuando="Cuando prepares el cuestionario"></cite>.</p>
+          <p><b>kNN también predice números.</b> Si en vez de "fruta o verdura" quisieras el precio por kilo, kNN busca los k vecinos igual y devuelve el <b>promedio</b> de sus precios. La regla cambia la votación por un promedio; todo lo demás queda igual.</p>
+          <div class="check" id="chk7"><p class="check-tit">Antes de seguir</p><div class="cuerpo"></div></div>
+
+          <div class="destacado" id="destacado">
+            <p class="dest-tit">Una confusión muy común</p>
+            <h4>¿Por qué k = 1 parece perfecto?</h4>
+            <p>Si mides la exactitud sobre los mismos puntos que el modelo guardó, con k = 1 cada punto se encuentra a sí mismo a distancia cero y se vota a sí mismo. Siempre acierta. Ese 100 % no dice nada de cómo le irá con un alimento nuevo.</p>
+            <p>Los ejemplos básico y particular de la unidad miden así la exactitud: sobre el mismo conjunto con el que clasifican, y además la llaman "precisión", que en la matriz de confusión es otra cosa. Por eso ahí k = 1 sale siempre perfecto
+              <cite class="cita" data-fuente="knn3particular" data-pag="7" data-ancla="experimentación-con-diferentes-valores-de-k" data-seccion="7 Experimentación con diferentes valores de k" data-que="La exactitud para k = 1 a 20 calculada con sapply sobre el mismo conjunto de entrenamiento. Léelo sabiendo que k = 1 da 100 % por construcción, y que lo que llama precisión es la exactitud." data-cuando="Después de responder la predicción de este recuadro"></cite>.</p>
+            <div class="check" id="chk7b"><p class="check-tit">Predice antes de mirar la línea gris</p><div class="cuerpo"></div></div>
+          </div>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+        </div>
+        <div id="planoBox"><svg id="plano" tabindex="0" role="img" aria-label="Plano con alimentos clasificados y un punto nuevo. Toca el plano o usa las flechas para mover el punto nuevo."></svg></div>
+        <div id="grafBox" hidden>
+          <svg id="graf" class="graf-svg" role="img" aria-label="Exactitud de kNN según k"></svg>
+          <div class="leyenda"><span><i class="cv"></i>validación cruzada (dejar uno fuera)</span><span><i class="tr"></i>sobre el entrenamiento</span></div>
+        </div>
+        <div class="leyenda" id="leyPlano"><span><i class="F"></i>fruta</span><span><i class="V"></i>verdura</span><span><i class="Q"></i>punto nuevo</span></div>
+        <div class="ctrls">
+          <div class="ctrl" id="ctrlK" hidden>
+            <span>k =</span><span class="kval" id="kVal">3</span>
+            <input type="range" id="kRange" min="1" max="12" step="1" value="3" aria-label="Número de vecinos k">
+          </div>
+          <div class="ctrl" id="ctrlMet" hidden>
+            <span>Distancia:</span>
+            <button type="button" data-met="euc" class="on">Euclídea</button>
+            <button type="button" data-met="man">Manhattan</button>
+          </div>
+          <div class="ctrl" id="ctrlPond" hidden>
+            <button type="button" id="btnPond">Voto ponderado</button>
+          </div>
+          <div class="ctrl" id="ctrlEsc" hidden>
+            <button type="button" data-esc="igual" class="on">Las dos de 0 a 10</button>
+            <button type="button" data-esc="x10" disabled>Dulzor de 0 a 100</button>
+            <button type="button" data-esc="z" disabled>Estandarizar las dos</button>
+          </div>
+        </div>
+        <div class="voto" id="voto" aria-live="polite"></div>
+        <div id="tabla"></div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>El mismo cálculo del paso 3, escrito como lo haría un programa: los 13 alimentos, el punto nuevo en (6, 6) y k = 5. Elige Python o R, dale a reproducir y mira las tres fases: medir, ordenar y votar. Al final se compara con la librería.</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir</p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="true">Python</button>
+            <button type="button" data-lang="r" aria-pressed="false">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">1 · medir</span><span data-f="2">2 · ordenar</span><span data-f="3">3 · votar</span>
+        </div>
+        <h3 class="mini-tit vr-tit">Los 13 alimentos y su distancia a (6, 6)</h3>
+        <div class="tabla-wrap"><table class="tabla vr-tabla" id="vrTabla"></table></div>
+        <div class="vr-cuenta" id="vrCuenta"></div>
+        <svg id="vrMini" class="vr-mini" role="img" aria-label="Plano con las distancias calculadas hasta ahora"></svg>
+        <h3 class="mini-tit vr-tit">Salida</h3>
+        <pre class="vr-salida" id="vrSalida"></pre>
+      </div>
+    </div>
+
+    <p class="vr-nota">En la práctica nadie escribe estos bucles. En Python es <code>KNeighborsClassifier(n_neighbors=5).fit(X, y).predict(...)</code>, el mismo que usa Raschka con <code>p=2, metric='minkowski'</code>
+      <cite class="cita" data-fuente="raschka3" data-pag="48" data-pimp="100" data-seccion="K-nearest neighbors – a lazy learning algorithm" data-que="KNeighborsClassifier con n_neighbors=5 sobre Iris estandarizado, las regiones de la Figure 3.26, el costo de predecir (k-d tree, ball tree) y un recuadro sobre qué hace scikit-learn con los empates." data-cuando="Después de reproducir el programa hasta el final"></cite>.
+      En R es <code>class::knn(train, test, cl, k)</code>, que hace todo en una llamada: como kNN es perezoso, no hay un paso de ajuste separado. Escribirlo una vez sirve para saber qué hay dentro y para no caer en las trampas de abajo.</p>
+
+    <details class="profundizar">
+      <summary>La versión sin bucle, y la validación cruzada del paso 7 en código</summary>
+      <div>
+        <p>Todas las distancias de una vez: <code>d = np.sqrt(((X - q) ** 2).sum(axis=1))</code> en Python, o <code>d &lt;- sqrt(rowSums(sweep(X, 2, q)^2))</code> en R. Cada fila de <code>X - q</code> es la resta coordenada a coordenada; se eleva al cuadrado, se suma por fila y se saca la raíz. Comparadas con las del bucle dan <code>True</code> y <code>TRUE</code>.</p>
+        <p>Las exactitudes del gráfico del paso 7 salen así: <code>cross_val_score(KNeighborsClassifier(n_neighbors=kk), X, y, cv=LeaveOneOut()).mean()</code> en Python, y <code>mean(knn.cv(train = X, cl = factor(y), k = kk) == y)</code> en R (<code>knn.cv</code> ya deja uno fuera). Para k = 1, 3, 5, 7, 9 y 11 los dos imprimen 0.769, 0.923, 0.923, 0.923, 0.769 y 0.538.</p>
+      </div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Dos corridas, dos respuestas</h3><span class="estado" data-reto="codigo2"></span></div>
+        <div id="codigo2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Escalar los datos nuevos</h3><span class="estado" data-reto="codigo3"></span></div>
+        <div id="codigo3"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Un empate que no es al azar</h3><span class="estado" data-reto="codigo4"></span></div>
+        <div id="codigo4"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: la biblioteca te avisa en el índice cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>¿Qué dicen los vecinos?</h3><span class="estado" data-reto="ojo"></span></div>
+        <p class="desc">Cinco casos con datos al azar. Mira el punto nuevo y la k, y decide sin calcular. Después te muestro los vecinos. Apruebas con 4 de 5.</p>
+        <div id="ojo"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Construir</span><h3>Busca los lugares raros</h3><span class="estado" data-reto="constructor"></span></div>
+        <p class="desc">Mueve el punto nuevo (toca el plano o arrástralo) hasta cumplir cada objetivo. Se marcan solos.</p>
+        <svg id="planoConstr" tabindex="0" role="img" aria-label="Plano para mover el punto nuevo"></svg>
+        <div class="grande" id="constrVivo"></div>
+        <ul class="objetivos" id="objetivos"></ul>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>Ordena a los vecinos con lápiz</h3><span class="estado" data-reto="mano"></span></div>
+        <p class="desc">Cinco alimentos y un punto nuevo. Calcula todas las distancias en papel antes de pedir pistas.</p>
+        <div id="manoDatos"></div>
+        <div id="mano"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Alguien se equivocó</h3><span class="estado" data-reto="error"></span></div>
+        <p class="desc">Una de las líneas tiene un error. Tócala.</p>
+        <div id="error"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Perezoso</h3><span class="estado" data-reto="prop1"></span></div>
+        <div id="prop1"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Todos los vecinos</h3><span class="estado" data-reto="prop2"></span></div>
+        <div id="prop2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Variables categóricas</h3><span class="estado" data-reto="prop3"></span></div>
+        <div id="prop3"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>La regla de la raíz</h3><span class="estado" data-reto="prop4"></span></div>
+        <div id="prop4"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Un dato fuera de rango</h3><span class="estado" data-reto="prop5"></span></div>
+        <div id="prop5"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Recordar a la fuerza es lo que fija. Arma la fórmula de memoria y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Fórmula de memoria</span><h3>Arma la distancia euclídea pieza por pieza</h3><span class="estado" data-reto="formula"></span></div>
+        <p class="desc">Hay piezas de más que no pertenecen, entre ellas la errata de la diapositiva 12. No mires arriba.</p>
+        <div id="formula"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el material</h2>
+      <p class="lecturas-intro">Ya construiste la idea con las manos. Ahora ve a las diapositivas y a los casos de la unidad, y a la versión técnica de Raschka, y comprueba que lo reconoces. Cada entrada dice qué vas a encontrar y en qué momento conviene leerla. Si abres la biblioteca con doble clic, el enlace abre la diapositiva, la sección o el PDF en ese lugar.</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> Los 13 alimentos, sus notas de dulzor y crocancia y los precios del paso 7 son inventados, elegidos para que las distancias
+    den limpias desde el punto (6, 6). Las exactitudes del paso 7 y la salida de la Parte 2 son las que imprimieron Python (scikit-learn) y R (class) al correr
+    este mismo código. Los retos de ojo clínico y a mano generan datos al azar cada vez. Tu progreso se guarda solo en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+(function () {
+  "use strict";
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var RETOS = ["ojo", "constructor", "mano", "error", "formula", "prop1", "prop2", "prop3", "prop4", "prop5", "codigo1", "codigo2", "codigo3", "codigo4"];
+  var C = B.concepto({ id: "knn", retos: RETOS, pasos: 7 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  var f = B.fmt;
+  // numero corto: entero sin decimales, si no con uno; entre parentesis si es negativo (para elevar al cuadrado)
+  function nm(v) { return Number.isInteger(v) ? f(v, 0) : f(v, 1); }
+  function np2(v) { return v < 0 ? "(" + nm(v) + ")" : nm(v); }
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+
+  /* ---------------- datos (inventados) ---------------- */
+  // dulzor y crocancia de 0 a 10; F = fruta, V = verdura
+  var PTS = [[7, 5], [8, 6], [8, 8], [7, 3], [9, 4], [6, 2], [10, 7], [7, 6], [4, 7], [2, 8], [1, 5], [3, 3], [2, 2]];
+  var CLS = ["F", "F", "F", "F", "F", "F", "F", "V", "V", "V", "V", "V", "V"];
+  var NOMS = PTS.map(function (_, i) { return CLS[i] + (CLS[i] === "F" ? i + 1 : i - 6); });
+  var NC = { F: "fruta", V: "verdura", E: "empate" };
+  var Q0 = [6, 6];
+  // media y desvio poblacional de cada columna (como StandardScaler)
+  var MX = 0, MY = 0, SX = 0, SY = 0;
+  PTS.forEach(function (p) { MX += p[0]; MY += p[1]; });
+  MX /= PTS.length; MY /= PTS.length;
+  PTS.forEach(function (p) { SX += (p[0] - MX) * (p[0] - MX); SY += (p[1] - MY) * (p[1] - MY); });
+  SX = Math.sqrt(SX / PTS.length); SY = Math.sqrt(SY / PTS.length);
+
+  /* ---------------- kNN ---------------- */
+  // o = { met: "euc" | "man", esc: "igual" | "x10" | "z", pond: bool }
+  function factores(esc) { return esc === "x10" ? [10, 1] : esc === "z" ? [1 / SX, 1 / SY] : [1, 1]; }
+  function dist(a, b, o) {
+    var fa = factores(o.esc), dx = (a[0] - b[0]) * fa[0], dy = (a[1] - b[1]) * fa[1];
+    return o.met === "man" ? Math.abs(dx) + Math.abs(dy) : Math.sqrt(dx * dx + dy * dy);
+  }
+  function vecinos(q, o, pts, cls, excluir) {
+    pts = pts || PTS; cls = cls || CLS;
+    var r = [];
+    for (var i = 0; i < pts.length; i++) if (i !== excluir) r.push({ i: i, d: dist(q, pts[i], o), c: cls[i] });
+    r.sort(function (a, b) { return Math.abs(a.d - b.d) < 1e-9 ? a.i - b.i : a.d - b.d; });
+    return r;
+  }
+  function decidir(vs, k, pond) {
+    var v = { F: 0, V: 0 }, w = { F: 0, V: 0 };
+    for (var j = 0; j < k && j < vs.length; j++) {
+      v[vs[j].c]++;
+      w[vs[j].c] += vs[j].d < 1e-9 ? 1e6 : 1 / vs[j].d;
+    }
+    var a = pond ? w : v;
+    var pred = Math.abs(a.F - a.V) < 1e-9 ? "E" : a.F > a.V ? "F" : "V";
+    return { v: v, w: w, pred: pred, radio: vs[Math.min(k, vs.length) - 1].d };
+  }
+  var EUC = { met: "euc", esc: "igual", pond: false };
+  function clasificar(q, k, o) { return decidir(vecinos(q, o || EUC), k, (o || EUC).pond); }
+
+  /* ---------------- plano ---------------- */
+  var NS = "http://www.w3.org/2000/svg";
+  function nodo(tag, at, padre) {
+    var e = document.createElementNS(NS, tag);
+    for (var k in at) e.setAttribute(k, at[k]);
+    if (padre) padre.appendChild(e);
+    return e;
+  }
+  function texto(padre, at, t) { var e = nodo("text", at, padre); e.textContent = t; return e; }
+
+  function crearPlano(svg, cfg) {
+    var W = 420, H = 416, M = { l: 44, r: 12, t: 12, b: 40 }, A = W - M.l - M.r;
+    var st = {
+      pts: cfg.pts || PTS, cls: cfg.cls || CLS, q: cfg.q ? cfg.q.slice() : null, k: cfg.k || 1,
+      o: Object.assign({}, EUC), capas: cfg.capas || {}, mover: !!cfg.mover, fx: 1, nombres: cfg.nombres !== false
+    };
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    svg.classList.add("plano-svg");
+    function sx(v) { return M.l + v / 10 * A; }
+    function sy(v) { return H - M.b - v / 10 * A; }
+    function ix(px) { return (px - M.l) / A * 10; }
+    function iy(py) { return (H - M.b - py) / A * 10; }
+    var gReg = nodo("g", {}, svg), gEjes = nodo("g", {}, svg), gLin = nodo("g", {}, svg), gAni = nodo("g", {}, svg);
+    var gPts = nodo("g", {}, svg), gLab = nodo("g", {}, svg), gQ = nodo("g", {}, svg);
+    var regClave = null;
+
+    function ejes() {
+      gEjes.innerHTML = "";
+      for (var t = 0; t <= 10; t++) {
+        nodo("line", { x1: sx(t), x2: sx(t), y1: sy(0), y2: sy(10), "class": "grid" + (t === 0 ? " eje" : "") }, gEjes);
+        nodo("line", { x1: sx(0), x2: sx(10), y1: sy(t), y2: sy(t), "class": "grid" + (t === 0 ? " eje" : "") }, gEjes);
+        if (t % 2 === 0) {
+          texto(gEjes, { x: sx(t), y: sy(0) + 16, "class": "tick", "text-anchor": "middle" }, t * st.fx);
+          texto(gEjes, { x: sx(0) - 7, y: sy(t) + 3.5, "class": "tick", "text-anchor": "end" }, t);
+        }
+      }
+      texto(gEjes, { x: sx(10), y: H - 7, "class": "eje-tit", "text-anchor": "end" }, st.fx === 1 ? "Dulzor (0 a 10)" : "Dulzor (0 a 100)");
+      texto(gEjes, { x: 12, y: sy(10), "class": "eje-tit", "text-anchor": "end", transform: "rotate(-90 12 " + sy(10) + ")" }, "Crocancia (0 a 10)");
+    }
+    function regiones() {
+      if (!st.capas.regiones) { gReg.innerHTML = ""; regClave = null; return; }
+      var clave = [st.k, st.o.met, st.o.esc, st.o.pond].join("|");
+      if (clave === regClave) return;
+      regClave = clave;
+      gReg.innerHTML = "";
+      var paso = 0.25, n = 40, lado = paso / 10 * A;
+      for (var a = 0; a < n; a++) {
+        for (var b = 0; b < n; b++) {
+          var c = [(a + 0.5) * paso, (b + 0.5) * paso];
+          var r = decidir(vecinos(c, st.o, st.pts, st.cls), st.k, st.o.pond);
+          nodo("rect", { x: sx(a * paso), y: sy((b + 1) * paso), width: lado + 0.4, height: lado + 0.4, "class": "rg " + r.pred }, gReg);
+        }
+      }
+    }
+    function render() {
+      regiones();
+      gLin.innerHTML = ""; gAni.innerHTML = ""; gPts.innerHTML = ""; gLab.innerHTML = ""; gQ.innerHTML = "";
+      var vs = null, res = null, cap = st.capas;
+      if (st.q) {
+        vs = vecinos(st.q, st.o, st.pts, st.cls);
+        res = decidir(vs, st.k, st.o.pond);
+        var qx = sx(st.q[0]), qy = sy(st.q[1]);
+        if (cap.todas) vs.forEach(function (v) {
+          if (cap.hasta != null && v.i >= cap.hasta) return;
+          nodo("line", { x1: qx, y1: qy, x2: sx(st.pts[v.i][0]), y2: sy(st.pts[v.i][1]), "class": "ln-t" }, gLin);
+        });
+        if (cap.vecinos) for (var j = 0; j < st.k; j++) {
+          var p = st.pts[vs[j].i];
+          nodo("line", { x1: qx, y1: qy, x2: sx(p[0]), y2: sy(p[1]), "class": "ln " + vs[j].c }, gLin);
+        }
+        if (cap.etiq) for (var e = 0; e < Math.min(cap.etiq, vs.length); e++) {
+          var pe = st.pts[vs[e].i];
+          texto(gLab, { x: (qx + sx(pe[0])) / 2, y: (qy + sy(pe[1])) / 2 - 4, "class": "dlab", "text-anchor": "middle" }, f(vs[e].d, 2));
+        }
+        if (cap.anillo) {
+          var fa = factores(st.o.esc), rx = res.radio / fa[0] / 10 * A, ry = res.radio / fa[1] / 10 * A;
+          if (st.o.met === "man") {
+            nodo("polygon", { points: [[qx + rx, qy], [qx, qy - ry], [qx - rx, qy], [qx, qy + ry]].map(function (z) { return z.join(","); }).join(" "), "class": "anillo" }, gAni);
+          } else {
+            nodo("ellipse", { cx: qx, cy: qy, rx: Math.max(rx, 0.1), ry: Math.max(ry, 0.1), "class": "anillo" }, gAni);
+          }
+        }
+      }
+      var dentro = {};
+      if (vs && cap.vecinos) for (var t = 0; t < st.k; t++) dentro[vs[t].i] = true;
+      st.pts.forEach(function (p, i) {
+        nodo("circle", { cx: sx(p[0]), cy: sy(p[1]), r: 6.5, "class": "pt " + st.cls[i] + (dentro[i] ? " vec" : "") }, gPts);
+        if (st.nombres) texto(gLab, { x: sx(p[0]) + 8, y: sy(p[1]) - 8, "class": "plab" }, NOMS[i] || "");
+      });
+      if (st.q) {
+        var col = cap.colorQ && res.pred !== "E" ? " " + res.pred : "";
+        var g = nodo("g", { "class": "qpt" + col }, gQ);
+        nodo("circle", { cx: sx(st.q[0]), cy: sy(st.q[1]), r: 9 }, g);
+        if (!col) texto(g, { x: sx(st.q[0]), y: sy(st.q[1]) + 4.2, "text-anchor": "middle" }, "?");
+      }
+      if (cfg.alCambiar) cfg.alCambiar({ q: st.q ? st.q.slice() : null, vs: vs, res: res, k: st.k, o: st.o });
+    }
+
+    function coords(e) {
+      var r = svg.getBoundingClientRect();
+      return [(e.clientX - r.left) / r.width * W, (e.clientY - r.top) / r.height * H];
+    }
+    function moverQ(x, y) {
+      x = Math.max(0, Math.min(10, Math.round(x * 2) / 2));
+      y = Math.max(0, Math.min(10, Math.round(y * 2) / 2));
+      if (st.q && st.q[0] === x && st.q[1] === y) return;
+      st.q = [x, y];
+      render();
+    }
+    var arrastra = false;
+    svg.addEventListener("pointerdown", function (e) {
+      if (!st.mover || !st.q) return;
+      var c = coords(e), x = ix(c[0]), y = iy(c[1]);
+      if (x < -0.3 || x > 10.3 || y < -0.3 || y > 10.3) return;
+      arrastra = true;
+      try { svg.setPointerCapture(e.pointerId); } catch (err) { /* nada */ }
+      e.preventDefault();
+      moverQ(x, y);
+    });
+    svg.addEventListener("pointermove", function (e) {
+      if (!arrastra) return;
+      var c = coords(e);
+      moverQ(ix(c[0]), iy(c[1]));
+    });
+    function soltar() { arrastra = false; }
+    svg.addEventListener("pointerup", soltar);
+    svg.addEventListener("pointercancel", soltar);
+    svg.addEventListener("keydown", function (e) {
+      if (!st.mover || !st.q) return;
+      var d = { ArrowLeft: [-0.5, 0], ArrowRight: [0.5, 0], ArrowUp: [0, 0.5], ArrowDown: [0, -0.5] }[e.key];
+      if (!d) return;
+      e.preventDefault();
+      moverQ(st.q[0] + d[0], st.q[1] + d[1]);
+    });
+
+    ejes();
+    render();
+    return {
+      info: function () {
+        var vs = st.q ? vecinos(st.q, st.o, st.pts, st.cls) : null;
+        return { q: st.q ? st.q.slice() : null, vs: vs, res: vs ? decidir(vs, st.k, st.o.pond) : null, k: st.k, o: st.o };
+      },
+      set: function (c) {
+        if (c.pts) { st.pts = c.pts; st.cls = c.cls; regClave = null; }
+        if ("q" in c) st.q = c.q ? c.q.slice() : null;
+        if ("k" in c) st.k = c.k;
+        if (c.o) st.o = Object.assign({}, st.o, c.o);
+        if (c.capas) st.capas = c.capas;
+        if ("mover" in c) st.mover = c.mover;
+        if ("nombres" in c) st.nombres = c.nombres;
+        if ("fx" in c && c.fx !== st.fx) { st.fx = c.fx; ejes(); }
+        svg.classList.toggle("mueve", st.mover);
+        render();
+      }
+    };
+  }
+
+  /* ---------------- estado del recorrido ---------------- */
+  var est = { paso: 0, q: Q0.slice(), k: 3, met: "euc", esc: "igual", pond: false, pred1: null, chk2: false, chk3: false, chk4: false, chk5: false, chk6: false, chk7b: false };
+  var pasos, chk2;
+
+  var MODOS = [
+    { hint: "Responde la pregunta del paso 1" },
+    { hint: "Toca el plano o arrastra el punto nuevo" },
+    { hint: "Mueve la k y mira quién entra al círculo", k: true, met: true, tabla: true },
+    { hint: "Activa el voto ponderado", k: true, met: true, pond: true, tabla: true },
+    { hint: "Mueve la k y mira cómo cambian las regiones", k: true, met: true, regiones: true },
+    { hint: "Cambia la escala del dulzor", k: true, regiones: true, esc: true },
+    { hint: "Exactitud de cada k impar", graf: true }
+  ];
+
+  function opciones() { return { met: est.met, esc: est.esc, pond: est.pond }; }
+
+  var plano = crearPlano($("plano"), {
+    q: Q0, k: 1,
+    alCambiar: function (info) { if (est.q && info.q) est.q = info.q; pintarPanel(info); }
+  });
+
+  function bloqueadoQ() {
+    return (est.paso === 0) || (est.paso === 2 && !est.chk3) || (est.paso === 3 && !est.chk4);
+  }
+
+  function entrar(i) {
+    est.paso = i;
+    var m = MODOS[i];
+    if (i !== 5 && est.esc !== "igual") { est.esc = "igual"; pintarEsc(); }
+    if (i !== 3 && est.pond) { est.pond = false; pintarPond(); }
+    if (i === 3) { est.k = 4; }
+    if (i === 2 && !est.chk3) est.k = 1;
+    if (i === 4 && est.k > 12 && !est.chk5) est.k = 12;
+    if (bloqueadoQ()) est.q = Q0.slice();
+    $("escHint").textContent = m.hint;
+    $("ctrlK").hidden = !m.k;
+    $("ctrlMet").hidden = !m.met;
+    $("ctrlPond").hidden = !m.pond;
+    $("ctrlEsc").hidden = !m.esc;
+    $("planoBox").hidden = !!m.graf;
+    $("leyPlano").hidden = !!m.graf;
+    $("grafBox").hidden = !m.graf;
+    if (m.graf) { $("voto").innerHTML = ""; $("tabla").innerHTML = ""; pintarGrafico(); return; }
+    if (!m.met && est.met !== "euc") { est.met = "euc"; pintarMet(); }
+    pintarK();
+    var capas, k = est.k;
+    if (i === 0) {
+      capas = est.pred1 ? { vecinos: true, anillo: true } : {};
+      k = est.pred1 ? 3 : 1;
+    } else if (i === 1) {
+      capas = { todas: true, vecinos: true, colorQ: true, etiq: est.chk2 ? 3 : 0 };
+      k = 1;
+    } else if (i === 2 || i === 3) {
+      capas = { vecinos: true, anillo: true, colorQ: (i === 2 ? est.chk3 : true), etiq: 0 };
+    } else {
+      capas = { regiones: true, colorQ: true };
+    }
+    plano.set({ q: est.q, k: k, o: opciones(), capas: capas, mover: !bloqueadoQ(), fx: est.esc === "x10" ? 10 : 1 });
+  }
+
+  /* panel de debajo del plano: votos, tabla y vivos */
+  function pintarPanel(info) {
+    var i = est.paso, m = MODOS[i];
+    if (!info || !info.vs || m.graf) return;
+    var vs = info.vs, res = info.res, k = info.k;
+    // vivo del paso 2
+    var v0 = vs[0], p0 = PTS[v0.i];
+    $("vivo2").innerHTML = "Punto nuevo en <b>(" + nm(info.q[0]) + ", " + nm(info.q[1]) + ")</b>.<br>Vecino más cercano: <b>" + NOMS[v0.i] + "</b> en (" + p0[0] + ", " + p0[1] + "), " +
+      NC[v0.c] + (est.chk2 ? ", a distancia <b>" + f(v0.d, 2) + "</b>." : ".") + "<br>Con k = 1, el punto nuevo es <b>" + NC[v0.c] + "</b>.";
+    // vivo del paso 3: la cuenta de los k vecinos
+    var ve = vecinos(info.q, EUC);
+    $("vivo3").innerHTML = ve.slice(0, Math.max(1, Math.min(est.k, 5))).map(function (v) {
+      var p = PTS[v.i], dx = info.q[0] - p[0], dy = info.q[1] - p[1];
+      return "d(?, " + NOMS[v.i] + ") = √((" + nm(info.q[0]) + " − " + p[0] + ")² + (" + nm(info.q[1]) + " − " + p[1] + ")²) = √" + f(dx * dx + dy * dy, 2).replace(/\.00$/, "") + " = " + f(v.d, 2);
+    }).join("<br>") + (est.k > 5 ? "<br>..." : "");
+    // vivo del paso 6
+    var V1 = 7, F6 = 5;
+    function linea(nom, idx, fx) {
+      var p = PTS[idx], dx = (info.q[0] - p[0]) * fx, dy = info.q[1] - p[1];
+      return "d(?, " + nom + ") = √(" + np2(dx) + "² + " + np2(dy) + "²) = <b>" + f(Math.sqrt(dx * dx + dy * dy), 2) + "</b>";
+    }
+    var q6 = info.q;
+    $("vivo6").innerHTML = (q6[0] === 6 && q6[1] === 6 ? "Desde el punto (6, 6):" : "Desde el punto nuevo:") + "<br>" +
+      "Las dos de 0 a 10: " + linea("V1", V1, 1) + " · " + linea("F6", F6, 1) + "<br>" +
+      (est.chk6 ? "Dulzor de 0 a 100: " + linea("V1", V1, 10) + " · " + linea("F6", F6, 10)
+        : "Dulzor de 0 a 100: responde la predicción para ver la cuenta.");
+
+    // votos
+    var h = "";
+    if (i === 2 || i === 3) {
+      var ocultar = i === 2 && !est.chk3;
+      h = "k = " + k + " · votos: fruta <b class=\"F\">" + (ocultar ? "?" : res.v.F) + "</b>, verdura <b class=\"V\">" + (ocultar ? "?" : res.v.V) + "</b>";
+      var simple = decidir(vs, k, false);
+      h += " → <b class=\"" + (ocultar ? "oculto" : simple.pred) + "\">" + (ocultar ? "?" : simple.pred === "E" ? "empate" : NC[simple.pred]) + "</b>";
+      if (i === 3 && est.pond) {
+        var ocP = !est.chk4;
+        h += "<br>pesos 1/d: fruta <b class=\"F\">" + (ocP ? "?" : f(res.w.F, 3)) + "</b>, verdura <b class=\"V\">" + (ocP ? "?" : f(res.w.V, 3)) + "</b>" +
+          " → <b class=\"" + (ocP ? "oculto" : res.pred) + "\">" + (ocP ? "?" : NC[res.pred]) + "</b>";
+      }
+    } else if (i === 4 || i === 5) {
+      h = "k = " + k + " · el punto nuevo: <b class=\"" + res.pred + "\">" + (res.pred === "E" ? "empate" : NC[res.pred]) + "</b>";
+    }
+    $("voto").innerHTML = h;
+
+    // tabla de vecinos ordenados
+    if (m.tabla) {
+      var t = '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>puesto</th><th>alimento</th><th>clase</th><th>dulzor</th><th>crocancia</th><th>distancia</th>' +
+        (i === 3 && est.pond ? '<th>peso 1/d</th>' : '') + '</tr></thead><tbody>';
+      vs.forEach(function (v, r) {
+        var p = PTS[v.i];
+        t += '<tr' + (r < k ? ' class="dentro"' : '') + '><td class="pl">' + (r + 1) + '</td><td>' + NOMS[v.i] + '</td><td class="' + v.c + '">' + NC[v.c] + '</td><td>' + p[0] + '</td><td>' + p[1] + '</td><td>' + f(v.d, 3) + '</td>' +
+          (i === 3 && est.pond ? (r < k && !est.chk4 ? '<td class="oculto">?</td>' : '<td>' + (r < k ? f(1 / v.d, 3) : '') + '</td>') : '') + '</tr>';
+      });
+      $("tabla").innerHTML = t + '</tbody></table></div>';
+    } else {
+      $("tabla").innerHTML = "";
+    }
+    if (chk2) chk2.refrescar();
+  }
+
+  /* controles del escenario */
+  function pintarK() {
+    var r = $("kRange");
+    r.max = est.chk5 ? 13 : 12;
+    if (est.k > +r.max) est.k = +r.max;
+    r.value = est.k;
+    $("kVal").textContent = est.k + (est.k === 13 ? " (n)" : "");
+  }
+  $("kRange").addEventListener("input", function () {
+    est.k = +this.value;
+    pintarK();
+    plano.set({ k: est.k });
+  });
+  function pintarMet() {
+    [].forEach.call($("ctrlMet").querySelectorAll("button"), function (b) { b.classList.toggle("on", b.getAttribute("data-met") === est.met); });
+  }
+  $("ctrlMet").addEventListener("click", function (e) {
+    var b = e.target.closest("button");
+    if (!b) return;
+    est.met = b.getAttribute("data-met");
+    pintarMet();
+    plano.set({ o: opciones() });
+  });
+  function pintarPond() {
+    $("btnPond").classList.toggle("on", est.pond);
+    $("btnPond").textContent = est.pond ? "Voto ponderado: activado" : "Voto ponderado";
+  }
+  $("btnPond").addEventListener("click", function () {
+    est.pond = !est.pond;
+    pintarPond();
+    plano.set({ o: opciones() });
+  });
+  function pintarEsc() {
+    [].forEach.call($("ctrlEsc").querySelectorAll("button"), function (b) {
+      b.classList.toggle("on", b.getAttribute("data-esc") === est.esc);
+      if (b.getAttribute("data-esc") !== "igual") b.disabled = !est.chk6;
+    });
+  }
+  $("ctrlEsc").addEventListener("click", function (e) {
+    var b = e.target.closest("button");
+    if (!b || b.disabled) return;
+    est.esc = b.getAttribute("data-esc");
+    pintarEsc();
+    plano.set({ o: opciones(), fx: est.esc === "x10" ? 10 : 1 });
+  });
+
+  /* ---------------- exactitud por k (paso 7) ---------------- */
+  var KS = [1, 3, 5, 7, 9, 11];
+  function exactitud(k, dejarUno) {
+    var ok = 0;
+    for (var i = 0; i < PTS.length; i++) {
+      var r = decidir(vecinos(PTS[i], EUC, PTS, CLS, dejarUno ? i : -1), k, false);
+      if (r.pred === CLS[i]) ok++;
+    }
+    return ok / PTS.length;
+  }
+  var ACC_CV = KS.map(function (k) { return exactitud(k, true); });
+  var ACC_TR = KS.map(function (k) { return exactitud(k, false); });
+  function pintarGrafico() {
+    var svg = $("graf"), W = 420, H = 300, M = { l: 46, r: 14, t: 16, b: 42 };
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    svg.innerHTML = "";
+    function gx(k) { return M.l + (k - 1) / 10 * (W - M.l - M.r); }
+    function gy(a) { return H - M.b - (a - 0.4) / 0.6 * (H - M.t - M.b); }
+    nodo("rect", { x: gx(3) - 16, y: M.t, width: 32, height: H - M.t - M.b, "class": "mejor" }, svg);
+    [0.4, 0.6, 0.8, 1].forEach(function (a) {
+      nodo("line", { x1: M.l, x2: W - M.r, y1: gy(a), y2: gy(a), "class": "grid" }, svg);
+      texto(svg, { x: M.l - 6, y: gy(a) + 3.5, "class": "tick", "text-anchor": "end" }, Math.round(a * 100) + " %");
+    });
+    KS.forEach(function (k) { texto(svg, { x: gx(k), y: H - M.b + 16, "class": "tick", "text-anchor": "middle" }, k); });
+    texto(svg, { x: W - M.r, y: H - 6, "class": "eje-tit", "text-anchor": "end" }, "k (número de vecinos)");
+    texto(svg, { x: 12, y: M.t + 4, "class": "eje-tit", "text-anchor": "end", transform: "rotate(-90 12 " + (M.t + 4) + ")" }, "exactitud");
+    function serie(acc, cl, ptCl, labCl, dy) {
+      nodo("polyline", { points: KS.map(function (k, j) { return gx(k) + "," + gy(acc[j]); }).join(" "), "class": cl }, svg);
+      KS.forEach(function (k, j) {
+        nodo("circle", { cx: gx(k), cy: gy(acc[j]), r: 4, "class": ptCl }, svg);
+        texto(svg, { x: gx(k), y: gy(acc[j]) + dy, "class": "val " + labCl, "text-anchor": "middle" }, Math.round(acc[j] * 13) + "/13");
+      });
+    }
+    if (est.chk7b) serie(ACC_TR, "tr", "tr-pt", "tr-l", -9);
+    serie(ACC_CV, "cv", "cv-pt", "", 17);
+  }
+
+  /* ---------------- chequeos de cada paso ---------------- */
+  // paso 1: prediccion libre
+  (function () {
+    var caja = $("chk1");
+    function responder(a) {
+      est.pred1 = a;
+      [].forEach.call(caja.querySelectorAll(".opt"), function (b) {
+        b.disabled = true;
+        b.classList.toggle("ok", b.getAttribute("data-a") === a);
+      });
+      caja.querySelector(".fb").innerHTML = (a === "F" ? "Dijiste <b>fruta</b>. " : "Dijiste <b>verdura</b>. ") +
+        "Las dos respuestas se pueden defender, y eso es justo lo interesante. El alimento más cercano es <b>V1</b>, una verdura a distancia 1: si le preguntas solo a él, es verdura. " +
+        "Pero si les preguntas a los <b>tres</b> más cercanos (el círculo del escenario), dos son frutas: es fruta. La respuesta depende de a cuántos vecinos les preguntes. Ese número es la <b>k</b> de kNN.";
+      if (est.paso === 0) plano.set({ k: 3, capas: { vecinos: true, anillo: true } });
+      pasos.completar(0);
+    }
+    caja.addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || b.disabled) return;
+      responder(b.getAttribute("data-a"));
+    });
+  })();
+
+  function frutaCercana() {
+    var q = est.q, vs = vecinos(q, EUC);
+    for (var j = 0; j < vs.length; j++) if (vs[j].c === "F") return vs[j];
+    return vs[0];
+  }
+  chk2 = B.numerico(cuerpo("chk2"), {
+    pregunta: function () {
+      var v = frutaCercana(), p = PTS[v.i];
+      return "Con el punto nuevo donde está ahora, en $(" + nm(est.q[0]) + ",\\ " + nm(est.q[1]) + ")$, ¿a qué distancia está la <b>fruta</b> más cercana? Es " + NOMS[v.i] + ", en $(" + p[0] + ",\\ " + p[1] + ")$. Dos decimales.";
+    },
+    respuesta: function () { return frutaCercana().d; },
+    tolerancia: 0.011,
+    pistas: [
+      "Resta las coordenadas: cuánto te mueves en dulzor y cuánto en crocancia. Después Pitágoras.",
+      function () {
+        var v = frutaCercana(), p = PTS[v.i], dx = est.q[0] - p[0], dy = est.q[1] - p[1];
+        return "Es $\\sqrt{(" + nm(dx).replace("−", "-") + ")^2 + (" + nm(dy).replace("−", "-") + ")^2} = \\sqrt{" + f(dx * dx + dy * dy, 2).replace(/\.00$/, "") + "}$.";
+      }
+    ],
+    diagnostico: function (v) {
+      var fr = frutaCercana(), p = PTS[fr.i], dx = Math.abs(est.q[0] - p[0]), dy = Math.abs(est.q[1] - p[1]);
+      if (Math.abs(v - (dx + dy)) < 0.011 && dx > 0 && dy > 0) return "Sumaste las dos diferencias. Esa es la distancia Manhattan; la euclídea eleva al cuadrado, suma y saca la raíz.";
+      if (Math.abs(v - (dx * dx + dy * dy)) < 0.011) return "Te faltó sacar la raíz cuadrada.";
+      return null;
+    },
+    explicacion: function () {
+      var v = frutaCercana();
+      return "La fruta más cercana está a " + f(v.d, 2) + ". Ahora el escenario muestra las distancias de los tres vecinos más cercanos.";
+    },
+    alResolver: function () {
+      est.chk2 = true;
+      if (est.paso === 1) entrar(1);
+      pasos.completar(1);
+    }
+  });
+
+  B.numerico(cuerpo("chk3"), {
+    pregunta: "El punto nuevo está fijo en $(6,\\ 6)$. Mira la tabla de vecinos ordenados. ¿Cuál es el <b>k más pequeño</b> con el que kNN lo declara fruta?",
+    respuesta: 3,
+    tolerancia: 0,
+    pistas: ["Recorre la tabla de arriba hacia abajo y lleva la cuenta de frutas y verduras.", "Con k = 1 vota solo V1. Con k = 2 votan V1 y F1. ¿Quién gana ahí?"],
+    diagnostico: function (v) {
+      if (v === 2) return "Con k = 2 votan V1 (verdura) y F1 (fruta): uno a uno. Es un empate, nadie gana todavía.";
+      if (v === 1) return "Con k = 1 manda V1, que es verdura.";
+      return null;
+    },
+    explicacion: "Con k = 1 gana verdura, con k = 2 hay empate 1 a 1, y con k = 3 entra F2 y quedan 2 frutas contra 1 verdura. Mueve la k y mira el círculo crecer: el voto se vuelve visible.",
+    alResolver: function () {
+      est.chk3 = true;
+      if (est.paso === 2) entrar(2);
+      pasos.completar(2);
+    }
+  });
+
+  B.numerico(cuerpo("chk4"), {
+    pregunta: "Punto en $(6,\\ 6)$ y k = 4. Los vecinos verdura son V1, a distancia $1$, y V2, a distancia $\\sqrt{5}$. Con el voto ponderado, ¿cuánto suma el puntaje de <b>verdura</b>? Tres decimales.",
+    respuesta: 1 + 1 / Math.sqrt(5),
+    tolerancia: 0.002,
+    pistas: ["Cada vecino aporta $1/d$. Suma los aportes de las dos verduras.", "$1/1 + 1/\\sqrt{5} = 1 + 1/2.236$."],
+    diagnostico: function (v) {
+      if (Math.abs(v - (1 + Math.sqrt(5))) < 0.01) return "Sumaste las distancias. El peso es el inverso: $1/d$.";
+      if (Math.abs(v - 2) < 0.01) return "Ese es el voto simple: dos votos. Con pesos, cada uno vale $1/d$.";
+      if (Math.abs(v - 1.2) < 0.01) return "Usaste $1/d^2$. También existe, pero aquí el peso es $1/d$.";
+      return null;
+    },
+    explicacion: "Verdura: $1 + 1/\\sqrt{5} = 1.447$. Fruta: $1/\\sqrt{2} + 1/2 = 0.707 + 0.5 = 1.207$. El empate 2 a 2 se rompe a favor de <b>verdura</b>, porque V1 está pegado al punto. Activa el voto ponderado y compruébalo en la tabla.",
+    alResolver: function () {
+      est.chk4 = true;
+      if (est.paso === 3) entrar(3);
+      pasos.completar(3);
+    }
+  });
+
+  B.opcionMultiple(cuerpo("chk5"), {
+    pregunta: "El deslizador llega hasta k = 12. Si lo llevaras a <b>k = 13</b>, es decir, a todos los alimentos, ¿cómo quedaría el mapa?",
+    opciones: [
+      "Todo el plano teal: siempre gana fruta",
+      "Igual que con k = 1, con la isla de V1",
+      "Mitad teal y mitad coral, partido por una recta",
+      "Todo gris: empate en todas partes"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "Con k = 13 votan los 13 alimentos, estén donde estén. ¿Puede importar dónde está el punto nuevo?",
+      "Si votan todos, el resultado no depende del lugar. ¿Puede haber una frontera?",
+      "¿Cuántas frutas y cuántas verduras hay? 7 y 6 no empatan."],
+    explicacion: "Con k = n votan siempre los mismos 13, sin importar dónde esté el punto: 7 frutas contra 6 verduras. El modelo predice siempre la clase mayoritaria. <b>Ahora sube la k a 13</b> y compruébalo.",
+    alResolver: function () {
+      est.chk5 = true;
+      pintarK();
+      pasos.completar(4);
+    }
+  });
+
+  B.opcionMultiple(cuerpo("chk6"), {
+    pregunta: "Si el dulzor se anota de 0 a 100 y la crocancia sigue de 0 a 10, con los mismos alimentos, ¿qué le pasa al mapa de regiones?",
+    opciones: [
+      "Se vuelve franjas verticales: los vecinos los decide casi solo el dulzor",
+      "No cambia: el dibujo es el mismo",
+      "Se vuelve franjas horizontales: los decide casi solo la crocancia",
+      "Todo el plano pasa a ser fruta"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "El dibujo es el mismo, pero kNN no mira el dibujo: mira los números. ¿Qué número creció?",
+      "Piensa qué diferencia pesa más en la cuenta: una de 0 a 100 o una de 0 a 10.",
+      "La votación sigue siendo entre vecinos. Lo que cambia es quiénes son los vecinos."],
+    explicacion: "Una diferencia de dulzor ahora vale diez veces más en la distancia, así que los vecinos son los que tienen un dulzor parecido, sin importar la crocancia: franjas verticales. <b>Ahora toca los botones</b> y después estandariza para recuperar el equilibrio.",
+    alResolver: function () {
+      est.chk6 = true;
+      pintarEsc();
+      if (est.paso === 5) pintarPanel(plano.info());
+      pasos.completar(5);
+    }
+  });
+
+  var chk7ok = false;
+  B.numerico(cuerpo("chk7"), {
+    pregunta: "Con k = 3, los vecinos del punto $(6,\\ 6)$ son V1, F1 y F2. Si sus precios por kilo fueran 3, 4 y 8 euros (inventados), ¿qué precio predice kNN?",
+    respuesta: 5,
+    tolerancia: 0.01,
+    pistas: ["En regresión no se vota: se promedia.", "$(3 + 4 + 8) / 3$."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 4) < 0.01) return "Esa es la mediana. kNN para regresión usa el promedio.";
+      if (Math.abs(v - 15) < 0.01) return "Esa es la suma. Falta dividir entre k.";
+      return null;
+    },
+    explicacion: "$(3 + 4 + 8)/3 = 5$. La misma búsqueda de vecinos, con un promedio en lugar de la votación. Ahora mira el recuadro de abajo.",
+    alResolver: function () { chk7ok = true; cerrarPaso7(); }
+  });
+  B.opcionMultiple(cuerpo("chk7b"), {
+    pregunta: "Si mides la exactitud de k = 1 sobre los mismos 13 alimentos que el modelo guardó, ¿cuánto da?",
+    opciones: ["13 de 13, el 100 %", "10 de 13, como en la validación cruzada", "Alrededor de la mitad", "Depende de la escala de las variables"],
+    correcta: 0,
+    pistas: [null,
+      "En la validación cruzada el punto no está entre los vecinos. Aquí sí está. ¿A qué distancia de sí mismo?",
+      "Piensa quién es el vecino más cercano de un punto que está en los datos.",
+      "Cambiar la escala cambia distancias, pero la distancia de un punto a sí mismo es cero en cualquier escala."],
+    explicacion: "Cada punto es su propio vecino más cercano, a distancia cero, y se vota a sí mismo: 13 de 13. Por eso la exactitud sobre el entrenamiento no sirve para elegir k. La línea gris ya está en el gráfico: compárala con la violeta.",
+    alResolver: function () {
+      est.chk7b = true;
+      if (est.paso === 6) pintarGrafico();
+      cerrarPaso7();
+    }
+  });
+  function cerrarPaso7() { if (chk7ok && est.chk7b) pasos.completar(6); }
+
+  pasos = B.pasos($("recorrido"), {
+    concepto: C,
+    alEntrar: entrar,
+    alTerminar: function () { location.hash = "retos"; }
+  });
+  est.chk2 = pasos.hecho(1);
+  est.chk3 = pasos.hecho(2);
+  est.chk4 = pasos.hecho(3);
+  est.chk5 = pasos.hecho(4);
+  est.chk6 = pasos.hecho(5);
+  if (pasos.hecho(6)) { est.chk7b = true; chk7ok = true; }
+  pintarEsc();
+  pintarPond();
+  pintarMet();
+  entrar(0);
+
+  /* ---------------- hipotesis inicial ---------------- */
+  (function () {
+    var ta = $("hipotesis"), t = null;
+    ta.value = B.nota("knn", "hipotesis");
+    function cita() {
+      var v = ta.value.trim(), el = $("citaHipo");
+      el.hidden = !v;
+      if (v) { el.textContent = ""; el.appendChild(document.createTextNode("Al principio escribiste: «" + v + "». ¿Se parece a preguntarle a los k más cercanos? ¿Pensaste en cuántos preguntarle?")); }
+    }
+    cita();
+    ta.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { B.nota("knn", "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; cita(); }, 500);
+    });
+  })();
+
+  /* ---------------- marcadores de estado de retos ---------------- */
+  function pintarEstados() {
+    [].forEach.call(document.querySelectorAll("[data-reto]"), function (el) {
+      var ok = C.retoOk(el.getAttribute("data-reto"));
+      el.textContent = ok ? "resuelto" : "pendiente";
+      el.classList.toggle("ok", ok);
+    });
+  }
+  C.alCambiar(pintarEstados);
+
+  /* ---------------- reto: ojo clinico ---------------- */
+  function gauss() {
+    var u = 0, v = 0;
+    while (u === 0) u = Math.random();
+    while (v === 0) v = Math.random();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+  function medio(v) { return Math.round(v * 2) / 2; }
+  function casoOjo() {
+    for (var t = 0; t < 500; t++) {
+      var pts = [], cls = [], usados = {};
+      for (var i = 0; i < 12; i++) {
+        var c = i < 6 ? "F" : "V", p;
+        do {
+          p = [medio(Math.max(0.5, Math.min(9.5, (c === "F" ? 6.4 : 3.6) + gauss() * 1.7))), medio(Math.max(0.5, Math.min(9.5, 5 + gauss() * 2.1)))];
+        } while (usados[p.join()]);
+        usados[p.join()] = true;
+        pts.push(p); cls.push(c);
+      }
+      var q = [medio(2.5 + Math.random() * 5), medio(2 + Math.random() * 6)];
+      if (usados[q.join()]) continue;
+      var k = [1, 3, 5][Math.floor(Math.random() * 3)];
+      var vs = vecinos(q, EUC, pts, cls);
+      if (vs[0].d < 0.6 || vs[k].d - vs[k - 1].d < 0.45) continue;
+      var mezcla = {};
+      vs.slice(0, 5).forEach(function (v) { mezcla[v.c] = true; });
+      if (!mezcla.F || !mezcla.V) continue;
+      return { pts: pts, cls: cls, q: q, k: k, res: decidir(vs, k, false) };
+    }
+    return null;
+  }
+  function casoSeguro() { var c = null; while (!c) c = casoOjo(); return c; }
+  (function () {
+    var cont = $("ojo");
+    cont.innerHTML = '<div class="ronda"></div><svg tabindex="-1" role="img" aria-label="Caso al azar con un punto nuevo"></svg>' +
+      '<p class="grande" style="margin-top:6px">Con <b class="kojo"></b>, el punto nuevo es...</p>' +
+      '<div class="ojo-opts"><button type="button" class="opt" data-a="F">Fruta</button><button type="button" class="opt" data-a="V">Verdura</button></div>' +
+      '<div class="fb" aria-live="polite"></div><div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    var p = crearPlano(cont.querySelector("svg"), { pts: PTS, cls: CLS, q: null, nombres: false });
+    var casos, ronda, aciertos, respondida;
+    function nueva() {
+      casos = [];
+      for (var i = 0; i < 5; i++) casos.push(casoSeguro());
+      ronda = 0; aciertos = 0;
+      mostrar();
+    }
+    function mostrar() {
+      respondida = false;
+      var c = casos[ronda];
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 5 · aciertos " + aciertos;
+      cont.querySelector(".kojo").textContent = "k = " + c.k;
+      p.set({ pts: c.pts, cls: c.cls, q: c.q, k: c.k, o: EUC, capas: {}, nombres: false });
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (b) { b.disabled = false; b.className = "opt"; });
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+    }
+    cont.querySelector(".ojo-opts").addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || respondida) return;
+      respondida = true;
+      var c = casos[ronda], ok = b.getAttribute("data-a") === c.res.pred;
+      if (ok) aciertos++;
+      b.classList.add(ok ? "ok" : "mal");
+      if (!ok) cont.querySelector('[data-a="' + c.res.pred + '"]').classList.add("ok");
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (x) { x.disabled = true; });
+      p.set({ capas: { vecinos: true, anillo: true, colorQ: true } });
+      var vs = vecinos(c.q, EUC, c.pts, c.cls), uno = vs[0].c;
+      var nota = c.k > 1 && uno !== c.res.pred ? " Ojo: el más cercano es " + NC[uno] + ", pero con k = " + c.k + " pierde la votación." : "";
+      cont.querySelector(".fb").innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No.</span> ') +
+        "Entre los " + c.k + " más cercanos hay " + c.res.v.F + " fruta" + (c.res.v.F === 1 ? "" : "s") + " y " + c.res.v.V + " verdura" + (c.res.v.V === 1 ? "" : "s") + ": " + NC[c.res.pred] + "." + nota;
+      var sig = cont.querySelector(".sig");
+      sig.hidden = false;
+      if (ronda === 4) {
+        var aprobo = aciertos >= 4;
+        C.reto("ojo", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertos + " de 5" + (aprobo ? ". Aprobado." : ". Necesitas 4 para aprobar.");
+        sig.textContent = "Otra tanda";
+      } else {
+        sig.textContent = "Siguiente ronda";
+      }
+    });
+    cont.querySelector(".sig").addEventListener("click", function () {
+      if (ronda === 4) nueva(); else { ronda++; mostrar(); }
+    });
+    nueva();
+  })();
+
+  /* ---------------- reto: constructor ---------------- */
+  (function () {
+    var OBJ = [
+      { t: "Un lugar donde k = 1 dice verdura pero k = 3 dice fruta.", ok: function (r) { return r[1] === "V" && r[3] === "F"; } },
+      { t: "Un lugar distinto de (6, 6) con empate 2 a 2 cuando k = 4.", ok: function (r, q) { return r[4] === "E" && !(q[0] === 6 && q[1] === 6); } },
+      { t: "El más difícil: un lugar donde k = 1 dice fruta pero k = 5 dice verdura.", ok: function (r) { return r[1] === "F" && r[5] === "V"; } }
+    ];
+    var logrados = [false, false, false], avisado = false;
+    var ul = $("objetivos");
+    OBJ.forEach(function (o) { var li = document.createElement("li"); li.innerHTML = '<span class="m"></span><span>' + o.t + '</span>'; ul.appendChild(li); });
+    function b(c) { return '<b class="' + c + '">' + (c === "E" ? "empate" : NC[c]) + '</b>'; }
+    crearPlano($("planoConstr"), {
+      q: [5, 9], k: 5, mover: true, capas: { vecinos: true, anillo: true },
+      alCambiar: function (info) {
+        var r = {};
+        [1, 3, 4, 5].forEach(function (k) { r[k] = clasificar(info.q, k).pred; });
+        $("constrVivo").innerHTML = "Punto en (" + nm(info.q[0]) + ", " + nm(info.q[1]) + ")<br>k = 1: " + b(r[1]) + " · k = 3: " + b(r[3]) + " · k = 4: " + b(r[4]) + " · k = 5: " + b(r[5]);
+        OBJ.forEach(function (o, i) { if (!logrados[i] && o.ok(r, info.q)) logrados[i] = true; ul.children[i].classList.toggle("hecho", logrados[i]); });
+        if (!avisado && logrados.every(Boolean)) { avisado = true; C.reto("constructor", true); }
+      }
+    }).set({ mover: true });
+  })();
+
+  /* ---------------- reto: a mano ---------------- */
+  (function () {
+    var D;
+    var LET = ["A", "B", "C", "D", "E"];
+    function generar() {
+      for (;;) {
+        var q = [Math.floor(Math.random() * 5) + 2, Math.floor(Math.random() * 5) + 2];
+        var pts = [], cls = [], usados = {};
+        usados[q.join()] = true;
+        for (var i = 0; i < 5; i++) {
+          var p;
+          do { p = [Math.floor(Math.random() * 9), Math.floor(Math.random() * 9)]; } while (usados[p.join()]);
+          usados[p.join()] = true;
+          pts.push(p); cls.push(Math.random() < 0.5 ? "F" : "V");
+        }
+        var vs = vecinos(q, EUC, pts, cls);
+        var dist4 = vs.slice(0, 4).map(function (v) { return Math.round(v.d * v.d); });
+        if (new Set(dist4).size < 4) continue;
+        if (vs[0].d > 4) continue;
+        D = { q: q, pts: pts, cls: cls, vs: vs, res: decidir(vs, 3, false) };
+        break;
+      }
+      $("manoDatos").innerHTML = '<table class="datos-mano"><tr><th></th>' + LET.map(function (l) { return "<th>" + l + "</th>"; }).join("") + '<th>nuevo</th></tr>' +
+        '<tr><th>dulzor</th>' + D.pts.map(function (p) { return "<td>" + p[0] + "</td>"; }).join("") + '<td>' + D.q[0] + '</td></tr>' +
+        '<tr><th>crocancia</th>' + D.pts.map(function (p) { return "<td>" + p[1] + "</td>"; }).join("") + '<td>' + D.q[1] + '</td></tr>' +
+        '<tr><th>clase</th>' + D.cls.map(function (c) { return '<td style="color:var(' + (c === "F" ? "--pos" : "--neg") + ')">' + NC[c] + "</td>"; }).join("") + '<td>?</td></tr></table>';
+    }
+    function d2(i) { var p = D.pts[i]; return (p[0] - D.q[0]) * (p[0] - D.q[0]) + (p[1] - D.q[1]) * (p[1] - D.q[1]); }
+    B.numerico($("mano"), {
+      pregunta: "Con k = 3, ¿a qué distancia está el <b>tercer</b> vecino más cercano del punto nuevo? Dos decimales.",
+      respuesta: function () { return D.vs[2].d; },
+      tolerancia: 0.011,
+      pistas: [
+        "Para cada alimento: resta las coordenadas, eleva al cuadrado, suma, y saca la raíz. Para ordenar ni siquiera hace falta la raíz: basta con los cuadrados.",
+        function () { return "Distancias al cuadrado: " + LET.map(function (l, i) { return l + " = " + d2(i); }).join(", ") + "."; },
+        function () { return "Ordenadas: " + D.vs.map(function (v) { return LET[v.i] + " (" + f(v.d, 2) + ")"; }).join(", ") + "."; }
+      ],
+      diagnostico: function (v) {
+        if (Math.abs(v - D.vs[2].d * D.vs[2].d) < 0.011) return "Esa es la distancia al cuadrado. Falta la raíz.";
+        for (var j = 0; j < 5; j++) if (j !== 2 && Math.abs(v - D.vs[j].d) < 0.011) return "Esa distancia es real, pero es la del vecino número " + (j + 1) + ". Ordénalas de menor a mayor.";
+        return null;
+      },
+      explicacion: function () {
+        var top = D.vs.slice(0, 3).map(function (v) { return LET[v.i] + " (" + NC[v.c] + ", " + f(v.d, 2) + ")"; }).join(", ");
+        return "Los tres más cercanos son " + top + ". El tercero está a " + f(D.vs[2].d, 2) + ". La votación queda " + D.res.v.F + " a " + D.res.v.V + ": el punto nuevo es <b>" + NC[D.res.pred] + "</b>.";
+      },
+      reintentable: true,
+      textoReintentar: "Otro ejercicio",
+      antesDeReintentar: generar,
+      alResolver: function (ok) { C.reto("mano", ok); }
+    });
+    generar();
+  })();
+
+  /* ---------------- reto: cazar el error ---------------- */
+  B.cazarError($("error"), {
+    variantes: [
+      {
+        intro: "Punto nuevo en $(1,\\ 2)$ y un alimento en $(4,\\ 6)$. Alguien calculó la distancia euclídea así:",
+        lineas: ["\\Delta_1 = 4 - 1 = 3", "\\Delta_2 = 6 - 2 = 4", "d = 3 + 4 = 7", "\\text{el alimento está a distancia } 7"],
+        erronea: 2,
+        explicacion: "Sumó las diferencias sin elevarlas al cuadrado: eso es la distancia Manhattan. La euclídea es $\\sqrt{3^2 + 4^2} = \\sqrt{25} = 5$."
+      },
+      {
+        intro: "Cinco alimentos con su distancia al punto nuevo y k = 3. Alguien clasificó así:",
+        lineas: ["A = 1.0\\ (F),\\ B = 4.5\\ (V),\\ C = 2.0\\ (V),\\ D = 6.1\\ (V),\\ E = 1.5\\ (F)",
+          "\\text{ordenadas}: A = 1.0,\\ E = 1.5,\\ C = 2.0,\\ B = 4.5,\\ D = 6.1",
+          "\\text{los 3 vecinos}: D,\\ B,\\ C",
+          "\\text{votos}: V = 3,\\ F = 0",
+          "\\text{el punto es verdura}"],
+        erronea: 2,
+        explicacion: "Tomó los tres <b>más lejanos</b>. Los vecinos son los tres primeros de la lista ordenada: A, E y C, con 2 frutas y 1 verdura. El punto es fruta."
+      },
+      {
+        intro: "k = 3 con voto ponderado $w = 1/d$. Vecinos: A (fruta, $d = 1$), B (verdura, $d = 2$), C (verdura, $d = 4$).",
+        lineas: ["\\text{voto simple}: F = 1,\\ V = 2 \\Rightarrow V",
+          "w_A = 1/1 = 1,\\quad w_B = 1/2 = 0.5,\\quad w_C = 1/4 = 0.25",
+          "\\text{puntaje}(F) = 1",
+          "\\text{puntaje}(V) = 0.5 + 0.25 = 0.75",
+          "\\text{ponderado}: \\text{gana } V \\text{ porque tiene más vecinos}"],
+        erronea: 4,
+        explicacion: "Con pesos ya no se cuentan vecinos: se comparan puntajes. Fruta suma 1 y verdura 0.75, así que gana <b>fruta</b>. El vecino pegado al punto pesa más que los dos lejanos juntos."
+      }
+    ],
+    alResolver: function (ok) { C.reto("error", ok); }
+  });
+
+  /* ---------------- retos: propiedades ---------------- */
+  function prop(id, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple($(id), cfg);
+  }
+  prop("prop1", {
+    pregunta: "¿Por qué a kNN se le llama aprendizaje <b>perezoso</b>?",
+    opciones: [
+      "No construye un modelo: guarda los datos y hace todo el trabajo al predecir",
+      "Porque tarda mucho en entrenar",
+      "Porque solo consulta a unos pocos vecinos",
+      "Porque ignora las variables que no le sirven"
+    ],
+    correcta: 0,
+    pistas: [null, "Al revés: entrenar es instantáneo. ¿Qué hace en ese momento?", "Consultar a pocos vecinos es la regla de decisión, no lo que lo hace perezoso.", "Al contrario: es sensible a las variables irrelevantes, porque todas entran en la distancia."],
+    explicacion: "Entrenar es solo guardar los casos. El costo aparece al predecir: para cada punto nuevo hay que medir la distancia a todos los guardados. Lo dice la diapositiva 6."
+  });
+  prop("prop2", {
+    pregunta: "Con $k = n$, es decir, todos los casos de entrenamiento, kNN...",
+    opciones: [
+      "Predice siempre la clase mayoritaria",
+      "Acierta el 100 % del entrenamiento",
+      "Sobreajusta al máximo",
+      "Da una frontera en forma de recta"
+    ],
+    correcta: 0,
+    pistas: [null, "El 100 % sobre el entrenamiento es de k = 1. Con k = n votan todos.", "El sobreajuste es el extremo opuesto, k = 1.", "Si votan todos, el resultado no depende del lugar: no hay frontera."],
+    explicacion: "Votan siempre los mismos $n$ casos, así que la respuesta es la misma en todo el plano: la clase con más casos. Es el extremo de sesgo alto (diapositiva 9)."
+  });
+  prop("prop3", {
+    pregunta: "Una variable categórica tiene 4 categorías (rojo, verde, amarillo, morado). Para usarla en la distancia, ¿cuántas columnas dummy se crean según la diapositiva 16?",
+    opciones: ["3", "4", "1, con los valores 1, 2, 3 y 4", "2"],
+    correcta: 0,
+    pistas: [null, "Con 4 columnas una es redundante: si las otras tres valen 0, ya sabes cuál es.", "Codificar como 1, 2, 3, 4 supone que los saltos entre colores son iguales y que el morado está lejos del rojo. Solo vale para ordinales con saltos iguales.", "Con dos columnas solo distingues 3 o 4 casos si mezclas valores. La regla es n − 1."],
+    explicacion: "Con $n$ categorías se usan $n - 1$ columnas de ceros y unos. La euclídea no se define para categorías: por eso se pasan a dummies."
+  });
+  prop("prop4", {
+    pregunta: "El caso del cáncer de mama tiene 469 casos de entrenamiento. Con la regla $k \\approx \\sqrt{n}$, ¿qué k elige la diapositiva 26?",
+    opciones: ["21", "22", "469", "5"],
+    correcta: 0,
+    pistas: [null, "$\\sqrt{469} \\approx 21.7$. Pero hay dos clases: ¿par o impar?", "Eso sería k = n: siempre la clase mayoritaria.", "Calcula $\\sqrt{469}$."],
+    explicacion: "$\\sqrt{469} \\approx 21.7$, y se elige 21 porque es impar: con dos clases (benigno y maligno) no puede haber empate."
+  });
+  prop("prop5", {
+    pregunta: "Normalizas el dulzor con min-max usando el entrenamiento, donde va de 2 a 8. Llega un mango con dulzor 9.5. ¿Qué valor le toca?",
+    opciones: [
+      "$1.25$: queda fuera de $[0, 1]$, y está bien así",
+      "$1$, porque min-max siempre deja todo en $[0, 1]$",
+      "Hay que recalcular el mínimo y el máximo incluyendo al mango",
+      "$0.95$"
+    ],
+    correcta: 0,
+    pistas: [null, "Haz la cuenta: $(9.5 - 2)/(8 - 2)$.", "Recalcular con los datos nuevos cambiaría la regla con la que se escaló el entrenamiento. La regla es la del entrenamiento.", "Eso es dividir entre 10. La fórmula resta el mínimo y divide entre el rango."],
+    explicacion: "$(9.5 - 2)/(8 - 2) = 7.5/6 = 1.25$. Min-max solo garantiza $[0, 1]$ para los datos con los que se calculó. Es la advertencia de la diapositiva 15: con datos nuevos fuera del rango, min-max se sale."
+  });
+
+  /* ---------------- formula de memoria ---------------- */
+  B.ordenar($("formula"), {
+    piezas: ["d(\\mathbf{x}_a,\\mathbf{x}_b)", "=", "\\Big(", "\\displaystyle\\sum_{j=1}^{p}", "(x_{aj}-x_{bj})^2", "\\Big)^{1/2}"],
+    distractores: ["(x_{aj}-y_{bj})^2", "|x_{aj}-x_{bj}|", "\\dfrac{1}{k}"],
+    soluciones: [[0, 1, 2, 3, 4, 5]],
+    explicacion: "Pitágoras con todas las coordenadas: diferencia en cada variable, al cuadrado, sumadas, y la raíz. La pieza con $y_{bj}$ es la errata de la diapositiva 12, y la del valor absoluto es la Manhattan.",
+    alResolver: function (ok) { C.reto("formula", ok); }
+  });
+
+  /* ---------------- vida real: el algoritmo en codigo ---------------- */
+  (function () {
+    var CODIGO = {
+      py: [
+        ["import", "import numpy as np"],
+        ["importsk", "from sklearn.neighbors import KNeighborsClassifier"],
+        [null, ""],
+        [null, "# dulzor y crocancia de 13 alimentos (inventados)"],
+        ["datos", "X = np.array([[7, 5], [8, 6], [8, 8], [7, 3], [9, 4], [6, 2], [10, 7],"],
+        ["datos", "              [7, 6], [4, 7], [2, 8], [1, 5], [3, 3], [2, 2]], dtype=float)"],
+        ["etiq", 'y = ["fruta"] * 7 + ["verdura"] * 6'],
+        ["nuevo", "q = np.array([6, 6], dtype=float)      # el punto nuevo"],
+        ["k", "k = 5"],
+        [null, ""],
+        ["ceros", "d = np.zeros(len(X))"],
+        ["fori", "for i in range(len(X)):                # 1. distancia a cada punto"],
+        ["dist", "    d[i] = np.sqrt(np.sum((X[i] - q) ** 2))"],
+        [null, ""],
+        ["orden", "orden = np.argsort(d)                  # 2. del más cercano al más lejano"],
+        ["votos0", "votos = {}"],
+        ["forj", "for j in orden[:k]:                    # 3. votan los k más cercanos"],
+        ["votar", "    votos[y[j]] = votos.get(y[j], 0) + 1"],
+        [null, ""],
+        ["pred", "pred = max(votos, key=votos.get)"],
+        ["impd", "print(np.round(d[orden[:k]], 3))"],
+        ["impv", 'print(votos, "->", pred)'],
+        [null, ""],
+        ["modelo", "modelo = KNeighborsClassifier(n_neighbors=k).fit(X, y)"],
+        ["lib", "print(modelo.predict([q]))"]
+      ],
+      r: [
+        ["importsk", "library(class)"],
+        [null, ""],
+        [null, "# dulzor y crocancia de 13 alimentos (inventados)"],
+        ["datos", "X <- matrix(c(7, 5,  8, 6,  8, 8,  7, 3,  9, 4,  6, 2,  10, 7,"],
+        ["datos", "              7, 6,  4, 7,  2, 8,  1, 5,  3, 3,  2, 2), ncol = 2, byrow = TRUE)"],
+        ["etiq", 'y <- c(rep("fruta", 7), rep("verdura", 6))'],
+        ["nuevo", "q <- c(6, 6)                           # el punto nuevo"],
+        ["k", "k <- 5"],
+        [null, ""],
+        ["ceros", "d <- numeric(nrow(X))"],
+        ["fori", "for (i in 1:nrow(X)) {                 # 1. distancia a cada punto"],
+        ["dist", "  d[i] <- sqrt(sum((X[i, ] - q)^2))"],
+        [null, "}"],
+        ["orden", "orden <- order(d)                      # 2. del más cercano al más lejano"],
+        ["votos0", "votos <- c(fruta = 0, verdura = 0)"],
+        ["forj", "for (j in orden[1:k]) {                # 3. votan los k más cercanos"],
+        ["votar", "  votos[y[j]] <- votos[y[j]] + 1"],
+        [null, "}"],
+        ["pred", "pred <- names(which.max(votos))"],
+        ["impd", "print(round(d[orden[1:k]], 3))"],
+        ["impv", 'print(votos); cat("->", pred, "\\n")'],
+        [null, ""],
+        ["lib", "print(knn(train = X, test = matrix(q, nrow = 1), cl = factor(y), k = k))"]
+      ]
+    };
+    // salida real de cada lenguaje (corrida antes de escribir la pagina)
+    var SALIDA = {
+      py: { impd: "[1.    1.414 2.    2.236 2.828]", impv: "{'verdura': 2, 'fruta': 3} -> fruta", lib: "['fruta']" },
+      r: { impd: "[1] 1.000 1.414 2.000 2.236 2.828", impv: "  fruta verdura \n      3       2 \n-> fruta ", lib: "[1] fruta\nLevels: fruta verdura" }
+    };
+    var K = 5, Q = [6, 6], n = PTS.length;
+    var D = PTS.map(function (p) { return Math.sqrt((p[0] - Q[0]) * (p[0] - Q[0]) + (p[1] - Q[1]) * (p[1] - Q[1])); });
+    var ORDEN = vecinos(Q, EUC).map(function (v) { return v.i; });
+    var PUESTO = []; ORDEN.forEach(function (i, r) { PUESTO[i] = r; });
+
+    /* eventos: una foto del estado despues de ejecutar cada linea */
+    var EV = [];
+    (function () {
+      var d = [], fase = 0, ordenado = false, votos = {}, nVotos = [], veces = 0, salida = [];
+      function foto(id, extra) {
+        EV.push(Object.assign({ id: id, fase: fase, d: d.slice(), ordenado: ordenado, votos: Object.assign({}, votos), nVotos: nVotos.slice(),
+          veces: veces, salida: salida.slice(), i: null, j: null }, extra || {}));
+      }
+      foto("import"); foto("importsk"); foto("datos"); foto("etiq"); foto("nuevo"); foto("k");
+      d = PTS.map(function () { return null; });
+      foto("ceros", { ceros: true });
+      fase = 1;
+      for (var i = 0; i < n; i++) {
+        foto("fori", { i: i });
+        d[i] = D[i]; veces++;
+        foto("dist", { i: i });
+      }
+      fase = 2; ordenado = true;
+      foto("orden");
+      fase = 3;
+      foto("votos0");
+      for (var r = 0; r < K; r++) {
+        var j = ORDEN[r];
+        foto("forj", { j: j, r: r });
+        var c = NC[CLS[j]];
+        votos[c] = (votos[c] || 0) + 1;
+        nVotos.push(j);
+        foto("votar", { j: j, r: r, c: c });
+      }
+      foto("pred", { fin: true });
+      salida.push("impd"); foto("impd", { fin: true });
+      salida.push("impv"); foto("impv", { fin: true });
+      foto("modelo", { fin: true });
+      salida.push("lib"); foto("lib", { fin: true });
+    })();
+
+    function narrar(e, ctx) {
+      var py = ctx.lang() === "py", ix = ctx.ix;
+      switch (e.id) {
+        case "import": return py ? "Carga NumPy, la librería de arreglos numéricos." : "R trae vectores y matrices de serie: esta línea de Python no tiene equivalente.";
+        case "importsk": return py ? "Trae el clasificador kNN de scikit-learn. Se usa solo al final, para comparar." : "Carga el paquete <b>class</b>, que tiene la función <b>knn</b>. Se usa solo al final, para comparar.";
+        case "datos": return "Los 13 alimentos: una fila por alimento y dos columnas, dulzor y crocancia. Es todo lo que kNN guarda.";
+        case "etiq": return "Las clases: los 7 primeros son fruta y los 6 últimos, verdura.";
+        case "nuevo": return "El punto nuevo, <b>q = (6, 6)</b>. El mismo del recorrido.";
+        case "k": return "Van a votar <b>k = 5</b> vecinos.";
+        case "ceros": return "Un vector de " + n + " lugares para guardar las distancias.";
+        case "fori": return "Alimento <b>i = " + ix(e.i) + "</b>, que en el recorrido se llama " + NOMS[e.i] + ".";
+        case "dist": var p = PTS[e.i]; return "Distancia de (" + p[0] + ", " + p[1] + ") a (6, 6): √((" + p[0] + " − 6)² + (" + p[1] + " − 6)²) = <b>" + f(D[e.i], 3) + "</b>.";
+        case "orden": return (py ? "<b>np.argsort</b>" : "<b>order</b>") + " no ordena las distancias: devuelve las <b>posiciones</b> de la más chica a la más grande. La primera es " +
+          ix(ORDEN[0]) + " (V1, a distancia 1).";
+        case "votos0": return "El conteo de votos empieza vacío.";
+        case "forj": return "Vecino número " + (e.r + 1) + ": la posición <b>j = " + ix(e.j) + "</b> (" + NOMS[e.j] + ", a " + f(D[e.j], 3) + ").";
+        case "votar": return NOMS[e.j] + " es <b>" + e.c + "</b>: un voto más para " + e.c + ".";
+        case "pred": return "Gana la clase con más votos: <b>fruta</b>, 3 contra 2.";
+        case "impd": return "Imprime las 5 distancias más chicas, ya ordenadas. Fíjate en el formato: " + (py ? "NumPy deja el punto solo cuando sobran ceros, como en <b>1.</b> y <b>2.</b>" : "R escribe <b>[1]</b> al principio, el índice del primer valor de la línea") + ".";
+        case "impv": return py ? "Imprime el conteo. El diccionario guarda las claves en el orden en que aparecieron: primero verdura, porque V1 fue el primer vecino." : "Imprime el conteo con sus nombres y la decisión.";
+        case "modelo": return py ? "Crea el clasificador de scikit-learn con k = 5. <b>fit</b> solo guarda los datos: es perezoso." : "En R no hace falta un paso de ajuste.";
+        case "lib": return py ? "La librería dice <b>fruta</b>, igual que los bucles." : "<b>class::knn</b> recibe el entrenamiento, el punto, las clases y k, todo junto, y dice <b>fruta</b>, igual que los bucles.";
+      }
+      return "";
+    }
+    var mini = crearPlano($("vrMini"), { q: Q, k: K, capas: {}, nombres: false });
+    function visual(e, anterior, ctx) {
+      var ix = ctx.ix;
+      var h = '<thead><tr><th>i</th><th>nombre</th><th>dulzor</th><th>crocancia</th><th>clase</th><th>d</th><th>puesto</th></tr></thead><tbody>';
+      for (var i = 0; i < n; i++) {
+        var p = PTS[i], cls = [];
+        if (e && e.i === i) cls.push("on");
+        if (e && e.ordenado && PUESTO[i] < K) cls.push("top");
+        if (e && e.j === i) cls.push("on");
+        var dv = !e || !e.d.length ? "" : e.d[i] == null ? "0" : f(e.d[i], 3);
+        h += '<tr class="' + cls.join(" ") + '"><td class="pl">' + ix(i) + '</td><td>' + NOMS[i] + '</td><td>' + p[0] + '</td><td>' + p[1] + '</td><td class="' + CLS[i] + '">' + NC[CLS[i]] + '</td><td>' + dv + '</td><td>' +
+          (e && e.ordenado ? (PUESTO[i] + 1) : "") + '</td></tr>';
+      }
+      $("vrTabla").innerHTML = h + '</tbody>';
+      var cuenta = "";
+      if (e && e.id === "dist") cuenta = "distancias calculadas: <b>" + e.veces + "</b> de " + n;
+      else if (e && e.fase === 3) {
+        var vf = e.votos.fruta || 0, vv = e.votos.verdura || 0;
+        cuenta = "votos: fruta <b>" + vf + "</b> · verdura <b>" + vv + "</b>" + (e.fin ? " → <b>fruta</b>" : "");
+      } else if (e && e.id === "orden") cuenta = "orden = " + (ctx.lang() === "py" ? "[" : "c(") + ORDEN.map(function (i) { return ix(i); }).join(", ") + (ctx.lang() === "py" ? "]" : ")");
+      $("vrCuenta").innerHTML = cuenta;
+      // mini plano: lineas a los puntos ya medidos, y despues a los que votaron
+      if (!e || e.fase === 0) mini.set({ k: 1, capas: {} });
+      else if (e.fase < 3) mini.set({ k: 1, capas: { todas: true, hasta: e.veces } });
+      else if (!e.nVotos.length) mini.set({ k: 1, capas: { todas: true } });
+      else mini.set({ k: e.nVotos.length, capas: { vecinos: true, anillo: !!e.fin } });
+      var lang = ctx.lang();
+      $("vrSalida").textContent = e ? e.salida.map(function (s) { return SALIDA[lang][s]; }).join("\n") : "";
+    }
+    B.vidaReal($("vidareal"), {
+      codigo: CODIGO,
+      eventos: EV,
+      narrar: narrar,
+      vars: function (e, ctx) {
+        var v = [], ix = ctx.ix;
+        if (e && e.i !== null) v.push('<span class="vj">i = <b>' + ix(e.i) + '</b></span>');
+        if (e && e.j !== null) v.push('<span class="vk">j = <b>' + ix(e.j) + '</b></span>');
+        v.push('<span>distancias calculadas: <b>' + (e ? e.veces : 0) + '</b></span>');
+        if (e && e.fase === 3) v.push('<span>votos emitidos: <b>' + e.nVotos.length + '</b></span>');
+        return v;
+      },
+      visual: visual,
+      demora: function (e) { return !e ? 600 : e.id === "fori" ? 260 : e.id === "dist" ? 520 : e.id === "votar" ? 900 : e.id === "orden" ? 1400 : 1000; }
+    });
+
+    /* chequeo de prediccion y trampas reales */
+    B.numerico(cuerpo("vrPred"), {
+      pregunta: "Para clasificar <b>un solo</b> punto nuevo con k = 5, ¿cuántas veces se va a ejecutar la línea que calcula una distancia?",
+      respuesta: 13,
+      tolerancia: 0,
+      pistas: ["Para saber cuáles son los 5 más cercanos, ¿contra cuántos alimentos tienes que medir?", "El bucle recorre todas las filas de X."],
+      diagnostico: function (v) {
+        if (v === 5) return "k decide cuántos votan, pero para saber quiénes son los 5 más cercanos primero hay que medir contra todos.";
+        if (v === 26) return "Cada distancia es una sola ejecución de la línea, aunque adentro use las dos coordenadas.";
+        return null;
+      },
+      explicacion: "<b>13</b>: una por alimento guardado, aunque solo voten 5. Ese es el costo de ser perezoso: con un millón de casos guardados, cada predicción mide un millón de distancias. Ahora dale a reproducir y mira el contador.",
+      alResolver: function (ok) { C.reto("codigo1", ok); }
+    });
+    prop("codigo2", {
+      pregunta: "En R corres <code>knn(train = X, test = matrix(q, nrow = 1), cl = factor(y), k = 4)</code> varias veces con el punto (6, 6). A veces dice fruta y a veces verdura. ¿Por qué?",
+      opciones: [
+        "Con k = 4 hay empate 2 a 2, y class::knn rompe los empates al azar",
+        "class::knn elige una muestra al azar de los datos cada vez",
+        "Es un error de redondeo en las distancias",
+        "Hay que llamar a set.seed antes, si no, la función falla"
+      ],
+      correcta: 0,
+      pistas: [null, "La función usa siempre todos los datos. Lo que cambia es otra cosa. ¿Qué pasa con 4 votos y dos clases?", "Las distancias son exactas: 1, √2, 2 y √5. Mira cuántos votos saca cada clase.", "No falla sin semilla: corre igual, pero el desempate cambia. La semilla solo lo hace repetible."],
+      explicacion: "Los 4 vecinos son V1, F1, F2 y V2: dos y dos. La diapositiva 25 lo dice: <b>class::knn</b> usa la euclídea, voto por mayoría y <b>empates al azar</b>. En 20 corridas con semillas 1 a 20 salió 9 veces fruta y 11 verdura. Por eso la diapositiva 26 elige k = 21, impar."
+    });
+    prop("codigo3", {
+      pregunta: "Estandarizas el entrenamiento con su media y su desvío. Para el punto de prueba calculas una media y un desvío nuevos con los datos de prueba. ¿Qué pasa?",
+      opciones: [
+        "El punto queda medido con otra regla: hay que usar la media y el desvío del entrenamiento",
+        "Nada: estandarizar siempre deja media 0 y desvío 1, da igual con qué datos",
+        "Mejora el modelo porque usa información más reciente",
+        "Solo importa si usas la distancia Manhattan"
+      ],
+      correcta: 0,
+      pistas: [null, "Media 0 y desvío 1 para cada grupo por separado no significa que un mismo valor quede en el mismo lugar en los dos.", "Si la prueba se escala con su propia regla, el mismo alimento cae en otro lugar del plano.", "Pasa con cualquier distancia: el problema es la regla, no la métrica."],
+      explicacion: "Un dulzor de 7 tiene que quedar en el mismo lugar del plano, venga de donde venga. En scikit-learn: <code>StandardScaler().fit(X_train)</code> y después <code>transform</code> en el entrenamiento y en la prueba. Es la diapositiva 15: la misma transformación en train y test."
+    });
+    prop("codigo4", {
+      pregunta: "En Python, <code>KNeighborsClassifier(n_neighbors=4)</code> con el punto (6, 6) dice <b>siempre</b> fruta, aunque haya empate 2 a 2. ¿Por qué no es al azar como en R?",
+      opciones: [
+        "En un empate, scikit-learn elige la clase que va primero en orden: fruta antes que verdura",
+        "Porque fruta tiene más casos en total",
+        "Porque scikit-learn pondera por distancia por defecto",
+        "Porque scikit-learn nunca tiene empates"
+      ],
+      correcta: 0,
+      pistas: [null, "Prueba mentalmente: si las clases se llamaran 'zfruta' y 'averdura', con los mismos datos, ¿qué diría?", "Por defecto usa <code>weights='uniform'</code>. Con <code>weights='distance'</code> diría verdura.", "Sí los tiene: predict_proba da [0.5, 0.5]."],
+      explicacion: "Con <code>predict_proba</code> se ve el empate, [0.5, 0.5], y el desempate toma la primera clase de <code>classes_</code>, que van en orden alfabético. Al renombrar las clases como 'zfruta' y 'averdura' la respuesta pasa a 'averdura'. No es un error, pero decide en silencio: con dos clases, usa k impar."
+    });
+  })();
+
+  /* ---------------- tarjetas ---------------- */
+  B.tarjetas($("tarjetas"), [
+    ["¿Cuáles son los cuatro pasos de kNN para clasificar un punto?", "Elegir k, calcular la distancia a todos los casos guardados, tomar los k más cercanos y votar por mayoría."],
+    ["¿Por qué es un aprendizaje <b>perezoso</b>?", "No construye un modelo: entrenar es guardar los datos. Todo el costo está al predecir, porque mide la distancia a todos."],
+    ["¿Qué pasa con k = 1 y con k = n?", "k = 1: frontera quebrada, sensible a cada punto raro (varianza alta). k = n: predice siempre la clase mayoritaria (sesgo alto)."],
+    ["¿Por qué hay que escalar antes de kNN?", "Porque la variable con números más grandes domina la distancia. Se estandariza (z) o normaliza (min-max) con los parámetros del entrenamiento."],
+    ["¿Cómo se elige k?", "Con validación cruzada, nunca con la exactitud sobre el entrenamiento. Regla rápida: $k \\approx \\sqrt{n}$, impar si hay dos clases."],
+    ["¿Qué es el voto ponderado?", "Cada vecino vota con peso $1/d$: los cercanos influyen más. Rompe empates y ayuda con k grande."],
+    ["¿Cómo predice kNN un número?", "Busca los k vecinos igual y devuelve el promedio de sus valores."],
+    ["¿Qué errata tiene la diapositiva 12?", "Escribe $x_{aj} - y_{bj}$ en la euclídea y la Manhattan. Debe ser $x_{aj} - x_{bj}$."]
+  ]);
+
+  /* ---------------- conexiones ---------------- */
+  B.conexiones("knn");
+})();
+</script>
+</body>
+</html>

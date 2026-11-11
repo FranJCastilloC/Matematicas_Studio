@@ -1,6 +1,6 @@
 # Mapa de citas: Brasil, "Before Machine Learning, Vol. 1: Linear Algebra", caps. 1 a 4
 
-Carpeta: `/Users/franciscocastillo/brain/Math/Before ML Vol 1 - Linear Algebra/`. Los caps. 5 y 6 están en `algebra-lineal.md`.
+Carpeta: `/Users/franciscocastillo/brain/02-Biblioteca/Matematicas/Before-ML-Vol1-LinearAlgebra/`. Los caps. 5 y 6 están en `algebra-lineal.md`.
 Sin código en los caps. 1-4 (el autor remite a github.com/mldepot/beforeMachineLearning).
 
 Correspondencia PDF / impresa: 00 índice: PDF = impresa + 2 · 01 caps. 1-2: PDF = impresa − 5 · 02 cap. 3: PDF = impresa − 7 · 03 cap. 4: PDF = impresa − 37.

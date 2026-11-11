@@ -1,8 +1,8 @@
 # Mapa de citas: álgebra lineal (Nield cap. 4, Brasil vol. 1 caps. 5 y 6)
 
-A = `/Users/franciscocastillo/brain/Math/Essential Math for Data Science/04 Cap 4 Linear Algebra.pdf` (61 páginas PDF, sin numeración impresa).
-C = `/Users/franciscocastillo/brain/Math/Before ML Vol 1 - Linear Algebra/04 Cap 5 Matrix Decomposition.pdf` (37 páginas; PDF = impresa − 102).
-D = `/Users/franciscocastillo/brain/Math/Before ML Vol 1 - Linear Algebra/05 Cap 6 Principal Component Analysis.pdf` (11 páginas; PDF = impresa − 139).
+A = `/Users/franciscocastillo/brain/02-Biblioteca/Matematicas/Essential-Math/04 Cap 4 Linear Algebra.pdf` (61 páginas PDF, sin numeración impresa).
+C = `/Users/franciscocastillo/brain/02-Biblioteca/Matematicas/Before-ML-Vol1-LinearAlgebra/04 Cap 5 Matrix Decomposition.pdf` (37 páginas; PDF = impresa − 102).
+D = `/Users/franciscocastillo/brain/02-Biblioteca/Matematicas/Before-ML-Vol1-LinearAlgebra/05 Cap 6 Principal Component Analysis.pdf` (11 páginas; PDF = impresa − 139).
 Índice de Brasil (00 Portada e indice.pdf): 4.3.1 "Line Up Vectors! The Eigen Stuff" p. 88; 4.3.2 "Matrix Diagonalization" p. 96; 5 "Matrix Decomposition" p. 103; 5.1 SVD p. 114; 6 PCA p. 140. El cap. 4 está en `03 Cap 4 But What About a Matrix.pdf` (no leído).
 
 | Tema | Archivo | PDF | Impresa | Sección | Qué hay |

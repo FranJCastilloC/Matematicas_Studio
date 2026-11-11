@@ -1,0 +1,1737 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>El truco del kernel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+/* ---------- lienzos SVG ---------- */
+.lz { width: 100%; height: auto; display: block; user-select: none; -webkit-user-select: none; touch-action: none; }
+.lz .grid { stroke: var(--line-soft); stroke-width: 1; }
+.lz .grid.eje { stroke: var(--ink-3); }
+.lz .tick { font: 10px var(--f-mono); fill: var(--ink-3); }
+.lz .eje-tit { font: 11.5px var(--f-body); fill: var(--ink-2); }
+.lz .pt { stroke: var(--surface); stroke-width: 1.8; }
+.lz .pt.pos { fill: var(--pos); }
+.lz .pt.neg { fill: var(--neg); }
+.lz .pt.nuevo { stroke: var(--ink); stroke-width: 1.6; }
+.lz .zona-pos { fill: var(--pos); }
+.lz .zona-neg { fill: var(--neg); }
+.lz .zona-borde { fill: var(--ink); fill-opacity: .55; }
+.lz .recta { stroke: var(--ink); stroke-width: 2.2; }
+.lz .recta.ac { stroke: var(--accent); }
+.lz .borde { stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 5 4; fill: none; }
+.lz .calle { fill: var(--accent); fill-opacity: .15; }
+.lz .parab { stroke: var(--ink-3); stroke-width: 1.4; stroke-dasharray: 4 4; fill: none; }
+.lz .tallo { stroke: var(--ink-3); stroke-width: 1; stroke-dasharray: 2 3; }
+.lz .plano3 { fill: var(--accent); fill-opacity: .16; stroke: var(--accent); stroke-width: 1.2; }
+.lz .piso { fill: var(--surface-2); stroke: var(--line); stroke-width: 1; }
+.lz .circ-fr { stroke: var(--accent); stroke-width: 2.2; fill: none; }
+.lz .anillo { fill: none; stroke: var(--ink); stroke-width: 2; }
+.lz .anillo.sel { stroke: var(--accent); stroke-width: 2.4; }
+.lz .anillo.j { stroke: var(--j); stroke-width: 2.4; }
+.lz .anillo.k { stroke: var(--k); stroke-width: 2.4; }
+.lz .vec-j { stroke: var(--j); stroke-width: 2.4; }
+.lz .vec-k { stroke: var(--k); stroke-width: 2.4; }
+.lz .pt.j { fill: var(--j); }
+.lz .pt.k { fill: var(--k); }
+.lz .manija { fill: var(--surface); stroke: var(--accent); stroke-width: 2.8; cursor: grab; }
+.lz .lab { font: 500 11px var(--f-mono); fill: var(--ink); paint-order: stroke; stroke: var(--surface); stroke-width: 3.5px; }
+.lz .lab.ac { fill: var(--accent); }
+.lz .lab.pos { fill: var(--pos); }
+.lz .lab.neg { fill: var(--neg); }
+.lz .lab.bad { fill: var(--bad); }
+.lz .lab.j { fill: var(--j); }
+.lz .lab.k { fill: var(--k); }
+.lz .lab.grande { font-size: 13px; }
+.lz .barra { fill: var(--accent); fill-opacity: .55; }
+.lz .barra.on { fill-opacity: 1; }
+.lz .celda { stroke: var(--surface); stroke-width: 2; cursor: pointer; }
+.lz .celda.sel { stroke: var(--ink); stroke-width: 2.5; }
+.lz .celda-t { font: 500 12px var(--f-mono); fill: var(--ink); pointer-events: none; }
+.lz .curva { stroke: var(--accent); stroke-width: 2.2; fill: none; }
+.lz .kcell { stroke: var(--surface); stroke-width: .6; }
+
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.esc-head .hint { font-size: 12.5px; color: var(--ink-2); }
+.ex { margin-top: 10px; }
+.leyenda { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 8px; font-size: 12.5px; color: var(--ink-2); }
+.leyenda i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+.leyenda i.pos { background: var(--pos); }
+.leyenda i.neg { background: var(--neg); }
+
+.vivo-p { font-family: var(--f-mono); font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; margin: 8px 0 12px; padding: 10px 12px; border: 1px dashed var(--line); border-radius: 8px; line-height: 1.6; }
+.vivo-p b { color: var(--ink); font-weight: 500; }
+.vivo-p b.ok { color: var(--ok); }
+.vivo-p b.bad { color: var(--bad); }
+.vivo-p b.ac { color: var(--accent); }
+.k-row { display: flex; align-items: center; gap: 12px; margin: 10px 0 4px; font-family: var(--f-mono); font-size: 13px; }
+.k-row input[type=range] { flex: 1; min-width: 0; accent-color: var(--accent); }
+.k-row b { min-width: 4.5em; font-weight: 500; text-align: right; }
+.k-row label { min-width: 4.5em; }
+.chips3 { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; font-family: var(--f-mono); font-size: 12.5px; }
+.chips3 span { padding: 2px 7px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); }
+.tphi { border-collapse: collapse; font-family: var(--f-mono); font-size: 12.5px; width: 100%; font-variant-numeric: tabular-nums; }
+.tphi th, .tphi td { padding: 3px 6px; border-bottom: 1px solid var(--line-soft); text-align: right; }
+.tphi th { color: var(--ink-3); font-weight: 500; font-size: 11.5px; }
+.tphi td:first-child, .tphi th:first-child { text-align: left; color: var(--ink-2); }
+.tphi .cj { color: var(--j); }
+.tphi .ck { color: var(--k); }
+.tphi tr.tot td { border-bottom: 0; font-weight: 500; color: var(--ink); }
+
+/* ---------- vida real ---------- */
+.vr-dos { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; align-items: start; }
+@media (max-width: 560px) { .vr-dos { grid-template-columns: minmax(0, 1fr); } }
+.salida { margin: 6px 0 0; padding: 8px 12px; background: var(--surface-2); border-radius: 8px; font-family: var(--f-mono); font-size: 12.5px; line-height: 1.6; white-space: pre; overflow-x: auto; min-height: 2.4em; color: var(--ink); }
+.salida.vacia { color: var(--ink-3); }
+
+/* ---------- retos propios ---------- */
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.ojo-opts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
+.ojo-opts .opt { text-align: center; }
+.mini { max-width: 380px; }
+.objetivos { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.objetivos li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.objetivos .m { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.objetivos li.hecho { color: var(--ink); }
+.objetivos li.hecho .m { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 3px var(--surface); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ Truco del kernel</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Aprendizaje automático · UD2 SVM de SM142003, Raschka cap. 3</p>
+    <h1>El truco del kernel: rectas en un espacio que nunca construyes</h1>
+    <p class="lede">
+      La SVM solo sabe trazar rectas (o planos). Pero hay datos que ninguna recta separa: una clase en el centro y la otra alrededor.
+      La salida es <b>levantar los puntos a una dimensión más</b>, donde sí se separan con un plano. Y el truco es que la SVM puede hacer eso
+      <b>sin calcular nunca las coordenadas nuevas</b>: le basta con una función que mide parecido entre pares de puntos, el kernel.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> Tienes puntos de dos colores: los de un color forman un grupo en el centro y los del otro color los rodean por todos lados. Una SVM solo sabe separar con rectas. ¿Qué harías para que pudiera separarlos igual? Escríbelo como te salga, aunque esté mal.</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: cambiaría los datos para que..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>De "ninguna recta sirve" a "una recta en otro espacio"</h2>
+      <p>Siete pasos. Cada uno termina con un chequeo: hasta que no lo resuelves, el siguiente queda cerrado. Equivocarte aquí no resta nada, es parte del método.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="Un umbral">
+          <span class="etapa">Paso 1</span>
+          <h3>Cómodo en el medio, incómodo en los extremos</h3>
+          <p>Cada punto es un día en una oficina. Su posición dice cuántos grados se alejó la temperatura de la ideal: a la izquierda, más frío; a la derecha, más calor. El color es lo que dijo la gente: <b style="color:var(--neg)">coral</b> es "cómodo" y <b style="color:var(--pos)">teal</b> es "incómodo". Los datos son inventados.</p>
+          <p>En la página de hiperplano y margen la SVM separaba con una recta. Aquí todo vive en una sola línea, así que "una recta" es un solo corte: un <b>umbral</b> que deja un color a cada lado.</p>
+          <div class="check" id="chk1">
+            <p class="check-tit">Predice antes de ver</p>
+            <div class="cuerpo"></div>
+          </div>
+          <div id="umbralBox" hidden>
+            <p>Ahora el umbral es tuyo: arrástralo en el escenario. Cuenta cuántos días quedan del lado equivocado.</p>
+            <div class="vivo-p" id="vivo1"></div>
+          </div>
+          <p>Raschka abre la parte no lineal de la SVM con el mismo problema en dos dimensiones, los datos XOR: cuatro esquinas alternadas que ninguna recta separa <cite class="cita" data-fuente="raschka3" data-pag="28" data-pimp="80" data-seccion="Kernel methods for linearly inseparable data" data-que="Los datos XOR con np.logical_xor y la Figure 3.13: dos clases que una recta no puede separar. Ojo: el texto dice que las etiquetas son 1 y −1, pero el código usa 1 y 0." data-cuando="Después de este paso"></cite>.</p>
+        </section>
+
+        <section class="paso card" data-titulo="Una dimensión más">
+          <span class="etapa">Paso 2</span>
+          <h3>Agrega una columna: la distancia al ideal, sin signo</h3>
+          <p>El problema es que "incómodo" pasa por los dos lados: mucho frío o mucho calor. Lo que importa es <b>qué tan lejos</b> del ideal, sin el signo. Elevar al cuadrado hace justo eso: <span data-tex="(-2)^2 = 2^2 = 4"></span>.</p>
+          <p>Así que a cada punto <span data-tex="x"></span> le agregas una segunda coordenada, su cuadrado. Ahora cada día es un punto del plano:</p>
+          <div class="fbloque"><div data-tex="\varphi(x) = (x,\; x^2)" data-display></div></div>
+          <p>La letra <span data-tex="\varphi"></span> (fi) es el nombre de ese levantamiento. Toca <b>Levantar los puntos</b> en el escenario: cada punto sube a la altura de su cuadrado y quedan sobre una parábola. Después arrastra la recta horizontal.</p>
+          <div class="vivo-p" id="vivo2">Primero levanta los puntos.</div>
+          <p>Las diapositivas presentan el truco del kernel con esta misma idea: agregar una dimensión para que los datos se separen con un plano <cite class="cita" data-fuente="svm3" data-pag="17" data-ancla="the-kernel-trick" data-seccion="5.1 The kernel trick" data-que="Agregar una dimensión para separar linealmente. Ojo: dice que 'la dimensión extra se llama kernel'; más preciso es que el kernel es la función que mide parecido en ese espacio, lo verás en el paso 5." data-cuando="Al terminar este paso"></cite>.</p>
+          <div class="check" id="chk2"><p class="check-tit">Antes de seguir</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="De vuelta">
+          <span class="etapa">Paso 3</span>
+          <h3>La recta vuelve como dos umbrales, o como un círculo</h3>
+          <p>La recta horizontal de margen máximo está en la altura 2.5. Una SVM lineal entrenada sobre los puntos levantados la encuentra exacta: <span data-tex="w \approx (0, 0.667)"></span> y <span data-tex="b \approx -1.667"></span>, es decir <span data-tex="0.667\,x^2 - 1.667 = 0"></span>, o <span data-tex="x^2 = 2.5"></span>.</p>
+          <p>Pero tú no clasificas en el plano levantado: los días nuevos llegan como un número, una temperatura. ¿Qué dice esa recta sobre la línea original? Un punto queda debajo de la recta cuando <span data-tex="x^2 < 2.5"></span>.</p>
+          <div class="check" id="chk3"><p class="check-tit">Antes de seguir</p><div class="cuerpo"></div></div>
+          <p>Una recta en el espacio levantado se ve curva, o partida, en el espacio original. Las diapositivas lo muestran con su figura del "estiramiento" <cite class="cita" data-fuente="svm3" data-pag="18" data-ancla="6/2" data-seccion="Figura del estiramiento" data-que="La Figure 6: el plano separador en el espacio con una dimensión más vuelve al espacio original como una frontera curva." data-cuando="Después de resolver este chequeo"></cite>.</p>
+          <p><b>Ahora en dos dimensiones.</b> En la vista <b>Círculos</b> hay 13 puntos inventados: 5 coral en el centro y 8 teal alrededor. Ninguna recta los separa. Les agregas una tercera coordenada, <span data-tex="z = x_1^2 + x_2^2"></span>, que es el cuadrado de la distancia al centro. Sube el deslizador <b>levantar</b>.</p>
+          <div class="fbloque"><div data-tex="\varphi(x_1, x_2) = (x_1,\; x_2,\; x_1^2 + x_2^2)" data-display></div></div>
+          <div class="vivo-p" id="vivo3">Resuelve el chequeo para abrir la vista de círculos.</div>
+          <p>Los coral quedan abajo (<span data-tex="z \le 1"></span>) y los teal arriba (<span data-tex="z \ge 8"></span>): el plano horizontal <span data-tex="z = 4.5"></span> los separa, y es el de margen máximo. De vuelta en el plano original, <span data-tex="x_1^2 + x_2^2 = 4.5"></span> es <b>un círculo</b> de radio <span data-tex="\sqrt{4.5} \approx 2.12"></span>. Es exactamente el ejemplo de Raschka <cite class="cita" data-fuente="raschka3" data-pag="29" data-pimp="81" data-seccion="Kernel methods for linearly inseparable data" data-que="La proyección φ(x₁, x₂) = (x₁, x₂, x₁² + x₂²) y la Figure 3.14: círculos concéntricos que un plano separa en 3D y que vuelven al plano como una frontera circular." data-cuando="Después de subir el deslizador"></cite>
+          y el de las diapositivas, que lo llaman <span data-tex="X_3 = X_1^2 + X_2^2"></span> <cite class="cita" data-fuente="svm3" data-pag="19" data-ancla="6/3" data-seccion="Círculos concéntricos" data-que="Los círculos concéntricos y la tercera variable X₃ = X₁² + X₂², que equivale a un kernel polinómico de grado 2." data-cuando="Después de subir el deslizador"></cite>.</p>
+          <div class="cita" id="citaHipo" hidden></div>
+        </section>
+
+        <section class="paso card" data-titulo="El costo">
+          <span class="etapa">Paso 4</span>
+          <h3>El problema: las columnas nuevas se multiplican</h3>
+          <p>En los círculos tuviste suerte: sabías que la columna útil era <span data-tex="x_1^2 + x_2^2"></span>. En general no lo sabes, así que la receta honesta es agregar <b>todos</b> los productos posibles hasta cierto grado: con dos variables y grado 2, son <span data-tex="1,\ x_1,\ x_2,\ x_1^2,\ x_1x_2,\ x_2^2"></span>, seis columnas.</p>
+          <p>Mueve los deslizadores del escenario: <span data-tex="p"></span> es el número de variables originales y <span data-tex="d"></span> el grado. Una imagen de 28 por 28 píxeles tiene <span data-tex="p = 784"></span>.</p>
+          <div class="vivo-p" id="vivo4"></div>
+          <details class="profundizar">
+            <summary>¿De dónde sale la cuenta? Combinaciones con repetición</summary>
+            <div>
+              <p>Un término de grado a lo sumo <span data-tex="d"></span> con <span data-tex="p"></span> variables es una forma de repartir <span data-tex="d"></span> "fichas" entre <span data-tex="p + 1"></span> cajas: una por variable y una caja extra para lo que no se usa (eso permite grados menores, incluida la constante 1). El número de repartos es</p>
+              <div class="fbloque"><div data-tex="\binom{p + d}{d} = \frac{(p+d)!}{p!\,d!}" data-display></div></div>
+              <p>Con <span data-tex="p = 2"></span> y <span data-tex="d = 2"></span> da <span data-tex="\binom{4}{2} = 6"></span>. Crece como <span data-tex="p^d"></span>: con <span data-tex="p = 784"></span> y <span data-tex="d = 5"></span> ya son más de dos billones de columnas por punto.</p>
+            </div>
+          </details>
+          <p>Raschka lo dice sin rodeos: construir las columnas nuevas de forma explícita es caro, sobre todo con muchas dimensiones, y por eso aparece el truco <cite class="cita" data-fuente="raschka3" data-pag="30" data-pimp="82" data-seccion="Using the kernel trick to find separating hyperplanes in a high-dimensional space" data-que="Por qué construir φ es caro, y la idea de reemplazar el producto punto x⁽ⁱ⁾ᵀx⁽ʲ⁾ por φ(x⁽ⁱ⁾)ᵀφ(x⁽ʲ⁾), definido como la función kernel κ." data-cuando="Al terminar este paso y antes del siguiente"></cite>.</p>
+          <div class="check" id="chk4"><p class="check-tit">Antes de seguir</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="El truco">
+          <span class="etapa">Paso 5</span>
+          <h3>La SVM solo pregunta productos punto</h3>
+          <p>Aquí está la llave. Cuando se resuelve el problema de la SVM por el otro camino (su versión dual), los datos aparecen <b>solo</b> dentro de productos punto <span data-tex="x_i \cdot x_j"></span>, y la predicción para un punto nuevo también:</p>
+          <div class="fbloque"><div data-tex="f(x) = \sum_i \alpha_i\, y_i\, (x_i \cdot x) + b" data-display></div></div>
+          <p>Los <span data-tex="\alpha_i"></span> son pesos que valen cero salvo en los vectores soporte. No necesitas saber cómo se calculan: lo importante es que <b>nunca se usan las coordenadas sueltas</b>, solo productos punto. Si levantas los datos con <span data-tex="\varphi"></span>, solo necesitas <span data-tex="\varphi(x)\cdot\varphi(z)"></span>. Esa función de dos puntos es el <b>kernel</b>:</p>
+          <div class="fbloque"><div data-tex="k(x, z) = \varphi(x)\cdot\varphi(z)" data-display></div></div>
+          <p>Y a veces hay un atajo. Para el levantamiento de grado 2 con dos variables, con unos <span data-tex="\sqrt 2"></span> bien puestos,</p>
+          <div class="fbloque"><div data-tex="\varphi(x) = \big(1,\ \sqrt2 x_1,\ \sqrt2 x_2,\ x_1^2,\ \sqrt2 x_1 x_2,\ x_2^2\big) \quad\Longrightarrow\quad \varphi(x)\cdot\varphi(z) = (x\cdot z + 1)^2" data-display></div></div>
+          <p>Arrastra los puntos <b style="color:var(--j)">x</b> y <b style="color:var(--k)">z</b> en el escenario. La tabla hace el camino largo (seis coordenadas, seis productos, una suma) y abajo está el atajo (un producto punto de dos números, más uno, al cuadrado). Siempre coinciden.</p>
+          <div class="vivo-p" id="vivo5"></div>
+          <p>Ese es el truco: la SVM trabaja en el espacio de seis dimensiones <b>sin construirlo</b>. Es la definición de Raschka, <span data-tex="\kappa(x^{(i)}, x^{(j)}) = \varphi(x^{(i)})^T\varphi(x^{(j)})"></span> <cite class="cita" data-fuente="raschka3" data-pag="31" data-pimp="83" data-seccion="Using the kernel trick to find separating hyperplanes in a high-dimensional space" data-que="La definición κ(x⁽ⁱ⁾, x⁽ʲ⁾) = φ(x⁽ⁱ⁾)ᵀφ(x⁽ʲ⁾) y, en la misma página, el kernel RBF que verás en el paso 6." data-cuando="Al terminar este paso"></cite>, y lo que las diapositivas llaman pensar el kernel como "similitudes por pares" entre observaciones <cite class="cita" data-fuente="svm3" data-pag="16" data-ancla="the-support-vector-machine" data-seccion="5 The support vector machine" data-que="La SVM como modelo de margen máximo y el kernel como una medida de similitud entre pares de observaciones." data-cuando="Al terminar este paso"></cite>. La versión dual no está en Raschka (declara la optimización fuera del libro); aquí solo usas su conclusión.</p>
+          <div class="check" id="chk5"><p class="check-tit">Antes de seguir</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Kernel RBF">
+          <span class="etapa">Paso 6</span>
+          <h3>El kernel RBF: parecido que se apaga con la distancia</h3>
+          <p>Si el kernel es una medida de parecido, puedes elegir la medida directamente. La más usada es la gaussiana, o RBF:</p>
+          <div class="fbloque"><div data-tex="k(x, z) = \exp\!\big(-\gamma\, \|x - z\|^2\big)" data-display></div></div>
+          <p>Vale 1 cuando <span data-tex="x = z"></span> y cae hacia 0 a medida que se alejan. El parámetro <span data-tex="\gamma"></span> (gamma) decide qué tan rápido cae: es una campana alrededor de cada punto, y <span data-tex="\gamma"></span> grande la hace angosta. La curvita debajo del escenario es esa campana.</p>
+          <p>El escenario muestra la SVM de verdad con kernel RBF sobre los 13 puntos de los círculos (entrenada con scikit-learn, <span data-tex="C = 1"></span>). El color de fondo es la clase que predice; los anillos negros, los vectores soporte. El cuadrado es un día nuevo en <span data-tex="(0.5, 0.5)"></span>, en medio de los coral.</p>
+          <div class="check" id="chk6"><p class="check-tit">Predice antes de mover gamma</p><div class="cuerpo"></div></div>
+          <div class="vivo-p" id="vivo6"></div>
+          <p>Raschka lo escribe con <span data-tex="\sigma"></span>: <span data-tex="\exp(-\|x^{(i)} - x^{(j)}\|^2 / 2\sigma^2)"></span>, con <span data-tex="\gamma = 1/(2\sigma^2)"></span>. Pero cuidado con una frase suya: dice que al aumentar <span data-tex="\gamma"></span> aumenta el alcance de cada ejemplo. Es al revés: <span data-tex="\gamma"></span> grande es <span data-tex="\sigma"></span> chico, una campana más angosta, y cada punto influye solo muy cerca de sí. Su conclusión, que la frontera se ajusta más, sí es correcta, y su figura con <span data-tex="\gamma = 100"></span> muestra el sobreajuste <cite class="cita" data-fuente="raschka3" data-pag="32" data-pimp="84" data-seccion="Using the kernel trick to find separating hyperplanes in a high-dimensional space" data-que="El efecto de γ en Iris. Errata: dice que un γ mayor aumenta el alcance de los ejemplos; en realidad la campana se angosta. La conclusión (frontera más ajustada) es correcta. Las figuras de gamma=0.2 y gamma=100.0 están en las dos páginas siguientes." data-cuando="Después de mover gamma de punta a punta"></cite>.</p>
+          <p>En las diapositivas, el RBF aparece entre los kernels populares, pero con dos erratas: está escrito <span data-tex="\exp(\gamma\|x - x'\|^2)"></span>, <b>sin el signo menos</b> (así crecería sin límite y no sería un parecido), y la tangente hiperbólica aparece con <span data-tex="\|x - x'\|"></span> donde va el producto interno <span data-tex="\langle x, x'\rangle"></span> <cite class="cita" data-fuente="svm3" data-pag="21" data-ancla="popular-kernel-functions" data-seccion="5.2 Popular kernel functions" data-que="Los kernels polinómico, RBF y tangente hiperbólica. Erratas: al RBF le falta el signo menos, y la tangente hiperbólica debe usar el producto interno ⟨x, x'⟩, no la distancia." data-cuando="Al terminar este paso"></cite>.</p>
+
+          <div class="destacado" id="destacado">
+            <p class="dest-tit">Una confusión muy común</p>
+            <h4>"El kernel transforma los datos y después se entrena una SVM normal"</h4>
+            <p>Conceptualmente es así: hay un <span data-tex="\varphi"></span> y, en ese espacio, la SVM traza un hiperplano. Pero en la práctica <b>nunca se calcula</b> <span data-tex="\varphi(x)"></span>. Lo que se calcula es la tabla de parecidos <span data-tex="K_{ij} = k(x_i, x_j)"></span>, de 13 por 13 con estos datos, y con ella se resuelve todo.</p>
+            <div class="check" id="chk6b"><p class="check-tit">Predice</p><div class="cuerpo"></div></div>
+            <div class="zcuenta" id="cuenta6b"></div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Elegir">
+          <span class="etapa">Paso 7</span>
+          <h3>Elegir kernel, gamma y C sin hacerte trampa</h3>
+          <p>Ya viste que un <span data-tex="\gamma"></span> grande acierta todo el entrenamiento y aun así se equivoca con un punto nuevo. Y de la página de margen blando ya conoces <span data-tex="C"></span>, el costo de cada violación: <span data-tex="C"></span> grande también ajusta más. ¿Cómo se eligen entonces?</p>
+          <p>No mirando la exactitud en los datos de entrenamiento, que siempre premia al más flexible. Se usa <b>validación cruzada</b>: se parten los datos en 5 trozos, se entrena con 4 y se mide en el que quedó afuera, rotando, y se promedia. Gana la combinación que mejor predice datos que no vio.</p>
+          <p>El escenario tiene una rejilla de 4 valores de <span data-tex="C"></span> por 5 de <span data-tex="\gamma"></span>, calculada con scikit-learn sobre 150 puntos simulados con ruido (dos círculos que se mezclan un poco). Empieza mostrando la exactitud <b>en entrenamiento</b>. Toca las celdas.</p>
+          <div class="check" id="chk7"><p class="check-tit">Predice antes de cambiar de vista</p><div class="cuerpo"></div></div>
+          <div class="vivo-p" id="vivo7">Toca una celda de la rejilla.</div>
+          <p>Las diapositivas resumen los dos hiperparámetros así: <span data-tex="C"></span> alto da un margen angosto, y <span data-tex="\gamma"></span> alto sobreajusta, bajo subajusta <cite class="cita" data-fuente="svm3" data-pag="27" data-ancla="7/2" data-seccion="C como costo y γ" data-que="C bajo es margen ancho y C alto margen angosto; γ alto sobreajusta y γ bajo subajusta. Ojo: remite a la 'Figure 8' cuando la figura de C y γ es la Figure 10, en la diapositiva anterior." data-cuando="Después de cambiar a validación cruzada"></cite>, y en clase el ajuste se hace con caret, que prueba <span data-tex="C"></span> y el ancho del RBF a la vez con validación cruzada <cite class="cita" data-fuente="svm3" data-pag="42" data-ancla="9/9" data-seccion="Nota sobre RBF y por qué CV" data-que="Con kernel RBF caret ajusta C y sigma juntos; kernlab::sigest() sugiere un rango razonable para sigma; search = 'random' como alternativa a la rejilla." data-cuando="Al terminar el recorrido"></cite>.</p>
+          <details class="profundizar">
+            <summary>El código de la rejilla, y el "sigma" de kernlab</summary>
+            <div>
+              <p>La rejilla del escenario es esta búsqueda, corrida de verdad. Imprime <code>{'C': 1, 'gamma': 1} 0.86</code>:</p>
+              <pre class="salida">from sklearn.datasets import make_circles
+from sklearn.model_selection import GridSearchCV, StratifiedKFold
+from sklearn.svm import SVC
+
+X, y = make_circles(n_samples=150, noise=0.2, factor=0.5, random_state=1)
+rejilla = {"C": [0.1, 1, 10, 100], "gamma": [0.01, 0.1, 1, 10, 100]}
+cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=0)
+busca = GridSearchCV(SVC(kernel="rbf"), rejilla, cv=cv).fit(X, y)
+print(busca.best_params_, round(busca.best_score_, 3))</pre>
+              <p>En R con caret, <code>method = "svmRadial"</code> ajusta <code>sigma</code> y <code>C</code>. Ese <code>sigma</code> es el de kernlab, que escribe el RBF como <span data-tex="\exp(-\sigma\|x - x'\|^2)"></span>: a pesar del nombre, hace el papel de <span data-tex="\gamma"></span>, no de la <span data-tex="\sigma"></span> de Raschka. Un <code>sigma</code> grande en caret es una campana angosta.</p>
+            </div>
+          </details>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+        </div>
+        <svg id="esc" class="lz" tabindex="0" role="img" aria-label="Escenario del paso actual. Se puede tocar y arrastrar."></svg>
+        <div class="ex" data-m="1" hidden>
+          <div class="btn-row"><button type="button" class="primary" id="btnLevantar">Levantar los puntos</button></div>
+        </div>
+        <div class="ex" data-m="2" hidden>
+          <div class="seg" id="vista3" role="group" aria-label="Vista">
+            <button type="button" data-v="recta" aria-pressed="true">Recta</button>
+            <button type="button" data-v="circ" aria-pressed="false" disabled>Círculos</button>
+          </div>
+          <div class="k-row" id="lev3Box" hidden><label for="lev3">levantar</label><input type="range" id="lev3" min="0" max="1" step="0.01" value="0"><b id="lev3Val">0%</b></div>
+        </div>
+        <div class="ex" data-m="3" hidden>
+          <div class="k-row"><label for="pSl">p</label><input type="range" id="pSl" min="0" max="8" step="1" value="1"><b id="pVal">2</b></div>
+          <div class="k-row"><label for="dSl">d</label><input type="range" id="dSl" min="1" max="10" step="1" value="2"><b id="dVal">2</b></div>
+          <div class="chips3" id="chips3"></div>
+        </div>
+        <div class="ex" data-m="4" hidden>
+          <div id="tabla5"></div>
+        </div>
+        <div class="ex" data-m="5" hidden>
+          <div class="k-row"><label for="gSl">γ</label><input type="range" id="gSl" min="0" max="9" step="1" value="3" disabled><b id="gVal">0.5</b></div>
+          <svg id="campana" class="lz" role="img" aria-label="La campana del kernel RBF: parecido según la distancia"></svg>
+        </div>
+        <div class="ex" data-m="6" hidden>
+          <div class="seg" id="vista7" role="group" aria-label="Qué exactitud mostrar">
+            <button type="button" data-v="tr" aria-pressed="true">Entrenamiento</button>
+            <button type="button" data-v="cv" aria-pressed="false" disabled>Validación cruzada</button>
+          </div>
+        </div>
+        <div class="leyenda"><span><i class="pos"></i>teal (+1)</span><span><i class="neg"></i>coral (−1)</span></div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>El programa hace tres cosas con los 13 puntos de los círculos. Primero comprueba con un bucle que el camino largo, <span data-tex="\varphi(x)\cdot\varphi(z)"></span>, da lo mismo que el atajo, <span data-tex="(x\cdot z + 1)^2"></span>. Después arma con bucles la matriz de kernel RBF, la tabla de parecidos de todos contra todos, y la compara con la librería. Al final entrena la SVM con kernel RBF: <code>SVC</code> en Python y <code>svm</code> del paquete e1071 en R.</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir</p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="true">Python</button>
+            <button type="button" data-lang="r" aria-pressed="false">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">1 · largo y atajo</span><span data-f="2">2 · matriz K</span><span data-f="3">3 · la SVM</span>
+        </div>
+        <div class="vr-dos">
+          <svg id="vrPlano" class="lz" role="img" aria-label="Los 13 puntos, con el par que compara el programa"></svg>
+          <svg id="vrMatriz" class="lz" role="img" aria-label="La matriz de kernel K, que se llena celda por celda"></svg>
+        </div>
+        <div class="vr-cuenta" id="vrCuenta"></div>
+        <h3 class="mini-tit vr-tit" style="margin-top:14px">Lo que imprime el programa</h3>
+        <pre class="salida" id="vrSalida"></pre>
+      </div>
+    </div>
+
+    <p class="vr-nota">En la práctica la matriz no se escribe a mano: <code>rbf_kernel(X, gamma=0.5)</code> en Python o <code>exp(-0.5 * as.matrix(dist(X))^2)</code> en R la arman en una línea, y la SVM la calcula por dentro. Raschka entrena exactamente esto sobre los datos XOR, con <code>SVC(kernel='rbf', gamma=0.10, C=10.0)</code> <cite class="cita" data-fuente="raschka3" data-pag="31" data-pimp="83" data-seccion="Using the kernel trick to find separating hyperplanes in a high-dimensional space" data-que="El código de la SVM con kernel RBF sobre XOR y la Figure 3.15 con la frontera curva que resulta." data-cuando="Después de reproducir el programa hasta el final"></cite>.
+    En clase se hace el caso de los círculos con kernlab: <code>mlbench.circle(n = 200)</code> y <code>ksvm(kernel = "polydot", kpar = list(degree = 2), C = Inf)</code>, el kernel polinómico de grado 2 del paso 5 <cite class="cita" data-fuente="svm3" data-pag="20" data-ancla="6/4" data-seccion="Código de los círculos" data-que="El código en R de los círculos: mlbench.circle, ksvm con polydot de grado 2 y C = Inf, y la Figure 7 con la vista 2D, la 3D y la frontera." data-cuando="Después de las trampas de abajo"></cite>.</p>
+
+    <details class="profundizar">
+      <summary>La versión vectorizada, y por qué la matriz es simétrica</summary>
+      <div>
+        <p>Los dos bucles caben en una línea. En Python, con <code>d2 = ((X[:, None, :] - X[None, :, :]) ** 2).sum(axis=2)</code> y <code>K = np.exp(-gamma * d2)</code>; en R, <code>K &lt;- exp(-gamma * as.matrix(dist(X))^2)</code>, que es la línea con la que el programa compara.</p>
+        <p>Como <span data-tex="\|x_i - x_j\| = \|x_j - x_i\|"></span>, la matriz es simétrica, y como cada punto está a distancia cero de sí mismo, la diagonal vale 1. Las librerías calculan solo la mitad, y LIBSVM guarda en caché las filas que más usa. Con <span data-tex="n"></span> puntos la matriz tiene <span data-tex="n^2"></span> celdas: es barata con miles de puntos y cara con millones. Esa es la desventaja de la SVM que las diapositivas nombran como "lenta con n grande".</p>
+      </div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>El gamma por defecto de scikit-learn</h3><span class="estado" data-reto="codigo2"></span></div>
+        <div id="codigo2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Los valores por defecto de e1071</h3><span class="estado" data-reto="codigo3"></span></div>
+        <div id="codigo3"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>dist() no está al cuadrado</h3><span class="estado" data-reto="codigo4"></span></div>
+        <div id="codigo4"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: la biblioteca te avisa en el índice cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>¿Qué columna agregarías?</h3><span class="estado" data-reto="ojo"></span></div>
+        <p class="desc">Cinco rondas con datos nuevos, centrados en el origen. Decide qué tercera coordenada hace que un plano los separe, o si ya se separan con una recta. Apruebas con 4 de 5.</p>
+        <div id="ojo"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Construir</span><h3>Una parábola corrida</h3><span class="estado" data-reto="constructor"></span></div>
+        <p class="desc">Ahora los días cómodos no están centrados en el cero. Levantas con <span data-tex="\varphi(x) = (x, (x - c)^2)"></span> y eliges <span data-tex="c"></span> y la altura <span data-tex="h"></span> de la recta horizontal. La holgura es la distancia vertical de la recta al punto más cercano. Cumple los tres objetivos.</p>
+        <svg id="planoConstr" class="lz mini" role="img" aria-label="Puntos levantados sobre una parábola corrida y una recta horizontal"></svg>
+        <div class="k-row"><label for="cSl">c</label><input type="range" id="cSl" min="-2" max="3" step="0.05" value="0"><b id="cVal">0.00</b></div>
+        <div class="k-row"><label for="hSl">h</label><input type="range" id="hSl" min="0" max="12" step="0.05" value="6"><b id="hVal">6.00</b></div>
+        <div class="vivo-p" id="constrVivo"></div>
+        <ul class="objetivos" id="objetivos"></ul>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>El atajo con lápiz</h3><span class="estado" data-reto="mano"></span></div>
+        <p class="desc">Calcula el kernel polinómico de grado 2 entre dos puntos, sin construir <span data-tex="\varphi"></span>.</p>
+        <div id="mano"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Alguien se equivocó</h3><span class="estado" data-reto="error"></span></div>
+        <p class="desc">Una de las líneas tiene un error. Tócala.</p>
+        <div id="error"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>El alcance de cada punto</h3><span class="estado" data-reto="prop1"></span></div>
+        <div id="prop1"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Un punto consigo mismo</h3><span class="estado" data-reto="prop2"></span></div>
+        <div id="prop2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Lo que la SVM necesita</h3><span class="estado" data-reto="prop3"></span></div>
+        <div id="prop3"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>De sigma a gamma</h3><span class="estado" data-reto="prop4"></span></div>
+        <div id="prop4"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Recordar a la fuerza es lo que fija. Arma el kernel RBF y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Fórmula de memoria</span><h3>Arma el kernel RBF</h3><span class="estado" data-reto="formula"></span></div>
+        <p class="desc">Hay piezas de más que no pertenecen, entre ellas la errata de las diapositivas. No mires arriba.</p>
+        <div id="formula"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el material</h2>
+      <p class="lecturas-intro">Ya construiste la idea con las manos. Ahora ve a las diapositivas de clase y al libro, y comprueba que lo reconoces. Cada entrada dice qué vas a encontrar y en qué momento conviene leerla. Si abres la biblioteca con doble clic, el enlace abre el PDF en esa página o las diapositivas en esa diapositiva.</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> Los once días de los pasos 1 a 3 y los 13 puntos de los círculos son inventados, elegidos para que las fronteras
+    den limpias: la recta <span>x² = 2.5</span> y el plano <span>z = 4.5</span>, los dos de margen máximo (comprobado con una SVM lineal).
+    Esta página no usa los veinte puntos de hiperplano y margen porque esos ya se separan con una recta. La rejilla del paso 7 sale de
+    150 puntos simulados con <code>make_circles</code>. Los datos de los retos son aleatorios o inventados. Tu progreso se guarda solo en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+/*
+  DATOS DE ESTA PAGINA (inventados).
+  Linea 1D: teal (+1) en -3, -2.5, -2, 2, 2.5, 3; coral (-1) en -1, -0.5, 0, 0.5, 1.
+    Levantados con phi(x) = (x, x^2), SVC(kernel="linear", C=1e6) da w = (0.00016, 0.6666), b = -1.6666: la recta x^2 = 2.5.
+  Circulos: coral (-1) (0,0) (1,0) (-1,0) (0,1) (0,-1); teal (+1) (3,0) (-3,0) (0,3) (0,-3) (2,2) (-2,2) (2,-2) (-2,-2).
+    Levantados con z = x1^2 + x2^2, SVC lineal da w ~ (0, 0, 0.2858), b = -1.286: el plano z = 4.5.
+  SOL: SVC(kernel="rbf", gamma=g, C=1) sobre los circulos, scikit-learn 1.6.1. Por cada g: [g, intercept_, dual_coef_ alineado
+    con los 13 puntos (0 si no es soporte), cantidad de soportes, exactitud en entrenamiento].
+  GRID: make_circles(n_samples=150, noise=0.2, factor=0.5, random_state=1), StratifiedKFold(5, shuffle=True, random_state=0);
+    [exactitud en entrenamiento, media de validacion cruzada], filas C = 0.1, 1, 10, 100 y columnas gamma = 0.01, 0.1, 1, 10, 100.
+*/
+(function () {
+  "use strict";
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var RETOS = ["ojo", "constructor", "mano", "error", "prop1", "prop2", "prop3", "prop4", "formula", "codigo1", "codigo2", "codigo3", "codigo4"];
+  var C = B.concepto({ id: "truco-kernel", retos: RETOS, pasos: 7 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  /* ---------------- utilidades ---------------- */
+  var f = B.fmt;
+  function cuenta(v) { return Number.isInteger(v) ? f(v, 0) : Number.isInteger(Math.round(v * 1e6) / 1e5) ? f(v, 1) : f(v, 2); }
+  function pto(p) { return "(" + cuenta(p[0]) + ", " + cuenta(p[1]) + ")"; }
+  var NS = "http://www.w3.org/2000/svg";
+  function nodo(tag, at, padre) {
+    var e = document.createElementNS(NS, tag);
+    for (var k in at) e.setAttribute(k, at[k]);
+    if (padre) padre.appendChild(e);
+    return e;
+  }
+  function texto(padre, at, t) { var e = nodo("text", at, padre); e.textContent = t; return e; }
+
+  // lienzo con escala lineal: o = {W, H, x0, x1, y0, y1, L, R, T, B}
+  function Lienzo(svg, o) {
+    var api = { svg: svg, o: o };
+    api.conf = function (o2) { o = api.o = o2; svg.setAttribute("viewBox", "0 0 " + o.W + " " + o.H); };
+    api.conf(o);
+    api.sx = function (v) { return o.L + (v - o.x0) / (o.x1 - o.x0) * (o.W - o.L - o.R); };
+    api.sy = function (v) { return o.H - o.B - (v - o.y0) / (o.y1 - o.y0) * (o.H - o.T - o.B); };
+    api.aDatos = function (e) {
+      var r = svg.getBoundingClientRect();
+      var px = (e.clientX - r.left) / r.width * o.W, py = (e.clientY - r.top) / r.height * o.H;
+      return [o.x0 + (px - o.L) / (o.W - o.L - o.R) * (o.x1 - o.x0), o.y0 + (o.H - o.B - py) / (o.H - o.T - o.B) * (o.y1 - o.y0)];
+    };
+    api.aPix = function (e) {
+      var r = svg.getBoundingClientRect();
+      return [(e.clientX - r.left) / r.width * o.W, (e.clientY - r.top) / r.height * o.H];
+    };
+    api.limpiar = function () { svg.innerHTML = ""; };
+    api.rejilla = function (dx, dy, etiquetas) {
+      var x, y;
+      for (x = Math.ceil(o.x0 / dx) * dx; x <= o.x1 + 1e-9; x += dx) {
+        nodo("line", { x1: api.sx(x), x2: api.sx(x), y1: api.sy(o.y0), y2: api.sy(o.y1), "class": "grid" + (Math.abs(x) < 1e-9 ? " eje" : "") }, svg);
+        if (etiquetas) texto(svg, { x: api.sx(x), y: api.sy(o.y0) + 14, "class": "tick", "text-anchor": "middle" }, cuenta(Math.round(x * 100) / 100));
+      }
+      for (y = Math.ceil(o.y0 / dy) * dy; y <= o.y1 + 1e-9; y += dy) {
+        nodo("line", { x1: api.sx(o.x0), x2: api.sx(o.x1), y1: api.sy(y), y2: api.sy(y), "class": "grid" + (Math.abs(y) < 1e-9 ? " eje" : "") }, svg);
+        if (etiquetas) texto(svg, { x: api.sx(o.x0) - 6, y: api.sy(y) + 3.5, "class": "tick", "text-anchor": "end" }, cuenta(Math.round(y * 100) / 100));
+      }
+    };
+    api.punto = function (x, y, cls, r) { return nodo("circle", { cx: api.sx(x), cy: api.sy(y), r: r || 6, "class": "pt " + cls }, svg); };
+    api.cuadro = function (x, y, cls) { return nodo("rect", { x: api.sx(x) - 6.5, y: api.sy(y) - 6.5, width: 13, height: 13, "class": "pt nuevo " + cls }, svg); };
+    api.anillo = function (x, y, cls, r) { return nodo("circle", { cx: api.sx(x), cy: api.sy(y), r: r || 10.5, "class": "anillo" + (cls ? " " + cls : "") }, svg); };
+    api.linea = function (a, b, cls) { return nodo("line", { x1: api.sx(a[0]), y1: api.sy(a[1]), x2: api.sx(b[0]), y2: api.sy(b[1]), "class": cls }, svg); };
+    api.etiqueta = function (x, y, t, cls, dx, dy, anc) { return texto(svg, { x: api.sx(x) + (dx || 0), y: api.sy(y) + (dy || 0), "class": cls || "lab", "text-anchor": anc || "middle" }, t); };
+    api.rect = function (x0, y0, x1, y1, cls, op) {
+      var a = nodo("rect", { x: Math.min(api.sx(x0), api.sx(x1)), y: Math.min(api.sy(y0), api.sy(y1)), width: Math.abs(api.sx(x1) - api.sx(x0)), height: Math.abs(api.sy(y1) - api.sy(y0)), "class": cls }, svg);
+      if (op != null) a.setAttribute("fill-opacity", op);
+      return a;
+    };
+    api.camino = function (pts, cls) { return nodo("polyline", { points: pts.map(function (p) { return api.sx(p[0]) + "," + api.sy(p[1]); }).join(" "), "class": cls }, svg); };
+    return api;
+  }
+  // arrastre generico: o.abajo(e) devuelve true si toma el arrastre; o.mover(e)
+  function arrastre(svg, o) {
+    var activo = false;
+    svg.addEventListener("pointerdown", function (e) {
+      if (!o.abajo(e)) return;
+      activo = true;
+      try { svg.setPointerCapture(e.pointerId); } catch (err) { /* nada */ }
+      e.preventDefault();
+    });
+    svg.addEventListener("pointermove", function (e) { if (activo) o.mover(e); });
+    function soltar() { activo = false; }
+    svg.addEventListener("pointerup", soltar);
+    svg.addEventListener("pointercancel", soltar);
+  }
+  function rbf(g, a, b) { var dx = a[0] - b[0], dy = a[1] - b[1]; return Math.exp(-g * (dx * dx + dy * dy)); }
+
+  /* ---------------- datos ---------------- */
+  var UNO = [[-3, 1], [-2.5, 1], [-2, 1], [2, 1], [2.5, 1], [3, 1], [-1, -1], [-0.5, -1], [0, -1], [0.5, -1], [1, -1]];
+  var CIRC = [[0, 0, -1], [1, 0, -1], [-1, 0, -1], [0, 1, -1], [0, -1, -1],
+    [3, 0, 1], [-3, 0, 1], [0, 3, 1], [0, -3, 1], [2, 2, 1], [-2, 2, 1], [2, -2, 1], [-2, -2, 1]];
+  var SOL = [[0.05,1.5974,[-1.0,-1.0,-1.0,-1.0,-1.0,0.2492,0.2497,0.2507,0.2503,1.0,1.0,1.0,1.0],13,0.6153846153846154],[0.1,1.3439,[-0.8795,-1.0,-1.0,-1.0,-1.0,0.2197,0.2193,0.2203,0.2203,1.0,1.0,1.0,1.0],13,1.0],[0.2,0.916,[0.0,-0.9795,-0.9793,-0.9896,-0.9882,0.326,0.3259,0.3288,0.3288,0.6568,0.6572,0.6564,0.6568],12,1.0],[0.5,0.603,[0.0,-0.936,-0.9359,-0.9361,-0.9357,0.4579,0.4577,0.4578,0.4584,0.4779,0.478,0.4778,0.4781],12,1.0],[1,0.5049,[-0.0342,-1.0,-1.0,-1.0,-1.0,0.5068,0.5067,0.5066,0.5066,0.5016,0.5024,0.5017,0.5017],13,1.0],[2,0.3936,[-0.852,-1.0,-1.0,-1.0,-1.0,0.6069,0.6066,0.6069,0.6066,0.6061,0.6064,0.6064,0.6061],13,1.0],[5,0.375,[-1.0,-1.0,-1.0,-1.0,-1.0,0.625,0.625,0.625,0.625,0.625,0.625,0.625,0.625],13,1.0],[10,0.375,[-1.0,-1.0,-1.0,-1.0,-1.0,0.625,0.625,0.625,0.625,0.625,0.625,0.625,0.625],13,1.0],[20,0.375,[-1.0,-1.0,-1.0,-1.0,-1.0,0.625,0.625,0.625,0.625,0.625,0.625,0.625,0.625],13,1.0],[50,0.375,[-1.0,-1.0,-1.0,-1.0,-1.0,0.625,0.625,0.625,0.625,0.625,0.625,0.625,0.625],13,1.0]];
+  var GRID = [
+    [[0.63, 0.57], [0.71, 0.68], [0.85, 0.83], [0.85, 0.81], [0.93, 0.70]],
+    [[0.63, 0.57], [0.71, 0.68], [0.86, 0.86], [0.89, 0.79], [0.96, 0.74]],
+    [[0.63, 0.57], [0.83, 0.83], [0.87, 0.84], [0.90, 0.77], [0.99, 0.73]],
+    [[0.73, 0.67], [0.83, 0.83], [0.86, 0.82], [0.95, 0.71], [1.00, 0.72]]
+  ];
+  var GC = [0.1, 1, 10, 100], GG = [0.01, 0.1, 1, 10, 100];
+  var NUEVO6 = [0.5, 0.5];
+  function decision(s, x) {
+    var v = s[1];
+    for (var i = 0; i < CIRC.length; i++) if (s[2][i]) v += s[2][i] * rbf(s[0], CIRC[i], x);
+    return v;
+  }
+  function binom(p, d) { var r = 1; for (var i = 1; i <= d; i++) r = r * (p + i) / i; return Math.round(r); }
+  function grande(n) {
+    if (n < 1e7) return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+    var e = Math.floor(Math.log10(n)), m = n / Math.pow(10, e);
+    return m.toFixed(2) + " × 10^" + e;
+  }
+  var PS = [1, 2, 3, 5, 10, 20, 50, 100, 784];
+  var SUP = "⁰¹²³⁴⁵⁶⁷⁸⁹", SUB = ["₁", "₂", "₃"];
+  function monomios(p, d) {
+    var out = [];
+    function rec(k, resto, exps) {
+      if (k === p) { out.push(exps.slice()); return; }
+      for (var e = 0; e <= resto; e++) { exps.push(e); rec(k + 1, resto - e, exps); exps.pop(); }
+    }
+    rec(0, d, []);
+    out.sort(function (a, b) { var sa = a.reduce(function (s, v) { return s + v; }, 0), sb = b.reduce(function (s, v) { return s + v; }, 0); return sa - sb || b.join() .localeCompare(a.join()); });
+    return out.map(function (ex) {
+      var s = "";
+      ex.forEach(function (e, k) { if (e) s += "x" + SUB[k] + (e > 1 ? SUP.charAt(e) : ""); });
+      return s || "1";
+    });
+  }
+  function phi2(v) { var r = Math.SQRT2; return [1, r * v[0], r * v[1], v[0] * v[0], r * v[0] * v[1], v[1] * v[1]]; }
+
+  /* ---------------- estado ---------------- */
+  var est = {
+    paso: 0, chk1: false, chk2: false, chk3: false, chk4: false, chk5: false, chk6: false, chk6b: false, chk7: false,
+    umbral: 1.5, lev: 0, levantado: false, h: 6, vista3: "recta", lev3: 0,
+    pI: 1, d: 2, X5: [2, 2], Z5: [1, 0], g: 3, vista7: "tr", celda: null
+  };
+  var pasos;
+  var svgE = $("esc");
+  var esc = Lienzo(svgE, { W: 400, H: 400, x0: 0, x1: 1, y0: 0, y1: 1, L: 0, R: 0, T: 0, B: 0 });
+
+  var HINTS = [
+    "Once días sobre una línea",
+    "Levanta los puntos y arrastra la recta",
+    "La recta, de vuelta en la línea",
+    "Mueve p y d",
+    "Arrastra x y z",
+    "Mueve gamma",
+    "Toca una celda"
+  ];
+
+  function render() {
+    esc.limpiar();
+    [render1, render2, render3, render4, render5, render6, render7][est.paso]();
+  }
+
+  /* paso 1: un umbral en la linea */
+  function errUmbral(u) {
+    var a = 0, b = 0;
+    UNO.forEach(function (p) { if ((p[0] > u ? 1 : -1) !== p[1]) a++; if ((p[0] > u ? -1 : 1) !== p[1]) b++; });
+    return Math.min(a, b);
+  }
+  function render1() {
+    esc.conf({ W: 400, H: 170, x0: -3.5, x1: 3.5, y0: -1, y1: 1, L: 14, R: 14, T: 10, B: 10 });
+    for (var t = -3; t <= 3; t++) {
+      esc.linea([t, -0.12], [t, 0.12], "grid eje");
+      esc.etiqueta(t, -0.12, (t > 0 ? "+" : "") + t + "°", "tick", 0, 16);
+    }
+    esc.linea([-3.5, 0], [3.5, 0], "grid eje");
+    if (est.chk1) {
+      esc.rect(-3.5, -0.75, est.umbral, 0.75, "zona-neg", 0.08);
+      esc.rect(est.umbral, -0.75, 3.5, 0.75, "zona-pos", 0.08);
+      esc.linea([est.umbral, -0.8], [est.umbral, 0.8], "recta ac");
+      nodo("circle", { cx: esc.sx(est.umbral), cy: esc.sy(0.8), r: 8, "class": "manija" }, svgE);
+    }
+    UNO.forEach(function (p) { esc.punto(p[0], 0, p[1] > 0 ? "pos" : "neg"); });
+    esc.etiqueta(-3.2, 0.55, "más frío", "lab", 0, 0, "start");
+    esc.etiqueta(3.2, 0.55, "más calor", "lab", 0, 0, "end");
+    if (est.chk1) {
+      var e = errUmbral(est.umbral);
+      $("vivo1").innerHTML = "Umbral en <b>" + f(est.umbral) + "</b> · días del lado equivocado: <b class=\"" + (e ? "bad" : "ok") + "\">" + e + "</b>" +
+        " (eligiendo el mejor lado para cada color). El mejor umbral posible se equivoca con <b>3</b>: los teal de un extremo siempre quedan con los coral.";
+    }
+  }
+
+  /* paso 2: levantar con (x, x^2) */
+  var O2 = { W: 400, H: 340, x0: -3.5, x1: 3.5, y0: -0.6, y1: 9.8, L: 30, R: 10, T: 10, B: 24 };
+  function errH(h) { var e = 0; UNO.forEach(function (p) { if ((p[0] * p[0] > h ? 1 : -1) !== p[1]) e++; }); return e; }
+  function holgH(h) {
+    var mc = -Infinity, mt = Infinity;
+    UNO.forEach(function (p) { var z = p[0] * p[0]; if (p[1] < 0) mc = Math.max(mc, z); else mt = Math.min(mt, z); });
+    return Math.min(h - mc, mt - h);
+  }
+  function render2() {
+    esc.conf(O2);
+    esc.rejilla(1, 1, true);
+    esc.etiqueta(3.5, -0.6, "x", "eje-tit", -4, -6, "end");
+    esc.etiqueta(-3.5, 9.8, "x²", "eje-tit", 4, 12, "start");
+    var t = est.lev;
+    if (t > 0.98) {
+      var par = [];
+      for (var x = -3.15; x <= 3.151; x += 0.05) par.push([x, x * x]);
+      esc.camino(par, "parab");
+      esc.linea([-3.5, est.h], [3.5, est.h], "recta ac");
+      nodo("circle", { cx: esc.sx(3.1), cy: esc.sy(est.h), r: 8, "class": "manija" }, svgE);
+      esc.etiqueta(-3.3, est.h, "altura " + f(est.h, 1), "lab ac", 0, -8, "start");
+    }
+    UNO.forEach(function (p) { esc.punto(p[0], t * p[0] * p[0], p[1] > 0 ? "pos" : "neg"); });
+    var el = $("vivo2");
+    if (!est.levantado) { el.textContent = "Primero levanta los puntos."; return; }
+    var e = errH(est.h), hg = holgH(est.h);
+    el.innerHTML = "Recta horizontal en la altura <b>" + f(est.h, 1) + "</b> · puntos del lado equivocado: <b class=\"" + (e ? "bad" : "ok") + "\">" + e + "</b>" +
+      (e ? "" : " · <b class=\"ok\">separa</b>") + (est.chk2 && !e ? " · holgura a cada lado: <b>" + f(hg) + "</b>" : "");
+  }
+
+  /* paso 3: de vuelta (recta) o circulos (3D) */
+  function render3() {
+    if (est.vista3 === "circ" && est.chk3) { render3circ(); return; }
+    esc.conf({ W: 400, H: 420, x0: -3.5, x1: 3.5, y0: -5.2, y1: 9.8, L: 30, R: 10, T: 10, B: 12 });
+    for (var g = 0; g <= 9; g++) {
+      esc.linea([-3.5, g], [3.5, g], "grid" + (g === 0 ? " eje" : ""));
+      if (g % 2 === 0) esc.etiqueta(-3.5, g, String(g), "tick", -6, 3.5, "end");
+    }
+    for (var gx = -3; gx <= 3; gx++) esc.linea([gx, 0], [gx, 9.8], "grid");
+    var par = [];
+    for (var x = -3.15; x <= 3.151; x += 0.05) par.push([x, x * x]);
+    esc.camino(par, "parab");
+    esc.linea([-3.5, 2.5], [3.5, 2.5], "recta ac");
+    esc.etiqueta(-3.3, 2.5, "x² = 2.5", "lab ac", 0, -8, "start");
+    UNO.forEach(function (p) { esc.punto(p[0], p[0] * p[0], p[1] > 0 ? "pos" : "neg"); });
+    // la linea original abajo
+    var yl = -3.6, r = Math.sqrt(2.5);
+    if (est.chk3) {
+      esc.rect(-r, yl - 0.7, r, yl + 0.7, "zona-neg", 0.12);
+      esc.rect(-3.5, yl - 0.7, -r, yl + 0.7, "zona-pos", 0.12);
+      esc.rect(r, yl - 0.7, 3.5, yl + 0.7, "zona-pos", 0.12);
+    }
+    esc.linea([-3.5, yl], [3.5, yl], "grid eje");
+    for (var t = -3; t <= 3; t++) { esc.linea([t, yl - 0.18], [t, yl + 0.18], "grid eje"); esc.etiqueta(t, yl, String(t), "tick", 0, 22); }
+    [-1, 1].forEach(function (s) {
+      esc.linea([s * r, 2.5], [s * r, yl], "borde");
+      esc.etiqueta(s * r, yl + 0.9, est.chk3 ? (s < 0 ? "−" : "") + "1.58" : "?", "lab ac grande", 0, 0);
+    });
+    UNO.forEach(function (p) { esc.punto(p[0], yl, p[1] > 0 ? "pos" : "neg", 5.5); });
+    esc.etiqueta(3.5, yl, "la línea original", "eje-tit", 0, -16, "end");
+  }
+  var AZ = -0.6, EL = 0.42;
+  function p3(x, y, z) {
+    var xr = x * Math.cos(AZ) - y * Math.sin(AZ), yr = x * Math.sin(AZ) + y * Math.cos(AZ);
+    return [200 + 40 * xr, 300 - 40 * (0.42 * z) - 40 * yr * Math.sin(EL), yr];
+  }
+  function render3circ() {
+    esc.conf({ W: 400, H: 400, x0: 0, x1: 400, y0: 400, y1: 0, L: 0, R: 0, T: 0, B: 0 });
+    var t = est.lev3, S = 3.6;
+    function poly(pts, cls) { return nodo("polygon", { points: pts.map(function (q) { return q[0] + "," + q[1]; }).join(" "), "class": cls }, svgE); }
+    poly([p3(-S, -S, 0), p3(S, -S, 0), p3(S, S, 0), p3(-S, S, 0)], "piso");
+    for (var g = -3; g <= 3; g++) {
+      var a = p3(g, -S, 0), b = p3(g, S, 0), c = p3(-S, g, 0), d = p3(S, g, 0);
+      nodo("line", { x1: a[0], y1: a[1], x2: b[0], y2: b[1], "class": "grid" }, svgE);
+      nodo("line", { x1: c[0], y1: c[1], x2: d[0], y2: d[1], "class": "grid" }, svgE);
+    }
+    var R = Math.sqrt(4.5), circ = [];
+    for (var k = 0; k <= 72; k++) { var q = p3(R * Math.cos(k / 36 * Math.PI), R * Math.sin(k / 36 * Math.PI), 0); circ.push(q[0] + "," + q[1]); }
+    if (t > 0.98) nodo("polyline", { points: circ.join(" "), "class": "circ-fr" }, svgE);
+    var orden = CIRC.map(function (p, i) { return { p: p, i: i, d: p3(p[0], p[1], 0)[2] }; }).sort(function (u, v) { return v.d - u.d; });
+    function dibujar(lista) {
+      lista.forEach(function (o) {
+        var p = o.p, z = t * (p[0] * p[0] + p[1] * p[1]), base = p3(p[0], p[1], 0), top = p3(p[0], p[1], z);
+        nodo("line", { x1: base[0], y1: base[1], x2: top[0], y2: top[1], "class": "tallo" }, svgE);
+        nodo("circle", { cx: top[0], cy: top[1], r: 6, "class": "pt " + (p[2] > 0 ? "pos" : "neg") }, svgE);
+      });
+    }
+    dibujar(orden.filter(function (o) { return o.p[2] < 0; }));
+    if (t > 0.98) {
+      poly([p3(-S, -S, 4.5), p3(S, -S, 4.5), p3(S, S, 4.5), p3(-S, S, 4.5)], "plano3");
+      var e = p3(S, -S, 4.5);
+      texto(svgE, { x: e[0] + 6, y: e[1], "class": "lab ac grande" }, "z = 4.5");
+    }
+    dibujar(orden.filter(function (o) { return o.p[2] > 0; }));
+    var ax = p3(-S, S, 0), ay = p3(-S, S, 9.5);
+    nodo("line", { x1: ax[0], y1: ax[1], x2: ay[0], y2: ay[1], "class": "grid eje" }, svgE);
+    texto(svgE, { x: ay[0] + 4, y: ay[1] + 4, "class": "eje-tit" }, "z = x₁² + x₂²");
+    $("vivo3").innerHTML = t > 0.98
+      ? "Levantados del todo. Coral en <b>z = 0 y 1</b>, teal en <b>z = 8 y 9</b>. El plano <b class=\"ac\">z = 4.5</b> los separa, y su sombra en el piso es el círculo violeta, <b>x₁² + x₂² = 4.5</b>, de radio <b>2.12</b>."
+      : "Levantando: <b>" + Math.round(t * 100) + "%</b>. Cada punto sube a la altura del cuadrado de su distancia al centro.";
+  }
+
+  /* paso 4: el costo */
+  function render4() {
+    var p = PS[est.pI], d = est.d, oculto = !est.chk4 && p === 3 && d === 2;
+    esc.conf({ W: 400, H: 300, x0: 0.5, x1: 10.5, y0: 0, y1: 25, L: 36, R: 8, T: 10, B: 26 });
+    for (var e = 0; e <= 25; e += 5) {
+      esc.linea([0.5, e], [10.5, e], "grid" + (e === 0 ? " eje" : ""));
+      esc.etiqueta(0.5, e, "10^" + e, "tick", -4, 3.5, "end");
+    }
+    for (var k = 1; k <= 10; k++) {
+      var n = binom(p, k), h = Math.log10(n);
+      var r = esc.rect(k - 0.35, 0, k + 0.35, Math.max(h, 0.15), "barra" + (k === d ? " on" : ""));
+      r.setAttribute("rx", 2);
+      esc.etiqueta(k, 0, "d=" + k, "tick", 0, 14);
+      if (k === d) esc.etiqueta(k, Math.max(h, 0.15), oculto ? "?" : grande(n), "lab ac", 0, -6);
+    }
+    esc.etiqueta(10.5, 25, "columnas por punto (escala logarítmica)", "eje-tit", 0, 8, "end");
+    $("pVal").textContent = p;
+    $("dVal").textContent = d;
+    var n0 = binom(p, d);
+    $("vivo4").innerHTML = "p = <b>" + p + "</b> variables, grado d = <b>" + d + "</b> → columnas nuevas por punto: <b class=\"ac\">" + (oculto ? "?" : grande(n0)) + "</b>" +
+      (oculto ? " (esta la calculas tú en el chequeo)" : (n0 > 1e6 ? "<br>Con 10 000 puntos y 8 bytes por número: <b>" + grande(n0 * 1e4 * 8 / 1e9) + " GB</b> solo para guardar los datos levantados." : ""));
+    var ch = $("chips3");
+    if (!oculto && p <= 3 && n0 <= 36) ch.innerHTML = monomios(p, d).map(function (m) { return "<span>" + m + "</span>"; }).join("");
+    else ch.innerHTML = oculto ? "" : '<span>demasiadas para listarlas</span>';
+  }
+
+  /* paso 5: el truco */
+  function esPar5() {
+    var a = est.X5, b = est.Z5;
+    function igual(u, v) { return u[0] === v[0] && u[1] === v[1]; }
+    return (igual(a, [1, 2]) && igual(b, [2, 1])) || (igual(a, [2, 1]) && igual(b, [1, 2]));
+  }
+  function render5() {
+    esc.conf({ W: 360, H: 360, x0: -3, x1: 3, y0: -3, y1: 3, L: 22, R: 10, T: 10, B: 22 });
+    esc.rejilla(1, 1, true);
+    esc.linea([0, 0], est.X5, "vec-j");
+    esc.linea([0, 0], est.Z5, "vec-k");
+    esc.punto(est.X5[0], est.X5[1], "j", 8);
+    esc.punto(est.Z5[0], est.Z5[1], "k", 8);
+    esc.etiqueta(est.X5[0], est.X5[1], "x " + pto(est.X5), "lab j grande", 0, -13);
+    esc.etiqueta(est.Z5[0], est.Z5[1], "z " + pto(est.Z5), "lab k grande", 0, 22);
+    var oc = !est.chk5 && esPar5();
+    var fx = phi2(est.X5), fz = phi2(est.Z5), nom = ["1", "√2·x₁", "√2·x₂", "x₁²", "√2·x₁x₂", "x₂²"];
+    var s = 0, h = '<table class="tphi"><tr><th>coordenada</th><th class="cj">φ(x)</th><th class="ck">φ(z)</th><th>producto</th></tr>';
+    nom.forEach(function (n, k) {
+      var pr = fx[k] * fz[k];
+      s += pr;
+      h += "<tr><td>" + n + '</td><td class="cj">' + f(fx[k], 3) + '</td><td class="ck">' + f(fz[k], 3) + "</td><td>" + (oc ? "?" : f(pr, 3)) + "</td></tr>";
+    });
+    var xz = est.X5[0] * est.Z5[0] + est.X5[1] * est.Z5[1];
+    h += '<tr class="tot"><td>camino largo: suma</td><td></td><td></td><td>' + (oc ? "?" : f(s, 3)) + "</td></tr></table>";
+    $("tabla5").innerHTML = h;
+    $("vivo5").innerHTML = "Camino largo: 6 coordenadas por punto, 6 productos y una suma = <b>" + (oc ? "?" : f(s, 3)) + "</b><br>" +
+      "Atajo: x·z = " + cuenta(est.X5[0]) + "·" + cuenta(est.Z5[0]) + " + " + cuenta(est.X5[1]) + "·" + cuenta(est.Z5[1]) + " = <b>" + (oc ? "?" : cuenta(xz)) + "</b>, " +
+      "(x·z + 1)² = <b class=\"ac\">" + (oc ? "?" : cuenta((xz + 1) * (xz + 1))) + "</b>" + (oc ? " (este par lo calculas tú en el chequeo)" : "");
+  }
+
+  /* paso 6: kernel RBF */
+  function render6() {
+    var s = SOL[est.g], g = s[0];
+    esc.conf({ W: 360, H: 360, x0: -4, x1: 4, y0: -4, y1: 4, L: 22, R: 10, T: 10, B: 22 });
+    var N = 40, paso = 8 / N, signos = [];
+    for (var a = 0; a < N; a++) {
+      signos.push([]);
+      for (var b = 0; b < N; b++) signos[a].push(decision(s, [-4 + (a + 0.5) * paso, -4 + (b + 0.5) * paso]) > 0);
+    }
+    for (a = 0; a < N; a++) for (b = 0; b < N; b++) {
+      var sg = signos[a][b], fr = (a + 1 < N && signos[a + 1][b] !== sg) || (b + 1 < N && signos[a][b + 1] !== sg);
+      var x0 = -4 + a * paso, y0 = -4 + b * paso;
+      esc.rect(x0, y0, x0 + paso + 0.01, y0 + paso + 0.01, fr ? "zona-borde" : sg ? "zona-pos" : "zona-neg", fr ? null : 0.2);
+    }
+    esc.rejilla(1, 1, true);
+    CIRC.forEach(function (p, i) { if (s[2][i]) esc.anillo(p[0], p[1]); esc.punto(p[0], p[1], p[2] > 0 ? "pos" : "neg"); });
+    var dn = decision(s, NUEVO6), mostrar = est.chk6 || est.g === 3;
+    esc.cuadro(NUEVO6[0], NUEVO6[1], mostrar ? (dn > 0 ? "pos" : "neg") : "");
+    esc.etiqueta(NUEVO6[0], NUEVO6[1], "nuevo", "lab", 22, -8);
+    $("gVal").textContent = cuenta(g);
+    var k1 = Math.exp(-g);
+    $("vivo6").innerHTML = "γ = <b>" + cuenta(g) + "</b> · k((0, 0), (1, 0)) = exp(−" + cuenta(g) + " · 1) = <b>" + f(k1, 4) + "</b> · k((0, 0), (2, 2)) = exp(−" + cuenta(g) + " · 8) = <b>" + f(Math.exp(-8 * g), 4) + "</b><br>" +
+      "vectores soporte: <b>" + s[3] + " de 13</b> · exactitud en entrenamiento: <b>" + f(s[4] * 100, 0) + "%</b> · el día nuevo (0.5, 0.5): <b class=\"" + (dn > 0 ? "bad" : "ok") + "\">" + (dn > 0 ? "teal" : "coral") + "</b>";
+    // campana
+    var cv = Lienzo($("campana"), { W: 300, H: 110, x0: 0, x1: 4, y0: 0, y1: 1.05, L: 26, R: 8, T: 8, B: 20 });
+    cv.limpiar();
+    cv.rejilla(1, 0.5, true);
+    var pts = [];
+    for (var d = 0; d <= 4.001; d += 0.04) pts.push([d, Math.exp(-g * d * d)]);
+    cv.camino(pts, "curva");
+    cv.punto(1, k1, "neg", 4.5);
+    cv.etiqueta(4, 1.05, "parecido k según la distancia", "eje-tit", 0, 10, "end");
+  }
+
+  /* paso 7: rejilla de C y gamma */
+  var O7 = { W: 400, H: 300, L: 72, T: 34, cw: 64, ch: 56 };
+  function render7() {
+    esc.conf({ W: 400, H: 300, x0: 0, x1: 400, y0: 300, y1: 0, L: 0, R: 0, T: 0, B: 0 });
+    var cvm = est.vista7 === "cv";
+    texto(svgE, { x: O7.L + 2.5 * O7.cw, y: 14, "class": "eje-tit", "text-anchor": "middle" }, "γ (gamma)");
+    GG.forEach(function (g, j) { texto(svgE, { x: O7.L + (j + 0.5) * O7.cw, y: 28, "class": "tick", "text-anchor": "middle" }, String(g)); });
+    GC.forEach(function (c, i) {
+      texto(svgE, { x: O7.L - 8, y: O7.T + (i + 0.5) * O7.ch + 4, "class": "tick", "text-anchor": "end" }, "C = " + c);
+      GG.forEach(function (g, j) {
+        var v = GRID[i][j][cvm ? 1 : 0], op = Math.max(0.06, (v - 0.55) / 0.45);
+        var r = nodo("rect", { x: O7.L + j * O7.cw, y: O7.T + i * O7.ch, width: O7.cw, height: O7.ch, "class": "celda" + (est.celda && est.celda[0] === i && est.celda[1] === j ? " sel" : ""), fill: "var(--accent)", "fill-opacity": op.toFixed(2) }, svgE);
+        r.setAttribute("data-i", i); r.setAttribute("data-j", j);
+        texto(svgE, { x: O7.L + (j + 0.5) * O7.cw, y: O7.T + (i + 0.5) * O7.ch + 4, "class": "celda-t", "text-anchor": "middle" }, v.toFixed(2));
+      });
+    });
+    texto(svgE, { x: 200, y: O7.T + 4 * O7.ch + 22, "class": "eje-tit", "text-anchor": "middle" }, cvm ? "exactitud media en validación cruzada (5 trozos)" : "exactitud en los mismos datos de entrenamiento");
+    var el = $("vivo7");
+    if (!est.celda) { el.textContent = "Toca una celda de la rejilla."; return; }
+    var i = est.celda[0], j = est.celda[1], v = GRID[i][j];
+    el.innerHTML = "C = <b>" + GC[i] + "</b>, γ = <b>" + GG[j] + "</b> · entrenamiento: <b>" + v[0].toFixed(2) + "</b>" +
+      (est.chk7 ? " · validación cruzada: <b class=\"ac\">" + v[1].toFixed(2) + "</b> · diferencia: <b class=\"" + (v[0] - v[1] > 0.1 ? "bad" : "") + "\">" + (v[0] - v[1]).toFixed(2) + "</b>" : " · validación cruzada: resuelve el chequeo");
+  }
+
+  function entrar(i) {
+    est.paso = i;
+    $("escHint").textContent = HINTS[i];
+    [].forEach.call(document.querySelectorAll(".escenario .ex"), function (x) { x.hidden = +x.getAttribute("data-m") !== i; });
+    render();
+  }
+
+  /* interaccion del escenario */
+  arrastre(svgE, {
+    abajo: function (e) {
+      var i = est.paso, q;
+      if (i === 0 && est.chk1) { q = esc.aDatos(e); est.umbral = Math.round(Math.max(-3.4, Math.min(3.4, q[0])) * 20) / 20; render(); return true; }
+      if (i === 1 && est.levantado) { q = esc.aDatos(e); est.h = Math.round(Math.max(0, Math.min(9.6, q[1])) * 10) / 10; render(); return true; }
+      if (i === 4) {
+        q = esc.aDatos(e);
+        var dx = Math.hypot(q[0] - est.X5[0], q[1] - est.X5[1]), dz = Math.hypot(q[0] - est.Z5[0], q[1] - est.Z5[1]);
+        if (Math.min(dx, dz) > 0.7) return false;
+        est.arr5 = dx <= dz ? "X5" : "Z5";
+        return true;
+      }
+      if (i === 6) {
+        var t = e.target;
+        if (t && t.getAttribute && t.getAttribute("data-i") !== null) { est.celda = [+t.getAttribute("data-i"), +t.getAttribute("data-j")]; render(); }
+        return false;
+      }
+      return false;
+    },
+    mover: function (e) {
+      var i = est.paso, q = esc.aDatos(e);
+      if (i === 0) { est.umbral = Math.round(Math.max(-3.4, Math.min(3.4, q[0])) * 20) / 20; render(); }
+      if (i === 1) { est.h = Math.round(Math.max(0, Math.min(9.6, q[1])) * 10) / 10; render(); }
+      if (i === 4 && est.arr5) {
+        var nx = Math.round(Math.max(-3, Math.min(3, q[0])) * 2) / 2, ny = Math.round(Math.max(-3, Math.min(3, q[1])) * 2) / 2, p = est[est.arr5];
+        if (p[0] !== nx || p[1] !== ny) { est[est.arr5] = [nx, ny]; render(); }
+      }
+    }
+  });
+  svgE.addEventListener("keydown", function (e) {
+    var d = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, 1], ArrowDown: [0, -1] }[e.key];
+    if (!d) return;
+    if (est.paso === 0 && est.chk1) { e.preventDefault(); est.umbral = Math.max(-3.4, Math.min(3.4, est.umbral + d[0] * 0.1)); render(); }
+    if (est.paso === 1 && est.levantado) { e.preventDefault(); est.h = Math.round(Math.max(0, Math.min(9.6, est.h + d[1] * 0.1)) * 10) / 10; render(); }
+    if (est.paso === 4) { e.preventDefault(); est.X5 = [Math.max(-3, Math.min(3, est.X5[0] + d[0] * 0.5)), Math.max(-3, Math.min(3, est.X5[1] + d[1] * 0.5))]; render(); }
+  });
+
+  /* paso 2: levantar con animacion */
+  $("btnLevantar").addEventListener("click", function () {
+    var btn = this, sube = !est.levantado, t0 = null;
+    btn.disabled = true;
+    function cuadro(ts) {
+      if (t0 === null) t0 = ts;
+      var u = Math.min(1, (ts - t0) / 900);
+      est.lev = sube ? u : 1 - u;
+      if (est.paso === 1) render();
+      if (u < 1) requestAnimationFrame(cuadro);
+      else {
+        est.levantado = sube;
+        btn.disabled = false;
+        btn.textContent = sube ? "Bajar los puntos" : "Levantar los puntos";
+        btn.classList.toggle("on", sube);
+        if (est.paso === 1) render();
+      }
+    }
+    requestAnimationFrame(cuadro);
+  });
+  /* paso 3: vistas */
+  function pintarVista3() {
+    [].forEach.call($("vista3").children, function (b) { b.setAttribute("aria-pressed", b.getAttribute("data-v") === est.vista3 ? "true" : "false"); });
+    $("lev3Box").hidden = est.vista3 !== "circ";
+  }
+  $("vista3").addEventListener("click", function (e) {
+    var b = e.target.closest("button");
+    if (!b || b.disabled) return;
+    est.vista3 = b.getAttribute("data-v");
+    pintarVista3();
+    if (est.paso === 2) render();
+  });
+  $("lev3").addEventListener("input", function () {
+    est.lev3 = +this.value;
+    $("lev3Val").textContent = Math.round(est.lev3 * 100) + "%";
+    if (est.paso === 2) render();
+  });
+  /* paso 4 */
+  $("pSl").addEventListener("input", function () { est.pI = +this.value; if (est.paso === 3) render(); });
+  $("dSl").addEventListener("input", function () { est.d = +this.value; if (est.paso === 3) render(); });
+  /* paso 6 */
+  $("gSl").addEventListener("input", function () { est.g = +this.value; if (est.paso === 5) render(); });
+  /* paso 7 */
+  $("vista7").addEventListener("click", function (e) {
+    var b = e.target.closest("button");
+    if (!b || b.disabled) return;
+    est.vista7 = b.getAttribute("data-v");
+    [].forEach.call(this.children, function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+    if (est.paso === 6) render();
+  });
+
+  /* ---------------- chequeos ---------------- */
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+
+  B.opcionMultiple(cuerpo("chk1"), {
+    pregunta: "¿Existe un umbral, un solo corte en la línea, que deje todos los coral de un lado y todos los teal del otro?",
+    opciones: ["No: los coral están en el medio y los teal a los dos lados", "Sí: en el 0", "Sí: en 1.5, entre el último coral y el primer teal", "Sí, si eliges bien qué lado es de cada color"],
+    correcta: 0,
+    pistas: [null,
+      "Un umbral en el 0 deja los días de frío de un lado y los de calor del otro. ¿Hay coral a los dos lados del 0?",
+      "En 1.5 los teal de la derecha quedan bien. ¿Y los teal de la izquierda, en −3, −2.5 y −2?",
+      "Cambiar los lados no cambia el problema: cualquier corte deja a la izquierda una mezcla de teal y coral."],
+    explicacion: "Un umbral parte la línea en dos pedazos, y los teal están en <b>tres</b> pedazos separados por los coral: izquierda, medio coral, derecha. Ningún corte único lo resuelve. Abajo puedes arrastrarlo y comprobarlo: lo mejor que consigues son 3 errores.",
+    alResolver: function () { est.chk1 = true; $("umbralBox").hidden = false; if (est.paso === 0) render(); pasos.completar(0); }
+  });
+
+  B.numerico(cuerpo("chk2"), {
+    pregunta: "Con los puntos levantados, ¿a qué altura va la recta horizontal que deja la holgura más grande a los dos lados?",
+    respuesta: 2.5,
+    tolerancia: 0.001,
+    pistas: ["El coral más alto es el de $x = \\pm 1$. ¿A qué altura queda? ¿Y el teal más bajo, el de $x = \\pm 2$?",
+      "Coral más alto: $1^2 = 1$. Teal más bajo: $2^2 = 4$. La recta va justo en el medio."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 1) < 0.001 || Math.abs(v - 4) < 0.001) return "A esa altura la recta toca un punto: la holgura de ese lado es cero. Busca el medio.";
+      if (Math.abs(v - 1.5) < 0.001) return "1.5 es el medio entre 1 y 2 en la línea original. Aquí se mide en alturas, $x^2$.";
+      return null;
+    },
+    explicacion: "En el medio entre 1 y 4: $(1 + 4)/2 = 2.5$, con holgura 1.5 hacia cada lado. Una recta separa lo que en la línea original ningún umbral separaba. El escenario ya muestra la holgura cuando separas.",
+    alResolver: function () { est.chk2 = true; if (est.paso === 1) render(); pasos.completar(1); }
+  });
+
+  B.numerico(cuerpo("chk3"), {
+    pregunta: "Los días nuevos se clasifican coral cuando $x^2 < 2.5$. ¿En qué temperatura positiva está el umbral, en la línea original? Usa dos decimales.",
+    respuesta: Math.sqrt(2.5),
+    tolerancia: 0.006,
+    pistas: ["El umbral es donde $x^2 = 2.5$ exactamente.", "Despeja: $x = \\sqrt{2.5}$."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 2.5) < 0.01) return "Esa es la altura en el espacio levantado. Hay que volver: ¿qué $x$ tiene $x^2 = 2.5$?";
+      if (Math.abs(v - 1.5) < 0.01) return "1.5 es el punto medio en la línea original, pero la recta se trazó en las alturas. Vuelve con $x^2 = 2.5$.";
+      if (Math.abs(v + Math.sqrt(2.5)) < 0.01) return "Ese es el otro umbral. Se pide el positivo.";
+      return null;
+    },
+    explicacion: "$\\sqrt{2.5} \\approx 1.58$. Y también $-1.58$: <b>una</b> recta en el espacio levantado vuelve como <b>dos</b> umbrales. Coral entre $-1.58$ y $1.58$, teal afuera. Fíjate que no es 1.5, el medio en la línea: el margen se maximizó en el otro espacio. Ahora se abrió la vista <b>Círculos</b>.",
+    alResolver: function () { est.chk3 = true; abrirCirc(); if (est.paso === 2) render(); pasos.completar(2); }
+  });
+  function abrirCirc() { $("vista3").querySelector('[data-v="circ"]').disabled = false; $("vivo3").textContent = "Elige la vista Círculos en el escenario."; }
+
+  B.numerico(cuerpo("chk4"), {
+    pregunta: "Con $p = 3$ variables y grado $d = 2$, ¿cuántas columnas tiene el levantamiento completo, contando la constante 1?",
+    respuesta: 10,
+    tolerancia: 0,
+    pistas: ["Cuenta por grado: grado 0 (la constante), grado 1 ($x_1, x_2, x_3$) y grado 2.",
+      "Grado 2: los tres cuadrados $x_1^2, x_2^2, x_3^2$ y los productos cruzados $x_1x_2, x_1x_3, x_2x_3$."],
+    diagnostico: function (v) {
+      if (v === 9) return "Te falta la constante 1.";
+      if (v === 6) return "Esos son solo los de grado 2. Faltan los de grado 1 y la constante.";
+      if (v === 7) return "Faltan los productos cruzados como $x_1 x_2$.";
+      return null;
+    },
+    explicacion: "$1 + 3 + 6 = 10$, que es $\\binom{5}{2}$. Pequeño aquí, pero mueve $p$ a 784 y $d$ a 5: ningún computador guarda eso para miles de imágenes. El paso siguiente es la salida.",
+    alResolver: function () { est.chk4 = true; if (est.paso === 3) render(); pasos.completar(3); }
+  });
+
+  B.numerico(cuerpo("chk5"), {
+    pregunta: "Sin construir $\\varphi$: con $x = (1, 2)$ y $z = (2, 1)$, ¿cuánto vale $k(x, z) = (x\\cdot z + 1)^2$?",
+    respuesta: 25,
+    tolerancia: 0,
+    pistas: ["Primero el producto punto: $1\\cdot 2 + 2\\cdot 1$.", "$x\\cdot z = 4$. Súmale 1 y eleva al cuadrado."],
+    diagnostico: function (v) {
+      if (v === 5) return "Ese es $x\\cdot z + 1$. Falta elevar al cuadrado.";
+      if (v === 16) return "Ese es $(x\\cdot z)^2$. Olvidaste el $+1$.";
+      if (v === 17) return "Ese es $(x\\cdot z)^2 + 1$: el $+1$ va dentro del paréntesis.";
+      return null;
+    },
+    explicacion: "$x\\cdot z = 4$ y $(4 + 1)^2 = 25$. Pon los puntos en $(1, 2)$ y $(2, 1)$ en el escenario: la suma de los seis productos también da 25. Dos multiplicaciones en vez de construir dos vectores de seis coordenadas.",
+    alResolver: function () { est.chk5 = true; if (est.paso === 4) render(); pasos.completar(4); }
+  });
+
+  B.opcionMultiple(cuerpo("chk6"), {
+    pregunta: "Ahora $\\gamma = 0.5$ y el día nuevo $(0.5, 0.5)$ sale coral. Si subes $\\gamma$ hasta 50, ¿cómo lo clasifica la SVM?",
+    opciones: ["Teal: con campanas tan angostas, ningún coral llega a él", "Coral, y con más seguridad: está rodeado de coral", "Queda justo en la frontera", "Coral, porque gamma no cambia qué puntos son vecinos"],
+    correcta: 0,
+    pistas: [null,
+      "Su coral más cercano está a distancia $\\sqrt{0.5} \\approx 0.71$. Con $\\gamma = 50$, ¿cuánto vale $\\exp(-50 \\cdot 0.5)$?",
+      "Con $\\gamma$ grande casi todos los parecidos valen 0, y lo que queda es el término $b$. ¿Qué signo tiene?",
+      "Los vecinos son los mismos, pero cuánto pesan depende de $\\gamma$ a través de la campana."],
+    explicacion: "Con $\\gamma = 50$, el parecido con su coral más cercano es $\\exp(-25)$, prácticamente cero. Cada punto de entrenamiento solo se defiende en una burbujita propia, y en todo lo demás manda $b = 0.375$, positivo: teal. Acierta el 100% del entrenamiento y falla con un día obvio. Eso es <b>sobreajuste</b>. Ahora mueve gamma de punta a punta: con $\\gamma = 0.05$ pasa lo contrario, la campana es tan ancha que todo se ve parecido y la SVM ni siquiera acierta el entrenamiento.",
+    alResolver: function () { est.chk6 = true; $("gSl").disabled = false; if (est.paso === 5) render(); cerrar6(); }
+  });
+  B.opcionMultiple(cuerpo("chk6b"), {
+    pregunta: "Para el kernel RBF existe un $\\varphi$ tal que $k(x, z) = \\varphi(x)\\cdot\\varphi(z)$. ¿Cuántas coordenadas tiene $\\varphi(x)$?",
+    opciones: ["Infinitas", "2, las de cada punto", "13, una por punto de entrenamiento", "6, como en el kernel polinómico de grado 2"],
+    correcta: 0,
+    pistas: [null,
+      "Con 2 coordenadas sería una SVM lineal, y la frontera del escenario no es una recta.",
+      "La matriz $K$ es de 13 por 13, pero eso cuenta pares de puntos, no coordenadas de $\\varphi$.",
+      "Escribe $\\exp(2\\gamma\\, x\\cdot z)$ como serie: $1 + u + u^2/2! + u^3/3! + \\dots$ ¿Dónde termina?"],
+    explicacion: "Infinitas: al desarrollar la exponencial en serie aparecen productos de todos los grados, sin fin. Así que el RBF <b>no se puede</b> entrenar construyendo $\\varphi$; solo se puede por el truco. Eso aclara la frase del título: la SVM con kernel es una SVM lineal en el espacio de $\\varphi$, pero lo único que se calcula son los $13 \\times 13$ parecidos y, para predecir, $f(x) = \\sum_i \\alpha_i y_i\\, k(x_i, x) + b$.",
+    alResolver: function () {
+      est.chk6b = true;
+      $("cuenta6b").innerHTML = "En el escenario, con γ = 0.5: f(0.5, 0.5) = Σ αᵢyᵢ k(xᵢ, (0.5, 0.5)) + b = <b>" + f(decision(SOL[3], NUEVO6), 3) + "</b>, negativo: coral.<br>" +
+        "Doce sumandos (el punto (0, 0) tiene α = 0 y no cuenta) y ninguna coordenada de φ.";
+      cerrar6();
+    }
+  });
+  function cerrar6() { if (est.chk6 && est.chk6b) pasos.completar(5); }
+
+  B.opcionMultiple(cuerpo("chk7"), {
+    pregunta: "La esquina $C = 100$, $\\gamma = 100$ acierta el 100% del entrenamiento. Cuando la midas con validación cruzada, su exactitud...",
+    opciones: ["Baja bastante: memorizó el ruido de esos datos", "Sigue en 1.00: si acierta todo, acierta todo", "Sube, porque tiene más datos para entrenar", "No se puede calcular con un gamma tan grande"],
+    correcta: 0,
+    pistas: [null,
+      "Acertar todo lo que ya viste no dice nada de lo que no viste. Acuérdate del día (0.5, 0.5) del paso 6.",
+      "En validación cruzada cada modelo entrena con 4 de 5 trozos: menos datos, no más.",
+      "Se puede calcular con cualquier gamma positivo; lo que cambia es la calidad."],
+    explicacion: "Cambia la vista a <b>Validación cruzada</b>: esa esquina cae a 0.72. La mejor celda es $C = 1$, $\\gamma = 1$, con 0.86, y ahí entrenamiento y validación casi coinciden. Abajo a la izquierda, $\\gamma = 0.01$, pasa lo contrario: las dos son malas (subajuste).",
+    alResolver: function () {
+      est.chk7 = true;
+      $("vista7").querySelector('[data-v="cv"]').disabled = false;
+      if (est.paso === 6) render();
+      pasos.completar(6);
+    }
+  });
+
+  pasos = B.pasos($("recorrido"), {
+    concepto: C,
+    alEntrar: entrar,
+    alTerminar: function () { location.hash = "retos"; }
+  });
+  est.chk1 = pasos.hecho(0);
+  est.chk2 = pasos.hecho(1);
+  est.chk3 = pasos.hecho(2);
+  est.chk4 = pasos.hecho(3);
+  est.chk5 = pasos.hecho(4);
+  if (est.chk1) $("umbralBox").hidden = false;
+  if (est.chk3) abrirCirc();
+  if (pasos.hecho(5)) { est.chk6 = est.chk6b = true; $("gSl").disabled = false; }
+  if (pasos.hecho(6)) { est.chk7 = true; $("vista7").querySelector('[data-v="cv"]').disabled = false; }
+  pintarVista3();
+  entrar(0);
+
+  /* ---------------- hipotesis inicial ---------------- */
+  (function () {
+    var ta = $("hipotesis"), t = null;
+    ta.value = B.nota("truco-kernel", "hipotesis");
+    function cita() {
+      var v = ta.value.trim(), el = $("citaHipo");
+      el.hidden = !v;
+      if (v) { el.textContent = ""; el.appendChild(document.createTextNode("Al principio escribiste: «" + v + "». ¿Se parece a agregar una coordenada nueva? ¿Pensabas cambiar la frontera, o cambiar los datos?")); }
+    }
+    cita();
+    ta.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { B.nota("truco-kernel", "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; cita(); }, 500);
+    });
+  })();
+
+  /* ---------------- marcadores de estado de retos ---------------- */
+  function pintarEstados() {
+    [].forEach.call(document.querySelectorAll("[data-reto]"), function (el) {
+      var ok = C.retoOk(el.getAttribute("data-reto"));
+      el.textContent = ok ? "resuelto" : "pendiente";
+      el.classList.toggle("ok", ok);
+    });
+  }
+  C.alCambiar(pintarEstados);
+
+  /* ---------------- reto: ojo clinico ---------------- */
+  function azar(a, b) { return a + Math.random() * (b - a); }
+  function generarOjo() {
+    var tipo = ["circ", "xor", "lin"][Math.floor(Math.random() * 3)], pts = [], k;
+    if (tipo === "circ") {
+      var r1 = azar(0.6, 1.3), r2 = azar(2.1, 3.1);
+      for (k = 0; k < 6; k++) { var a = azar(0, 2 * Math.PI), r = azar(0, r1); pts.push([r * Math.cos(a), r * Math.sin(a), -1]); }
+      for (k = 0; k < 9; k++) { var b = (k + azar(-0.3, 0.3)) / 9 * 2 * Math.PI, rr = azar(r2, 3.3); pts.push([rr * Math.cos(b), rr * Math.sin(b), 1]); }
+    } else if (tipo === "xor") {
+      for (k = 0; k < 16; k++) {
+        var sx = k % 2 ? 1 : -1, sy = k % 4 < 2 ? 1 : -1;
+        pts.push([sx * azar(0.5, 3.1), sy * azar(0.5, 3.1), sx * sy]);
+      }
+    } else {
+      var th = azar(0, Math.PI), n = [Math.cos(th), Math.sin(th)], c = azar(-0.8, 0.8);
+      while (pts.length < 14) {
+        var x = azar(-3.2, 3.2), y = azar(-3.2, 3.2), s = n[0] * x + n[1] * y - c;
+        if (Math.abs(s) < 0.5) continue;
+        pts.push([x, y, s > 0 ? 1 : -1]);
+      }
+    }
+    return { tipo: tipo, pts: pts, ok: { circ: 0, xor: 1, lin: 2 }[tipo] };
+  }
+  (function () {
+    var cont = $("ojo");
+    cont.innerHTML = '<div class="ronda"></div><svg class="lz mini" role="img" aria-label="Datos de dos clases"></svg>' +
+      '<div class="ojo-opts"><button type="button" class="opt" data-a="0">x₁² + x₂²</button><button type="button" class="opt" data-a="1">x₁ · x₂</button><button type="button" class="opt" data-a="2">ninguna: ya se separan</button></div>' +
+      '<div class="fb" aria-live="polite"></div><div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    var pl = Lienzo(cont.querySelector("svg"), { W: 320, H: 320, x0: -3.5, x1: 3.5, y0: -3.5, y1: 3.5, L: 10, R: 10, T: 10, B: 10 });
+    var caso, ronda, aciertos, respondida;
+    var EXPL = [
+      "Una clase cerca del centro y la otra lejos: lo que las distingue es la distancia al centro, $x_1^2 + x_2^2$. El plano horizontal en esa altura vuelve como un círculo.",
+      "Cuadrantes alternados, como XOR: el color depende de si $x_1$ y $x_2$ tienen el mismo signo, y eso es el signo de $x_1 x_2$. Con esa columna, un plano los separa.",
+      "Ya hay una recta que los separa: no hace falta levantar nada. Un kernel aquí solo agrega riesgo de sobreajuste."
+    ];
+    function pintar() {
+      pl.limpiar();
+      pl.rejilla(1, 1, false);
+      caso.pts.forEach(function (p) { pl.punto(p[0], p[1], p[2] > 0 ? "pos" : "neg", 5.5); });
+    }
+    function nueva() { ronda = 0; aciertos = 0; mostrar(); }
+    function mostrar() {
+      respondida = false;
+      caso = generarOjo();
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 5 · aciertos " + aciertos;
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (b) { b.disabled = false; b.className = "opt"; });
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+      pintar();
+    }
+    cont.querySelector(".ojo-opts").addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || respondida) return;
+      respondida = true;
+      var el = +b.getAttribute("data-a"), acierto = el === caso.ok;
+      if (acierto) aciertos++;
+      b.classList.add(acierto ? "ok" : "mal");
+      if (!acierto) cont.querySelector('[data-a="' + caso.ok + '"]').classList.add("ok");
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (x) { x.disabled = true; });
+      cont.querySelector(".fb").innerHTML = (acierto ? '<span class="si">Bien.</span> ' : '<span class="no">No.</span> ') + B.conTex(EXPL[caso.ok]);
+      var sig = cont.querySelector(".sig");
+      sig.hidden = false;
+      if (ronda === 4) {
+        var aprobo = aciertos >= 4;
+        C.reto("ojo", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertos + " de 5" + (aprobo ? ". Aprobado." : ". Necesitas 4 para aprobar.");
+        sig.textContent = "Otra tanda";
+      } else sig.textContent = "Siguiente ronda";
+    });
+    cont.querySelector(".sig").addEventListener("click", function () { if (ronda === 4) nueva(); else { ronda++; mostrar(); } });
+    nueva();
+  })();
+
+  /* ---------------- reto: constructor ---------------- */
+  (function () {
+    var COR = [0.5, 1, 1.5, 2], TEA = [-1.5, -1, 3.5, 4];
+    var OBJ = [
+      { t: "Que la recta horizontal separe los dos colores.", ok: function (e) { return e.sep; } },
+      { t: "Que separe con una holgura de al menos 1.5.", ok: function (e) { return e.sep && e.hg >= 1.5; } },
+      { t: "Que separe con una holgura de al menos 2.2, casi la máxima posible.", ok: function (e) { return e.sep && e.hg >= 2.2 - 1e-9; } }
+    ];
+    var logrados = [false, false, false], avisado = false, c = 0, h = 6;
+    var ul = $("objetivos");
+    OBJ.forEach(function (o) { var li = document.createElement("li"); li.innerHTML = '<span class="m"></span><span>' + o.t + '</span>'; ul.appendChild(li); });
+    var pl = Lienzo($("planoConstr"), { W: 380, H: 300, x0: -2.5, x1: 4.5, y0: -0.5, y1: 12.5, L: 28, R: 8, T: 8, B: 22 });
+    function evaluar() {
+      var mc = Math.max.apply(null, COR.map(function (x) { return (x - c) * (x - c); }));
+      var mt = Math.min.apply(null, TEA.map(function (x) { return (x - c) * (x - c); }));
+      return { sep: mc < h && h < mt, hg: Math.min(h - mc, mt - h) };
+    }
+    function pintar() {
+      pl.limpiar();
+      pl.rejilla(1, 2, true);
+      var par = [];
+      for (var x = -2.5; x <= 4.501; x += 0.05) { var z = (x - c) * (x - c); if (z <= 12.5) par.push([x, z]); else if (par.length) { pl.camino(par, "parab"); par = []; } }
+      if (par.length) pl.camino(par, "parab");
+      pl.linea([-2.5, h], [4.5, h], "recta ac");
+      COR.forEach(function (x) { pl.punto(x, (x - c) * (x - c), "neg", 5.5); });
+      TEA.forEach(function (x) { pl.punto(x, (x - c) * (x - c), "pos", 5.5); });
+      var e = evaluar();
+      $("cVal").textContent = f(c);
+      $("hVal").textContent = f(h);
+      $("constrVivo").innerHTML = e.sep
+        ? "Separa · holgura <b>" + f(e.hg) + "</b> · de vuelta en la línea: coral entre <b>" + f(c - Math.sqrt(h)) + "</b> y <b>" + f(c + Math.sqrt(h)) + "</b>"
+        : "Esta recta <b class=\"bad\">no separa</b>: algún punto queda del lado del otro color.";
+      OBJ.forEach(function (o, i) { if (!logrados[i] && o.ok(e)) logrados[i] = true; ul.children[i].classList.toggle("hecho", logrados[i]); });
+      if (!avisado && logrados.every(Boolean)) {
+        avisado = true;
+        C.reto("constructor", true);
+        $("constrVivo").innerHTML += "<br>Los tres objetivos listos. El máximo era 2.25, con c = 1.25 (el centro de los coral) y h = 2.81.";
+      }
+    }
+    $("cSl").addEventListener("input", function () { c = +this.value; pintar(); });
+    $("hSl").addEventListener("input", function () { h = +this.value; pintar(); });
+    pintar();
+  })();
+
+  /* ---------------- reto: a mano ---------------- */
+  (function () {
+    var D;
+    function generar() {
+      for (;;) {
+        var r = function () { return Math.floor(Math.random() * 6) - 2; };
+        var x = [r(), r()], z = [r(), r()], xz = x[0] * z[0] + x[1] * z[1];
+        if (xz === 0 || xz === -1 || Math.abs(xz + 1) > 9) continue;
+        D = { x: x, z: z, xz: xz, k: (xz + 1) * (xz + 1) };
+        break;
+      }
+    }
+    var cfg = {
+      pregunta: function () { return "Con $x = (" + D.x[0] + ", " + D.x[1] + ")$ y $z = (" + D.z[0] + ", " + D.z[1] + ")$, ¿cuánto vale $k(x, z) = (x\\cdot z + 1)^2$?"; },
+      respuesta: function () { return D.k; },
+      tolerancia: 0,
+      pistas: [
+        function () { return "Producto punto: $" + D.x[0] + "\\cdot " + (D.z[0] < 0 ? "(" + D.z[0] + ")" : D.z[0]) + " + " + D.x[1] + "\\cdot " + (D.z[1] < 0 ? "(" + D.z[1] + ")" : D.z[1]) + "$."; },
+        function () { return "$x\\cdot z = " + D.xz + "$. Ahora súmale 1."; },
+        function () { return "$x\\cdot z + 1 = " + (D.xz + 1) + "$. Elévalo al cuadrado."; }
+      ],
+      diagnostico: function (v) {
+        if (v === D.xz * D.xz) return "Ese es $(x\\cdot z)^2$: olvidaste el $+1$.";
+        if (v === D.xz + 1) return "Falta elevar al cuadrado.";
+        if (v === D.xz * D.xz + 1) return "El $+1$ va dentro del paréntesis, antes de elevar.";
+        return null;
+      },
+      explicacion: function () { return "$x\\cdot z = " + D.xz + "$, y $(" + D.xz + " + 1)^2 = " + D.k + "$. Es el producto punto de dos vectores de seis coordenadas, sin haberlos construido."; },
+      reintentable: true,
+      textoReintentar: "Otro ejercicio",
+      antesDeReintentar: generar,
+      alResolver: function (ok) { C.reto("mano", ok); }
+    };
+    generar();
+    B.numerico($("mano"), cfg);
+  })();
+
+  /* ---------------- reto: cazar el error ---------------- */
+  B.cazarError($("error"), {
+    variantes: [
+      {
+        intro: "Kernel RBF con $\\gamma = 0.5$ entre $x = (0, 0)$ y $z = (1, 1)$. Alguien copió la fórmula de la diapositiva 21:",
+        lineas: ["x - z = (-1, -1)", "\\|x - z\\|^2 = 1 + 1 = 2", "k(x, z) = \\exp(0.5 \\cdot 2)", "= e \\approx 2.72"],
+        erronea: 2,
+        explicacion: "Falta el signo menos: $k = \\exp(-0.5\\cdot 2) = e^{-1} \\approx 0.37$. Sin el menos, el parecido crece con la distancia y pasa de 1: es la errata de la diapositiva 21."
+      },
+      {
+        intro: "Kernel RBF con $\\gamma = 0.1$ entre $x = (0, 0)$ y $z = (3, 4)$:",
+        lineas: ["x - z = (-3, -4)", "\\|x - z\\| = \\sqrt{9 + 16} = 5", "\\|x - z\\|^2 = 5", "k(x, z) = \\exp(-0.1 \\cdot 5) \\approx 0.61"],
+        erronea: 2,
+        explicacion: "El cuadrado de la distancia es $25$, no $5$. Entonces $k = \\exp(-2.5) \\approx 0.08$. Es la misma trampa que <code>dist()</code> en R, que da la distancia sin elevar."
+      },
+      {
+        intro: "Kernel polinómico de grado 2 entre $x = (1, 2)$ y $z = (2, -1)$:",
+        lineas: ["k(x, z) = (x\\cdot z + 1)^2", "x\\cdot z = 1\\cdot 2 + 2\\cdot 1 = 4", "x\\cdot z + 1 = 5", "k(x, z) = 25"],
+        erronea: 1,
+        explicacion: "La segunda coordenada de $z$ es $-1$: $x\\cdot z = 2 - 2 = 0$, y $k = (0 + 1)^2 = 1$."
+      }
+    ],
+    alResolver: function (ok) { C.reto("error", ok); }
+  });
+
+  /* ---------------- retos: propiedades ---------------- */
+  function prop(id, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple($(id), cfg);
+  }
+  prop("prop1", {
+    pregunta: "Raschka escribe que al aumentar $\\gamma$ aumenta el alcance de cada ejemplo. ¿Qué pasa en realidad con el alcance?",
+    opciones: ["Se achica: la campana es más angosta y cada punto influye solo muy cerca", "Crece, como dice el libro", "No cambia: $\\gamma$ solo cambia la altura de la campana", "Depende del valor de $C$"],
+    correcta: 0,
+    pistas: [null,
+      "Con $\\gamma$ grande, $\\exp(-\\gamma d^2)$ cae a casi cero ya con $d$ pequeño. ¿Eso es más alcance o menos?",
+      "La altura es siempre 1 en $d = 0$. Lo que cambia es el ancho.",
+      "El ancho de la campana es solo cosa de $\\gamma$: $C$ es otro parámetro."],
+    explicacion: "$\\gamma = 1/(2\\sigma^2)$: más $\\gamma$ es menos $\\sigma$, una campana angosta. La frontera se ajusta más justamente porque cada punto solo defiende su vecindad. La conclusión del libro está bien; la frase sobre el alcance, al revés."
+  });
+  prop("prop2", {
+    pregunta: "Para el kernel RBF, ¿cuánto vale $k(x, x)$, un punto consigo mismo?",
+    opciones: ["Siempre 1", "Depende de $\\gamma$", "Siempre 0", "$\\|x\\|^2$"],
+    correcta: 0,
+    pistas: [null,
+      "$\\|x - x\\|^2 = 0$, y $\\exp(-\\gamma\\cdot 0)$ no depende de $\\gamma$.",
+      "La distancia de un punto a sí mismo es 0, y $\\exp(0) = 1$.",
+      "Eso sería el kernel lineal, $x\\cdot x$. En el RBF entra la diferencia $x - x$."],
+    explicacion: "$\\exp(-\\gamma\\cdot 0) = 1$: la diagonal de la matriz $K$ son unos, y todos los demás valores quedan entre 0 y 1. Por eso se lee como un parecido."
+  });
+  prop("prop3", {
+    pregunta: "Para entrenar una SVM con kernel sobre $n$ puntos, ¿qué necesita saber de los datos?",
+    opciones: ["Solo los $n \\times n$ valores $k(x_i, x_j)$ y las etiquetas", "Las coordenadas $\\varphi(x_i)$ de cada punto", "Solo las coordenadas originales, sin kernel", "Los $n$ valores $k(x_i, x_i)$"],
+    correcta: 0,
+    pistas: [null,
+      "Con RBF, $\\varphi(x_i)$ tiene infinitas coordenadas. ¿Se podrían guardar?",
+      "Las coordenadas sí entran, pero solo a través de los productos punto.",
+      "Esos son solo la diagonal. Hacen falta los parecidos entre todos los pares."],
+    explicacion: "En la versión dual los datos solo aparecen en productos punto, y con el truco esos productos son $k(x_i, x_j)$. Por eso la matriz de kernel es todo lo que la SVM necesita: es lo que arma el programa de la vida real."
+  });
+  prop("prop4", {
+    pregunta: "Raschka escribe el RBF como $\\exp(-\\|x - z\\|^2 / 2\\sigma^2)$. Si $\\sigma = 0.5$, ¿cuánto vale $\\gamma$?",
+    opciones: ["2", "0.5", "0.25", "1"],
+    correcta: 0,
+    pistas: [null,
+      "Ese es $\\sigma$. $\\gamma = 1/(2\\sigma^2)$.",
+      "$2\\sigma^2 = 0.5$, y $\\gamma$ es su inverso.",
+      "$\\sigma^2 = 0.25$, el doble es 0.5, y uno sobre eso no es 1."],
+    explicacion: "$\\gamma = 1/(2 \\cdot 0.25) = 2$. Un $\\sigma$ chico da un $\\gamma$ grande: campana angosta."
+  });
+
+  /* ---------------- formula de memoria ---------------- */
+  B.ordenar($("formula"), {
+    piezas: ["k(x, z)", "=", "\\exp\\big(", "-\\gamma", "\\|x - z\\|^2", "\\big)"],
+    distractores: ["+\\gamma", "\\|x - z\\|", "x\\cdot z"],
+    soluciones: [[0, 1, 2, 3, 4, 5]],
+    explicacion: "El signo menos hace que el parecido caiga con la distancia, y la distancia va al cuadrado. Sin el menos (la errata de la diapositiva 21) el valor crecería sin límite.",
+    alResolver: function (ok) { C.reto("formula", ok); }
+  });
+
+  /* ---------------- vida real: el algoritmo en codigo ---------------- */
+  (function () {
+    // cada linea: [id semantico, texto]. El id une la misma instruccion en los dos lenguajes.
+    var CODIGO = {
+      py: [
+        ["import", "import numpy as np"],
+        ["import", "from sklearn.metrics.pairwise import rbf_kernel"],
+        ["import", "from sklearn.svm import SVC"],
+        [null, ""],
+        [null, "# datos inventados: 5 coral en el centro, 8 teal alrededor"],
+        ["datos", "X = np.array([[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1],      # clase -1"],
+        ["datos", "              [3, 0], [-3, 0], [0, 3], [0, -3],"],
+        ["datos", "              [2, 2], [-2, 2], [2, -2], [-2, -2]],           # clase +1"],
+        ["datos", "             dtype=float)"],
+        ["y", "y = np.array([-1] * 5 + [1] * 8)"],
+        ["n", "n = len(X)"],
+        [null, ""],
+        ["phidef", "def phi(v):                                     # 1. el camino largo"],
+        ["phidef", "    r = np.sqrt(2)"],
+        ["phidef", "    return [1, r * v[0], r * v[1], v[0] ** 2, r * v[0] * v[1], v[1] ** 2]"],
+        [null, ""],
+        ["pq", "p, q = X[9], X[1]                               # (2, 2) y (1, 0)"],
+        ["fpq", "fp, fq = phi(p), phi(q)"],
+        ["largo0", "largo = 0.0"],
+        ["fork", "for k in range(6):"],
+        ["suma", "    largo += fp[k] * fq[k]"],
+        ["atajo", "atajo = (p[0] * q[0] + p[1] * q[1] + 1) ** 2    # 2. el atajo"],
+        ["imp1", 'print("largo", round(largo, 6), " atajo", atajo)'],
+        [null, ""],
+        ["gamma", "gamma = 0.5"],
+        ["K0", "K = np.zeros((n, n))"],
+        ["fori", "for i in range(n):                              # 3. matriz de kernel RBF"],
+        ["forj", "    for j in range(n):"],
+        ["d2", "        d2 = (X[i, 0] - X[j, 0]) ** 2 + (X[i, 1] - X[j, 1]) ** 2"],
+        ["kij", "        K[i, j] = np.exp(-gamma * d2)"],
+        ["imp2", 'print("K[0, 1]", round(K[0, 1], 4), " K[0, 9]", round(K[0, 9], 4))'],
+        ["imp3", 'print("igual a la librería:", np.allclose(K, rbf_kernel(X, gamma=gamma)))'],
+        [null, ""],
+        ["fit", 'svm = SVC(kernel="rbf", gamma=gamma, C=1).fit(X, y)    # 4. la SVM'],
+        ["imp4", 'print("exactitud", svm.score(X, y), " soportes", len(svm.support_))'],
+        ["imp5", 'print("nuevos", svm.predict([[1.5, 0.5], [2, 1]]))']
+      ],
+      r: [
+        ["import", "library(e1071)"],
+        [null, ""],
+        [null, "# datos inventados: 5 coral en el centro, 8 teal alrededor"],
+        ["datos", "X <- matrix(c(0, 0,  1, 0,  -1, 0,  0, 1,  0, -1,            # clase -1"],
+        ["datos", "              3, 0,  -3, 0,  0, 3,  0, -3,"],
+        ["datos", "              2, 2,  -2, 2,  2, -2,  -2, -2),                # clase +1"],
+        ["datos", "            ncol = 2, byrow = TRUE)"],
+        ["y", "y <- c(rep(-1, 5), rep(1, 8))"],
+        ["n", "n <- nrow(X)"],
+        [null, ""],
+        ["phidef", "phi <- function(v) {                            # 1. el camino largo"],
+        ["phidef", "  r <- sqrt(2)"],
+        ["phidef", "  c(1, r * v[1], r * v[2], v[1]^2, r * v[1] * v[2], v[2]^2)"],
+        ["phidef", "}"],
+        ["pq", "p <- X[10, ]; q <- X[2, ]                       # (2, 2) y (1, 0)"],
+        ["fpq", "fp <- phi(p); fq <- phi(q)"],
+        ["largo0", "largo <- 0"],
+        ["fork", "for (k in 1:6) {"],
+        ["suma", "  largo <- largo + fp[k] * fq[k]"],
+        [null, "}"],
+        ["atajo", "atajo <- (p[1] * q[1] + p[2] * q[2] + 1)^2      # 2. el atajo"],
+        ["imp1", 'cat("largo", round(largo, 6), " atajo", atajo, "\\n")'],
+        [null, ""],
+        ["gamma", "gamma <- 0.5"],
+        ["K0", "K <- matrix(0, n, n)"],
+        ["fori", "for (i in 1:n) {                                # 3. matriz de kernel RBF"],
+        ["forj", "  for (j in 1:n) {"],
+        ["d2", "    d2 <- (X[i, 1] - X[j, 1])^2 + (X[i, 2] - X[j, 2])^2"],
+        ["kij", "    K[i, j] <- exp(-gamma * d2)"],
+        [null, "  }"],
+        [null, "}"],
+        ["imp2", 'cat("K[1, 2]", round(K[1, 2], 4), " K[1, 10]", round(K[1, 10], 4), "\\n")'],
+        ["imp3", 'cat("igual a la librería:", isTRUE(all.equal(K, exp(-gamma * as.matrix(dist(X))^2),'],
+        ["imp3", '                                           check.attributes = FALSE)), "\\n")'],
+        [null, ""],
+        ["fit", 'fit <- svm(X, factor(y), kernel = "radial", gamma = gamma, cost = 1,'],
+        ["fit", "           scale = FALSE)                       # 4. la SVM"],
+        ["imp4", 'cat("exactitud", mean(predict(fit, X) == y), " soportes", fit$tot.nSV, "\\n")'],
+        ["imp5", 'cat("nuevos", as.character(predict(fit, rbind(c(1.5, 0.5), c(2, 1)))), "\\n")']
+      ]
+    };
+    // salida real de cada programa (python3 con scikit-learn 1.6.1 y Rscript con e1071 1.7.17), linea por linea
+    var SALIDA = {
+      py: ["largo 9.0  atajo 9.0", "K[0, 1] 0.6065  K[0, 9] 0.0183", "igual a la librería: True", "exactitud 1.0  soportes 12", "nuevos [-1  1]"],
+      r: ["largo 9  atajo 9 ", "K[1, 2] 0.6065  K[1, 10] 0.0183 ", "igual a la librería: TRUE ", "exactitud 1  soportes 12 ", "nuevos -1 1 "]
+    };
+    var X = CIRC.map(function (p) { return [p[0], p[1]]; }), n = X.length, G = 0.5;
+    var P = X[9], Q = X[1], FP = phi2(P), FQ = phi2(Q);
+    var NOM = ["1", "√2·x₁", "√2·x₂", "x₁²", "√2·x₁x₂", "x₂²"];
+
+    /* eventos: una foto del estado despues de ejecutar cada linea */
+    var EV = [];
+    (function () {
+      var st = { fase: 0, k: null, largo: null, prod: null, atajo: null, i: null, j: null, d2: null, kij: null, lleno: 0, out: 0, pq: false, fpq: false, gamma: false };
+      function foto(id, extra) { EV.push(Object.assign({}, st, { id: id }, extra || {})); }
+      foto("import"); foto("datos"); foto("y"); foto("n");
+      st.fase = 1;
+      foto("phidef");
+      st.pq = true; foto("pq");
+      st.fpq = true; foto("fpq");
+      st.largo = 0; foto("largo0");
+      for (var k = 0; k < 6; k++) {
+        st.k = k; st.prod = null; foto("fork");
+        st.prod = FP[k] * FQ[k]; st.largo += st.prod; foto("suma");
+      }
+      st.k = null; st.prod = null;
+      st.atajo = Math.pow(P[0] * Q[0] + P[1] * Q[1] + 1, 2); foto("atajo");
+      st.out = 1; foto("imp1");
+      st.fase = 2; st.gamma = true; foto("gamma");
+      foto("K0");
+      for (var i = 0; i < n; i++) {
+        st.i = i; st.j = null; st.d2 = null; st.kij = null; foto("fori");
+        for (var j = 0; j < n; j++) {
+          st.j = j; st.d2 = null; st.kij = null; foto("forj");
+          st.d2 = Math.pow(X[i][0] - X[j][0], 2) + Math.pow(X[i][1] - X[j][1], 2); foto("d2");
+          st.kij = Math.exp(-G * st.d2); st.lleno = i * n + j + 1; foto("kij");
+        }
+      }
+      st.i = null; st.j = null; st.d2 = null; st.kij = null;
+      st.out = 2; foto("imp2");
+      st.out = 3; foto("imp3");
+      st.fase = 3; foto("fit");
+      st.out = 4; foto("imp4");
+      st.out = 5; foto("imp5", { fin: true });
+    })();
+
+    function narrar(e, ctx) {
+      var py = ctx.lang() === "py", ix = ctx.ix;
+      switch (e.id) {
+        case "import": return py ? "Carga <b>NumPy</b>, <b>rbf_kernel</b> (la matriz de kernel ya hecha, para comparar) y la SVM de scikit-learn, <b>SVC</b>."
+          : "Carga <b>e1071</b>, el paquete de R que trae <b>svm()</b>. Por dentro usa LIBSVM, la misma librería en C que scikit-learn.";
+        case "datos": return "Los 13 puntos de los círculos del recorrido: los 5 primeros coral, en el centro, y los 8 últimos teal, alrededor.";
+        case "y": return "Las etiquetas: <b>−1</b> para los coral y <b>+1</b> para los teal.";
+        case "n": return "Guarda <b>n = 13</b>.";
+        case "phidef": return "Define el levantamiento de grado 2 del paso 5: seis coordenadas, con los <b>√2</b> que hacen que el producto punto dé el atajo. " + (py ? "En Python las coordenadas de v son v[0] y v[1]." : "En R son v[1] y v[2].");
+        case "pq": return "Elige dos puntos: p = <b>(2, 2)</b>, la fila " + (py ? "9" : "10") + ", y q = <b>(1, 0)</b>, la fila " + (py ? "1" : "2") + ". " + (py ? "Python cuenta desde 0." : "R cuenta desde 1.");
+        case "fpq": return "El camino largo: construye φ(p) y φ(q), seis números cada uno.";
+        case "largo0": return "El acumulador del producto punto empieza en 0.";
+        case "fork": return "Coordenada <b>k = " + ix(e.k) + "</b>: " + NOM[e.k] + ".";
+        case "suma": return "Multiplica " + f(FP[e.k], 3) + " × " + f(FQ[e.k], 3) + " = <b>" + f(e.prod, 3) + "</b> y lo suma: largo = <b>" + f(e.largo, 3) + "</b>.";
+        case "atajo": return "El atajo: p·q = 2·1 + 2·0 = 2, más 1, al cuadrado: <b>9</b>. Dos multiplicaciones en vez de doce.";
+        case "imp1": return "Imprime los dos: <b>9 y 9</b>." + (py ? " El largo se redondea porque √2·√2 en coma flotante no es exactamente 2." : "");
+        case "gamma": return "Fija <b>γ = 0.5</b>, el mismo valor que viste en el paso 6.";
+        case "K0": return "Una matriz de 13 por 13 llena de ceros: ahí va el parecido de cada punto con cada punto.";
+        case "fori": return "Fila <b>i = " + ix(e.i) + "</b>: el punto " + pto(X[e.i]) + " contra todos.";
+        case "forj": return "Columna <b>j = " + ix(e.j) + "</b>: " + pto(X[e.i]) + " contra " + pto(X[e.j]) + ".";
+        case "d2": return "Distancia al cuadrado: <b>" + cuenta(e.d2) + "</b>.";
+        case "kij": return "K[" + ix(e.i) + ", " + ix(e.j) + "] = exp(−0.5 · " + cuenta(e.d2) + ") = <b>" + f(e.kij, 4) + "</b>." + (e.i === e.j ? " Un punto consigo mismo: siempre 1." : "");
+        case "imp2": return "Imprime dos celdas: (0, 0) con (1, 0), a distancia 1, da <b>0.6065</b>; (0, 0) con (2, 2), a distancia al cuadrado 8, da <b>0.0183</b>. " + (py ? "Python escribe K[0, 1] y K[0, 9]." : "R escribe K[1, 2] y K[1, 10]: son las mismas celdas.");
+        case "imp3": return py ? "Compara con <b>rbf_kernel</b>: <b>True</b>, los bucles hicieron lo mismo que la librería."
+          : "Compara con la versión de una línea, <b>exp(−γ · dist²)</b>: <b>TRUE</b>. Hace falta check.attributes = FALSE porque dist() les pone nombres a filas y columnas.";
+        case "fit": return py ? "La SVM con kernel RBF, <b>γ = 0.5</b> y <b>C = 1</b>. Por dentro calcula esta misma matriz."
+          : "La SVM con kernel radial, <b>gamma = 0.5</b>, <b>cost = 1</b> y <b>scale = FALSE</b>, para que use los datos tal cual (la segunda trampa de abajo).";
+        case "imp4": return "Acierta los 13 puntos y usa <b>12 vectores soporte</b>: todos menos (0, 0), que está en el centro de los coral y no frena nada.";
+        case "imp5": return "Dos días nuevos: (1.5, 0.5), dentro del círculo, sale <b>−1</b> (coral); (2, 1), afuera, sale <b>+1</b> (teal). En el plano de la izquierda está la frontera curva.";
+      }
+      return "";
+    }
+
+    var vp = Lienzo($("vrPlano"), { W: 260, H: 260, x0: -3.6, x1: 3.6, y0: -3.6, y1: 3.6, L: 8, R: 8, T: 8, B: 8 });
+    var mz = $("vrMatriz"), MC = 17, ML = 22;
+    mz.setAttribute("viewBox", "0 0 " + (ML + n * MC + 4) + " " + (ML + n * MC + 4));
+    var KF = [];
+    for (var a = 0; a < n; a++) { KF.push([]); for (var b2 = 0; b2 < n; b2++) KF[a].push(rbf(G, X[a], X[b2])); }
+
+    function visual(e, anterior, ctx) {
+      vp.limpiar();
+      if (e && e.fin) {
+        var s = SOL[3], N = 30, pz = 7.2 / N;
+        for (var u = 0; u < N; u++) for (var v = 0; v < N; v++) {
+          var cx = -3.6 + (u + 0.5) * pz, cy = -3.6 + (v + 0.5) * pz;
+          vp.rect(cx - pz / 2, cy - pz / 2, cx + pz / 2 + 0.01, cy + pz / 2 + 0.01, decision(s, [cx, cy]) > 0 ? "zona-pos" : "zona-neg", 0.2);
+        }
+      }
+      vp.rejilla(1, 1, false);
+      if (e && e.fase === 1 && e.pq) vp.linea(P, Q, "borde");
+      if (e && e.i !== null && e.j !== null && e.fase === 2) vp.linea(X[e.i], X[e.j], "borde");
+      CIRC.forEach(function (p, k) {
+        if (e && e.fin && SOL[3][2][k]) vp.anillo(p[0], p[1], "", 9);
+        vp.punto(p[0], p[1], p[2] > 0 ? "pos" : "neg", 5);
+      });
+      if (e && e.fase === 1 && e.pq) { vp.anillo(P[0], P[1], "j", 9); vp.anillo(Q[0], Q[1], "k", 9); vp.etiqueta(P[0], P[1], "p", "lab j", 0, -12); vp.etiqueta(Q[0], Q[1], "q", "lab k", 0, -12); }
+      if (e && e.fase === 2 && e.i !== null) { vp.anillo(X[e.i][0], X[e.i][1], "j", 9); if (e.j !== null) vp.anillo(X[e.j][0], X[e.j][1], "k", 11); }
+      if (e && e.fin) { vp.cuadro(1.5, 0.5, "neg"); vp.cuadro(2, 1, "pos"); }
+
+      // matriz
+      mz.innerHTML = "";
+      var lleno = e ? e.lleno : 0;
+      for (var ii = 0; ii < n; ii++) {
+        texto(mz, { x: ML - 4, y: ML + ii * MC + MC / 2 + 3.5, "class": "tick", "text-anchor": "end" }, String(ctx.ix(ii)));
+        texto(mz, { x: ML + ii * MC + MC / 2, y: ML - 6, "class": "tick", "text-anchor": "middle" }, String(ctx.ix(ii)));
+        for (var jj = 0; jj < n; jj++) {
+          var hecho = ii * n + jj < lleno;
+          nodo("rect", { x: ML + jj * MC, y: ML + ii * MC, width: MC, height: MC, "class": "kcell", fill: hecho ? "var(--accent)" : "var(--surface-2)", "fill-opacity": hecho ? Math.max(0.05, KF[ii][jj]).toFixed(3) : 1 }, mz);
+        }
+      }
+      if (e && e.fase === 2 && e.i !== null && e.j !== null) nodo("rect", { x: ML + e.j * MC, y: ML + e.i * MC, width: MC, height: MC, fill: "none", stroke: "var(--ink)", "stroke-width": 2 }, mz);
+
+      var cu = "";
+      if (e && e.fase === 1 && e.fpq) {
+        cu = NOM.map(function (nm, k) {
+          var on = e.k === k;
+          return (on ? "<b>" : "") + nm + ": " + f(FP[k], 3) + " × " + f(FQ[k], 3) + (on ? "</b>" : "");
+        }).join(" · ");
+        if (e.largo !== null) cu += "<br>largo = <b>" + f(e.largo, 3) + "</b>";
+        if (e.atajo !== null) cu += " · atajo = (2·1 + 2·0 + 1)² = <b>" + cuenta(e.atajo) + "</b>";
+      } else if (e && e.fase === 2) {
+        cu = "celdas calculadas: <b>" + e.lleno + " de " + n * n + "</b>";
+        if (e.d2 !== null) cu += " · d² = <b>" + cuenta(e.d2) + "</b>";
+        if (e.kij !== null) cu += " · K = exp(−0.5 · " + cuenta(e.d2) + ") = <b>" + f(e.kij, 4) + "</b>";
+      } else if (e && e.fase === 3) {
+        cu = "12 vectores soporte (anillos) · el (0, 0) no lo es" + (e.fin ? " · cuadrados: los dos días nuevos" : "");
+      }
+      $("vrCuenta").innerHTML = cu;
+
+      var lin = SALIDA[ctx.lang()].slice(0, e ? e.out : 0), sal = $("vrSalida");
+      sal.textContent = lin.length ? lin.join("\n") : "(todavía no imprime nada)";
+      sal.classList.toggle("vacia", !lin.length);
+    }
+
+    B.vidaReal($("vidareal"), {
+      codigo: CODIGO,
+      eventos: EV,
+      narrar: narrar,
+      vars: function (e, ctx) {
+        var v = [], ix = ctx.ix;
+        if (!e) return v;
+        if (e.k !== null) v.push('<span>k = <b>' + ix(e.k) + '</b></span>');
+        if (e.largo !== null && e.fase === 1) v.push('<span class="vj">largo = <b>' + f(e.largo, 3) + '</b></span>');
+        if (e.atajo !== null && e.fase === 1) v.push('<span class="vk">atajo = <b>' + cuenta(e.atajo) + '</b></span>');
+        if (e.gamma) v.push('<span>gamma = <b>0.5</b></span>');
+        if (e.i !== null) v.push('<span class="vj">i = <b>' + ix(e.i) + '</b></span>');
+        if (e.j !== null) v.push('<span class="vk">j = <b>' + ix(e.j) + '</b></span>');
+        if (e.d2 !== null) v.push('<span>d2 = <b>' + cuenta(e.d2) + '</b></span>');
+        if (e.kij !== null) v.push('<span>K[i, j] = <b>' + f(e.kij, 4) + '</b></span>');
+        return v;
+      },
+      visual: visual,
+      demora: function (e) {
+        if (!e) return 600;
+        return { forj: 40, d2: 50, kij: 70, fori: 400, fork: 400, suma: 700 }[e.id] || 1000;
+      }
+    });
+
+    /* prediccion y trampas reales */
+    B.numerico(cuerpo("vrPred"), {
+      pregunta: "Con 13 puntos, ¿cuántas veces se ejecuta la línea <code>K[i, j] = np.exp(-gamma * d2)</code>?",
+      respuesta: 169,
+      tolerancia: 0,
+      pistas: ["Hay un bucle para las filas y, dentro, otro para las columnas. ¿Cuántas vueltas da cada uno?", "Cada uno da 13 vueltas, y el de adentro corre completo en cada vuelta del de afuera."],
+      diagnostico: function (v) {
+        if (v === 13) return "Esas son las vueltas de un solo bucle. El de adentro corre 13 veces por cada fila.";
+        if (v === 26) return "Los bucles están anidados: se multiplican, no se suman.";
+        if (v === 78 || v === 91) return "Pensaste en la mitad de la matriz, porque es simétrica. Este programa no se salta nada: llena las 169 celdas.";
+        return null;
+      },
+      explicacion: "$13 \\times 13 = 169$, una por celda de la matriz, incluida la diagonal. La librería hace lo mismo con la mitad del trabajo, porque $K$ es simétrica. Dale a reproducir y mira cómo se llena.",
+      alResolver: function (ok) { C.reto("codigo1", ok); }
+    });
+    prop("codigo2", {
+      pregunta: "En Python borras <code>gamma=gamma</code> y entrenas <code>SVC(kernel=\"rbf\", C=1)</code>. ¿Qué $\\gamma$ usa?",
+      opciones: [
+        "0.1806: el valor por defecto es <code>gamma=\"scale\"</code>, que vale 1/(2 · X.var()), y X.var() es 2.769",
+        "0.5, que es 1/(número de columnas)",
+        "1",
+        "0.5, porque es el último valor que usaste"
+      ],
+      correcta: 0,
+      pistas: [null,
+        "Ese es el valor por defecto de e1071 en R, y era el de scikit-learn antes de la versión 0.22. Hoy el defecto es otro.",
+        "El valor por defecto no es un número fijo: depende de los datos.",
+        "Un modelo nuevo no recuerda el gamma de otro."],
+      explicacion: "Corrido de verdad: <code>svm._gamma</code> da <code>0.18055555555555555</code>, que es $1/(2 \\cdot 2.769)$. <code>X.var()</code> es la varianza de los 26 números de X juntos. Con estos datos sigue acertando todo y usa 12 soportes, pero es otro modelo: si comparas con R, fija <code>gamma</code> en los dos."
+    });
+    prop("codigo3", {
+      pregunta: "En R corres <code>svm(X, factor(y), kernel = \"radial\")</code>, sin <code>gamma</code> ni <code>scale</code>. ¿Qué kernel usa en realidad?",
+      opciones: [
+        "γ = 1/ncol = 0.5, pero sobre los datos estandarizados: cada columna se divide entre 1.732, así que en tus unidades es γ = 0.5/3 ≈ 0.167",
+        "γ = 0.5 sobre tus datos tal cual",
+        "El mismo <code>gamma=\"scale\"</code> que scikit-learn",
+        "Da error porque falta gamma"
+      ],
+      correcta: 0,
+      pistas: [null,
+        "e1071 tiene otro argumento que por defecto vale TRUE y cambia los datos antes de entrenar.",
+        "Cada librería tiene su propio valor por defecto. El de e1071 es 1/(número de columnas).",
+        "No da error: los valores por defecto existen y actúan en silencio."],
+      explicacion: "Corrido de verdad: <code>fit$gamma</code> es 0.5, <code>fit$scaled</code> es <code>TRUE TRUE</code> y la escala de cada columna es 1.732 (su desvío). Dividir los datos entre 1.732 multiplica las distancias al cuadrado por $1/3$, así que es como usar $\\gamma \\approx 0.167$ con tus datos. Por eso el programa pone <code>gamma = gamma</code> y <code>scale = FALSE</code>: para que R y Python entrenen exactamente el mismo modelo."
+    });
+    prop("codigo4", {
+      pregunta: "En R comparas tu matriz con <code>exp(-gamma * as.matrix(dist(X)))</code>, sin el <code>^2</code>. ¿Qué pasa?",
+      opciones: [
+        "No coinciden: dist() da la distancia, no su cuadrado; K[1, 10] sale 0.2431 en vez de 0.0183",
+        "Coinciden: dist() ya devuelve la distancia al cuadrado",
+        "Coinciden, porque con gamma = 0.5 da lo mismo",
+        "Da error de dimensiones"
+      ],
+      correcta: 0,
+      pistas: [null,
+        "dist() da la distancia euclídea: entre (0, 0) y (2, 2) es $\\sqrt 8 \\approx 2.83$, no 8.",
+        "$\\exp(-0.5\\cdot 2.83)$ y $\\exp(-0.5\\cdot 8)$ no son iguales.",
+        "Las dos matrices son de 13 por 13; el problema es de valores."],
+      explicacion: "Corrido de verdad: con <code>^2</code> la celda [1, 10] da 0.0183; sin él, 0.2431, y <code>all.equal</code> responde <code>Mean relative difference: 3.377077</code>. Sin el cuadrado tienes otro kernel (el laplaciano), no el RBF."
+    });
+  })();
+
+  /* ---------------- tarjetas ---------------- */
+  B.tarjetas($("tarjetas"), [
+    ["¿Qué hace un levantamiento $\\varphi$?", "Agrega coordenadas nuevas a cada punto (por ejemplo $x^2$) para que una recta o un plano separe lo que antes no separaba."],
+    ["¿Cómo vuelve al espacio original una recta del espacio levantado?", "Como una frontera curva: dos umbrales en la recta, un círculo en el plano."],
+    ["¿Qué es un <b>kernel</b>?", "Una función $k(x, z) = \\varphi(x)\\cdot\\varphi(z)$: el producto punto en el espacio levantado, calculado sin construirlo."],
+    ["¿Por qué alcanza con el kernel?", "Porque en la versión dual de la SVM los datos solo aparecen en productos punto: $f(x) = \\sum \\alpha_i y_i\\, k(x_i, x) + b$."],
+    ["Kernel polinómico de grado 2", "$(x\\cdot z + 1)^2$, igual al producto punto de dos vectores de seis coordenadas cuando hay dos variables."],
+    ["Kernel RBF", "$\\exp(-\\gamma\\|x - z\\|^2)$, con el signo menos. Vale 1 en $x = z$ y cae a 0 con la distancia. Su $\\varphi$ tiene infinitas coordenadas."],
+    ["¿Qué hace un $\\gamma$ grande?", "Campanas angostas: cada punto influye solo muy cerca, la frontera se pega a los datos y sobreajusta."],
+    ["¿Cómo se eligen kernel, $\\gamma$ y $C$?", "Con validación cruzada, nunca por la exactitud en los datos de entrenamiento."]
+  ]);
+
+  /* ---------------- conexiones ---------------- */
+  B.conexiones("truco-kernel");
+})();
+</script>
+</body>
+</html>

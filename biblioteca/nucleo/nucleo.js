@@ -11,6 +11,9 @@
     tex(root) / texStr(src)          formulas con KaTeX
     pasos(root, cfg)                 recorrido paso a paso con candado
     opcionMultiple / numerico / ordenar / cazarError / tarjetas   tipos de reto
+    citas(root) / lecturas(el)       chips de cita al PDF y la lista de lecturas de la pagina
+    conexiones(id)                   prerrequisitos, siguientes y "Donde te lo ensenaron" desde el catalogo
+    vidaReal(root, cfg)              codigo Python y R animado linea por linea
 
   Todo el estado vive en localStorage y cada acceso esta protegido: si el
   navegador lo bloquea, la pagina funciona igual pero sin recordar progreso.
@@ -634,45 +637,60 @@
   //         data-que="La formula de la covarianza y el codigo con np.cov."
   //         data-cuando="Despues del paso 3"></cite>
   // data-pag es la pagina del archivo PDF (la que abre el visor); data-pimp, la impresa en el libro (opcional).
+  // Diapositivas HTML (fuentes con tipo: "diapositivas"): data-pag es el numero de diapositiva que se ve en pantalla
+  // y data-ancla el ancla de reveal.js sin "#/" (por ejemplo "popular-kernel-functions" o "5/9").
+  // Documentos HTML de una sola pagina (tipo: "documento"): data-pag es el numero de seccion ("9.4") y data-ancla el id sin "#".
   // B.citas(root) convierte cada <cite> en un chip con un panel desplegable y un enlace al PDF en esa pagina.
   // B.lecturas(el) arma, al final de la pagina, la lista de todas las citas en el orden en que aparecen.
   function fuenteDe(id) { return (window.FUENTES || {})[id]; }
-  function urlPdf(f, pag) {
+  function esDiapo(f) { return !!(f && f.tipo === "diapositivas"); }
+  function esDoc(f) { return !!(f && f.tipo === "documento"); }
+  function fragmento(f, pag, ancla) {
+    if (esDiapo(f)) return ancla ? "#/" + ancla : "";
+    if (esDoc(f)) return ancla ? "#" + encodeURIComponent(ancla) : "";
+    return pag ? "#page=" + pag : "";
+  }
+  function urlPdf(f, pag, ancla) {
     var ruta = String(f.archivo).split("/").map(encodeURIComponent).join("/");
-    return "file://" + ruta + (pag ? "#page=" + pag : "");
+    return "file://" + ruta + fragmento(f, pag, ancla);
+  }
+  function lugar(d) {
+    if (esDiapo(d.f)) return d.pag ? "diapositiva " + d.pag : "";
+    if (esDoc(d.f)) return d.pag ? "sección " + d.pag : "";
+    if (d.pimp) return "p. " + d.pimp;
+    return d.pag ? "p. " + d.pag + " del PDF" : "";
   }
   function datosCita(c) {
     var id = c.getAttribute("data-fuente"), f = fuenteDe(id);
     return {
-      id: id, f: f, pag: c.getAttribute("data-pag") || "", pimp: c.getAttribute("data-pimp") || "",
+      id: id, f: f, pag: c.getAttribute("data-pag") || "", pimp: c.getAttribute("data-pimp") || "", ancla: c.getAttribute("data-ancla") || "",
       seccion: c.getAttribute("data-seccion") || "", que: c.getAttribute("data-que") || "", cuando: c.getAttribute("data-cuando") || ""
     };
   }
   function etiqueta(d) {
-    var t = d.f ? d.f.corto : d.id;
-    if (d.pimp) t += ", p. " + d.pimp;
-    else if (d.pag) t += ", p. " + d.pag + " del PDF";
-    return t;
+    var t = d.f ? d.f.corto : d.id, l = lugar(d);
+    return l ? t + ", " + l : t;
   }
   // en el servidor de produccion los PDF viven en /pdf/, con la misma ruta que tienen dentro de brain/
-  function urlPdfServidor(f, pag) {
+  function urlPdfServidor(f, pag, ancla) {
     var partes = String(f.archivo).split("/brain/");
     if (partes.length < 2) return null;
-    return API + "/pdf/" + partes.slice(1).join("/brain/").split("/").map(encodeURIComponent).join("/") + (pag ? "#page=" + pag : "");
+    return API + "/pdf/" + partes.slice(1).join("/brain/").split("/").map(encodeURIComponent).join("/") + fragmento(f, pag, ancla);
   }
+  function textoAbrir(d) { return esDiapo(d.f) ? "Abrir esa diapositiva" : esDoc(d.f) ? "Abrir esa sección" : "Abrir el PDF en esa pagina"; }
   function abrirPdf(d, boton) {
     if (!d.f) return;
-    var url = urlPdf(d.f, d.pag);
+    var url = urlPdf(d.f, d.pag, d.ancla);
     if (location.protocol === "file:") { window.open(url, "_blank"); return; }
-    var enServidor = nube.pdf && urlPdfServidor(d.f, d.pag);
+    var enServidor = nube.pdf && urlPdfServidor(d.f, d.pag, d.ancla);
     if (enServidor) { window.open(enServidor, "_blank", "noopener"); return; }
     // servido por http el navegador bloquea file://; se copia la ruta para abrirla a mano
-    var txt = d.f.archivo + (d.pag ? "  (pagina " + d.pag + ")" : "");
+    var txt = d.f.archivo + (lugar(d) ? "  (" + lugar(d) + ")" : "");
     function listo(ok) {
       boton.textContent = ok ? "Ruta copiada. Pégala en Finder o en el navegador." :
-        nube.servidor ? "Los PDF no están en el servidor: ábrelo en tu Mac" + (d.pag ? ", página " + d.pag + "." : ".") :
+        nube.servidor ? "Los PDF no están en el servidor: ábrelo en tu Mac" + (lugar(d) ? ", " + lugar(d) + "." : ".") :
         "Abre la biblioteca con doble clic para que el enlace funcione.";
-      setTimeout(function () { boton.textContent = "Abrir el PDF en esa pagina"; }, 2600);
+      setTimeout(function () { boton.textContent = textoAbrir(d); }, 2600);
     }
     try { navigator.clipboard.writeText(txt).then(function () { listo(true); }, function () { listo(false); }); } catch (e) { listo(false); }
   }
@@ -690,10 +708,10 @@
       pop.className = "cita-pop";
       pop.hidden = true;
       pop.innerHTML = (d.f ? '<b>' + esc(d.f.titulo) + '</b><small>' + esc(d.f.autor) + '</small>' : '<b>' + esc(d.id) + '</b>') +
-        (d.seccion ? '<span class="sec">Seccion: ' + esc(d.seccion) + (d.pimp ? ', p. ' + esc(d.pimp) : '') + (d.pag ? ' (p. ' + esc(d.pag) + ' del PDF)' : '') + '</span>' : '') +
+        (d.seccion ? '<span class="sec">Seccion: ' + esc(d.seccion) + (esDiapo(d.f) || esDoc(d.f) ? (lugar(d) ? ', ' + esc(lugar(d)) : '') : (d.pimp ? ', p. ' + esc(d.pimp) : '') + (d.pag ? ' (p. ' + esc(d.pag) + ' del PDF)' : '')) + '</span>' : '') +
         (d.que ? '<span class="que">' + esc(d.que) + '</span>' : '') +
         (d.cuando ? '<span class="cuando">Mejor momento: ' + esc(d.cuando) + '</span>' : '') +
-        '<button type="button" class="abrir">Abrir el PDF en esa pagina</button>';
+        '<button type="button" class="abrir">' + textoAbrir(d) + '</button>';
       pop.querySelector(".abrir").addEventListener("click", function (e) { e.stopPropagation(); abrirPdf(d, this); });
       chip.addEventListener("click", function (e) {
         e.stopPropagation();
@@ -716,9 +734,9 @@
     }
   };
   B.lecturas = function (el, root) {
-    var cs = (root || document).querySelectorAll("cite.cita"), vistos = {}, porFuente = [], mapa = {};
+    var cs = (root || document).querySelectorAll("cite.cita"), vistos = {}, porFuente = [], mapa = {}, todas = [];
     for (var i = 0; i < cs.length; i++) {
-      var d = datosCita(cs[i]), k = d.id + "|" + d.pag;
+      var d = datosCita(cs[i]), k = d.id + "|" + d.pag + "|" + d.ancla;
       if (vistos[k]) continue;
       vistos[k] = 1;
       if (!mapa[d.id]) { mapa[d.id] = { f: d.f, id: d.id, items: [] }; porFuente.push(mapa[d.id]); }
@@ -729,11 +747,12 @@
       return '<div class="lectura"><h3>' + esc(g.f ? g.f.titulo : g.id) + '</h3>' +
         (g.f ? '<p class="autor">' + esc(g.f.autor) + (g.f.nota ? ' &middot; ' + esc(g.f.nota) : '') + '</p>' : '') +
         '<ul>' + g.items.map(function (d) {
-          return '<li><b>' + esc(d.pimp ? 'p. ' + d.pimp : d.pag ? 'p. ' + d.pag + ' del PDF' : 'sin pagina') + '</b>' +
+          todas.push(d);
+          return '<li><b>' + esc(lugar(d) || 'sin pagina') + '</b>' +
             (d.seccion ? ' &middot; ' + esc(d.seccion) : '') +
             (d.que ? '<br><span class="que">' + esc(d.que) + '</span>' : '') +
             (d.cuando ? '<br><span class="cuando">Mejor momento: ' + esc(d.cuando) + '</span>' : '') +
-            (d.f ? ' <a class="abrir-l" href="' + urlPdf(d.f, d.pag) + '" target="_blank" rel="noopener">abrir</a>' : '') +
+            (d.f ? ' <a class="abrir-l" data-i="' + (todas.length - 1) + '" href="' + urlPdf(d.f, d.pag, d.ancla) + '" target="_blank" rel="noopener">abrir</a>' : '') +
             '</li>';
         }).join("") + '</ul></div>';
     }).join("");
@@ -741,11 +760,57 @@
       a.addEventListener("click", function (e) {
         if (location.protocol === "file:") return;
         e.preventDefault();
-        var d = { f: { archivo: decodeURIComponent(a.getAttribute("href").replace(/^file:\/\//, "").replace(/#page=\d+$/, "")) }, pag: (a.getAttribute("href").match(/#page=(\d+)$/) || [])[1] };
-        abrirPdf(d, a);
+        abrirPdf(todas[+a.getAttribute("data-i")], a);
       });
     });
   };
+  /* ---------------- conexiones y donde te lo ensenaron ---------------- */
+  // Llena #prereq y #siguen con los titulos del catalogo, y agrega la tarjeta "Donde te lo ensenaron"
+  // dentro de .conexiones con lo que dice "aparece". Un concepto planeado se muestra sin enlace.
+  function normTit(s) { return String(s).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase(); }
+  B.buscarConcepto = function (titulo) {
+    var cat = window.CATALOGO || [], n = normTit(titulo);
+    for (var i = 0; i < cat.length; i++) if (normTit(cat[i].titulo) === n) return cat[i];
+    return null;
+  };
+  B.nombreUnidad = function (materia, ud) {
+    var m = (window.MATERIAS || []).filter(function (x) { return x.codigo === materia; })[0];
+    if (!m) return { materia: materia, unidad: "" };
+    var u = (m.unidades || []).filter(function (x) { return x[0] === ud; })[0];
+    return { materia: m.nombre, unidad: u ? u[1] : "" };
+  };
+  B.conexiones = function (id, root) {
+    root = root || document;
+    var cat = window.CATALOGO || [], yo = cat.filter(function (c) { return c.id === id; })[0];
+    if (!yo) return;
+    function pill(nombre) {
+      var c = B.buscarConcepto(nombre);
+      if (c && c.estado !== "planeado") {
+        var a = document.createElement("a"); a.className = "pill"; a.href = "../" + c.archivo; a.textContent = nombre; return a;
+      }
+      var s = document.createElement("span");
+      s.className = "pill " + (c ? "planeado" : "falta");
+      s.textContent = nombre;
+      if (c) s.title = c.resumen;
+      return s;
+    }
+    var pre = root.querySelector("#prereq"), sig = root.querySelector("#siguen");
+    if (pre) { pre.textContent = ""; (yo.prerequisitos || []).forEach(function (n) { pre.appendChild(pill(n)); }); }
+    if (sig) { sig.textContent = ""; (yo.siguientes || []).forEach(function (n) { sig.appendChild(pill(n)); }); }
+    var caja = root.querySelector(".conexiones");
+    if (!caja || caja.querySelector(".aparece")) return;
+    var card = document.createElement("div");
+    card.className = "card aparece";
+    var ap = yo.aparece || [];
+    card.innerHTML = '<h3 class="mini-tit">Dónde te lo enseñaron</h3>' + (ap.length
+      ? '<ul class="aparece-lista">' + ap.map(function (a) {
+          var n = B.nombreUnidad(a.materia, a.ud);
+          return '<li><b>' + esc(a.ud) + (n.unidad ? ' · ' + esc(n.unidad) : '') + '</b><br><span>' + esc(n.materia) + ' (' + esc(a.materia) + ')</span></li>';
+        }).join("") + '</ul>'
+      : '<p class="vacio">No aparece en las materias del máster: es un fundamento que viene de los libros.</p>');
+    caja.appendChild(card);
+  };
+
   /* ---------------- vida real: motor del codigo animado ---------------- */
   // root: la seccion que contiene los controles e ids fijos:
   //   #vrCode #vrNarra #vrVars #vrProg #vrPlay #vrAnt #vrSig #vrFin #vrReset #vrVel #vrLang #vrCopiar (y #vrFases opcional)

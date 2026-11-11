@@ -1,6 +1,6 @@
 # Mapa de citas: Jansen, cap. 13 "Data-Driven Risk Factors and Asset Allocation with Unsupervised Learning"
 
-Archivo: `/Users/franciscocastillo/brain/Finance/Machine-Learning-For-Finance/Cap13 - Data-Driven Risk Factors and Asset Allocation with Unsupervised Learning.pdf` (32 páginas PDF).
+Archivo: `/Users/franciscocastillo/brain/02-Biblioteca/Finanzas-ML/ML4T/Cap13 - Data-Driven Risk Factors and Asset Allocation with Unsupervised Learning.pdf` (32 páginas PDF).
 Correspondencia: página PDF N = impresa N + 406.
 
 | Tema | PDF | Impresa | Sección | Qué hay |

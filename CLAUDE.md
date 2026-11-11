@@ -1,20 +1,24 @@
 # Math Videos: biblioteca interactiva de matemáticas
 
 Francisco estudia matemáticas (maestría en IA) y le cuesta entender lo abstracto hasta que lo ve.
-Esta carpeta es su biblioteca personal: una página interactiva por concepto.
+Esta carpeta es su biblioteca personal: una página interactiva por concepto **matemático**.
+Es una biblioteca de conceptos, no de materias: las materias del máster solo se citan ("dónde te lo enseñaron").
+Lo que hay que estudiar vive en `~/brain` (`01-Academico`, `02-Biblioteca`, `03-Matematicas`; la carpeta del semestre es
+`SEMESTRE 1 ` con un espacio al final). second_brain (MCP) sirve para ubicar temas, pero las páginas se citan contra el PDF.
 **Francisco no programa.** Él trae el concepto (tema, apuntes, PDF, página de un libro) y Claude construye todo.
 
 ## Estructura
 
 ```
 biblioteca/
-  index.html              catálogo por ruta de estudio: progreso, repaso espaciado, libros, conceptos sugeridos
-  catalogo.js             window.UNIDADES (rutas) y window.CATALOGO, una entrada por concepto, con unidad y orden
+  index.html              rutas agrupadas y plegables, filtro por materia y unidad, progreso, repaso, próximas tandas, libros
+  catalogo.js             el mapa completo: UNIDADES (20 rutas en 5 grupos), MATERIAS, TANDAS y CATALOGO (listos y planeados)
   fuentes.js              window.FUENTES: los libros y el material del máster que se citan, con la ruta al PDF
   nucleo/estilo.css       tokens de color y componentes compartidos (incluye vida real, destacado y citas)
   nucleo/nucleo.js        window.Biblioteca: progreso, pasos con candado, tipos de reto, citas, motor de vida real
   nucleo/BRIEF-CONCEPTO.md  el brief que recibe cada agente que construye una página
   nucleo/verificar.py     verificación sin navegador: python3 nucleo/verificar.py conceptos/<id>.html
+  nucleo/verificar_catalogo.py  revisa el catálogo entero: títulos, órdenes, archivos, unidades cubiertas, PDF
   nucleo/prueba.js        prueba de humo dentro del navegador (se carga con fetch y eval desde la consola)
   conceptos/<id>.html     una página por concepto
   conceptos/<id>-*-lab.html  laboratorios extra de un concepto (opcional)
@@ -39,16 +43,36 @@ CSS ni JS relativos con `file://`, así que para probar siempre usar el servidor
 3. Crear `biblioteca/conceptos/<id>.html` siguiendo `nucleo/BRIEF-CONCEPTO.md` y la estructura de `covarianza.html`.
    Si son varias páginas, construirlas en paralelo con agentes (fork) que reciben ese brief más la especificación
    de su página: imagen central, pasos, chequeos, retos, código de vida real y citas con página.
-4. Agregar la entrada en `biblioteca/catalogo.js` (con `unidad`, `orden`, `prerequisitos` y `siguientes`).
-   Las rutas de estudio están en `window.UNIDADES` (hoy: `ud1`, la UD1 del máster, y `bml1`, Before ML vol. 1).
-   Si un concepto pertenece a más de una ruta, va en su ruta principal y en `tambien: [{ unidad, orden }]`.
+4. El concepto casi siempre ya está en `biblioteca/catalogo.js` como `estado: "planeado"`, con su ruta, orden, `tanda`,
+   prerrequisitos y `aparece`. Al construirlo: `estado: "listo"`, borrar `tanda`, `agregado` con la fecha del día y
+   `fuentes: [ids]` con las fuentes que la página cita. Si es nuevo, se agrega con todos los campos (ver la cabecera del archivo)
+   y se suma su título a `siguientes` de sus prerrequisitos. Luego `python3 nucleo/verificar_catalogo.py` tiene que decir OK.
+   Las rutas están en `window.UNIDADES`, agrupadas por `grupo` (Fundamentos, Cálculo, Álgebra lineal, Probabilidad y
+   estadística, Aprendizaje automático). Si un concepto pertenece a más de una ruta, va en su ruta principal y en
+   `tambien: [{ unidad, orden }]`. `aparece: [{ materia, ud }]` dice dónde lo enseñan en el máster (`window.MATERIAS`).
 4b. Citar las fuentes: si el concepto sale de un libro o material que no está mapeado en `brain/fuentes/`, leerlo
    primero (o delegar la lectura) y guardar el mapa de citas con páginas verificadas antes de construir.
 5. Si un concepto existente lo lista como prerrequisito o siguiente, se enlaza solo por título:
    usar exactamente el mismo título.
 6. Verificar en el navegador (servidor `biblioteca`): recorrer todos los pasos, responder bien y mal
    cada chequeo, revisar ancho móvil (375 px) sin scroll horizontal, y sin errores de consola.
-   Al terminar, borrar el progreso de prueba: `localStorage.removeItem('biblioteca:v1')`.
+   Las pruebas se hacen en una pestaña propia con `http://127.0.0.1:8765` (otro origen, otro almacenamiento), nunca en
+   `localhost:8765`, donde Francisco puede estar estudiando. Al terminar, borrar el progreso de prueba en esa pestaña:
+   `localStorage.removeItem('biblioteca:v1')`.
+
+## Construir por tandas
+
+El catálogo tiene el mapa completo (186 conceptos al 2026-11-11) y cada planeado lleva `tanda` (1 primero), ordenada por las
+fechas del campus (`window.TANDAS`). El plan completo está en `~/.claude/plans/users-franciscocastillo-brain-second-br-splendid-diffie.md`.
+Por cada tanda:
+1. Mapas de citas primero: por cada fuente nueva, leer el PDF (o delegar la lectura) y guardar `brain/fuentes/<fuente>.md`
+   con tema, página del PDF, página impresa, desfase y erratas. Registrar la fuente en `biblioteca/fuentes.js`.
+2. Escribir la especificación de cada página: imagen central, 5 a 8 pasos de lo plano a lo complejo, chequeos, trampa,
+   vida real en Python y R, retos y citas con página.
+3. Construir en paralelo con agentes (hasta 8 a la vez, `model: "opus"`), cada uno con `nucleo/BRIEF-CONCEPTO.md` más su especificación.
+4. Integrar en el catálogo, correr `verificar_catalogo.py`, y verificar en el navegador.
+5. Preparar el stage y redactar el mensaje de commit para Francisco.
+Un componente visual que sirve a varias páginas (plano con arrastre, graficador de funciones, histograma, lienzo de grafos) va al núcleo.
 
 ## Estándar de cada página de concepto
 
@@ -94,7 +118,8 @@ que lo ejecuta línea por línea (ver la sección `vidareal` de `covarianza.html
 
 **Parte 5, lecturas.** `B.lecturas` arma la lista de todo lo citado en la página, agrupado por libro.
 
-**Parte 6, conexiones.** Prerrequisitos y siguientes, leídos del catálogo.
+**Parte 6, conexiones.** Prerrequisitos y siguientes, leídos del catálogo con `B.conexiones(id)`, que también agrega
+"Dónde te lo enseñaron" a partir de `aparece`. Los conceptos planeados salen sin enlace.
 
 ## Citas a los libros
 
@@ -102,6 +127,8 @@ Francisco quiere ir del visual al libro: entender aquí y después leer la versi
 - Dentro de los pasos, `<cite class="cita" data-fuente data-pag data-pimp data-seccion data-que data-cuando>` se vuelve
   un chip con panel y enlace al PDF en esa página (`B.citas()`). `data-pag` es la página del archivo PDF; `data-pimp`
   la impresa.
+- Diapositivas HTML de clase (Quarto/reveal.js, como las de SM142003): la fuente lleva `tipo: "diapositivas"` en `fuentes.js`
+  y la cita usa `data-pag` = número de diapositiva y `data-ancla` = ancla de reveal.js sin `#/` (la da el mapa de citas).
 - Solo se citan páginas verificadas, las de `brain/fuentes/*.md`. Nunca inventar una página.
 - Entre 6 y 14 citas por página, cada una con qué hay y cuándo leerla. Si el material tiene un error o una
   inconsistencia, se dice en la página con naturalidad.

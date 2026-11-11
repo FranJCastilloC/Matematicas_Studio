@@ -1,6 +1,6 @@
 # Mapa de citas: Raschka, Liu y Mirjalili, cap. 5 "Compressing Data via Dimensionality Reduction"
 
-Archivo: `/Users/franciscocastillo/brain/Machine Learning/Dimensional Reduction/Cap05 - Compressing Data via Dimensionality Reduction.pdf` (32 páginas PDF).
+Archivo: `/Users/franciscocastillo/brain/02-Biblioteca/Machine-Learning/PyTorch-Scikit-Learn/Cap05 - Compressing Data via Dimensionality Reduction.pdf` (32 páginas PDF).
 Correspondencia verificada: página PDF N = página impresa N + 138. Edición: Machine Learning with PyTorch and Scikit-Learn (Packt, 2022).
 
 | Tema | PDF | Impresa | Sección | Qué hay |
