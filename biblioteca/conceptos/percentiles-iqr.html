@@ -1,0 +1,1366 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Percentiles y box plot</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+/* ---------- recta con tijeras ---------- */
+.recta-svg { width: 100%; height: auto; display: block; user-select: none; -webkit-user-select: none; }
+.recta-svg.arrastrable { touch-action: none; }
+.recta-svg .eje { stroke: var(--ink-3); stroke-width: 1.2; }
+.recta-svg .tick { stroke: var(--line); stroke-width: 1; }
+.recta-svg .tlab { font: 10px var(--f-mono); fill: var(--ink-3); }
+.recta-svg .tit { font: 11px var(--f-mono); fill: var(--ink-3); letter-spacing: .06em; text-transform: uppercase; }
+.recta-svg .pt .hit { fill: transparent; }
+.recta-svg .pt .dot { fill: var(--ink); stroke: var(--surface); stroke-width: 2; }
+.recta-svg .pt.sel .dot { fill: var(--accent); }
+.recta-svg .pt.drag { cursor: grab; }
+.recta-svg .pt.fuera .dot { fill: var(--neg); }
+.recta-svg .pt.baja .dot { fill: var(--j); }
+.recta-svg .pt.media .dot { fill: var(--k); }
+.recta-svg .plab { font: 9.5px var(--f-mono); fill: var(--ink-2); pointer-events: none; paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+.recta-svg .orden { font: 9px var(--f-mono); fill: var(--ink-3); pointer-events: none; }
+.recta-svg .corte { stroke: var(--accent); stroke-width: 1.6; stroke-dasharray: 4 3; }
+.recta-svg .corte-lab { font: 500 10.5px var(--f-mono); fill: var(--accent); }
+.recta-svg .tijera { fill: var(--accent); }
+.recta-svg .banda { fill: var(--accent); fill-opacity: .12; }
+.recta-svg .pct { fill: var(--j); fill-opacity: .16; }
+.recta-svg .pct-lab { font: 500 10.5px var(--f-mono); fill: var(--j); }
+.recta-svg .valla { stroke: var(--neg); stroke-width: 1.4; stroke-dasharray: 2 3; }
+.recta-svg .valla3 { stroke: var(--neg); stroke-width: 1; stroke-dasharray: 1 3; opacity: .7; }
+.recta-svg .valla-lab { font: 500 9.5px var(--f-mono); fill: var(--neg); }
+.recta-svg .zona-fuera { fill: var(--neg); fill-opacity: .07; }
+.recta-svg .caja { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.6; }
+.recta-svg .med { stroke: var(--ink); stroke-width: 2.4; }
+.recta-svg .bigote { stroke: var(--ink-2); stroke-width: 1.4; }
+.recta-svg .tope { stroke: var(--ink-2); stroke-width: 1.4; }
+.recta-svg .out { fill: none; stroke: var(--neg); stroke-width: 1.8; }
+.recta-svg .pieza { transition: opacity .35s ease; }
+.recta-svg .pieza.oculta { opacity: 0; }
+.recta-svg .mini-tit { font: 500 10px var(--f-mono); fill: var(--ink-2); }
+.recta-svg .grupo-lab { font: 500 11px var(--f-mono); fill: var(--ink); }
+
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.esc-head .hint { font-size: 12.5px; color: var(--ink-2); }
+.esc-head button { margin-left: auto; font-size: 12px; padding: 5px 10px; }
+
+/* ---------- lectura ---------- */
+.lista-ord { display: flex; flex-wrap: wrap; gap: 4px; margin: 10px 0 4px; }
+.lista-ord span { font-family: var(--f-mono); font-size: 12.5px; padding: 3px 7px; border-radius: 5px; background: var(--surface-2); color: var(--ink-2); display: grid; justify-items: center; gap: 1px; min-width: 32px; }
+.lista-ord span small { font-size: 9px; color: var(--ink-3); }
+.lista-ord span.q { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.lista-ord span.fuera { background: var(--bad-soft); color: var(--bad); }
+.lista-ord span.pct { background: var(--j-soft); color: var(--j); }
+.resumen { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 6px; margin-top: 10px; }
+.resumen div { background: var(--surface-2); border-radius: 7px; padding: 6px 9px; font-family: var(--f-mono); font-size: 11px; color: var(--ink-3); }
+.resumen div b { display: block; font-size: 15px; color: var(--ink); font-weight: 500; font-variant-numeric: tabular-nums; }
+.resumen div.acc b { color: var(--accent); }
+.resumen div.neg b { color: var(--neg); }
+.resumen div.oculto b { color: var(--accent); }
+.robusto { width: 100%; border-collapse: collapse; font-family: var(--f-mono); font-size: 12.5px; margin-top: 8px; font-variant-numeric: tabular-nums; }
+.robusto th { text-align: right; font-weight: 500; color: var(--ink-3); font-size: 11px; padding: 4px 8px; border-bottom: 1px solid var(--line); }
+.robusto th:first-child, .robusto td:first-child { text-align: left; }
+.robusto td { text-align: right; padding: 4px 8px; border-bottom: 1px solid var(--line-soft); color: var(--ink-2); }
+.robusto td.cambio { color: var(--neg); font-weight: 600; }
+.robusto td.quieto { color: var(--ok); font-weight: 600; }
+.pct-row { display: flex; align-items: center; gap: 10px; margin: 10px 0 6px; font-family: var(--f-mono); font-size: 13px; }
+.pct-row input[type="range"] { flex: 1; }
+.pct-row b { min-width: 7ch; color: var(--ink); font-weight: 500; }
+.armar { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }
+.armar button.hecho { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); }
+.armar button.mal { border-color: var(--bad); background: var(--bad-soft); }
+.grande { font-family: var(--f-mono); font-size: 14px; color: var(--ink-2); margin: 6px 0 12px; font-variant-numeric: tabular-nums; }
+.grande b { font-size: 18px; color: var(--ink); font-weight: 500; }
+.tres { display: grid; gap: 4px; margin-top: 6px; }
+
+/* ---------- vida real: panel visual ---------- */
+.vr-lista { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 10px; }
+.vr-lista span { font-family: var(--f-mono); font-size: 12.5px; padding: 3px 7px; border-radius: 5px; background: var(--surface-2); color: var(--ink-2); min-width: 30px; text-align: center; }
+.vr-lista span.lo, .vr-lista span.hi { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.vr-lista span.fuera { background: var(--bad-soft); color: var(--bad); }
+.vr-lista span.dentro { outline: 1.5px solid var(--ok); }
+.vr-lista span.cambio { animation: parpadeo .5s ease; }
+.vr-res { display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); gap: 6px; }
+.vr-res div { background: var(--surface-2); border-radius: 7px; padding: 6px 9px; font-family: var(--f-mono); font-size: 11px; color: var(--ink-3); min-height: 44px; }
+.vr-res div b { display: block; font-size: 15px; color: var(--ink); font-weight: 500; font-variant-numeric: tabular-nums; }
+.vr-res div.vacia b { color: var(--ink-3); }
+.vr-res div.llega { animation: llega .55s ease-out; }
+.vr-cuenta { margin: 12px 0 14px; min-height: 2.6em; font-family: var(--f-mono); font-size: 13.5px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.vr-cuenta b { color: var(--ink); font-weight: 500; }
+
+/* ---------- retos propios ---------- */
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.ojo-opts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
+.ojo-opts .opt { text-align: center; }
+.objetivos { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.objetivos li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.objetivos .m { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.objetivos li.hecho { color: var(--ink); }
+.objetivos li.hecho .m { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 3px var(--surface); }
+.datos-mano { border-collapse: collapse; font-family: var(--f-mono); font-size: 14px; margin: 4px 0 12px; }
+.datos-mano td { padding: 4px 9px; border: 1px solid var(--line); text-align: center; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ Percentiles y box plot</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Estadística · UD1 §4.5 · diapositivas 19 a 22</p>
+    <h1>Percentiles, cuartiles y box plot: cortar los datos en partes iguales</h1>
+    <p class="lede">
+      Ordenas los datos en una fila y los cortas con unas tijeras: tres cortes bien puestos te dan los cuartiles.
+      La <b>caja</b> es la mitad central, los <b>bigotes</b> llegan hasta donde los datos todavía son normales, y lo que queda afuera
+      es un valor atípico. Todo sale de un solo número, el ancho de la caja, con una regla que puedes aplicar sin opinar.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> Tienes los tiempos de entrega de 11 pedidos, en días. Uno tardó 25 y los demás menos de 10. ¿Cómo decidirías que ese es "demasiado lento" con una regla que no dependa de tu opinión? Escríbela como te salga.</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: compararía con..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>Del montón ordenado al box plot</h2>
+      <p>Siete pasos. Cada uno termina con un chequeo que abre el siguiente. Equivocarte aquí no resta nada: es parte del método.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="Ordenar y contar">
+          <span class="etapa">Paso 1</span>
+          <h3>Ordenar es la mitad del trabajo</h3>
+          <p>Once pedidos, cada uno con los días que tardó en llegar. Antes de calcular nada, la fila se <b>ordena de menor a mayor</b>. A partir de ahí, un percentil es solo una forma de señalar un lugar de la fila: el <b>percentil k</b> es el valor que deja por debajo el k % de los datos.</p>
+          <p>Mueve el control y mira cómo se pinta la porción de la fila que queda por debajo. El percentil 25 deja un cuarto; el 90, nueve de cada diez.</p>
+          <div class="pct-row"><span>percentil</span><input type="range" id="pctSlider" min="0" max="100" value="25" step="5"><b id="pctVal">25</b></div>
+          <p>En el material del máster esto se define en una línea y se nombran los deciles, que parten en diez, y los cuartiles, que parten en cuatro <cite class="cita" data-fuente="ud1" data-pag="8" data-seccion="3.3 Medidas de dispersión: Percentiles, Deciles, Cuartiles" data-que="Las definiciones verbales de percentil, decil y cuartil. Sin fórmula ni ejemplo: por eso construimos todo aquí." data-cuando="Al terminar este paso"></cite>
+          <cite class="cita" data-fuente="ud1slides" data-pag="19" data-seccion="Medidas de Dispersión: Percentiles" data-que="La misma definición en formato diapositiva, con deciles y cuartiles." data-cuando="Al terminar este paso"></cite>.
+          Nield lo dice de otra forma: la mediana es un cuantil, el del 50 % <cite class="cita" data-fuente="nield3" data-pag="13" data-seccion="Median, recuadro The Median is a Quantile" data-que="Un recuadro corto: la mediana es el cuantil 50 %, y los cuantiles 25, 50 y 75 se llaman cuartiles." data-cuando="Al terminar este paso"></cite>.</p>
+          <div class="check" id="chk1"><p class="check-tit">Predice antes de mover el control</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Los tres cortes">
+          <span class="etapa">Paso 2</span>
+          <h3>Tres tijeretazos: Q1, Q2 y Q3</h3>
+          <p>Los <b>cuartiles</b> son los tres cortes que parten la fila ordenada en cuatro partes iguales. <span data-tex="Q_1"></span> es el percentil 25, <span data-tex="Q_2"></span> el 50, que es la mediana, y <span data-tex="Q_3"></span> el 75.</p>
+          <p>Con 11 datos, cada corte cae "entre" dos valores: la posición de <span data-tex="Q_1"></span> es <span data-tex="0.25 \cdot (11 - 1) = 2.5"></span>, o sea a mitad de camino entre el tercer y el cuarto dato ordenado. Cuando los dos son iguales, no hay nada que promediar. Arrastra un punto y mira cómo se mueven las tijeras.</p>
+          <div class="fbloque">
+            <div data-tex="\text{posición}(p) = p\,(n-1) \qquad\qquad Q_1 = P_{25},\; Q_2 = P_{50} = \text{Me},\; Q_3 = P_{75}" data-display></div>
+            <div class="vivo" id="vivoQ"></div>
+          </div>
+          <p>Las diapositivas lo resumen con los cuatro cuartos y aclaran que el cuarto corte, el 100 %, es el máximo <cite class="cita" data-fuente="ud1slides" data-pag="20" data-seccion="En cuanto a los cuartiles" data-que="Q1 = 25 %, Q2 = 50 % = mediana, Q3 = 75 %, Q4 = 100 % = máximo." data-cuando="Al terminar este paso"></cite>.</p>
+          <div class="check" id="chk2"><p class="check-tit">Antes de seguir</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="El ancho de la caja">
+          <span class="etapa">Paso 3</span>
+          <h3>El rango intercuartílico: donde vive la mitad central</h3>
+          <p>Entre <span data-tex="Q_1"></span> y <span data-tex="Q_3"></span> está el 50 % central de los datos. La distancia entre los dos cortes se llama <b>rango intercuartílico</b>, IQR, y es el ancho de la caja que vas a dibujar.</p>
+          <div class="fbloque">
+            <div data-tex="\text{IQR} = Q_3 - Q_1" data-display></div>
+            <div class="vivo" id="vivoIQR"></div>
+          </div>
+          <p>Fíjate en la banda violeta del escenario: ese es el IQR. Arrastra los datos de las puntas: la banda ni se entera. Arrastra uno del medio: ahí sí cambia.</p>
+          <p>La teoría de la UD1 no trae esta fórmula; está solo en las diapositivas <cite class="cita" data-fuente="ud1slides" data-pag="21" data-seccion="Rango Intercuartílico" data-que="IQR = Q3 − Q1, y la frase clave: contiene el 50 % central de los datos." data-cuando="Al terminar este paso"></cite>.</p>
+          <div class="check" id="chk3"><p class="check-tit">Antes de seguir</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Las vallas">
+          <span class="etapa">Paso 4</span>
+          <h3>Las vallas: hasta dónde es normal</h3>
+          <p>Aquí está la regla que pediste en la hipótesis. Se toma el ancho de la caja y se marcan dos vallas: una a <b>1.5 veces el IQR</b> por debajo de <span data-tex="Q_1"></span> y otra a 1.5 veces por encima de <span data-tex="Q_3"></span>. Todo lo que cae afuera es un <b>valor atípico</b>.</p>
+          <div class="fbloque">
+            <div data-tex="\text{valla}_{\text{inf}} = Q_1 - 1.5\,\text{IQR} \qquad\qquad \text{valla}_{\text{sup}} = Q_3 + 1.5\,\text{IQR}" data-display></div>
+            <div class="vivo" id="vivoVallas"></div>
+          </div>
+          <p>Las diapositivas agregan una segunda valla a <b>3 veces el IQR</b>: entre 1.5 y 3 llaman al dato "atípico no influyente", y más allá de 3, "influyente" <cite class="cita" data-fuente="ud1slides" data-pag="22" data-seccion="En cuanto a los cuartiles: diagrama de caja" data-que="La figura clave del material: el box plot anotado con Min, Q1, Q2, Q3, Max, IQR, los bigotes en Q1 − 1.5·IQR y Q3 + 1.5·IQR, y las líneas a 3·IQR con outliers no influyentes e influyentes. Es el único lugar de los dos PDF donde aparece la regla 1.5." data-cuando="Después del chequeo, con la figura al lado del escenario"></cite>.</p>
+          <div class="cita" id="citaHipo" hidden></div>
+          <div class="check" id="chk4"><p class="check-tit">Predice antes de arrastrar</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Armar la caja">
+          <span class="etapa">Paso 5</span>
+          <h3>De la lista al dibujo, pieza por pieza</h3>
+          <p>El <b>box plot</b> no es más que estas cinco cosas dibujadas. Arma el tuyo tocando las piezas en orden:</p>
+          <div class="armar" id="armar">
+            <button type="button" data-pieza="caja">1. La caja, de Q1 a Q3</button>
+            <button type="button" data-pieza="med">2. La mediana adentro</button>
+            <button type="button" data-pieza="bigotes">3. Los bigotes</button>
+            <button type="button" data-pieza="outs">4. Los atípicos, sueltos</button>
+          </div>
+          <p>Ojo con el bigote: <b>no llega hasta la valla</b> ni hasta el máximo. Llega hasta el <b>último dato real</b> que todavía está dentro de la valla. La valla es una línea imaginaria; el bigote toca un dato.</p>
+          <p>En la teoría del máster el diagrama de caja aparece como técnica para detectar atípicos en el análisis univariado <cite class="cita" data-fuente="ud1" data-pag="13" data-seccion="Tabla 3: Detección de Outliers, técnicas" data-que="El box plot nombrado como técnica de detección de outliers, junto a la puntuación Z y la visualización. Solo el nombre: el dibujo está en las diapositivas." data-cuando="Al terminar este paso"></cite>.</p>
+          <div class="check" id="chk5"><p class="check-tit">Antes de seguir</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Por qué es robusto">
+          <span class="etapa">Paso 6</span>
+          <h3>El mismo atípico, cuatro reacciones distintas</h3>
+          <p>Arrastra el dato más alto hacia la derecha, hasta 25 o 30, y mira la tabla. La media y la desviación estándar lo siguen como un perro; la mediana y el IQR ni se mueven. Esa es la palabra <b>robusto</b>: una medida que no cambia porque un dato se vaya lejos.</p>
+          <table class="robusto" id="tablaRobusta"></table>
+          <p>Por eso el IQR es el criterio estándar para marcar atípicos, y por eso la mediana se prefiere a la media cuando hay colas largas. La tabla de ventajas en ML lo pone en una fila: identificar outliers con IQR y percentiles <cite class="cita" data-fuente="ud1" data-pag="10" data-seccion="3.5 Aplicación de la estadística descriptiva en ML, Tabla 2" data-que="Seis usos de la estadística descriptiva en machine learning. La fila de outliers dice que se identifican con IQR y percentiles, y que si no se tratan distorsionan modelos sensibles a la escala." data-cuando="Al terminar este paso"></cite>.</p>
+          <details class="profundizar">
+            <summary>¿Y la desviación estándar? Compara con la página de varianza</summary>
+            <div>
+              <p>La desviación estándar suma los cuadrados de todos los desvíos, así que un dato muy lejano pesa muchísimo. El IQR solo mira dos posiciones de la fila ordenada: por más lejos que se vaya el último dato, sigue siendo "el último" y los cortes no cambian.</p>
+              <p>Esto tiene un costo: el IQR ignora qué pasa en las puntas. Si te interesa precisamente eso, el box plot te lo muestra como puntos sueltos, pero el número no lo mide.</p>
+            </div>
+          </details>
+          <div class="check" id="chk6"><p class="check-tit">Predice antes de arrastrar</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Leer box plots">
+          <span class="etapa">Paso 7</span>
+          <h3>Leer un box plot sin ver los datos</h3>
+          <p>Tres grupos de pedidos, uno al lado del otro. Sin la lista de datos, el dibujo te dice: dónde está el centro (la raya), cuánto se dispersa la mitad central (la caja), si hay cola hacia un lado (un bigote más largo que el otro, o la raya corrida dentro de la caja) y si hay atípicos (puntos sueltos).</p>
+          <p>Toca cada grupo del escenario para ver su lectura.</p>
+          <p class="grande" id="lecturaGrupo">Toca un grupo.</p>
+
+          <div class="destacado" id="destacado">
+            <p class="dest-tit">Una confusión muy común</p>
+            <h4>No hay una sola forma de calcular un cuartil</h4>
+            <p>Hasta ahora usamos la posición <span data-tex="p\,(n-1)"></span> con interpolación lineal. Es la regla de NumPy, de pandas y la que R usa por defecto. Pero hay otras ocho en R, Excel usa otra, y algunos libros toman la "mediana de cada mitad". Con pocos datos, <b>el mismo vector da cuartiles distintos según el programa</b>. Ninguno está mal: son convenciones. Lo que está mal es comparar cuartiles calculados con reglas distintas sin saberlo.</p>
+            <div class="check" id="chk7b"><p class="check-tit">Predice antes de ver la respuesta</p><div class="cuerpo"></div></div>
+          </div>
+          <div class="check" id="chk7"><p class="check-tit">Antes de seguir</p><div class="cuerpo"></div></div>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+          <button type="button" class="ghost" id="btnRestaurar">Restaurar datos</button>
+        </div>
+        <svg id="recta" tabindex="0" role="img" aria-label="Recta numérica con los datos ordenados, los cortes de los cuartiles y el box plot. Arrastra los puntos o usa las flechas del teclado."></svg>
+        <svg id="rectaGrupos" class="recta-svg" role="img" aria-label="Tres box plots para comparar" hidden></svg>
+        <div id="lectura"></div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>El mismo cálculo, escrito como lo haría un programa: ordenar, ubicar la posición de cada corte, interpolar, medir la caja, poner las vallas y señalar los atípicos. Elige Python o R y dale a reproducir.</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir</p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="true">Python</button>
+            <button type="button" data-lang="r" aria-pressed="false">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">1 · ordenar</span><span data-f="2">2 · los cortes</span><span data-f="3">3 · caja y vallas</span>
+        </div>
+        <h3 class="mini-tit vr-tit" id="vrListaTit">x: los datos</h3>
+        <div class="vr-lista" id="vrLista"></div>
+        <div class="vr-cuenta" id="vrCuenta"></div>
+        <h3 class="mini-tit vr-tit">Resultados</h3>
+        <div class="vr-res" id="vrRes"></div>
+      </div>
+    </div>
+
+    <p class="vr-nota">En la práctica nadie escribe la función de interpolar. <code>np.percentile(x, [25, 50, 75])</code> en Python, <code>df.describe()</code> en pandas, y <code>quantile(x)</code> con <code>IQR(x)</code> y <code>boxplot.stats(x)</code> en R lo hacen en una línea. Escribirlo una vez sirve para entender por qué dos programas pueden dar cuartiles distintos para los mismos datos, que es la trampa de abajo.</p>
+
+    <details class="profundizar">
+      <summary>La misma regla en una línea: por qué <code>p · (n − 1)</code></summary>
+      <div>
+        <p>Si numeras las posiciones de la fila ordenada desde 0 hasta <span data-tex="n-1"></span>, el primer dato es el percentil 0 y el último el percentil 100. Cualquier percentil intermedio es una fracción de ese recorrido: <span data-tex="p\,(n-1)"></span>. Si cae entre dos posiciones, se toma la fracción que corresponde del tramo entre esos dos datos. Es la regla "linear" de NumPy y el <code>type = 7</code> de R.</p>
+        <p>Otras reglas numeran las posiciones desde 1 hasta <span data-tex="n"></span> y usan <span data-tex="p\,(n+1)"></span> (el <code>type = 6</code> de R, el método "weibull" de NumPy), o toman la mediana de cada mitad (las bisagras de Tukey, lo que usa <code>boxplot.stats</code>). Con muchos datos todas dan casi lo mismo; con pocos, no.</p>
+      </div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Dos programas, dos cuartiles</h3><span class="estado" data-reto="codigo2"></span></div>
+        <div id="codigo2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>La caja de R no coincide con quantile</h3><span class="estado" data-reto="codigo3"></span></div>
+        <div id="codigo3"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: el índice te avisa cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>Lee tres cajas</h3><span class="estado" data-reto="ojo"></span></div>
+        <p class="desc">Cinco rondas. Tres box plots y una pregunta: cuál tiene atípicos, cuál es más disperso o cuál tiene cola a la derecha. Apruebas con 4 de 5.</p>
+        <div id="ojo"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Construir</span><h3>Arma la fila</h3><span class="estado" data-reto="constructor"></span></div>
+        <p class="desc">Arrastra los puntos hasta cumplir cada objetivo. Se marcan solos.</p>
+        <svg id="rectaConstr" tabindex="0" role="img" aria-label="Recta para construir una fila de datos"></svg>
+        <div class="grande" id="constrVivo"></div>
+        <ul class="objetivos" id="objetivos"></ul>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>Calcula la valla con lápiz</h3><span class="estado" data-reto="mano"></span></div>
+        <p class="desc">Once números. Ordena, corta, mide y pon la valla superior antes de pedir pistas.</p>
+        <div id="manoDatos"></div>
+        <div id="mano"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Alguien se equivocó</h3><span class="estado" data-reto="error"></span></div>
+        <p class="desc">Una de las líneas tiene un error. Tócala.</p>
+        <div id="error"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>La mediana con otro nombre</h3><span class="estado" data-reto="prop1"></span></div>
+        <div id="prop1"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Un atípico que se aleja más</h3><span class="estado" data-reto="prop2"></span></div>
+        <div id="prop2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Correr todos los datos</h3><span class="estado" data-reto="prop3"></span></div>
+        <div id="prop3"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Cambiar de unidades</h3><span class="estado" data-reto="prop4"></span></div>
+        <div id="prop4"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Recordar a la fuerza es lo que fija. Arma la regla de la valla de memoria y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Fórmula de memoria</span><h3>Arma la valla superior pieza por pieza</h3><span class="estado" data-reto="formula"></span></div>
+        <p class="desc">Hay piezas de más que no pertenecen. No mires arriba.</p>
+        <div id="formula"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el material</h2>
+      <p class="lecturas-intro">Ya construiste la idea con las manos. Ahora ve a la versión técnica y comprueba que la reconoces. Cada entrada dice qué vas a encontrar y en qué momento conviene leerla. Si abres la biblioteca con doble clic, el enlace abre el PDF en esa página.</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> Los once tiempos de entrega son inventados, elegidos para que los cuartiles caigan limpios (4, 6 y 8) con la regla
+    de interpolación lineal. Los tres grupos del paso 7 y las rondas del ojo clínico también son inventados. Tu progreso se guarda solo en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+(function () {
+  "use strict";
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var RETOS = ["ojo", "constructor", "mano", "error", "formula", "prop1", "prop2", "prop3", "prop4", "codigo1", "codigo2", "codigo3"];
+  var C = B.concepto({ id: "percentiles-iqr", retos: RETOS, pasos: 7 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  /* ---------------- utilidades numericas ---------------- */
+  function f(v, d) {
+    d = d == null ? 2 : d;
+    var s = Math.abs(v).toFixed(d);
+    if (+s === 0) return (0).toFixed(d);
+    return (v < 0 ? "−" : "") + s;
+  }
+  function fn(v) { return Number.isInteger(v) ? f(v, 0) : (Math.abs(v * 2 - Math.round(v * 2)) < 1e-9 ? f(v, 1) : f(v)); }
+
+  // percentil con posicion p*(n-1) e interpolacion lineal (numpy "linear", R type 7)
+  function percentil(ord, p) {
+    var pos = p * (ord.length - 1), lo = Math.floor(pos), fr = pos - lo;
+    if (lo + 1 < ord.length) return ord[lo] + fr * (ord[lo + 1] - ord[lo]);
+    return ord[lo];
+  }
+  function resumen(datos) {
+    var ord = datos.slice().sort(function (a, b) { return a - b; }), n = ord.length;
+    var q1 = percentil(ord, 0.25), q2 = percentil(ord, 0.5), q3 = percentil(ord, 0.75), iqr = q3 - q1;
+    var vinf = q1 - 1.5 * iqr, vsup = q3 + 1.5 * iqr, v3inf = q1 - 3 * iqr, v3sup = q3 + 3 * iqr;
+    var dentro = ord.filter(function (v) { return v >= vinf && v <= vsup; });
+    var fuera = ord.filter(function (v) { return v < vinf || v > vsup; });
+    var m = ord.reduce(function (a, b) { return a + b; }, 0) / n;
+    var sd = Math.sqrt(ord.reduce(function (a, v) { return a + (v - m) * (v - m); }, 0) / (n - 1));
+    return { ord: ord, n: n, q1: q1, q2: q2, q3: q3, iqr: iqr, vinf: vinf, vsup: vsup, v3inf: v3inf, v3sup: v3sup,
+      binf: dentro.length ? dentro[0] : null, bsup: dentro.length ? dentro[dentro.length - 1] : null, fuera: fuera, media: m, sd: sd,
+      min: ord[0], max: ord[n - 1] };
+  }
+
+  /* ---------------- recta interactiva ---------------- */
+  var NS = "http://www.w3.org/2000/svg";
+  function nodo(tag, at, padre) {
+    var e = document.createElementNS(NS, tag);
+    for (var k in at) e.setAttribute(k, at[k]);
+    if (padre) padre.appendChild(e);
+    return e;
+  }
+  function texto(padre, at, t) { var e = nodo("text", at, padre); e.textContent = t; return e; }
+
+  // o: { datos, max, capas, arrastrable, alCambiar(res), alMover(datos), alSeleccionar(i), etiquetas }
+  function crearRecta(svg, o) {
+    var W = 440, H = o.alto || 250, M = { l: 18, r: 18 }, MAX = o.max || 30;
+    var YR = 70, YB = 185;
+    var BASE = { orden: false, pct: null, cortes: false, banda: false, vallas: false, vallas3: false, caja: false, med: false, bigotes: false, outs: false, color: false };
+    var st = { datos: o.datos.slice(), capas: Object.assign({}, BASE, o.capas || {}), arrastrable: o.arrastrable !== false, sel: null, drag: null, etiquetas: o.etiquetas !== false, ocultar: null };
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    svg.classList.add("recta-svg");
+    function sx(v) { return M.l + v / MAX * (W - M.l - M.r); }
+    function ix(px) { return (px - M.l) / (W - M.l - M.r) * MAX; }
+    var gBase = nodo("g", {}, svg), gZonas = nodo("g", {}, svg), gCortes = nodo("g", {}, svg), gBox = nodo("g", {}, svg), gPts = nodo("g", {}, svg);
+
+    function base() {
+      gBase.innerHTML = "";
+      nodo("line", { x1: sx(0), x2: sx(MAX), y1: YR, y2: YR, "class": "eje" }, gBase);
+      for (var t = 0; t <= MAX; t += 5) {
+        nodo("line", { x1: sx(t), x2: sx(t), y1: YR - 4, y2: YR + 4, "class": "tick" }, gBase);
+        texto(gBase, { x: sx(t), y: YR + 16, "class": "tlab", "text-anchor": "middle" }, t);
+      }
+      texto(gBase, { x: sx(0), y: 14, "class": "tit" }, "los datos, ordenados");
+      texto(gBase, { x: sx(0), y: YB - 34, "class": "tit" }, "box plot");
+    }
+    function pieza(cls, visible) { return "pieza " + cls + (visible ? "" : " oculta"); }
+
+    function render() {
+      var r = resumen(st.datos);
+      gZonas.innerHTML = ""; gCortes.innerHTML = ""; gBox.innerHTML = ""; gPts.innerHTML = "";
+      var c = st.capas;
+      // percentil k: banda azul de lo que queda por debajo
+      if (c.pct !== null) {
+        var pv = percentil(r.ord, c.pct / 100);
+        nodo("rect", { x: sx(0), y: YR - 30, width: Math.max(0, sx(pv) - sx(0)), height: 36, "class": "pct", rx: 3 }, gZonas);
+        nodo("line", { x1: sx(pv), x2: sx(pv), y1: YR - 34, y2: YR + 6, "class": "corte" }, gCortes);
+        texto(gCortes, { x: sx(pv), y: YR - 38, "class": "pct-lab", "text-anchor": "middle" }, "P" + c.pct + " = " + fn(pv));
+      }
+      if (c.banda) nodo("rect", { x: sx(r.q1), y: YR - 30, width: Math.max(0, sx(r.q3) - sx(r.q1)), height: 36, "class": "banda", rx: 3 }, gZonas);
+      if (c.vallas) {
+        nodo("rect", { x: sx(0), y: YR - 34, width: Math.max(0, sx(Math.max(0, r.vinf)) - sx(0)), height: 44, "class": "zona-fuera" }, gZonas);
+        nodo("rect", { x: sx(Math.min(MAX, r.vsup)), y: YR - 34, width: Math.max(0, sx(MAX) - sx(Math.min(MAX, r.vsup))), height: 44, "class": "zona-fuera" }, gZonas);
+        [[r.vinf, "Q1 − 1.5·IQR"], [r.vsup, "Q3 + 1.5·IQR"]].forEach(function (v, k) {
+          if (v[0] < 0 || v[0] > MAX) return;
+          nodo("line", { x1: sx(v[0]), x2: sx(v[0]), y1: YR - 36, y2: YB + 22, "class": "valla" }, gCortes);
+          texto(gCortes, { x: sx(v[0]) + (k ? 4 : -4), y: YB + 32, "class": "valla-lab", "text-anchor": k ? "start" : "end" }, v[1] + " = " + fn(v[0]));
+        });
+        if (c.vallas3) [r.v3inf, r.v3sup].forEach(function (v) {
+          if (v < 0 || v > MAX) return;
+          nodo("line", { x1: sx(v), x2: sx(v), y1: YR - 36, y2: YB + 22, "class": "valla3" }, gCortes);
+          texto(gCortes, { x: sx(v), y: YR - 40, "class": "valla-lab", "text-anchor": "middle" }, "3·IQR");
+        });
+      }
+      if (c.cortes) [[r.q1, "Q1"], [r.q2, "Q2 = Me"], [r.q3, "Q3"]].forEach(function (q, k) {
+        var ocultar = st.ocultar === k;
+        nodo("line", { x1: sx(q[0]), x2: sx(q[0]), y1: YR - 34, y2: YR + 8, "class": "corte" }, gCortes);
+        nodo("path", { d: "M" + (sx(q[0]) - 5) + " " + (YR - 44) + " l10 0 l-5 8 z", "class": "tijera" }, gCortes);
+        texto(gCortes, { x: sx(q[0]), y: YR - 48, "class": "corte-lab", "text-anchor": "middle" }, q[1] + " = " + (ocultar ? "?" : fn(q[0])));
+      });
+      // puntos apilados
+      var pila = {}, orden = r.ord;
+      st.datos.forEach(function (v, i) {
+        var k = String(v), nivel = pila[k] || 0;
+        pila[k] = nivel + 1;
+        var x = sx(v), y = YR - 10 - nivel * 11;
+        var fuera = c.color && (v < r.vinf || v > r.vsup);
+        var cls = "pt" + (st.sel === i ? " sel" : "") + (st.arrastrable ? " drag" : "") + (fuera ? " fuera" : "") +
+          (c.pct !== null && v <= percentil(r.ord, c.pct / 100) ? " baja" : "");
+        var g = nodo("g", { "class": cls, "data-i": i }, gPts);
+        nodo("circle", { cx: x, cy: y, r: 11, "class": "hit" }, g);
+        nodo("circle", { cx: x, cy: y, r: 5.5, "class": "dot" }, g);
+        if (c.orden && st.etiquetas) {
+          var pos = orden.indexOf(v) + nivel;
+          texto(g, { x: x, y: y - 9, "class": "orden", "text-anchor": "middle" }, pos + 1);
+        }
+      });
+      // box plot
+      var bx1 = sx(r.q1), bx3 = sx(r.q3), h = 30;
+      nodo("rect", { x: bx1, y: YB - h / 2, width: Math.max(1, bx3 - bx1), height: h, "class": pieza("caja", c.caja), rx: 2 }, gBox);
+      nodo("line", { x1: sx(r.q2), x2: sx(r.q2), y1: YB - h / 2, y2: YB + h / 2, "class": pieza("med", c.med) }, gBox);
+      if (r.binf !== null) {
+        nodo("line", { x1: sx(r.binf), x2: bx1, y1: YB, y2: YB, "class": pieza("bigote", c.bigotes) }, gBox);
+        nodo("line", { x1: bx3, x2: sx(r.bsup), y1: YB, y2: YB, "class": pieza("bigote", c.bigotes) }, gBox);
+        nodo("line", { x1: sx(r.binf), x2: sx(r.binf), y1: YB - 8, y2: YB + 8, "class": pieza("tope", c.bigotes) }, gBox);
+        nodo("line", { x1: sx(r.bsup), x2: sx(r.bsup), y1: YB - 8, y2: YB + 8, "class": pieza("tope", c.bigotes) }, gBox);
+      }
+      r.fuera.forEach(function (v) { nodo("circle", { cx: sx(v), cy: YB, r: 4.5, "class": pieza("out", c.outs) }, gBox); });
+      if (c.caja) {
+        texto(gBox, { x: bx1, y: YB + h / 2 + 14, "class": "plab", "text-anchor": "middle" }, fn(r.q1));
+        texto(gBox, { x: bx3, y: YB + h / 2 + 14, "class": "plab", "text-anchor": "middle" }, fn(r.q3));
+      }
+      r.sel = st.sel;
+      if (o.alCambiar) o.alCambiar(r);
+    }
+
+    function coords(e) { var b = svg.getBoundingClientRect(); return (e.clientX - b.left) / b.width * W; }
+    function mover(i, x) {
+      x = Math.max(0, Math.min(MAX, Math.round(x)));
+      if (st.datos[i] === x) return;
+      st.datos[i] = x;
+      render();
+      if (o.alMover) o.alMover(st.datos.slice());
+    }
+    svg.addEventListener("pointerdown", function (e) {
+      var g = e.target.closest ? e.target.closest(".pt") : null;
+      if (!g) return;
+      var i = +g.getAttribute("data-i");
+      st.sel = i;
+      if (st.arrastrable) { st.drag = i; try { svg.setPointerCapture(e.pointerId); } catch (err) { /* nada */ } e.preventDefault(); }
+      render();
+      if (o.alSeleccionar) o.alSeleccionar(i);
+    });
+    svg.addEventListener("pointermove", function (e) { if (st.drag !== null) mover(st.drag, ix(coords(e))); });
+    function soltar() { st.drag = null; }
+    svg.addEventListener("pointerup", soltar);
+    svg.addEventListener("pointercancel", soltar);
+    svg.addEventListener("keydown", function (e) {
+      if (st.sel === null || !st.arrastrable) return;
+      var d = { ArrowLeft: -1, ArrowRight: 1 }[e.key];
+      if (!d) return;
+      e.preventDefault();
+      mover(st.sel, st.datos[st.sel] + d);
+    });
+    base();
+    render();
+    return {
+      res: function () { return resumen(st.datos); },
+      datos: function () { return st.datos.slice(); },
+      set: function (c) {
+        if (c.datos) st.datos = c.datos.slice();
+        if (c.capas) st.capas = Object.assign({}, BASE, c.capas);
+        ["arrastrable", "sel", "etiquetas", "ocultar"].forEach(function (k) { if (k in c) st[k] = c[k]; });
+        svg.classList.toggle("arrastrable", st.arrastrable);
+        render();
+      },
+      capa: function (k, v) { st.capas[k] = v; render(); }
+    };
+  }
+
+  /* ---------------- estado del recorrido ---------------- */
+  var ORIGINAL = [2, 3, 4, 4, 5, 6, 7, 8, 8, 9, 10];
+  var rOrig = resumen(ORIGINAL);
+  var datos = ORIGINAL.slice();
+  var est = { paso: 0, pct: 25, chk3: false, chk4: false, chk7: false, chk7b: false, armadas: {}, grupo: null };
+  var pasos;
+
+  var MODOS = [
+    { capas: { orden: true, pct: 25 }, hint: "Mueve el control del percentil", arrastrable: false },
+    { capas: { orden: true, cortes: true }, hint: "Arrastra un punto: las tijeras lo siguen", arrastrable: true },
+    { capas: { orden: true, cortes: true, banda: true }, hint: "Arrastra una punta y después uno del medio", arrastrable: true },
+    { capas: { orden: true, cortes: true, banda: true, vallas: true, vallas3: true, color: true }, hint: "Arrastra el 10 más allá de la valla", arrastrable: true },
+    { capas: { cortes: true, vallas: true, color: true }, hint: "Toca las piezas en orden", arrastrable: true },
+    { capas: { cortes: true, vallas: true, color: true, caja: true, med: true, bigotes: true, outs: true }, hint: "Arrastra el dato más alto y mira la tabla", arrastrable: true },
+    { capas: {}, hint: "Toca un grupo", arrastrable: false, grupos: true }
+  ];
+
+  var recta = crearRecta($("recta"), {
+    datos: datos, max: 30,
+    alCambiar: function (r) { if (!MODOS[est.paso].grupos) { pintarLectura(r); refrescarVivos(r); } },
+    alMover: function (d) { datos = d; }
+  });
+
+  function pintarLectura(r) {
+    var m = MODOS[est.paso], c = m.capas, h = "";
+    var pv = c.pct != null ? percentil(r.ord, c.pct / 100) : null;
+    h += '<div class="lista-ord">' + r.ord.map(function (v, i) {
+      var cls = [];
+      if (pv !== null && v <= pv) cls.push("pct");
+      if (c.cortes && (i === 2 || i === 3 || i === 5 || i === 7 || i === 8)) cls.push("q");
+      if (c.color && (v < r.vinf || v > r.vsup)) cls.push("fuera");
+      return '<span class="' + cls.join(" ") + '">' + fn(v) + '<small>' + (i + 1) + 'º</small></span>';
+    }).join("") + '</div>';
+    var celdas = [];
+    if (pv !== null) celdas.push('<div class="acc">P' + c.pct + '<b>' + fn(pv) + '</b></div>');
+    if (c.cortes) {
+      celdas.push('<div class="acc">Q1<b>' + fn(r.q1) + '</b></div>');
+      celdas.push('<div class="acc">Q2 = Me<b>' + fn(r.q2) + '</b></div>');
+      celdas.push('<div class="acc">Q3<b>' + fn(r.q3) + '</b></div>');
+    }
+    if (c.banda) celdas.push('<div class="' + (est.paso === 2 && !est.chk3 ? "oculto" : "acc") + '">IQR<b>' + (est.paso === 2 && !est.chk3 ? "?" : fn(r.iqr)) + '</b></div>');
+    if (c.vallas) {
+      var oc = est.paso === 3 && !est.chk4;
+      celdas.push('<div class="neg">valla inf<b>' + (oc ? "?" : fn(r.vinf)) + '</b></div>');
+      celdas.push('<div class="neg">valla sup<b>' + (oc ? "?" : fn(r.vsup)) + '</b></div>');
+      celdas.push('<div class="neg">atípicos<b>' + (r.fuera.length ? r.fuera.map(fn).join(", ") : "ninguno") + '</b></div>');
+    }
+    if (c.bigotes) {
+      celdas.push('<div>bigote inf<b>' + fn(r.binf) + '</b></div>');
+      celdas.push('<div>bigote sup<b>' + fn(r.bsup) + '</b></div>');
+    }
+    if (celdas.length) h += '<div class="resumen">' + celdas.join("") + '</div>';
+    $("lectura").innerHTML = h;
+  }
+
+  function refrescarVivos(r) {
+    $("vivoQ").innerHTML = "n = " + r.n + " &nbsp;·&nbsp; posición de Q1 = 0.25 × 10 = 2.5 → entre " + fn(r.ord[2]) + " y " + fn(r.ord[3]) + " → <b>" + fn(r.q1) + "</b>" +
+      "<br>posición de Q2 = 0.5 × 10 = 5 → el 6.º dato → <b>" + fn(r.q2) + "</b> &nbsp;·&nbsp; posición de Q3 = 7.5 → entre " + fn(r.ord[7]) + " y " + fn(r.ord[8]) + " → <b>" + fn(r.q3) + "</b>";
+    $("vivoIQR").innerHTML = "IQR = " + fn(r.q3) + " − " + fn(r.q1) + " = <b>" + (est.chk3 || est.paso !== 2 ? fn(r.iqr) : "?") + "</b>";
+    var oc = est.paso === 3 && !est.chk4;
+    $("vivoVallas").innerHTML = "valla inferior = " + fn(r.q1) + " − 1.5 × " + fn(r.iqr) + " = <b>" + (oc ? "?" : fn(r.vinf)) + "</b> &nbsp;·&nbsp; valla superior = " + fn(r.q3) + " + 1.5 × " + fn(r.iqr) + " = <b>" + (oc ? "?" : fn(r.vsup)) + "</b>";
+    pintarRobusta(r);
+    if (chk3) chk3.refrescar();
+    if (chk4) chk4.refrescar();
+  }
+
+  function pintarRobusta(r) {
+    var filas = [["media", rOrig.media, r.media], ["desviación estándar", rOrig.sd, r.sd], ["mediana", rOrig.q2, r.q2], ["IQR", rOrig.iqr, r.iqr]];
+    $("tablaRobusta").innerHTML = '<thead><tr><th>medida</th><th>datos originales</th><th>ahora</th><th>cambio</th></tr></thead><tbody>' +
+      filas.map(function (x) {
+        var d = x[2] - x[1], cls = Math.abs(d) < 1e-9 ? "quieto" : "cambio";
+        return '<tr><td>' + x[0] + '</td><td>' + f(x[1]) + '</td><td>' + f(x[2]) + '</td><td class="' + cls + '">' + (Math.abs(d) < 1e-9 ? "ni se movió" : (d > 0 ? "+" : "") + f(d)) + '</td></tr>';
+      }).join("") + '</tbody>';
+  }
+
+  /* grupos del paso 7 */
+  var GRUPOS = [
+    { n: "A", d: [4, 5, 5, 6, 6, 6, 7, 7, 8, 8, 9], lect: "Caja estrecha y bigotes parejos: entregas regulares, sin atípicos, simétrica." },
+    { n: "B", d: [3, 4, 4, 5, 5, 6, 8, 10, 13, 16, 20], lect: "La raya está pegada al lado izquierdo de la caja y el bigote derecho es largo: cola hacia la derecha, asimetría positiva." },
+    { n: "C", d: [5, 6, 6, 7, 7, 7, 8, 8, 9, 9, 27], lect: "Caja parecida a la de A, pero un punto suelto a la derecha: un atípico que la caja ignora." }
+  ];
+  function dibujarGrupos() {
+    var svg = $("rectaGrupos"), W = 440, H = 250, M = { l: 18, r: 18 }, MAX = 30;
+    $("recta").hidden = true;
+    svg.hidden = false;
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    svg.innerHTML = "";
+    function sx(v) { return M.l + v / MAX * (W - M.l - M.r); }
+    nodo("line", { x1: sx(0), x2: sx(MAX), y1: 232, y2: 232, "class": "eje" }, svg);
+    for (var t = 0; t <= MAX; t += 5) { nodo("line", { x1: sx(t), x2: sx(t), y1: 228, y2: 236, "class": "tick" }, svg); texto(svg, { x: sx(t), y: 248, "class": "tlab", "text-anchor": "middle" }, t); }
+    GRUPOS.forEach(function (g, k) {
+      var r = resumen(g.d), y = 45 + k * 65, h = 26;
+      var gg = nodo("g", { "class": "grupo", "data-g": k, style: "cursor:pointer" }, svg);
+      nodo("rect", { x: sx(0), y: y - 24, width: sx(MAX) - sx(0), height: 50, fill: "transparent" }, gg);
+      texto(gg, { x: sx(0), y: y - 10, "class": "grupo-lab" }, "Grupo " + g.n + (est.grupo === k ? "  (elegido)" : ""));
+      nodo("line", { x1: sx(r.binf), x2: sx(r.q1), y1: y + 8, y2: y + 8, "class": "bigote" }, gg);
+      nodo("line", { x1: sx(r.q3), x2: sx(r.bsup), y1: y + 8, y2: y + 8, "class": "bigote" }, gg);
+      nodo("line", { x1: sx(r.binf), x2: sx(r.binf), y1: y + 2, y2: y + 14, "class": "tope" }, gg);
+      nodo("line", { x1: sx(r.bsup), x2: sx(r.bsup), y1: y + 2, y2: y + 14, "class": "tope" }, gg);
+      nodo("rect", { x: sx(r.q1), y: y + 8 - h / 2, width: sx(r.q3) - sx(r.q1), height: h, "class": "caja", rx: 2, style: est.grupo === k ? "stroke-width:2.6" : "" }, gg);
+      nodo("line", { x1: sx(r.q2), x2: sx(r.q2), y1: y + 8 - h / 2, y2: y + 8 + h / 2, "class": "med" }, gg);
+      r.fuera.forEach(function (v) { nodo("circle", { cx: sx(v), cy: y + 8, r: 4.5, "class": "out" }, gg); });
+    });
+    svg.onclick = function (e) {
+      var g = e.target.closest(".grupo");
+      if (!g) return;
+      est.grupo = +g.getAttribute("data-g");
+      var r = resumen(GRUPOS[est.grupo].d);
+      $("lecturaGrupo").innerHTML = "<b>Grupo " + GRUPOS[est.grupo].n + "</b>: " + GRUPOS[est.grupo].lect + " Mediana " + fn(r.q2) + ", IQR " + fn(r.iqr) + ", bigotes de " + fn(r.binf) + " a " + fn(r.bsup) + (r.fuera.length ? ", atípicos: " + r.fuera.map(fn).join(", ") : "") + ".";
+      dibujarGrupos();
+    };
+    $("lectura").innerHTML = "";
+  }
+
+  function entrar(i) {
+    est.paso = i;
+    var m = MODOS[i];
+    $("escHint").textContent = m.hint;
+    $("btnRestaurar").hidden = !!m.grupos;
+    if (m.grupos) { dibujarGrupos(); return; }
+    $("rectaGrupos").hidden = true;
+    $("recta").hidden = false;
+    var capas = Object.assign({}, m.capas);
+    if (i === 0) capas.pct = est.pct;
+    if (i === 4) { ["caja", "med", "bigotes", "outs"].forEach(function (k) { capas[k] = !!est.armadas[k]; }); }
+    recta.set({ datos: datos, capas: capas, arrastrable: m.arrastrable, sel: null, ocultar: null });
+  }
+
+  $("pctSlider").addEventListener("input", function () {
+    est.pct = +this.value;
+    $("pctVal").textContent = est.pct;
+    if (est.paso === 0) recta.capa("pct", est.pct);
+  });
+  $("btnRestaurar").addEventListener("click", function () { datos = ORIGINAL.slice(); recta.set({ datos: datos }); });
+
+  $("armar").addEventListener("click", function (e) {
+    var b = e.target.closest("button");
+    if (!b) return;
+    var orden = ["caja", "med", "bigotes", "outs"], k = b.getAttribute("data-pieza"), idx = orden.indexOf(k);
+    for (var j = 0; j < idx; j++) if (!est.armadas[orden[j]]) { b.classList.add("mal"); setTimeout(function () { b.classList.remove("mal"); }, 400); return; }
+    est.armadas[k] = true;
+    b.classList.add("hecho");
+    if (est.paso === 4) recta.capa(k, true);
+  });
+
+  /* ---------------- chequeos de cada paso ---------------- */
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+  var chk3, chk4;
+
+  B.numerico(cuerpo("chk1"), {
+    pregunta: "Los once tiempos ordenados son 2, 3, 4, 4, 5, 6, 7, 8, 8, 9, 10. ¿Qué valor es el <b>percentil 50</b>, el que deja la mitad por debajo?",
+    respuesta: 6,
+    tolerancia: 0.01,
+    pistas: ["Cuenta: con 11 datos, el del medio tiene cinco por debajo y cinco por encima.", "Es el sexto dato de la fila ordenada."],
+    diagnostico: function (v) {
+      if (v === 5.5) return "Ese sería el promedio de 5 y 6, pero con 11 datos hay uno justo en el medio.";
+      if (v === 5) return "El 5 es el quinto dato. Cuenta cuántos quedan por debajo de él: solo cuatro.";
+      return null;
+    },
+    explicacion: "El sexto dato de once es el 6: cinco por debajo, cinco por encima. Es la mediana, y también el percentil 50. Ahora mueve el control hasta 50 y compruébalo.",
+    alResolver: function () { pasos.completar(0); }
+  });
+
+  B.opcionMultiple(cuerpo("chk2"), {
+    pregunta: "¿Qué porcentaje de los datos queda <b>entre Q1 y Q3</b>?",
+    opciones: ["El 50 %", "El 75 %", "El 25 %", "Depende de los datos"],
+    correcta: 0,
+    pistas: [null, "Q3 deja el 75 % por debajo, pero Q1 ya dejó el 25 %. ¿Cuánto queda entre los dos?", "El 25 % es lo que hay entre dos cortes vecinos, no entre el primero y el tercero.", "Los cortes se definen por porcentajes, así que la respuesta es la misma para cualquier dato."],
+    explicacion: "Por debajo de Q3 está el 75 %, y por debajo de Q1 el 25 %. Entre los dos queda 75 − 25 = <b>50 %</b>: la mitad central. Es lo que va a medir el paso 3.",
+    alResolver: function () { pasos.completar(1); }
+  });
+
+  chk3 = B.numerico(cuerpo("chk3"), {
+    pregunta: function () { var r = recta.res(); return "Con los datos que tienes ahora, Q1 = " + fn(r.q1) + " y Q3 = " + fn(r.q3) + ". ¿Cuánto vale el IQR?"; },
+    respuesta: function () { return recta.res().iqr; },
+    tolerancia: 0.011,
+    pistas: ["Es una resta, no una suma.", function () { var r = recta.res(); return "Es " + fn(r.q3) + " − " + fn(r.q1) + "."; }],
+    diagnostico: function (v) { var r = recta.res(); if (Math.abs(v - (r.q3 + r.q1)) < 0.011) return "Sumaste los cuartiles. El IQR es la distancia entre ellos."; return null; },
+    explicacion: function () { var r = recta.res(); return fn(r.q3) + " − " + fn(r.q1) + " = " + fn(r.iqr) + ". En ese tramo vive la mitad central de las entregas."; },
+    alResolver: function () { est.chk3 = true; var r = recta.res(); pintarLectura(r); refrescarVivos(r); pasos.completar(2); }
+  });
+
+  chk4 = B.numerico(cuerpo("chk4"), {
+    pregunta: function () { var r = recta.res(); return "Con Q3 = " + fn(r.q3) + " e IQR = " + fn(r.iqr) + ", ¿a partir de qué valor un pedido pasa a ser <b>atípico por arriba</b>? Es decir, ¿dónde está la valla superior?"; },
+    respuesta: function () { return recta.res().vsup; },
+    tolerancia: 0.011,
+    pistas: ["La valla superior parte de Q3, no de la mediana ni del máximo.", function () { var r = recta.res(); return "Es " + fn(r.q3) + " + 1.5 × " + fn(r.iqr) + "."; }],
+    diagnostico: function (v) {
+      var r = recta.res();
+      if (Math.abs(v - (r.q3 + 1.5 * r.q3)) < 0.011) return "Multiplicaste 1.5 por Q3. El 1.5 multiplica al IQR.";
+      if (Math.abs(v - (r.q2 + 1.5 * r.iqr)) < 0.011) return "Partiste de la mediana. La valla sale de Q3.";
+      if (Math.abs(v - (r.q3 + r.iqr)) < 0.011) return "Te faltó el 1.5: la valla está a una vez y media el IQR.";
+      return null;
+    },
+    explicacion: function () { var r = recta.res(); return fn(r.q3) + " + 1.5 × " + fn(r.iqr) + " = " + fn(r.vsup) + ". Todo lo que pase de ahí es atípico. <b>Ahora arrastra el 10</b> hacia la derecha y mira en qué momento cambia de color."; },
+    alResolver: function () { est.chk4 = true; var r = recta.res(); pintarLectura(r); refrescarVivos(r); pasos.completar(3); }
+  });
+
+  B.opcionMultiple(cuerpo("chk5"), {
+    pregunta: "Con los datos originales (Q3 = 8, valla superior = 14, máximo = 10), ¿hasta dónde llega el <b>bigote superior</b>?",
+    opciones: ["Hasta 10, el último dato dentro de la valla", "Hasta 14, la valla", "Hasta 8, el borde de la caja", "Hasta 11, el promedio entre Q3 y la valla"],
+    correcta: 0,
+    pistas: [null, "La valla es una línea imaginaria. ¿Hay algún pedido que haya tardado 14 días?", "El bigote sale de la caja, no se queda en ella.", "El bigote toca un dato real, no un promedio."],
+    explicacion: "El bigote se estira hasta el <b>último dato real</b> que no supera la valla: el 10. Si arrastras ese 10 hasta 25, el bigote retrocede hasta el 9 y el 25 queda como punto suelto. Pruébalo ahora.",
+    alResolver: function () { pasos.completar(4); }
+  });
+
+  B.opcionMultiple(cuerpo("chk6"), {
+    pregunta: "Vas a arrastrar el dato más alto de 10 a 30. ¿Cuál de estas medidas va a cambiar <b>más</b>?",
+    opciones: ["La desviación estándar", "La mediana", "El IQR", "Las cuatro cambian igual"],
+    correcta: 0,
+    pistas: [null, "La mediana es el sexto dato ordenado. ¿Sigue siendo el sexto si el último se va lejos?", "El IQR sale de dos posiciones de la fila. ¿Cambian esas posiciones?", "Dos de ellas no cambian nada. Piensa cuáles usan todos los valores."],
+    explicacion: "La desviación estándar eleva al cuadrado cada desvío, y un desvío de 20 pesa 400. La media también se mueve, pero menos. La mediana y el IQR dependen de posiciones, no de valores: <b>no se mueven</b>. Compruébalo arrastrando.",
+    alResolver: function () { pasos.completar(5); }
+  });
+
+  B.opcionMultiple(cuerpo("chk7"), {
+    pregunta: "En un box plot, la raya de la mediana está pegada al borde izquierdo de la caja y el bigote derecho es mucho más largo que el izquierdo. ¿Qué te dice eso?",
+    opciones: ["Hay cola hacia la derecha: pocos valores muy altos", "Hay cola hacia la izquierda: pocos valores muy bajos", "Los datos son simétricos", "Hay un error en el dibujo"],
+    correcta: 0,
+    pistas: [null, "La cola larga está del lado del bigote largo.", "Si fueran simétricos, la raya estaría en el medio y los bigotes serían parejos.", "Es un dibujo perfectamente válido: mira el grupo B."],
+    explicacion: "Si la mitad superior de los datos ocupa más espacio que la inferior, hay valores que se estiran hacia la derecha: <b>asimetría positiva</b>. Es lo que vas a medir con un número en la página de asimetría.",
+    alResolver: function () { est.chk7 = true; cerrar7(); }
+  });
+
+  B.opcionMultiple(cuerpo("chk7b"), {
+    pregunta: "Para los datos 1, 2, 3, 4, 5, 6, 7, 8, NumPy dice que Q1 = 2.75. En R, <code>quantile(x, 0.25, type = 6)</code> da 2.25 y <code>boxplot.stats</code> usa 2.5. ¿Cuál es el cuartil correcto?",
+    opciones: ["Los tres: son convenciones distintas y ninguna es la verdadera", "2.75, porque NumPy es el estándar", "2.5, porque es el promedio de 2 y 3", "2.25, porque R es el programa de estadística"],
+    correcta: 0,
+    pistas: [null, "Si solo una fuera válida, ¿por qué R ofrecería nueve?", "Es una regla válida, pero no la única.", "R trae nueve reglas y usa por defecto la misma que NumPy."],
+    explicacion: "Un cuartil con pocos datos cae entre dos valores, y <b>cómo repartir ese tramo es una decisión</b>, no un hecho. NumPy y R por defecto usan la posición p(n − 1); otras reglas usan p(n + 1) o la mediana de cada mitad. Con cientos de datos la diferencia desaparece. Lo importante es saber cuál usa tu programa cuando compares.",
+    alResolver: function () { est.chk7b = true; cerrar7(); }
+  });
+  function cerrar7() { if (est.chk7 && est.chk7b) pasos.completar(6); }
+
+  pasos = B.pasos($("recorrido"), {
+    concepto: C,
+    alEntrar: entrar,
+    alTerminar: function () { location.hash = "retos"; }
+  });
+  est.chk3 = pasos.hecho(2);
+  est.chk4 = pasos.hecho(3);
+  if (pasos.hecho(4)) { est.armadas = { caja: true, med: true, bigotes: true, outs: true }; [].forEach.call($("armar").children, function (b) { b.classList.add("hecho"); }); }
+  entrar(pasos.actual());
+
+  /* ---------------- hipotesis inicial ---------------- */
+  (function () {
+    var ta = $("hipotesis"), t = null;
+    ta.value = B.nota("percentiles-iqr", "hipotesis");
+    function cita() {
+      var v = ta.value.trim(), el = $("citaHipo");
+      el.hidden = !v;
+      if (v) { el.textContent = ""; el.appendChild(document.createTextNode("Al principio escribiste: «" + v + "». ¿Se parece a la regla de las vallas? ¿Qué le faltaba a la tuya para no depender de tu opinión?")); }
+    }
+    cita();
+    ta.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { B.nota("percentiles-iqr", "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; cita(); }, 500);
+    });
+  })();
+
+  /* ---------------- marcadores de estado de retos ---------------- */
+  function pintarEstados() {
+    [].forEach.call(document.querySelectorAll("[data-reto]"), function (el) {
+      var ok = C.retoOk(el.getAttribute("data-reto"));
+      el.textContent = ok ? "resuelto" : "pendiente";
+      el.classList.toggle("ok", ok);
+    });
+  }
+  C.alCambiar(pintarEstados);
+
+  /* ---------------- vida real: el algoritmo en codigo ---------------- */
+  (function () {
+    var CODIGO = {
+      py: [
+        ["import", "import numpy as np"],
+        [null, ""],
+        [null, "# dias que tardo cada entrega; el 25 es la que se perdio en el correo"],
+        ["datos", "x = [2, 3, 4, 4, 5, 6, 7, 8, 8, 9, 25]"],
+        ["ordenar", "x = sorted(x)                       # 1. ordenar"],
+        ["n", "n = len(x)"],
+        [null, ""],
+        ["def", "def percentil(x, p):                # 2. posicion = p * (n - 1), e interpolar"],
+        ["pos", "    pos = p * (len(x) - 1)"],
+        ["lo", "    lo = int(pos)"],
+        ["frac", "    frac = pos - lo"],
+        ["ifint", "    if lo + 1 < len(x):"],
+        ["interp", "        return x[lo] + frac * (x[lo + 1] - x[lo])"],
+        ["ultimo", "    return x[lo]"],
+        [null, ""],
+        ["q1", "q1 = percentil(x, 0.25)             # 3. los tres cortes"],
+        ["q2", "q2 = percentil(x, 0.50)"],
+        ["q3", "q3 = percentil(x, 0.75)"],
+        ["iqr", "iqr = q3 - q1                       # 4. el ancho de la caja"],
+        [null, ""],
+        ["vinf", "valla_inf = q1 - 1.5 * iqr          # 5. las vallas"],
+        ["vsup", "valla_sup = q3 + 1.5 * iqr"],
+        ["atip", "atipicos = [v for v in x if v < valla_inf or v > valla_sup]"],
+        ["binf", "bigote_inf = min(v for v in x if v >= valla_inf)"],
+        ["bsup", "bigote_sup = max(v for v in x if v <= valla_sup)"],
+        [null, ""],
+        ["print1", "print(q1, q2, q3, iqr)"],
+        ["print2", "print(valla_inf, valla_sup, bigote_inf, bigote_sup, atipicos)"],
+        ["verif", "print(np.percentile(x, [25, 50, 75]))   # [4. 6. 8.]"]
+      ],
+      r: [
+        [null, "# dias que tardo cada entrega; el 25 es la que se perdio en el correo"],
+        ["datos", "x <- c(2, 3, 4, 4, 5, 6, 7, 8, 8, 9, 25)"],
+        ["ordenar", "x <- sort(x)                         # 1. ordenar"],
+        ["n", "n <- length(x)"],
+        [null, ""],
+        ["def", "percentil <- function(x, p) {        # 2. posicion = p * (n - 1), e interpolar"],
+        ["pos", "  pos <- p * (length(x) - 1)"],
+        ["lo", "  lo <- floor(pos)"],
+        ["frac", "  frac <- pos - lo"],
+        ["ifint", "  if (lo + 1 < length(x)) {"],
+        ["interp", "    return(x[lo + 1] + frac * (x[lo + 2] - x[lo + 1]))"],
+        [null, "  }"],
+        ["ultimo", "  x[lo + 1]"],
+        [null, "}"],
+        [null, ""],
+        ["q1", "q1 <- percentil(x, 0.25)             # 3. los tres cortes"],
+        ["q2", "q2 <- percentil(x, 0.50)"],
+        ["q3", "q3 <- percentil(x, 0.75)"],
+        ["iqr", "iqr <- q3 - q1                       # 4. el ancho de la caja"],
+        [null, ""],
+        ["vinf", "valla_inf <- q1 - 1.5 * iqr          # 5. las vallas"],
+        ["vsup", "valla_sup <- q3 + 1.5 * iqr"],
+        ["atip", "atipicos <- x[x < valla_inf | x > valla_sup]"],
+        ["binf", "bigote_inf <- min(x[x >= valla_inf])"],
+        ["bsup", "bigote_sup <- max(x[x <= valla_sup])"],
+        [null, ""],
+        ["print1", "print(c(q1, q2, q3, iqr))"],
+        ["print2", "print(c(valla_inf, valla_sup, bigote_inf, bigote_sup, atipicos))"],
+        ["verif", "print(quantile(x, c(0.25, 0.5, 0.75)))   # 4 6 8"],
+        ["verif2", "print(IQR(x))                            # 4"]
+      ]
+    };
+    var X0 = [2, 3, 4, 4, 5, 6, 7, 8, 8, 9, 25];
+    var ORD = X0.slice().sort(function (a, b) { return a - b; });
+    var n = ORD.length;
+    var R = resumen(X0);
+
+    /* eventos: una foto del estado despues de ejecutar cada linea */
+    var EV = [];
+    (function () {
+      var res = {}, fase = 0;
+      function foto(id, extra) { EV.push(Object.assign({ id: id, fase: fase, res: Object.assign({}, res), p: null, pos: null, lo: null, frac: null, val: null }, extra || {})); }
+      foto("import"); foto("datos", { ordenado: false });
+      fase = 1; foto("ordenar", { ordenado: true }); foto("n");
+      foto("def");
+      fase = 2;
+      [["q1", 0.25], ["q2", 0.5], ["q3", 0.75]].forEach(function (q) {
+        var p = q[1], pos = p * (n - 1), lo = Math.floor(pos), fr = pos - lo;
+        var val = lo + 1 < n ? ORD[lo] + fr * (ORD[lo + 1] - ORD[lo]) : ORD[lo];
+        foto("pos", { p: p, pos: pos, q: q[0] });
+        foto("lo", { p: p, pos: pos, lo: lo, q: q[0] });
+        foto("frac", { p: p, pos: pos, lo: lo, frac: fr, q: q[0] });
+        foto("interp", { p: p, pos: pos, lo: lo, frac: fr, val: val, q: q[0] });
+        res[q[0]] = val;
+        foto(q[0], { p: p, lo: lo, val: val, q: q[0], nuevo: q[0] });
+      });
+      fase = 3;
+      res.iqr = res.q3 - res.q1; foto("iqr", { nuevo: "iqr" });
+      res.vinf = res.q1 - 1.5 * res.iqr; foto("vinf", { nuevo: "vinf" });
+      res.vsup = res.q3 + 1.5 * res.iqr; foto("vsup", { nuevo: "vsup" });
+      res.atip = ORD.filter(function (v) { return v < res.vinf || v > res.vsup; }); foto("atip", { nuevo: "atip" });
+      res.binf = Math.min.apply(null, ORD.filter(function (v) { return v >= res.vinf; })); foto("binf", { nuevo: "binf" });
+      res.bsup = Math.max.apply(null, ORD.filter(function (v) { return v <= res.vsup; })); foto("bsup", { nuevo: "bsup" });
+      foto("print1", { fin: true }); foto("print2", { fin: true }); foto("verif", { fin: true });
+    })();
+    var NOMQ = { q1: "Q1", q2: "Q2", q3: "Q3" };
+
+    function narrar(e, ctx) {
+      var py = ctx.lang() === "py", ix = ctx.ix;
+      switch (e.id) {
+        case "import": return py ? "Carga NumPy. Solo lo vamos a usar al final, para comprobar." : "R trae todo lo necesario de serie, así que no hay nada que importar.";
+        case "datos": return "Once tiempos de entrega, en días. El <b>25</b> es el pedido que se perdió. Todavía están desordenados.";
+        case "ordenar": return "Ordena la fila de menor a mayor. <b>Sin esto, nada de lo que sigue tiene sentido.</b>";
+        case "n": return "Guarda cuántos datos hay: <b>n = " + n + "</b>.";
+        case "def": return "Define la función que ubica un percentil. Recibe la lista ordenada y una fracción p entre 0 y 1.";
+        case "pos": return "Para " + NOMQ[e.q] + ", la posición es " + e.p + " × (" + n + " − 1) = <b>" + fn(e.pos) + "</b>." + (Number.isInteger(e.pos) ? " Es entera: cae justo sobre un dato." : " No es entera: cae entre dos datos.");
+        case "lo": return "La parte entera, <b>" + e.lo + "</b>, dice entre qué dos vecinos de la fila mirar" + (py ? " (contando desde 0)." : ". En R la fila se cuenta desde 1, así que el vecino es x[" + ix(e.lo) + "].");
+        case "frac": return "La parte decimal, <b>" + fn(e.frac) + "</b>, dice qué fracción del tramo entre los dos vecinos hay que avanzar.";
+        case "interp": return "Interpola: x[" + ix(e.lo) + "] + " + fn(e.frac) + " × (x[" + ix(e.lo + 1) + "] − x[" + ix(e.lo) + "]) = " + fn(ORD[e.lo]) + " + " + fn(e.frac) + " × (" + fn(ORD[Math.min(e.lo + 1, n - 1)]) + " − " + fn(ORD[e.lo]) + ") = <b>" + fn(e.val) + "</b>.";
+        case "q1": case "q2": case "q3": return NOMQ[e.id] + " = <b>" + fn(e.val) + "</b>. " + (e.id === "q2" ? "Es la mediana." : e.id === "q1" ? "Un cuarto de las entregas tardó menos." : "Tres cuartos tardaron menos.");
+        case "iqr": return "El ancho de la caja: " + fn(e.res.q3) + " − " + fn(e.res.q1) + " = <b>" + fn(e.res.iqr) + "</b>.";
+        case "vinf": return "Valla inferior: " + fn(e.res.q1) + " − 1.5 × " + fn(e.res.iqr) + " = <b>" + fn(e.res.vinf) + "</b>. Es negativa: ningún pedido va a caer por debajo.";
+        case "vsup": return "Valla superior: " + fn(e.res.q3) + " + 1.5 × " + fn(e.res.iqr) + " = <b>" + fn(e.res.vsup) + "</b>. Cualquier entrega de más de 14 días es atípica.";
+        case "atip": return "Filtra los que quedan fuera de las vallas: <b>" + (e.res.atip.length ? e.res.atip.map(fn).join(", ") : "ninguno") + "</b>.";
+        case "binf": return "El bigote inferior llega al primer dato que no está por debajo de la valla: <b>" + fn(e.res.binf) + "</b>.";
+        case "bsup": return "El bigote superior llega al último dato que no supera la valla: <b>" + fn(e.res.bsup) + "</b>, no al 25 ni al 14.";
+        case "print1": return "Imprime los tres cortes y el IQR: <b>4, 6, 8, 4</b>.";
+        case "print2": return "Imprime las vallas, los bigotes y los atípicos: <b>−2, 14, 2, 9</b> y el <b>25</b>.";
+        case "verif": return py ? "Compara con <b>np.percentile</b>: devuelve [4. 6. 8.], los mismos cortes." : "Compara con <b>quantile</b>, que da 4, 6, 8, y con <b>IQR</b>, que da 4. Los mismos números.";
+      }
+      return "";
+    }
+    function visual(e, anterior, ctx) {
+      var ix = ctx.ix, lista = $("vrLista"), ordenado = e && (e.ordenado || e.fase >= 1);
+      $("vrListaTit").textContent = ordenado ? "x ordenado (posición " + (ctx.lang() === "py" ? "desde 0" : "desde 1") + ")" : "x: los datos";
+      var vals = ordenado ? ORD : X0, cambio = ordenado && (!anterior || !(anterior.ordenado || anterior.fase >= 1));
+      lista.innerHTML = vals.map(function (v, i) {
+        var cls = [];
+        if (e && e.lo !== null && e.id !== "q1" && e.id !== "q2" && e.id !== "q3") { if (i === e.lo) cls.push("lo"); if (i === e.lo + 1 && e.frac !== null && e.frac > 0) cls.push("hi"); }
+        if (e && (e.id === "q1" || e.id === "q2" || e.id === "q3") && (i === e.lo || (i === e.lo + 1 && !Number.isInteger(e.p * (n - 1))))) cls.push("lo");
+        if (e && e.res.vsup !== undefined && (v < e.res.vinf || v > e.res.vsup)) cls.push("fuera");
+        if (e && (e.id === "binf" && v === e.res.binf || e.id === "bsup" && v === e.res.bsup)) cls.push("dentro");
+        if (cambio) cls.push("cambio");
+        return '<span class="' + cls.join(" ") + '" title="posición ' + (ordenado ? ix(i) : "") + '">' + fn(v) + '</span>';
+      }).join("");
+      $("vrCuenta").innerHTML = !e ? "" :
+        e.id === "pos" ? e.p + " × (" + n + " − 1) = <b>" + fn(e.pos) + "</b>" :
+        e.id === "interp" ? fn(ORD[e.lo]) + " + " + fn(e.frac) + " × (" + fn(ORD[Math.min(e.lo + 1, n - 1)]) + " − " + fn(ORD[e.lo]) + ") = <b>" + fn(e.val) + "</b>" :
+        e.id === "iqr" ? fn(e.res.q3) + " − " + fn(e.res.q1) + " = <b>" + fn(e.res.iqr) + "</b>" :
+        e.id === "vinf" ? fn(e.res.q1) + " − 1.5 × " + fn(e.res.iqr) + " = <b>" + fn(e.res.vinf) + "</b>" :
+        e.id === "vsup" ? fn(e.res.q3) + " + 1.5 × " + fn(e.res.iqr) + " = <b>" + fn(e.res.vsup) + "</b>" :
+        e.fin ? "Fila ordenada, tres cortes, una caja y una valla: el 25 queda afuera." : "";
+      var campos = [["q1", "Q1"], ["q2", "Q2 = Me"], ["q3", "Q3"], ["iqr", "IQR"], ["vinf", "valla inf"], ["vsup", "valla sup"], ["binf", "bigote inf"], ["bsup", "bigote sup"], ["atip", "atípicos"]];
+      $("vrRes").innerHTML = campos.map(function (c) {
+        var v = e ? e.res[c[0]] : undefined, hay = v !== undefined;
+        var txt = !hay ? "?" : Array.isArray(v) ? (v.length ? v.map(fn).join(", ") : "ninguno") : fn(v);
+        return '<div class="' + (hay ? "" : "vacia") + (e && e.nuevo === c[0] ? " llega" : "") + '">' + c[1] + '<b>' + txt + '</b></div>';
+      }).join("");
+    }
+    B.vidaReal($("vidareal"), {
+      codigo: CODIGO,
+      eventos: EV,
+      narrar: narrar,
+      vars: function (e, ctx) {
+        var v = [];
+        if (e && e.p !== null) v.push('<span>p = <b>' + e.p + '</b></span>');
+        if (e && e.pos !== null) v.push('<span>pos = <b>' + fn(e.pos) + '</b></span>');
+        if (e && e.lo !== null && e.id !== "q1" && e.id !== "q2" && e.id !== "q3") v.push('<span class="vj">lo = <b>' + ctx.ix(e.lo) + '</b></span>');
+        if (e && e.frac !== null) v.push('<span class="vk">frac = <b>' + fn(e.frac) + '</b></span>');
+        v.push('<span>n = <b>' + n + '</b></span>');
+        return v;
+      },
+      visual: visual,
+      demora: function (e) { return !e ? 600 : e.id === "pos" || e.id === "lo" || e.id === "frac" ? 650 : e.id === "interp" ? 1100 : e.id === "ordenar" ? 1200 : 900; }
+    });
+
+    /* chequeo de prediccion y trampas reales */
+    B.numerico(cuerpo("vrPred"), {
+      pregunta: "El programa ubica Q1 en la posición 0.25 × (11 − 1) = 2.5, a mitad de camino entre el tercer y el cuarto dato ordenado. Con estos datos, ¿qué valor va a devolver <code>percentil(x, 0.25)</code>?",
+      respuesta: 4,
+      tolerancia: 0.01,
+      pistas: ["Ordena primero: 2, 3, 4, 4, 5, 6, 7, 8, 8, 9, 25.", "El tercer y el cuarto dato ordenados son 4 y 4. A mitad de camino entre dos iguales..."],
+      diagnostico: function (v) {
+        if (v === 3.5) return "Ese sería el punto medio entre 3 y 4, pero el tercer dato no es 3. Ordena y cuenta de nuevo.";
+        if (v === 2.5) return "2.5 es la posición en la fila, no el valor que hay en ella.";
+        return null;
+      },
+      explicacion: "Entre 4 y 4 no hay nada que interpolar: <b>Q1 = 4</b>. Ahora dale a reproducir y mira cómo la función llega a ese número en tres líneas.",
+      alResolver: function (ok) { C.reto("codigo1", ok); }
+    });
+    prop("codigo2", {
+      pregunta: "Para <code>y = [1, 2, 3, 4, 5, 6, 7, 8]</code>, <code>np.percentile(y, 25)</code> devuelve <b>2.75</b> y en R <code>quantile(y, 0.25, type = 6)</code> devuelve <b>2.25</b>. ¿Qué pasó?",
+      opciones: [
+        "Usan reglas distintas para la posición: p(n − 1) contra p(n + 1). Las dos son válidas",
+        "R tiene un error en type = 6",
+        "NumPy no ordena los datos antes de calcular",
+        "Es un error de redondeo de punto flotante"
+      ],
+      correcta: 0,
+      pistas: [null, "R documenta nueve tipos de cuantil. El 7, que es el default, coincide con NumPy.", "NumPy sí ordena. Prueba con los datos desordenados y da lo mismo.", "La diferencia es de medio punto. El punto flotante no se equivoca tanto."],
+      explicacion: "NumPy y el <code>type = 7</code> de R usan la posición 0.25 × 7 = 1.75 desde 0, que cae en 2.75. El <code>type = 6</code> usa 0.25 × 9 = 2.25 desde 1, que cae en 2.25. <b>Con pocos datos, la regla importa.</b> Cuando compares cuartiles de dos programas, mira qué regla usa cada uno. <code>np.percentile(y, 25, method='weibull')</code> reproduce el type 6 de R."
+    });
+    prop("codigo3", {
+      pregunta: "En R, <code>boxplot.stats(1:8)$stats</code> da como borde inferior de la caja <b>2.5</b>, pero <code>quantile(1:8, 0.25)</code> da <b>2.75</b>. ¿Por qué el dibujo de la caja no usa el cuartil?",
+      opciones: [
+        "boxplot.stats usa las bisagras de Tukey: la mediana de cada mitad, que con pocos datos difiere del cuartil",
+        "boxplot.stats redondea a medios",
+        "boxplot.stats quita el máximo y el mínimo antes de calcular",
+        "Es el mismo número; la diferencia está en cómo se imprime"
+      ],
+      correcta: 0,
+      pistas: [null, "2.5 no es un redondeo de 2.75. Es otra cuenta: la mediana de 1, 2, 3, 4.", "No quita nada: fivenum(1:8) da 1, 2.5, 4.5, 6.5, 8.", "2.5 y 2.75 son números distintos."],
+      explicacion: "El box plot clásico de Tukey corta cada mitad por su mediana: la mitad inferior de 1..8 es 1, 2, 3, 4, y su mediana es 2.5. <code>fivenum()</code> y <code>boxplot.stats()</code> hacen eso. Con 11 datos como los nuestros las dos reglas coinciden (4, 6, 8), pero con otros n no. Si dibujas una caja a mano con <code>quantile</code> y la comparas con <code>boxplot()</code>, puede no calzar, y las dos están bien."
+    });
+  })();
+
+  /* ---------------- retos: ojo clinico ---------------- */
+  function al(a, b) { return a + Math.floor(Math.random() * (b - a + 1)); }
+  function mezclar(a) { return B.mezclar(a); }
+  function nubeTipo(tipo) {
+    // genera 11 valores enteros con la propiedad pedida
+    for (var t = 0; t < 300; t++) {
+      var base = al(6, 14), d = [], i, anc = tipo === "ancha" ? al(5, 7) : al(1, 3);
+      for (i = 0; i < 11; i++) d.push(Math.max(1, Math.min(29, Math.round(base + (Math.random() - 0.5) * 2 * anc))));
+      if (tipo === "cola") { d.sort(function (a, b) { return a - b; }); d[8] += al(1, 2); d[9] += al(2, 4); d[10] += al(3, 5); }
+      if (tipo === "outlier") { d[10] = 29; }
+      d = d.map(function (v) { return Math.max(1, Math.min(29, v)); });
+      var r = resumen(d);
+      var tieneOut = r.fuera.length > 0, cola = (r.bsup - r.q3) > 2 * (r.q1 - r.binf) + 1 || (r.q3 - r.q2) > 1.8 * (r.q2 - r.q1);
+      if (tipo === "outlier" && tieneOut) return d;
+      if (tipo === "cola" && !tieneOut && cola) return d;
+      if (tipo === "ancha" && !tieneOut && r.iqr >= 5 && !cola) return d;
+      if (tipo === "normal" && !tieneOut && r.iqr <= 3 && !cola) return d;
+    }
+    return d;
+  }
+  (function () {
+    var cont = $("ojo");
+    cont.innerHTML = '<div class="ronda"></div><svg role="img" aria-label="Tres box plots"></svg><p class="q" style="margin-top:10px"></p>' +
+      '<div class="ojo-opts"><button type="button" class="opt" data-a="0">A</button><button type="button" class="opt" data-a="1">B</button><button type="button" class="opt" data-a="2">C</button></div>' +
+      '<div class="fb" aria-live="polite"></div><div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    var svg = cont.querySelector("svg"), W = 440, H = 190, MAX = 30, Ml = 18;
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    svg.classList.add("recta-svg");
+    function sx(v) { return Ml + v / MAX * (W - 2 * Ml); }
+    var PREG = [
+      { t: "outlier", q: "¿Cuál de los tres grupos tiene un <b>valor atípico</b>?", otros: ["normal", "ancha"] },
+      { t: "ancha", q: "¿Cuál de los tres grupos es el <b>más disperso</b> en su mitad central?", otros: ["normal", "normal"] },
+      { t: "cola", q: "¿Cuál de los tres grupos tiene <b>cola hacia la derecha</b>?", otros: ["normal", "ancha"] }
+    ];
+    var ronda, aciertos, respondida, correcta, grupos;
+    function dibujar(mostrarDatos) {
+      svg.innerHTML = "";
+      nodo("line", { x1: sx(0), x2: sx(MAX), y1: 172, y2: 172, "class": "eje" }, svg);
+      for (var t = 0; t <= MAX; t += 5) { nodo("line", { x1: sx(t), x2: sx(t), y1: 168, y2: 176, "class": "tick" }, svg); texto(svg, { x: sx(t), y: 186, "class": "tlab", "text-anchor": "middle" }, t); }
+      grupos.forEach(function (d, k) {
+        var r = resumen(d), y = 28 + k * 50, h = 22;
+        texto(svg, { x: sx(0), y: y - 6, "class": "grupo-lab" }, ["A", "B", "C"][k]);
+        nodo("line", { x1: sx(r.binf), x2: sx(r.q1), y1: y + 8, y2: y + 8, "class": "bigote" }, svg);
+        nodo("line", { x1: sx(r.q3), x2: sx(r.bsup), y1: y + 8, y2: y + 8, "class": "bigote" }, svg);
+        nodo("line", { x1: sx(r.binf), x2: sx(r.binf), y1: y + 3, y2: y + 13, "class": "tope" }, svg);
+        nodo("line", { x1: sx(r.bsup), x2: sx(r.bsup), y1: y + 3, y2: y + 13, "class": "tope" }, svg);
+        nodo("rect", { x: sx(r.q1), y: y + 8 - h / 2, width: Math.max(1, sx(r.q3) - sx(r.q1)), height: h, "class": "caja", rx: 2 }, svg);
+        nodo("line", { x1: sx(r.q2), x2: sx(r.q2), y1: y + 8 - h / 2, y2: y + 8 + h / 2, "class": "med" }, svg);
+        r.fuera.forEach(function (v) { nodo("circle", { cx: sx(v), cy: y + 8, r: 4.5, "class": "out" }, svg); });
+        if (mostrarDatos) d.forEach(function (v) { nodo("circle", { cx: sx(v), cy: y - 14, r: 2.6, fill: "var(--ink-3)" }, svg); });
+      });
+    }
+    function nueva() { ronda = 0; aciertos = 0; mostrar(); }
+    function mostrar() {
+      respondida = false;
+      var P = PREG[Math.floor(Math.random() * PREG.length)];
+      correcta = Math.floor(Math.random() * 3);
+      grupos = [];
+      for (var k = 0; k < 3; k++) grupos.push(k === correcta ? nubeTipo(P.t) : nubeTipo(P.otros[k < correcta ? k : k - 1]));
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 5 · aciertos " + aciertos;
+      cont.querySelector(".q").innerHTML = P.q;
+      dibujar(false);
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (b) { b.disabled = false; b.className = "opt"; });
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+    }
+    cont.querySelector(".ojo-opts").addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || respondida) return;
+      respondida = true;
+      var ok = +b.getAttribute("data-a") === correcta;
+      if (ok) aciertos++;
+      b.classList.add(ok ? "ok" : "mal");
+      if (!ok) cont.querySelector('[data-a="' + correcta + '"]').classList.add("ok");
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (x) { x.disabled = true; });
+      dibujar(true);
+      var r = resumen(grupos[correcta]);
+      cont.querySelector(".fb").innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No.</span> ') + "El grupo " + ["A", "B", "C"][correcta] + " tiene IQR " + fn(r.iqr) + ", bigotes de " + fn(r.binf) + " a " + fn(r.bsup) + (r.fuera.length ? " y un atípico en " + r.fuera.map(fn).join(", ") : "") + ". Arriba de cada caja ahora ves los datos que la generaron.";
+      var sig = cont.querySelector(".sig");
+      sig.hidden = false;
+      if (ronda === 4) {
+        var aprobo = aciertos >= 4;
+        C.reto("ojo", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertos + " de 5" + (aprobo ? ". Aprobado." : ". Necesitas 4 para aprobar.");
+        sig.textContent = "Otra tanda";
+      } else sig.textContent = "Siguiente ronda";
+    });
+    cont.querySelector(".sig").addEventListener("click", function () { if (ronda === 4) nueva(); else { ronda++; mostrar(); } });
+    nueva();
+  })();
+
+  /* ---------------- reto: constructor ---------------- */
+  (function () {
+    var OBJ = [
+      { t: "Ningún atípico, y una caja de ancho 6 o más.", ok: function (r) { return r.fuera.length === 0 && r.iqr >= 6; } },
+      { t: "Exactamente dos atípicos por arriba y ninguno por abajo.", ok: function (r) { return r.fuera.length === 2 && r.fuera.every(function (v) { return v > r.vsup; }); } },
+      { t: "Una caja de ancho exactamente 3 con la mediana en 10.", ok: function (r) { return Math.abs(r.iqr - 3) < 1e-9 && Math.abs(r.q2 - 10) < 1e-9; } }
+    ];
+    var logrados = [false, false, false], avisado = false, ul = $("objetivos");
+    OBJ.forEach(function (o) { var li = document.createElement("li"); li.innerHTML = '<span class="m"></span><span>' + o.t + '</span>'; ul.appendChild(li); });
+    crearRecta($("rectaConstr"), {
+      datos: [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], max: 30, alto: 240,
+      capas: { cortes: true, vallas: true, color: true, caja: true, med: true, bigotes: true, outs: true },
+      alCambiar: function (r) {
+        $("constrVivo").innerHTML = "Q1 <b>" + fn(r.q1) + "</b> · Me <b>" + fn(r.q2) + "</b> · Q3 <b>" + fn(r.q3) + "</b> · IQR <b>" + fn(r.iqr) + "</b> · atípicos <b>" + (r.fuera.length ? r.fuera.map(fn).join(", ") : "0") + "</b>";
+        OBJ.forEach(function (o, i) { if (!logrados[i] && o.ok(r)) logrados[i] = true; ul.children[i].classList.toggle("hecho", logrados[i]); });
+        if (!avisado && logrados.every(Boolean)) { avisado = true; C.reto("constructor", true); }
+      }
+    });
+  })();
+
+  /* ---------------- reto: a mano ---------------- */
+  (function () {
+    var D;
+    function generar() {
+      for (;;) {
+        var d = [];
+        for (var i = 0; i < 10; i++) d.push(al(3, 18));
+        d.push(al(20, 30));
+        var r = resumen(d);
+        if (r.iqr >= 2 && r.iqr <= 9 && (r.iqr * 2) % 1 === 0) { D = { d: d, r: r }; break; }
+      }
+      $("manoDatos").innerHTML = '<table class="datos-mano"><tr>' + d.map(function (v) { return "<td>" + v + "</td>"; }).join("") + "</tr></table>";
+    }
+    var cfg = {
+      pregunta: "Con la regla de interpolación lineal (posición p · (n − 1)), ¿cuánto vale la <b>valla superior</b>, Q3 + 1.5 · IQR, para estos once números?",
+      respuesta: function () { return D.r.vsup; },
+      tolerancia: 0.011,
+      pistas: [
+        function () { return "Ordenados: " + D.r.ord.join(", ") + "."; },
+        function () { return "Con 11 datos, Q1 está a mitad de camino entre el 3.º y el 4.º (" + fn(D.r.ord[2]) + " y " + fn(D.r.ord[3]) + "), y Q3 entre el 8.º y el 9.º (" + fn(D.r.ord[7]) + " y " + fn(D.r.ord[8]) + ")."; },
+        function () { return "Q1 = " + fn(D.r.q1) + ", Q3 = " + fn(D.r.q3) + ", IQR = " + fn(D.r.iqr) + ". Falta sumar 1.5 veces el IQR a Q3."; }
+      ],
+      diagnostico: function (v) {
+        var r = D.r;
+        if (Math.abs(v - r.iqr) < 0.011) return "Ese es el IQR. La valla es Q3 más una vez y media eso.";
+        if (Math.abs(v - (r.q3 + r.iqr)) < 0.011) return "Te faltó el 1.5.";
+        if (Math.abs(v - r.q3) < 0.011) return "Ese es Q3, el borde de la caja. La valla está más allá.";
+        if (Math.abs(v - (r.q3 + 1.5 * r.q3)) < 0.011) return "Multiplicaste 1.5 por Q3 en vez de por el IQR.";
+        return null;
+      },
+      explicacion: function () { var r = D.r; return "Q1 = " + fn(r.q1) + ", Q3 = " + fn(r.q3) + ", IQR = " + fn(r.iqr) + ", y " + fn(r.q3) + " + 1.5 × " + fn(r.iqr) + " = " + fn(r.vsup) + ". " + (r.fuera.length ? "El " + r.fuera.map(fn).join(" y el ") + " queda" + (r.fuera.length > 1 ? "n" : "") + " afuera." : "Ningún dato la supera: el más alto todavía es normal."); },
+      reintentable: true,
+      textoReintentar: "Otro ejercicio",
+      antesDeReintentar: generar,
+      alResolver: function (ok) { C.reto("mano", ok); }
+    };
+    generar();
+    B.numerico($("mano"), cfg);
+  })();
+
+  /* ---------------- reto: cazar el error ---------------- */
+  B.cazarError($("error"), {
+    variantes: [
+      {
+        intro: "Datos ordenados: 3, 4, 5, 6, 8, 9, 11, 12, 13, 14, 30. Alguien buscó los atípicos así:",
+        lineas: ["Q_1 = 5 \\quad (\\text{entre el 3.º y el 4.º})", "Q_3 = 13", "\\text{IQR} = Q_3 + Q_1 = 18", "\\text{valla}_{\\text{sup}} = 13 + 1.5 \\cdot 18 = 40", "30 < 40 \\Rightarrow \\text{no hay atípicos}"],
+        erronea: 2,
+        explicacion: "El IQR es una resta: 13 − 5 = 8. Con eso la valla superior es 13 + 12 = 25, y el 30 sí es atípico. Sumar los cuartiles infla la caja y esconde los extremos."
+      },
+      {
+        intro: "Datos ordenados: 2, 3, 4, 4, 5, 6, 7, 8, 8, 9, 25. Alguien calculó la valla así:",
+        lineas: ["Q_1 = 4", "Q_3 = 8", "\\text{IQR} = 8 - 4 = 4", "\\text{valla}_{\\text{sup}} = Q_3 + 1.5 \\cdot Q_3 = 8 + 12 = 20", "25 > 20 \\Rightarrow 25 \\text{ es atípico}"],
+        erronea: 3,
+        explicacion: "El 1.5 multiplica al IQR, no a Q3: la valla es 8 + 1.5 · 4 = 14. Aquí la conclusión salió bien de casualidad, pero con otros datos esa cuenta marca atípicos que no lo son."
+      },
+      {
+        intro: "Datos tal como llegaron: 9, 2, 14, 5, 7, 3, 11, 6, 8, 4, 10. Alguien calculó los cuartiles así:",
+        lineas: ["n = 11,\\; \\text{posición de } Q_1 = 0.25 \\cdot 10 = 2.5", "Q_1 = \\tfrac{x_3 + x_4}{2} = \\tfrac{14 + 5}{2} = 9.5", "Q_3 = \\tfrac{x_8 + x_9}{2} = \\tfrac{6 + 8}{2} = 7", "\\text{IQR} = 7 - 9.5 = -2.5"],
+        erronea: 1,
+        explicacion: "Tomó el tercer y cuarto dato de la lista sin ordenarla. Ordenada es 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 14: Q1 = 4.5 y Q3 = 9.5, IQR = 5. Un IQR negativo es la señal de que faltó ordenar."
+      }
+    ],
+    alResolver: function (ok) { C.reto("error", ok); }
+  });
+
+  /* ---------------- retos: propiedades ---------------- */
+  function prop(id, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple($(id), cfg);
+  }
+  prop("prop1", {
+    pregunta: "¿Cuál de estas afirmaciones sobre la <b>mediana</b> es correcta?",
+    opciones: ["Es el percentil 50 y el segundo cuartil", "Es el promedio de Q1 y Q3", "Es el centro de la caja del box plot", "Es el percentil 25"],
+    correcta: 0,
+    pistas: [null, "La mediana es una posición de la fila, no un promedio de dos cortes.", "Está dentro de la caja, pero no necesariamente en el centro: mira el grupo B del paso 7.", "El percentil 25 es Q1."],
+    explicacion: "La mediana deja la mitad por debajo: percentil 50, cuartil 2. Dentro de la caja puede estar corrida hacia un lado, y eso justamente es una pista de asimetría."
+  });
+  prop("prop2", {
+    pregunta: "Un dato ya es atípico, en 25. Lo arrastras hasta 100. ¿Qué le pasa al <b>IQR</b>?",
+    opciones: ["No cambia", "Se agranda", "Se achica", "Depende de n"],
+    correcta: 0,
+    pistas: [null, "El IQR sale de dos posiciones de la fila ordenada. ¿Cambió alguna de esas dos posiciones?", "Mover el último dato más lejos no cambia quién es el último.", "No depende: las posiciones de Q1 y Q3 son las mismas."],
+    explicacion: "El 25 ya era el último de la fila; en 100 sigue siendo el último. Q1 y Q3 miran el tercer y el octavo lugar, y esos no se enteraron. Por eso el IQR es robusto."
+  });
+  prop("prop3", {
+    pregunta: "Sumas 5 días a todas las entregas. ¿Qué pasa con el IQR y con la valla superior?",
+    opciones: ["El IQR no cambia; la valla sube 5", "Los dos suben 5", "Ninguno cambia", "El IQR sube 5; la valla no cambia"],
+    correcta: 0,
+    pistas: [null, "El IQR es una resta de dos valores que subieron lo mismo.", "La valla es un valor de la recta, y toda la recta se corrió.", "Al revés: el ancho de la caja se conserva, su posición no."],
+    explicacion: "Q1 y Q3 suben 5 cada uno, así que su diferencia queda igual. La valla es Q3 + 1.5 · IQR: sube con Q3. Correr los datos mueve la caja sin cambiar su ancho."
+  });
+  prop("prop4", {
+    pregunta: "Pasas los tiempos de días a horas, multiplicando todo por 24. ¿Qué pasa con el IQR?",
+    opciones: ["Se multiplica por 24", "No cambia", "Se multiplica por 24²", "Se divide entre 24"],
+    correcta: 0,
+    pistas: [null, "Q1 y Q3 ahora están en horas. ¿Y su diferencia?", "Eso pasaría con la varianza, que es un cuadrado. El IQR está en las unidades originales.", "Al estirar los números, las distancias crecen, no se achican."],
+    explicacion: "Q1 y Q3 se multiplican por 24, y la resta también. El IQR se mide en las mismas unidades que los datos, como la desviación estándar y a diferencia de la varianza."
+  });
+
+  /* ---------------- formula de memoria ---------------- */
+  B.ordenar($("formula"), {
+    piezas: ["\\text{valla}_{\\text{sup}}", "=", "Q_3", "+", "1.5", "\\times", "(Q_3 - Q_1)"],
+    distractores: ["Q_1", "\\div", "3", "\\bar{x}", "(Q_3 + Q_1)"],
+    soluciones: [[0, 1, 2, 3, 4, 5, 6], [0, 1, 2, 3, 6, 5, 4]],
+    explicacion: "Desde el borde superior de la caja, una vez y media el ancho de la caja. Lo que pase de ahí es atípico.",
+    alResolver: function (ok) { C.reto("formula", ok); }
+  });
+
+  /* ---------------- tarjetas ---------------- */
+  B.tarjetas($("tarjetas"), [
+    ["¿Qué es el <b>percentil k</b>?", "El valor de la fila ordenada que deja por debajo el k % de los datos. Q1, Q2 y Q3 son los percentiles 25, 50 y 75."],
+    ["¿Qué mide el <b>IQR</b> y cómo se calcula?", "El ancho de la mitad central: $\\text{IQR} = Q_3 - Q_1$. Es la caja del box plot."],
+    ["¿Cuándo un dato es <b>atípico</b> según la regla del IQR?", "Si queda fuera de las vallas $Q_1 - 1.5\\,\\text{IQR}$ y $Q_3 + 1.5\\,\\text{IQR}$. Más allá de $3\\,\\text{IQR}$, las diapositivas lo llaman influyente."],
+    ["¿Hasta dónde llega el <b>bigote</b>?", "Hasta el último dato real que todavía está dentro de la valla. No hasta la valla ni hasta el máximo."],
+    ["¿Por qué el IQR es <b>robusto</b> y la desviación estándar no?", "El IQR depende de dos posiciones de la fila ordenada; la desviación eleva al cuadrado cada desvío, así que un dato lejano la dispara."],
+    ["¿Qué te dice un bigote derecho mucho más largo que el izquierdo?", "Cola hacia la derecha: asimetría positiva. Pocos valores muy altos."],
+    ["¿Por qué dos programas pueden dar cuartiles distintos?", "Con pocos datos el corte cae entre dos valores y cada convención lo reparte distinto: $p(n-1)$, $p(n+1)$ o la mediana de cada mitad."]
+  ]);
+
+  /* ---------------- conexiones ---------------- */
+  (function () {
+    var cat = window.CATALOGO || [], yo = cat.filter(function (c) { return c.id === "percentiles-iqr"; })[0];
+    function norm(s) { return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase(); }
+    function pill(nombre) {
+      var c = cat.filter(function (x) { return norm(x.titulo) === norm(nombre); })[0];
+      if (c) { var a = document.createElement("a"); a.className = "pill"; a.href = "../" + c.archivo; a.textContent = nombre; return a; }
+      var s = document.createElement("span"); s.className = "pill falta"; s.textContent = nombre; return s;
+    }
+    if (!yo) return;
+    yo.prerequisitos.forEach(function (n) { $("prereq").appendChild(pill(n)); });
+    yo.siguientes.forEach(function (n) { $("siguen").appendChild(pill(n)); });
+  })();
+})();
+</script>
+</body>
+</html>

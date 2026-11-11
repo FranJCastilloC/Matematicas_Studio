@@ -1,0 +1,1243 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Codificación y datos faltantes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+/* ---------- escenario: la tabla que se transforma ---------- */
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.esc-head .hint { font-size: 12.5px; color: var(--ink-2); }
+.modos { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.modos button { font-size: 12px; padding: 5px 10px; }
+.modos button.on { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+.tabla-wrap { overflow-x: auto; }
+.tabla { width: 100%; border-collapse: collapse; font-family: var(--f-mono); font-size: 12px; font-variant-numeric: tabular-nums; }
+.tabla th { font-weight: 500; color: var(--ink-3); font-size: 11px; text-align: center; padding: 4px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.tabla td { text-align: center; padding: 4px 8px; border-bottom: 1px solid var(--line-soft); color: var(--ink-2); white-space: nowrap; }
+.tabla td.pl, .tabla th:first-child { text-align: left; color: var(--ink-3); }
+.tabla td.cat { color: var(--ink); font-weight: 500; }
+.tabla th.nueva, .tabla td.nueva { background: var(--accent-soft); color: var(--ink); }
+.tabla td.nueva.uno { color: var(--pos); font-weight: 600; }
+.tabla td.nueva.cero { color: var(--ink-3); }
+.tabla td.hueco { color: var(--neg); font-weight: 600; }
+.tabla td.imput { color: var(--accent); font-weight: 600; }
+.tabla td.suma { color: var(--neg); font-weight: 600; border-left: 1px dashed var(--line); }
+.tabla th.suma { border-left: 1px dashed var(--line); }
+.tabla td.apag, .tabla th.apag { opacity: .35; }
+.tabla td.cambio { animation: parpadeo .5s ease; }
+@keyframes parpadeo { 0% { background: var(--accent); } 100% { background: transparent; } }
+.c-rojo { color: #c7472c; } .c-verde { color: #4a8a24; } .c-azul { color: #2257c4; }
+:root[data-theme="dark"] .c-rojo, :root:not([data-theme="light"]) .c-rojo { color: #f08163; }
+:root[data-theme="dark"] .c-verde, :root:not([data-theme="light"]) .c-verde { color: #8cc45c; }
+:root[data-theme="dark"] .c-azul, :root:not([data-theme="light"]) .c-azul { color: #6ca0f5; }
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .c-rojo { color: #c7472c; } :root:not([data-theme="dark"]) .c-verde { color: #4a8a24; } :root:not([data-theme="dark"]) .c-azul { color: #2257c4; } }
+
+/* mini plano de distancias */
+.dist-svg { width: 100%; height: auto; display: block; margin-top: 12px; }
+.dist-svg .eje { stroke: var(--line); stroke-width: 1; }
+.dist-svg .tick { font: 10px var(--f-mono); fill: var(--ink-3); }
+.dist-svg .tit { font: 500 11px var(--f-mono); fill: var(--ink-2); letter-spacing: .06em; text-transform: uppercase; }
+.dist-svg .pt { stroke: var(--surface); stroke-width: 2; }
+.dist-svg .plab { font: 500 11px var(--f-mono); fill: var(--ink); }
+.dist-svg .seg { stroke: var(--ink-3); stroke-dasharray: 3 3; stroke-width: 1.2; }
+.dist-svg .dlab { font: 10.5px var(--f-mono); fill: var(--ink-2); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+.lectura { font-size: 13.5px; color: var(--ink-2); min-height: 2.6em; margin-top: 8px; }
+.lectura b { color: var(--ink); font-weight: 500; }
+
+/* tira de puntos para los faltantes */
+.tira-svg { width: 100%; height: auto; display: block; margin-top: 10px; }
+.tira-svg .eje { stroke: var(--ink-3); stroke-width: 1; }
+.tira-svg .tick { font: 10px var(--f-mono); fill: var(--ink-3); }
+.tira-svg .pt { fill: var(--ink); stroke: var(--surface); stroke-width: 1.5; }
+.tira-svg .pt.imput { fill: var(--accent); }
+.tira-svg .pt.outlier { fill: var(--neg); }
+.tira-svg .marca { stroke-width: 2; }
+.tira-svg .marca.media { stroke: var(--neg); }
+.tira-svg .marca.mediana { stroke: var(--pos); }
+.tira-svg .mlab { font: 500 10.5px var(--f-mono); }
+.tira-svg .mlab.media { fill: var(--neg); }
+.tira-svg .mlab.mediana { fill: var(--pos); }
+.imp-opts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.imp-opts button { font-size: 12px; padding: 5px 10px; }
+.imp-opts button.on { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+
+/* ---------- retos propios ---------- */
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.ojo-opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 6px; margin-top: 10px; }
+.ojo-opts .opt { text-align: center; }
+.tabla-mini { border-collapse: collapse; font-family: var(--f-mono); font-size: 12.5px; margin: 8px 0; }
+.tabla-mini th, .tabla-mini td { padding: 4px 10px; border: 1px solid var(--line); text-align: center; }
+.tabla-mini th { color: var(--ink-3); font-weight: 500; font-size: 11px; }
+.tabla-mini td:first-child { color: var(--ink); font-weight: 500; }
+.decisiones { display: grid; gap: 10px; }
+.decision { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); }
+.decision .var { font-size: 13.5px; color: var(--ink); }
+.decision .var small { color: var(--ink-3); display: block; font-size: 12px; }
+.decision .opciones { display: flex; flex-wrap: wrap; gap: 5px; }
+.decision .opciones button { font-size: 12px; padding: 4px 9px; font-weight: 400; }
+.decision .opciones button.ok { border-color: var(--ok); background: var(--ok-soft); color: var(--ok); }
+.decision .opciones button.mal { border-color: var(--bad); background: var(--bad-soft); opacity: .8; }
+.decision .porque { font-size: 12.5px; color: var(--ink-2); min-height: 1.2em; }
+.decision.hecha { border-color: var(--ok); }
+.pares { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.pares .col { display: grid; gap: 6px; align-content: start; }
+.pares .col h4 { font-family: var(--f-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 2px; }
+.pares button { text-align: left; font-weight: 400; font-size: 13px; background: var(--surface); line-height: 1.35; min-height: 44px; }
+.pares button.sel { border-color: var(--accent); background: var(--accent-soft); }
+.pares button.unido { border-color: var(--ok); background: var(--ok-soft); color: var(--ink-2); cursor: default; }
+.pares button.err { border-color: var(--bad); background: var(--bad-soft); }
+@media (max-width: 520px) { .pares { grid-template-columns: 1fr; } }
+.vr-tabla td.nueva { background: var(--accent-soft); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ Codificación y datos faltantes</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Preprocesamiento · UD1 §8.3 a §8.5</p>
+    <h1>Codificación y datos faltantes: traducir sin mentir</h1>
+    <p class="lede">
+      Un modelo solo come números. Cuando tienes colores, tallas o ciudades, hay que traducirlos, y cada traducción <b>le cuenta al modelo algo sobre las distancias entre categorías</b>, a veces algo falso.
+      Y cuando faltan datos, rellenarlos también cuenta una historia. Aquí vas a ver, en una tabla que se transforma en vivo, qué dice cada forma de traducir.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> Tienes una columna con los colores rojo, verde y azul, y un modelo que solo entiende números. ¿Cómo se la darías? Escribe lo primero que se te ocurra, aunque después resulte que tiene un problema.</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: le pondría un número a cada color..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>Cada traducción le dice algo al modelo</h2>
+      <p>Siete pasos. Cada uno termina con un chequeo: hasta que no lo resuelves, el siguiente queda cerrado. Equivocarte aquí no resta nada, es parte del método.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="Un número por categoría">
+          <span class="etapa">Paso 1</span>
+          <h3>El modelo solo come números</h3>
+          <p>Ocho clientes de una tienda. De cada uno sabemos el <b>color</b> que eligió, la <b>talla</b>, la <b>ciudad</b>, su <b>edad</b> y si <b>compró</b>. Un modelo no puede multiplicar "rojo" por un coeficiente, así que la salida más obvia es numerar: azul = 0, rojo = 1, verde = 2. Se llama <b>label encoding</b>.</p>
+          <p>Mira el escenario: la columna de color ya está numerada, y debajo, el mini plano dibuja dónde queda cada color según esos números. Antes de seguir, piensa qué está "viendo" un modelo lineal en esa columna.</p>
+          <p>La UD1 lista esta técnica en una línea y avisa que impone un orden <cite class="cita" data-fuente="ud1" data-pag="19" data-seccion="Codificación de variables categóricas" data-que="Las seis técnicas en una línea cada una: Label Encoding, One-Hot, Ordinal, Frequency, Target y Variables Dummy. No trae ningún ejemplo numérico; ese es el que estás construyendo aquí." data-cuando="Al terminar el paso 5, cuando hayas visto las seis"></cite>.</p>
+          <div class="check" id="chk1"><p class="check-tit">Predice antes de seguir</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="One-hot">
+          <span class="etapa">Paso 2</span>
+          <h3>Una columna por categoría</h3>
+          <p>La solución es no decir "cuánto" sino "cuál": una columna por color, con un 1 en la columna que corresponde y 0 en las demás. Se llama <b>one-hot</b> porque solo una columna está "encendida" por fila.</p>
+          <div class="fbloque">
+            <div data-tex="\text{rojo} \to (0,\,1,\,0) \qquad \text{verde} \to (0,\,0,\,1) \qquad \text{azul} \to (1,\,0,\,0)" data-display></div>
+            <div class="vivo">Las columnas van en orden alfabético: azul, rojo, verde. Así lo hacen pandas y R.</div>
+          </div>
+          <p>Mira el mini plano: ahora los tres colores están a la <b>misma distancia</b> entre sí. Ninguno está "en el medio" ni es "el doble" de otro. Eso es exactamente lo que queremos decirle al modelo sobre una variable <b>nominal</b>: son categorías distintas y nada más.</p>
+          <p>El precio es el ancho de la tabla: con muchas categorías aparecen muchas columnas. La UD1 lo resume en una línea <cite class="cita" data-fuente="ud1slides" data-pag="40" data-seccion="Codificación de variables categóricas" data-que="La misma lista de seis técnicas que la teoría, palabra por palabra, en formato diapositiva." data-cuando="Después de este paso, para fijar los nombres"></cite>.</p>
+          <div class="check" id="chk2"><p class="check-tit">Antes de seguir</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Dummy">
+          <span class="etapa">Paso 3</span>
+          <h3>Una columna de más</h3>
+          <p>Mira la columna <b>suma</b> que apareció a la derecha de las tres columnas one-hot. Vale 1 en todas las filas, siempre. Eso significa que las tres columnas juntas son una <b>constante</b>: si sabes dos, la tercera está determinada.</p>
+          <p>Para un modelo lineal con intercepto (que ya tiene una columna de unos escondida) eso es <b>colinealidad perfecta</b>: la fórmula no tiene una solución única. La salida es quitar una categoría, la de <b>referencia</b>, y quedarse con dos columnas. A eso se le llama <b>variables dummy</b>.</p>
+          <div class="fbloque">
+            <div data-tex="k \text{ categorías} \;\to\; k \text{ columnas one-hot} \;\to\; k-1 \text{ columnas dummy}" data-display></div>
+            <div class="vivo">El coeficiente de cada dummy se lee como "cuánto cambia respecto de la referencia".</div>
+          </div>
+          <p>Toca <b>Dummy</b> en el escenario. La UD1 lo anota como "omitir la categoría de referencia" <cite class="cita" data-fuente="ud1" data-pag="19" data-seccion="Codificación de variables categóricas" data-que="La viñeta de Variables Dummy, con la nota de omitir una categoría de referencia. No explica por qué: el porqué es la columna suma que acabas de ver." data-cuando="Después de este paso"></cite>, y las diapositivas la ejemplifican con género 1/0 <cite class="cita" data-fuente="ud1slides" data-pag="12" data-seccion="Tipos de variables" data-que="La tabla de tipos de variable con una fila extra, Variable Dummy: género masculino 1 / femenino 0, nivel educativo primaria 0 / secundaria 1." data-cuando="Después de este paso"></cite>.</p>
+          <details class="profundizar">
+            <summary>¿Y en el mini plano, por qué dummy no deja los colores equidistantes?</summary>
+            <div>
+              <p>Con dummy, la referencia queda en el origen (0, 0) y las otras dos en (1, 0) y (0, 1). La referencia está a distancia 1 de cada una, pero entre ellas dos hay <span data-tex="\sqrt{2}"></span>. Para un modelo lineal no importa, porque el intercepto absorbe la referencia. Para un modelo que mide distancias, como kNN, sí importa: ahí conviene one-hot completo.</p>
+            </div>
+          </details>
+          <div class="check" id="chk3"><p class="check-tit">Antes de seguir</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Ordinal">
+          <span class="etapa">Paso 4</span>
+          <h3>Cuando el orden sí existe</h3>
+          <p>La talla es distinta: S, M, L y XL <b>sí</b> tienen un orden. Aquí numerar no inventa nada: S = 0, M = 1, L = 2, XL = 3 respeta lo que la variable ya dice. Se llama <b>ordinal encoding</b>, y es label encoding con un orden decidido por ti, no por el alfabeto.</p>
+          <p>Lo que sigue sin existir es la <b>distancia</b>: nada garantiza que de S a M haya "lo mismo" que de L a XL. Por eso la UD1 separa las variables en nominales (sin orden) y ordinales (con orden pero sin distancia precisa) <cite class="cita" data-fuente="ud1" data-pag="5" data-seccion="3.1. Tipos de variables, Tabla 1" data-que="La tabla con cualitativa ordinal, nominal y dicotómica, y cuantitativa discreta y continua, con ejemplos: satisfacción, color de ojos, enfermedad sí/no. Decide qué codificación tiene sentido para cada una." data-cuando="Ahora mismo, antes del chequeo"></cite>.</p>
+          <p>Toca <b>Ordinal</b> en el escenario y mira la columna de talla. La regla práctica: <b>nominal → one-hot o dummy; ordinal → enteros con tu orden</b>.</p>
+          <div class="check" id="chk4"><p class="check-tit">Antes de seguir</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Muchas categorías">
+          <span class="etapa">Paso 5</span>
+          <h3>Frecuencia y objetivo: cuando hay demasiadas</h3>
+          <p>Con 5 ciudades, one-hot da 5 columnas. Con 500 ciudades, 500. Dos atajos para la <b>alta cardinalidad</b>:</p>
+          <p><b>Frequency encoding</b>: reemplazar cada categoría por cuántas veces aparece. Madrid → 3, Lima → 2, las demás → 1. Una sola columna, pero dos ciudades con la misma frecuencia se vuelven indistinguibles.</p>
+          <p><b>Target encoding</b>: reemplazar cada categoría por la media de la variable objetivo dentro de ella. Toca <b>Target</b> en el escenario y mira cómo rojo se convierte en 0.67 porque dos de los tres clientes que eligieron rojo compraron.</p>
+          <div class="destacado">
+            <p class="dest-tit">Una trampa muy común</p>
+            <h4>Target encoding usa la respuesta para fabricar la pregunta</h4>
+            <p>La columna nueva se calculó mirando <b>compró</b>, que es justo lo que el modelo tiene que predecir. Si esas medias se calculan con todos los datos, incluidos los de prueba, el modelo "ve" las respuestas de prueba antes del examen. Se llama <b>fuga de información</b>. Las medias se calculan solo con entrenamiento, y con alguna suavización cuando una categoría tiene pocas filas.</p>
+            <div class="check" id="chk5b"><p class="check-tit">Predice antes de seguir</p><div class="cuerpo"></div></div>
+          </div>
+          <div class="check" id="chk5"><p class="check-tit">Antes de seguir</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Faltantes">
+          <span class="etapa">Paso 6</span>
+          <h3>Los huecos también cuentan una historia</h3>
+          <p>Dos clientes no tienen edad. Las opciones son dos: <b>eliminar</b> esas filas (perdemos el 25 % de los datos) o <b>imputar</b>, es decir, rellenar el hueco con un valor razonable.</p>
+          <p>Mira la tira de puntos del escenario. Los seis valores presentes van de 25 a 58, y ese 58 es un valor atípico. Hay dos candidatos para rellenar: la <b>media</b> (36.67, arrastrada por el 58) y la <b>mediana</b> (33.5, en el medio de la fila). Para una variable categórica se usa la <b>moda</b>; y hay métodos que miran a los vecinos parecidos, como la imputación por kNN.</p>
+          <p>Fíjate en lo que pasa al imputar: los dos huecos caen en el <b>mismo punto</b> y forman una pila artificial. Dos clientes que no sabemos nada de ellos ahora "tienen" exactamente 33.5 años. Imputar achata la dispersión y hay que saberlo.</p>
+          <p>La UD1 lo resume en un párrafo <cite class="cita" data-fuente="ud1" data-pag="17" data-seccion="Limpieza de Datos: Eliminación o Imputación de Valores Faltantes" data-que="Un párrafo: imputar con media, mediana, moda o algoritmos de imputación, o eliminar. También la eliminación de valores atípicos y de ruido. Sin ejemplo numérico." data-cuando="Al terminar este paso"></cite>
+          y lo vincula con el preprocesamiento para ML <cite class="cita" data-fuente="ud1" data-pag="11" data-seccion="Tabla 2. Ventajas principales de la estadística descriptiva en ML" data-que="La fila Manejo de datos faltantes: imputar con media o mediana, o eliminar. Y la fila de outliers con IQR, que explica por qué aquí la mediana le gana a la media." data-cuando="Al terminar este paso"></cite>.
+          Jansen lo vive con acciones: PCA no admite huecos, así que elimina las series con menos del 95 % de datos y rellena el resto con el promedio del día <cite class="cita" data-fuente="jansen13" data-pag="16" data-pimp="422" data-seccion="Preparing the data: top 350 US stocks" data-que="Código real: dropna con umbral del 95 % por acción y por día, imputación con el retorno promedio del día, y winsorizar al 2.5 / 97.5 % porque PCA es sensible a outliers." data-cuando="Cuando llegues a PCA"></cite>.</p>
+          <div class="check" id="chk6"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="El orden">
+          <span class="etapa">Paso 7</span>
+          <h3>El orden del pipeline y la fuga de información</h3>
+          <p>Todo lo que viste tiene un <b>parámetro</b> que se calcula a partir de los datos: la lista de categorías del one-hot, las frecuencias, las medias del target encoding, la mediana para imputar. La regla que evita la fuga es una sola: <b>esos parámetros se calculan con el conjunto de entrenamiento y después se aplican, sin recalcular, al de prueba</b>.</p>
+          <p>El resumen que escribiste de la UD1 propone un orden: quitar variables de varianza casi nula, imputar faltantes, transformar las sesgadas, estandarizar, reducir dimensiones con PCA y, por último, codificar las categóricas. Vale aclarar dos cosas. Primera: ese orden y la expresión <b>data leakage</b> están en tu resumen pero <b>no aparecen en los PDF oficiales</b> de la UD1; lo más cercano es el aviso de estandarizar antes de PCA. Segunda: PCA solo entra con columnas numéricas, así que si las categóricas van a entrar en PCA hay que codificarlas antes.</p>
+          <div class="fbloque">
+            <div data-tex="\text{ajustar (fit) con entrenamiento} \;\;\to\;\; \text{aplicar (transform) a entrenamiento y a prueba}" data-display></div>
+            <div class="vivo" id="vivoFuga"></div>
+          </div>
+          <div class="cita" id="citaHipo" hidden></div>
+          <div class="check" id="chk7"><p class="check-tit">Antes de seguir</p><div class="cuerpo"></div></div>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+        </div>
+        <div class="modos" id="modos" role="group" aria-label="Codificación"></div>
+        <div class="tabla-wrap"><table class="tabla" id="tabla"></table></div>
+        <p class="lectura" id="lectura"></p>
+        <svg id="dist" class="dist-svg" role="img" aria-label="Distancias entre categorías según la codificación"></svg>
+        <div id="faltantes" hidden>
+          <div class="imp-opts" id="impOpts"></div>
+          <svg id="tira" class="tira-svg" role="img" aria-label="Edades en una recta numérica, con los huecos imputados"></svg>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>Un programa que arma el one-hot de la columna color a mano, columna por columna, y después rellena los huecos de edad con la mediana. Elige Python o R, dale a reproducir y mira cómo la tabla se llena.</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir</p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="true">Python</button>
+            <button type="button" data-lang="r" aria-pressed="false">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">1 · las categorías</span><span data-f="2">2 · one-hot fila por fila</span><span data-f="3">3 · imputar</span>
+        </div>
+        <h3 class="mini-tit vr-tit" id="vrTablaTit">La tabla</h3>
+        <div class="tabla-wrap"><table class="tabla vr-tabla" id="vrTabla"></table></div>
+        <div class="vr-cuenta" id="vrCuenta"></div>
+      </div>
+    </div>
+
+    <p class="vr-nota">En la práctica nadie escribe estos bucles. <code>pd.get_dummies(df["color"])</code> en pandas, <code>OneHotEncoder</code> en scikit-learn y <code>model.matrix(~ color)</code> en R arman las columnas solas; <code>SimpleImputer(strategy="median")</code> y <code>ifelse(is.na(x), ...)</code> rellenan los huecos. Escribirlo una vez sirve para saber qué hay dentro, y para no caer en las tres trampas de abajo. Ojo: el capítulo de Raschka que trata esto a fondo es el 4, y no está en la carpeta; la UD1 tampoco trae un ejemplo numérico, así que este es el tuyo.</p>
+
+    <details class="profundizar">
+      <summary>Lo que hace R solo: <code>model.matrix(~ color)</code></summary>
+      <div>
+        <p>Cuando ajustas un modelo lineal en R con <code>lm(compro ~ color)</code>, R convierte el factor en dummies sin que se lo pidas, y quita la primera categoría (azul, por orden alfabético) como referencia. Por eso en la comparación del final usamos <code>model.matrix(~ color - 1)</code>: el <code>- 1</code> quita el intercepto y deja las tres columnas, igual que el one-hot a mano.</p>
+        <p>En pandas, <code>get_dummies(..., drop_first=True)</code> hace lo mismo que R por defecto: devuelve dos columnas, rojo y verde, con azul como referencia.</p>
+      </div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Columnas que no coinciden</h3><span class="estado" data-reto="codigo2"></span></div>
+        <div id="codigo2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>La media que vio el examen</h3><span class="estado" data-reto="codigo3"></span></div>
+        <div id="codigo3"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: la biblioteca te avisa en el índice cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>¿Qué codificación es?</h3><span class="estado" data-reto="ojo"></span></div>
+        <p class="desc">Cinco tablas ya codificadas. Mira las columnas y di qué técnica se usó. Apruebas con 4 de 5.</p>
+        <div id="ojo"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Decidir</span><h3>Elige la codificación</h3><span class="estado" data-reto="constructor"></span></div>
+        <p class="desc">Cinco variables reales. Para cada una, elige cómo la traducirías. Se marcan solas.</p>
+        <div id="constructor"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Emparejar</span><h3>Técnica y situación</h3><span class="estado" data-reto="emparejar"></span></div>
+        <p class="desc">Toca una técnica y después la situación donde conviene. Los pares correctos se bloquean en verde.</p>
+        <div id="emparejar"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Alguien se equivocó</h3><span class="estado" data-reto="error"></span></div>
+        <p class="desc">Una de las líneas tiene un error. Tócala.</p>
+        <div id="error"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Contar columnas</h3><span class="estado" data-reto="prop1"></span></div>
+        <div id="prop1"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Lo que frequency no ve</h3><span class="estado" data-reto="prop2"></span></div>
+        <div id="prop2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Imputar con outliers</h3><span class="estado" data-reto="prop3"></span></div>
+        <div id="prop3"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Borrar filas</h3><span class="estado" data-reto="prop4"></span></div>
+        <div id="prop4"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Recordar a la fuerza es lo que fija. Arma el orden del pipeline de memoria y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">De memoria</span><h3>Arma el pipeline en orden</h3><span class="estado" data-reto="pipeline"></span></div>
+        <p class="desc">El orden del resumen de la UD1. Hay piezas de más que no van. Si codificas las categóricas antes de PCA también vale.</p>
+        <div id="pipeline"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el libro</h2>
+      <p class="lecturas-intro">Ya construiste la idea con las manos. Ahora ve a la versión técnica y comprueba que la reconoces. Cada entrada dice qué vas a encontrar y en qué momento conviene leerla. Si abres la biblioteca con doble clic, el enlace abre el PDF en esa página.</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> Los ocho clientes son inventados, elegidos para que las cuentas sean limpias: dos de tres rojos compraron (0.67), la mediana de las edades presentes da 33.5 y el 58 hace de valor atípico.
+    El material de la UD1 no trae ningún ejemplo numérico de codificación ni de imputación. Tu progreso se guarda solo en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+(function () {
+  "use strict";
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var RETOS = ["ojo", "constructor", "emparejar", "error", "prop1", "prop2", "prop3", "prop4", "pipeline", "codigo1", "codigo2", "codigo3"];
+  var C = B.concepto({ id: "codificacion-faltantes", retos: RETOS, pasos: 7 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  /* ---------------- datos ---------------- */
+  var f = B.fmt;
+  var COLOR = ["rojo", "verde", "azul", "rojo", "azul", "verde", "rojo", "azul"];
+  var TALLA = ["S", "M", "L", "XL", "M", "S", "L", "M"];
+  var CIUDAD = ["Madrid", "Bogotá", "Lima", "Madrid", "Quito", "Lima", "Madrid", "Buenos Aires"];
+  var COMPRO = [1, 0, 1, 1, 0, 1, 0, 0];
+  var EDAD = [25, 32, null, 41, 29, null, 35, 58];
+  var CATS = ["azul", "rojo", "verde"];
+  var ORDEN_TALLA = { S: 0, M: 1, L: 2, XL: 3 };
+  var N = COLOR.length;
+  function cuenta(arr) { var c = {}; arr.forEach(function (v) { c[v] = (c[v] || 0) + 1; }); return c; }
+  var FREQ_COLOR = cuenta(COLOR), FREQ_CIUDAD = cuenta(CIUDAD);
+  function targetDe(cat, filas) {
+    var s = 0, n = 0;
+    (filas || COLOR.map(function (_, i) { return i; })).forEach(function (i) { if (COLOR[i] === cat) { s += COMPRO[i]; n++; } });
+    return n ? s / n : null;
+  }
+  var PRESENTES = EDAD.filter(function (v) { return v !== null; });
+  var MEDIA_EDAD = PRESENTES.reduce(function (a, b) { return a + b; }, 0) / PRESENTES.length;
+  var MEDIANA_EDAD = (function () { var o = PRESENTES.slice().sort(function (a, b) { return a - b; }); return (o[2] + o[3]) / 2; })();
+  function colorHtml(c) { return '<span class="c-' + c + '">' + c + '</span>'; }
+
+  /* ---------------- escenario ---------------- */
+  var MODOS = [
+    { id: "label", t: "Label", hint: "Un entero por color, en orden alfabético" },
+    { id: "onehot", t: "One-hot", hint: "Una columna por color" },
+    { id: "dummy", t: "Dummy", hint: "One-hot sin la categoría de referencia (azul)" },
+    { id: "ordinal", t: "Ordinal", hint: "Las tallas con el orden que ya tienen" },
+    { id: "frequency", t: "Frequency", hint: "Cada ciudad, por cuántas veces aparece" },
+    { id: "target", t: "Target", hint: "Cada color, por la media de compró en ese color" }
+  ];
+  var est = { modo: "label", paso: 0, imput: "ninguna", sumaVisible: false, faltantes: false, chk6: false };
+
+  (function () {
+    MODOS.forEach(function (m) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.textContent = m.t;
+      b.setAttribute("data-modo", m.id);
+      b.addEventListener("click", function () { est.modo = m.id; pintarEscenario(); });
+      $("modos").appendChild(b);
+    });
+    [["ninguna", "Sin imputar"], ["media", "Imputar con la media"], ["mediana", "Imputar con la mediana"], ["eliminar", "Eliminar las filas"]].forEach(function (o) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.textContent = o[1];
+      b.setAttribute("data-imp", o[0]);
+      b.addEventListener("click", function () {
+        est.imput = o[0];
+        pintarEscenario();
+        if (est.paso === 5 && !est.chk6 && o[0] !== "ninguna") $("escHint").textContent = "Responde el chequeo para ver cuál se mueve menos.";
+      });
+      $("impOpts").appendChild(b);
+    });
+  })();
+
+  function columnasCodif() {
+    // devuelve [{titulo, valor(i), clase(i)}] segun el modo
+    var m = est.modo;
+    if (m === "label") return [{ t: "color_num", v: function (i) { return CATS.indexOf(COLOR[i]); } }];
+    if (m === "onehot" || m === "dummy") {
+      var cats = m === "dummy" ? CATS.slice(1) : CATS;
+      var cols = cats.map(function (c) { return { t: c, v: function (i) { return COLOR[i] === c ? 1 : 0; }, bin: true }; });
+      if (m === "onehot" && est.sumaVisible) cols.push({ t: "suma", v: function () { return 1; }, suma: true });
+      return cols;
+    }
+    if (m === "ordinal") return [{ t: "talla_num", v: function (i) { return ORDEN_TALLA[TALLA[i]]; }, deTalla: true }];
+    if (m === "frequency") return [{ t: "ciudad_freq", v: function (i) { return FREQ_CIUDAD[CIUDAD[i]]; }, deCiudad: true }];
+    if (m === "target") return [{ t: "color_target", v: function (i) { return f(targetDe(COLOR[i])); } }];
+    return [];
+  }
+
+  function pintarTabla() {
+    var cols = columnasCodif(), m = est.modo;
+    var deTalla = cols.some(function (c) { return c.deTalla; }), deCiudad = cols.some(function (c) { return c.deCiudad; });
+    var h = '<thead><tr><th>fila</th><th' + (deTalla || deCiudad ? ' class="apag"' : '') + '>color</th>';
+    if (m === "ordinal") h += '<th>talla</th>'; else h += '<th class="apag">talla</th>';
+    if (m === "frequency") h += '<th>ciudad</th>'; else h += '<th class="apag">ciudad</th>';
+    h += '<th' + (m === "target" ? '' : ' class="apag"') + '>compró</th>';
+    h += '<th' + (est.faltantes ? '' : ' class="apag"') + '>edad</th>';
+    cols.forEach(function (c) { h += '<th class="nueva' + (c.suma ? ' suma' : '') + '">' + c.t + '</th>'; });
+    h += '</tr></thead><tbody>';
+    for (var i = 0; i < N; i++) {
+      if (est.faltantes && est.imput === "eliminar" && EDAD[i] === null) continue;
+      h += '<tr><td class="pl">' + (i + 1) + '</td>';
+      h += '<td class="cat' + (deTalla || deCiudad ? ' apag' : '') + '">' + colorHtml(COLOR[i]) + '</td>';
+      h += '<td class="' + (m === "ordinal" ? 'cat' : 'apag') + '">' + TALLA[i] + '</td>';
+      h += '<td class="' + (m === "frequency" ? 'cat' : 'apag') + '">' + CIUDAD[i] + '</td>';
+      h += '<td class="' + (m === "target" ? 'cat' : 'apag') + '">' + COMPRO[i] + '</td>';
+      var e = EDAD[i];
+      if (!est.faltantes) h += '<td class="apag">' + (e === null ? "NaN" : e) + '</td>';
+      else if (e !== null) h += '<td>' + e + '</td>';
+      else if (est.imput === "media") h += '<td class="imput cambio">' + f(MEDIA_EDAD) + '</td>';
+      else if (est.imput === "mediana") h += '<td class="imput cambio">' + f(MEDIANA_EDAD, 1) + '</td>';
+      else h += '<td class="hueco">NaN</td>';
+      cols.forEach(function (c) {
+        var v = c.v(i), cls = "nueva" + (c.suma ? " suma" : c.bin ? (v === 1 ? " uno" : " cero") : "");
+        h += '<td class="' + cls + '">' + v + '</td>';
+      });
+      h += '</tr>';
+    }
+    $("tabla").innerHTML = h + '</tbody>';
+  }
+
+  var NS = "http://www.w3.org/2000/svg";
+  function nodo(tag, at, padre) { var e = document.createElementNS(NS, tag); for (var k in at) e.setAttribute(k, at[k]); if (padre) padre.appendChild(e); return e; }
+  function texto(padre, at, t) { var e = nodo("text", at, padre); e.textContent = t; return e; }
+  var COLHEX = { rojo: "var(--neg)", verde: "var(--k)", azul: "var(--j)" };
+
+  function pintarDist() {
+    var svg = $("dist"), m = est.modo, W = 420, H = 190;
+    svg.innerHTML = "";
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    svg.hidden = est.faltantes;
+    if (est.faltantes) return;
+    var pos, titulo, lectura;
+    if (m === "label") {
+      titulo = "Dónde queda cada color con label encoding";
+      pos = { azul: [0, 0], rojo: [1, 0], verde: [2, 0] };
+      lectura = "En una recta: azul = 0, rojo = 1, verde = 2. Un modelo lineal lee que verde está <b>el doble de lejos</b> de azul que rojo, y que rojo está <b>en el medio</b>. Nada de eso existe en los datos.";
+    } else if (m === "onehot") {
+      titulo = "Dónde queda cada color con one-hot";
+      pos = { azul: [0, 0], rojo: [1, 0], verde: [0.5, 0.866] };
+      lectura = "Cada color vive en su propio eje. Dibujados en el plano, los tres quedan a la <b>misma distancia</b> entre sí (√2 en el espacio de tres columnas): son solo distintos, sin orden ni medio.";
+    } else if (m === "dummy") {
+      titulo = "Dónde queda cada color con dummy (referencia: azul)";
+      pos = { azul: [0, 0], rojo: [1, 0], verde: [0, 1] };
+      lectura = "Azul, la referencia, queda en el origen. Rojo y verde a distancia 1 de azul, pero a <b>√2</b> entre ellos. Para un modelo lineal da igual; para uno de distancias, como kNN, no.";
+    } else if (m === "ordinal") {
+      titulo = "Dónde queda cada talla con ordinal encoding";
+      pos = { S: [0, 0], M: [1, 0], L: [2, 0], XL: [3, 0] };
+      lectura = "Aquí la recta <b>sí</b> dice la verdad sobre el orden: S < M < L < XL. Lo que sigue siendo inventado es que los saltos sean iguales.";
+    } else if (m === "frequency") {
+      titulo = "Dónde queda cada ciudad con frequency encoding";
+      pos = { "Bogotá": [1, 0.3], "Quito": [1, 0], "Buenos Aires": [1, -0.3], "Lima": [2, 0], "Madrid": [3, 0] };
+      lectura = "Bogotá, Quito y Buenos Aires aparecen una vez cada una: las tres caen en el <b>mismo punto</b>. Para el modelo ya son la misma ciudad.";
+    } else {
+      titulo = "Dónde queda cada color con target encoding";
+      pos = { azul: [targetDe("azul") * 3, 0], verde: [targetDe("verde") * 3, 0], rojo: [targetDe("rojo") * 3, 0] };
+      lectura = "Ahora el orden lo decide <b>compró</b>: azul 0.33, verde 0.50, rojo 0.67. Es útil, pero esa columna se fabricó mirando la respuesta.";
+    }
+    var sx = function (x) { return 40 + x / 3 * (W - 80); }, sy = function (y) { return H - 50 - y * 90; };
+    texto(svg, { x: 12, y: 16, "class": "tit" }, titulo);
+    nodo("line", { x1: 40, x2: W - 40, y1: sy(0), y2: sy(0), "class": "eje" }, svg);
+    for (var t = 0; t <= 3; t++) texto(svg, { x: sx(t), y: sy(0) + 16, "class": "tick", "text-anchor": "middle" }, t);
+    var nombres = Object.keys(pos);
+    // segmentos entre pares (solo para 3 o menos puntos, si no se llena)
+    if (nombres.length <= 3) {
+      for (var a = 0; a < nombres.length; a++) for (var b = a + 1; b < nombres.length; b++) {
+        var p = pos[nombres[a]], q = pos[nombres[b]];
+        var d = Math.hypot(p[0] - q[0], p[1] - q[1]);
+        if (d === 0) continue;
+        nodo("line", { x1: sx(p[0]), y1: sy(p[1]), x2: sx(q[0]), y2: sy(q[1]), "class": "seg" }, svg);
+        texto(svg, { x: (sx(p[0]) + sx(q[0])) / 2, y: (sy(p[1]) + sy(q[1])) / 2 - 5, "class": "dlab", "text-anchor": "middle" }, f(d));
+      }
+    }
+    nombres.forEach(function (n, i) {
+      var p = pos[n], col = COLHEX[n] || "var(--ink)";
+      nodo("circle", { cx: sx(p[0]), cy: sy(p[1]), r: 7, fill: col, "class": "pt" }, svg);
+      texto(svg, { x: sx(p[0]) + (p[1] > 0.5 ? 0 : 10), y: sy(p[1]) + (p[1] > 0.5 ? -12 : (i % 2 ? 18 : -10)), "class": "plab", "text-anchor": p[1] > 0.5 ? "middle" : "start" }, n);
+    });
+    $("lectura").innerHTML = lectura;
+  }
+
+  function pintarTira() {
+    var box = $("faltantes"), svg = $("tira");
+    box.hidden = !est.faltantes;
+    [].forEach.call($("impOpts").children, function (b) { b.classList.toggle("on", b.getAttribute("data-imp") === est.imput); });
+    if (!est.faltantes) return;
+    var W = 420, H = 150;
+    svg.innerHTML = "";
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    var sx = function (v) { return 30 + (v - 20) / 45 * (W - 60); };
+    nodo("line", { x1: 30, x2: W - 30, y1: 100, y2: 100, "class": "eje" }, svg);
+    for (var t = 20; t <= 65; t += 5) {
+      nodo("line", { x1: sx(t), x2: sx(t), y1: 100, y2: 105, "class": "eje" }, svg);
+      if (t % 10 === 0) texto(svg, { x: sx(t), y: 120, "class": "tick", "text-anchor": "middle" }, t);
+    }
+    var pila = {};
+    function punto(v, cls) {
+      var k = Math.round(v * 2) / 2, n = pila[k] || 0;
+      pila[k] = n + 1;
+      nodo("circle", { cx: sx(v), cy: 92 - n * 14, r: 6, "class": "pt " + cls }, svg);
+    }
+    PRESENTES.forEach(function (v) { punto(v, v >= 55 ? "outlier" : ""); });
+    var vImp = est.imput === "media" ? MEDIA_EDAD : est.imput === "mediana" ? MEDIANA_EDAD : null;
+    if (vImp !== null) { punto(vImp, "imput"); punto(vImp, "imput"); }
+    var valores = PRESENTES.slice();
+    if (vImp !== null) valores = valores.concat([vImp, vImp]);
+    var media = valores.reduce(function (a, b) { return a + b; }, 0) / valores.length;
+    var o = valores.slice().sort(function (a, b) { return a - b; }), mediana = o.length % 2 ? o[(o.length - 1) / 2] : (o[o.length / 2 - 1] + o[o.length / 2]) / 2;
+    nodo("line", { x1: sx(media), x2: sx(media), y1: 28, y2: 100, "class": "marca media" }, svg);
+    texto(svg, { x: sx(media), y: 20, "class": "mlab media", "text-anchor": "middle" }, "media " + f(media));
+    nodo("line", { x1: sx(mediana), x2: sx(mediana), y1: 40, y2: 100, "class": "marca mediana" }, svg);
+    texto(svg, { x: sx(mediana), y: 140, "class": "mlab mediana", "text-anchor": "middle" }, "mediana " + f(mediana, 1));
+    var msg = est.imput === "ninguna" ? "Seis edades presentes y dos huecos. El 58 (en coral) tira de la media hacia arriba: media " + f(MEDIA_EDAD) + ", mediana " + f(MEDIANA_EDAD, 1) + "."
+      : est.imput === "eliminar" ? "Se fueron dos filas de ocho: el 25 % de los clientes. Las medidas no cambian, pero el modelo aprende con menos."
+      : est.imput === "media" ? "Los dos huecos cayeron en " + f(MEDIA_EDAD) + " y forman una pila (en violeta). La media no se mueve, pero la dispersión se achata."
+      : "Los dos huecos cayeron en " + f(MEDIANA_EDAD, 1) + " y forman una pila (en violeta). La mediana no se mueve y la media baja a " + f(media) + ".";
+    $("lectura").innerHTML = msg;
+  }
+
+  function pintarEscenario() {
+    [].forEach.call($("modos").children, function (b) { b.classList.toggle("on", b.getAttribute("data-modo") === est.modo); });
+    $("modos").hidden = est.faltantes;
+    pintarTabla();
+    pintarDist();
+    pintarTira();
+  }
+
+  var PASOS_CFG = [
+    { modo: "label", hint: "Mira la columna color_num y el mini plano" },
+    { modo: "onehot", hint: "Una columna por color; toca los botones para comparar" },
+    { modo: "onehot", suma: true, hint: "Mira la columna suma y después toca Dummy" },
+    { modo: "ordinal", hint: "Toca Ordinal y mira la columna talla_num" },
+    { modo: "frequency", hint: "Compara Frequency y Target" },
+    { faltantes: true, hint: "Elige cómo rellenar los dos huecos de edad" },
+    { modo: "target", hint: "Toca Target: esa columna necesita cuidado con la fuga" }
+  ];
+  function entrar(i) {
+    est.paso = i;
+    var c = PASOS_CFG[i];
+    est.faltantes = !!c.faltantes;
+    est.sumaVisible = !!c.suma;
+    if (c.modo) est.modo = c.modo;
+    if (!est.faltantes) est.imput = "ninguna";
+    $("escHint").textContent = c.hint;
+    pintarEscenario();
+  }
+
+  /* ---------------- chequeos ---------------- */
+  var pasos;
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+
+  B.opcionMultiple(cuerpo("chk1"), {
+    pregunta: "Con azul = 0, rojo = 1 y verde = 2, un modelo lineal que multiplica esa columna por un coeficiente está suponiendo que...",
+    opciones: [
+      "Verde está el doble de lejos de azul que rojo, y rojo queda en el medio: un orden y unas distancias que los colores no tienen",
+      "Los tres colores son categorías distintas sin relación entre sí",
+      "Verde es la categoría más frecuente",
+      "Nada: el modelo entiende que son etiquetas"
+    ],
+    correcta: 0,
+    pistas: [null, "Eso es lo que querríamos. Pero mira el mini plano: ¿los tres puntos están a la misma distancia?", "Los números vienen del alfabeto, no de las frecuencias.", "Un modelo lineal multiplica. Si verde es 2 y rojo es 1, ¿qué le pasa al producto?"],
+    explicacion: "Un coeficiente por 2 es el doble que por 1. El modelo trata la columna como si fuera una cantidad, y el orden alfabético se vuelve un orden real. Para variables sin orden hace falta otra traducción: el paso 2.",
+    alResolver: function () { pasos.completar(0); }
+  });
+
+  B.numerico(cuerpo("chk2"), {
+    pregunta: "Si en lugar de 3 colores tuvieras 7 ciudades, ¿cuántas columnas crea el one-hot completo?",
+    respuesta: 7, tolerancia: 0,
+    pistas: ["Una columna por categoría distinta.", "Siete categorías."],
+    diagnostico: function (v) { if (v === 6) return "Seis son las columnas dummy, con una ciudad de referencia. El one-hot completo tiene una por ciudad."; if (v === 1) return "Una sola columna es label encoding, que inventa un orden."; return null; },
+    explicacion: "Siete columnas, una por ciudad, y en cada fila una sola vale 1. Con 500 ciudades serían 500 columnas: ese es el problema que resuelve el paso 5.",
+    alResolver: function () { pasos.completar(1); }
+  });
+
+  B.opcionMultiple(cuerpo("chk3"), {
+    pregunta: "Un modelo lineal con intercepto recibe las tres columnas one-hot de color. ¿Cuál es el problema?",
+    opciones: [
+      "Las tres columnas suman 1 en todas las filas, igual que la columna del intercepto: colinealidad perfecta, sin solución única",
+      "Hay demasiadas columnas para ocho filas",
+      "Las columnas de ceros y unos no se pueden multiplicar por un coeficiente",
+      "No hay ningún problema"
+    ],
+    correcta: 0,
+    pistas: [null, "El número de columnas no es el problema. Mira la columna suma.", "Sí se pueden: el problema es que una de las columnas se puede escribir a partir de las otras.", "Mira la columna suma: ¿cambia alguna vez?"],
+    explicacion: "La suma es una constante, y el intercepto ya es esa constante. Una de las columnas sobra. Al quitarla, la categoría quitada pasa a ser la referencia y cada coeficiente se lee como la diferencia con ella. <b>Toca Dummy</b> y comprueba que la columna suma desaparece.",
+    alResolver: function () { pasos.completar(2); }
+  });
+
+  B.opcionMultiple(cuerpo("chk4"), {
+    pregunta: "¿Cuál de estas variables es ordinal, y por eso admite enteros con un orden decidido por ti?",
+    opciones: ["Nivel de satisfacción: bajo, medio, alto", "Color de ojos", "Ciudad de residencia", "Tipo de sangre"],
+    correcta: 0,
+    mezclar: true,
+    pistas: [null, "¿Hay un color de ojos que sea 'más' que otro?", "Puedes ordenarlas por nombre, pero eso no es un orden de la variable.", "A+, O−, AB: ¿cuál va primero? Ninguno."],
+    explicacion: "Bajo < medio < alto es un orden real, aunque no sepas si de bajo a medio hay 'lo mismo' que de medio a alto. Las otras tres son nominales: one-hot o dummy.",
+    alResolver: function () { pasos.completar(3); }
+  });
+
+  B.opcionMultiple(cuerpo("chk5b"), {
+    pregunta: "Calculas las medias del target encoding con todos los datos, entrenamiento y prueba juntos, y después mides el error en prueba. ¿Qué pasa con ese error?",
+    opciones: [
+      "Sale mejor de lo que es, porque la columna ya contiene información de las respuestas de prueba",
+      "Sale peor, porque las medias se diluyen",
+      "No cambia: las medias son las mismas",
+      "Sale mejor, y eso es bueno"
+    ],
+    correcta: 0,
+    pistas: [null, "Más datos no diluyen: el problema es qué datos. ¿De dónde salieron las respuestas?", "No son las mismas: las de prueba entraron en la cuenta.", "Mejor en el examen no es mejor en el mundo: el examen estaba filtrado."],
+    explicacion: "El modelo vio las respuestas de prueba a través de la columna codificada. El error en prueba se vuelve optimista y no predice lo que va a pasar con datos nuevos. Las medias se calculan solo con entrenamiento.",
+    alResolver: function () { est.chk5b = true; cerrar5(); }
+  });
+
+  B.numerico(cuerpo("chk5"), {
+    pregunta: "Con target encoding, ¿qué número reemplaza a <b>rojo</b>? Es la media de <b>compró</b> entre los clientes que eligieron rojo (filas 1, 4 y 7).",
+    respuesta: 2 / 3, tolerancia: 0.011,
+    pistas: ["Mira la columna compró en las filas 1, 4 y 7: 1, 1 y 0.", "Es (1 + 1 + 0) / 3."],
+    diagnostico: function (v) { if (Math.abs(v - 2) < 0.011) return "Esa es la suma. Falta dividir entre los tres clientes."; if (Math.abs(v - 3) < 0.011) return "Tres es la frecuencia de rojo, no la media del objetivo."; return null; },
+    explicacion: "(1 + 1 + 0) / 3 = 0.67. Verde da 0.50 y azul 0.33. Es una columna muy informativa, y justamente por eso es peligrosa: el chequeo del recuadro violeta te dice por qué.",
+    alResolver: function () { est.chk5 = true; cerrar5(); }
+  });
+  function cerrar5() { if (est.chk5 && est.chk5b) pasos.completar(4); }
+
+  B.opcionMultiple(cuerpo("chk6"), {
+    pregunta: "Todavía no toques los botones. Hay un 58 muy por encima del resto. Si rellenas los dos huecos, ¿qué opción se deja arrastrar menos por ese 58?",
+    opciones: ["La mediana", "La media", "Da lo mismo: las dos se mueven igual", "Ninguna: imputar no depende de los valores presentes"],
+    correcta: 0,
+    pistas: [null, "La media suma todos los valores, incluido el 58. ¿Y la mediana?", "Una de las dos usa el valor 58 en la cuenta y la otra solo cuenta posiciones.", "Las dos se calculan con los valores presentes; la pregunta es cuál se mueve."],
+    explicacion: "La mediana solo mira quién está en el medio de la fila: el 58 podría ser 580 y seguiría dando 33.5. La media sí lo suma: 36.67. <b>Ahora toca los botones</b> y mira la pila violeta que aparece en cada caso.",
+    alResolver: function () { est.chk6 = true; $("escHint").textContent = "Toca cada opción y mira la tira de puntos"; pasos.completar(5); }
+  });
+
+  B.opcionMultiple(cuerpo("chk7"), {
+    pregunta: "Vas a imputar la edad con la mediana. ¿Con qué filas calculas esa mediana?",
+    opciones: [
+      "Solo con las de entrenamiento, y esa misma mediana se usa para rellenar los huecos de prueba",
+      "Con todas las filas, entrenamiento y prueba, para que la mediana sea más precisa",
+      "Con las de entrenamiento para entrenamiento y con las de prueba para prueba",
+      "Con las de prueba, porque son las que se evalúan"
+    ],
+    correcta: 0,
+    pistas: [null, "Más precisa en el examen, pero el examen deja de ser un examen.", "Si prueba calcula su propia mediana, el modelo recibe datos transformados con una regla distinta a la que aprendió.", "Prueba no se toca hasta el final."],
+    explicacion: "Fit con entrenamiento, transform en los dos. Es la misma regla para estandarizar, para one-hot (la lista de categorías) y para target encoding. Mira la fórmula de arriba: ya tiene tus números.",
+    alResolver: function () { pasos.completar(6); }
+  });
+
+  function pintarFuga() {
+    var tr = [25, 32, 41, 29], todos = PRESENTES;
+    var o = tr.slice().sort(function (a, b) { return a - b; }), medTr = (o[1] + o[2]) / 2;
+    $("vivoFuga").innerHTML = "Con las seis primeras filas como entrenamiento, la mediana de edad es <b>" + f(medTr, 1) + "</b> y esa es la que rellena los huecos, también en prueba. Con todas las filas sería <b>" + f(MEDIANA_EDAD, 1) + "</b>: distinta, porque el 58 de prueba entró en la cuenta.";
+  }
+  pintarFuga();
+
+  pasos = B.pasos($("recorrido"), {
+    concepto: C,
+    alEntrar: entrar,
+    alTerminar: function () { location.hash = "vidareal"; }
+  });
+  est.chk6 = pasos.hecho(5);
+  est.chk5 = est.chk5b = pasos.hecho(4);
+  entrar(pasos.actual());
+
+  /* ---------------- hipotesis inicial ---------------- */
+  (function () {
+    var ta = $("hipotesis"), t = null;
+    ta.value = B.nota("codificacion-faltantes", "hipotesis");
+    function cita() {
+      var v = ta.value.trim(), el = $("citaHipo");
+      el.hidden = !v;
+      if (v) { el.textContent = ""; el.appendChild(document.createTextNode("Al principio escribiste: «" + v + "». ¿Tu idea inventaba un orden? ¿Qué le agregarías ahora?")); }
+    }
+    cita();
+    ta.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { B.nota("codificacion-faltantes", "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; cita(); }, 500);
+    });
+  })();
+
+  /* ---------------- estados de retos ---------------- */
+  function pintarEstados() {
+    [].forEach.call(document.querySelectorAll("[data-reto]"), function (el) {
+      var ok = C.retoOk(el.getAttribute("data-reto"));
+      el.textContent = ok ? "resuelto" : "pendiente";
+      el.classList.toggle("ok", ok);
+    });
+  }
+  C.alCambiar(pintarEstados);
+
+  /* ---------------- vida real ---------------- */
+  (function () {
+    var CODIGO = {
+      py: [
+        ["import", "import numpy as np"],
+        ["import", "import pandas as pd"],
+        [null, ""],
+        ["datos", 'color = ["rojo", "verde", "azul", "rojo", "azul", "verde", "rojo", "azul"]'],
+        ["datos", "edad = [25, 32, np.nan, 41, 29, np.nan, 35, 58]"],
+        [null, ""],
+        [null, "# 1. one-hot a mano: una columna por categoría"],
+        ["cats", "categorias = sorted(set(color))           # ['azul', 'rojo', 'verde']"],
+        ["zeros", "onehot = np.zeros((len(color), len(categorias)))"],
+        ["fori", "for i in range(len(color)):               # fila por fila"],
+        ["forj", "    for j in range(len(categorias)):      # categoría por categoría"],
+        ["si", "        if color[i] == categorias[j]:"],
+        ["uno", "            onehot[i, j] = 1              # la columna de su categoría"],
+        [null, ""],
+        [null, "# 2. imputar la edad con la mediana de los valores presentes"],
+        ["presentes", "presentes = [x for x in edad if not np.isnan(x)]"],
+        ["mediana", "mediana = float(np.median(presentes))"],
+        ["imputar", "edad_imputada = [mediana if np.isnan(x) else x for x in edad]"],
+        [null, ""],
+        ["imprimir", "print(onehot)"],
+        ["imprimir", "print(edad_imputada)"],
+        ["verificar", "dummies = pd.get_dummies(pd.Series(color)).to_numpy()"],
+        ["verificar", "print(np.array_equal(onehot, dummies))    # True"]
+      ],
+      r: [
+        ["datos", 'color <- c("rojo", "verde", "azul", "rojo", "azul", "verde", "rojo", "azul")'],
+        ["datos", "edad  <- c(25, 32, NA, 41, 29, NA, 35, 58)"],
+        [null, ""],
+        [null, "# 1. one-hot a mano: una columna por categoría"],
+        ["cats", 'categorias <- sort(unique(color))         # "azul" "rojo" "verde"'],
+        ["zeros", "onehot <- matrix(0, length(color), length(categorias))"],
+        ["fori", "for (i in seq_along(color)) {             # fila por fila"],
+        ["forj", "  for (j in seq_along(categorias)) {      # categoría por categoría"],
+        ["si", "    if (color[i] == categorias[j]) {"],
+        ["uno", "      onehot[i, j] <- 1                   # la columna de su categoría"],
+        [null, "    }"],
+        [null, "  }"],
+        [null, "}"],
+        [null, ""],
+        [null, "# 2. imputar la edad con la mediana de los valores presentes"],
+        ["mediana", "mediana <- median(edad, na.rm = TRUE)"],
+        ["imputar", "edad_imputada <- ifelse(is.na(edad), mediana, edad)"],
+        [null, ""],
+        ["imprimir", "print(onehot)"],
+        ["imprimir", "print(edad_imputada)"],
+        ["verificar", "all(onehot == model.matrix(~ color - 1))  # TRUE"]
+      ]
+    };
+    var EV = [];
+    (function () {
+      var M = [], fase = 0, veces = 0;
+      for (var a = 0; a < N; a++) M.push([null, null, null]);
+      function foto(id, extra) {
+        EV.push(Object.assign({ id: id, fase: fase, M: M.map(function (r) { return r.slice(); }), veces: veces, i: null, j: null, imp: null }, extra || {}));
+      }
+      foto("import");
+      foto("datos");
+      fase = 1; foto("cats");
+      M = M.map(function (r) { return r.map(function () { return 0; }); });
+      foto("zeros");
+      fase = 2;
+      for (var i = 0; i < N; i++) {
+        foto("fori", { i: i });
+        for (var j = 0; j < CATS.length; j++) {
+          foto("forj", { i: i, j: j });
+          var coincide = COLOR[i] === CATS[j];
+          foto("si", { i: i, j: j, coincide: coincide });
+          if (coincide) { M[i][j] = 1; veces++; foto("uno", { i: i, j: j, nuevo: true }); }
+        }
+      }
+      fase = 3;
+      foto("presentes", { imp: "presentes" });
+      foto("mediana", { imp: "mediana" });
+      foto("imputar", { imp: "hecho" });
+      foto("imprimir", { imp: "hecho", fin: true });
+      foto("verificar", { imp: "hecho", fin: true });
+    })();
+    function narrar(e, ctx) {
+      var py = ctx.lang() === "py", ix = ctx.ix;
+      switch (e.id) {
+        case "import": return py ? "Carga NumPy para la matriz y pandas para comparar al final." : "R trae vectores, matrices y factores de serie: no hay nada que importar.";
+        case "datos": return "Los datos: 8 colores y 8 edades, dos de ellas vacías (" + (py ? "np.nan" : "NA") + ").";
+        case "cats": return "Las categorías distintas, ordenadas alfabéticamente: <b>azul, rojo, verde</b>. Ese orden decide qué columna es cada una.";
+        case "zeros": return "Una matriz de 8 × 3 llena de ceros: una fila por cliente, una columna por color.";
+        case "fori": return "Fila <b>i = " + ix(e.i) + "</b>: el cliente " + (e.i + 1) + ", que eligió " + COLOR[e.i] + ".";
+        case "forj": return "Columna <b>j = " + ix(e.j) + "</b>: la categoría " + CATS[e.j] + ".";
+        case "si": return "¿" + COLOR[e.i] + " es igual a " + CATS[e.j] + "? <b>" + (e.coincide ? "Sí" : "No") + "</b>." + (e.coincide ? " Hay que encender esta columna." : " Esta celda se queda en 0.");
+        case "uno": return "onehot[" + ix(e.i) + ", " + ix(e.j) + "] = 1. Es el único 1 de la fila " + (e.i + 1) + ".";
+        case "presentes": return "Se quedan solo las edades que existen: 25, 32, 41, 29, 35 y 58. Seis de ocho.";
+        case "mediana": return "La mediana de esas seis: ordenadas, las dos del medio son 32 y 35, y su promedio es <b>33.5</b>." + (py ? "" : " En R, na.rm = TRUE ignora los NA.");
+        case "imputar": return "Cada " + (py ? "np.nan" : "NA") + " se reemplaza por <b>33.5</b>; los valores presentes quedan iguales.";
+        case "imprimir": return "Imprime la matriz y las edades. Son las mismas que viste en el escenario.";
+        case "verificar": return py ? "Compara con <b>pd.get_dummies</b>, que arma las mismas tres columnas en el mismo orden, y da <b>True</b>."
+          : "Compara con <b>model.matrix(~ color - 1)</b>, que arma las mismas tres columnas, y da <b>TRUE</b>.";
+      }
+      return "";
+    }
+    function visual(e, anterior, ctx) {
+      var ix = ctx.ix;
+      var conCats = e && e.fase >= 1, matriz = e && e.fase >= 1 && e.id !== "cats";
+      $("vrTablaTit").textContent = e && e.fase >= 3 ? "La tabla, con los huecos rellenados" : matriz ? "La tabla, con el one-hot llenándose" : "La tabla";
+      var h = '<thead><tr><th>fila</th><th>color</th>';
+      if (conCats) CATS.forEach(function (c) { h += '<th class="nueva">' + c + '</th>'; });
+      h += '<th>edad</th></tr></thead><tbody>';
+      for (var i = 0; i < N; i++) {
+        h += '<tr' + (e && e.i === i ? ' class="sel"' : '') + '><td class="pl">' + ix(i) + '</td><td class="cat">' + colorHtml(COLOR[i]) + '</td>';
+        if (conCats) for (var j = 0; j < CATS.length; j++) {
+          var v = matriz ? e.M[i][j] : null;
+          var foco = e && e.i === i && e.j === j;
+          var cls = "nueva" + (v === 1 ? " uno" : v === 0 ? " cero" : "") + (foco ? " cambio" : "");
+          h += '<td class="' + cls + '">' + (v === null ? "" : v) + '</td>';
+        }
+        var ed = EDAD[i];
+        if (ed !== null) h += '<td>' + ed + '</td>';
+        else if (e && e.imp === "hecho") h += '<td class="imput">33.5</td>';
+        else if (e && e.imp === "presentes") h += '<td class="hueco apag">NaN</td>';
+        else h += '<td class="hueco">NaN</td>';
+        h += '</tr>';
+      }
+      $("vrTabla").innerHTML = h + '</tbody>';
+      $("vrCuenta").innerHTML = e && e.id === "mediana" ? "ordenadas: 25, 29, <b>32, 35</b>, 41, 58 &nbsp;·&nbsp; (32 + 35) / 2 = <b>33.5</b>"
+        : e && e.id === "uno" ? "fila " + (e.i + 1) + ": un solo 1, en la columna " + CATS[e.j]
+        : e && e.fin ? "8 filas, 3 columnas, 8 unos en total. Dos huecos rellenados con la mediana." : "";
+    }
+    B.vidaReal($("vidareal"), {
+      codigo: CODIGO, eventos: EV, narrar: narrar, visual: visual,
+      vars: function (e, ctx) {
+        var v = [], ix = ctx.ix;
+        if (e && e.i !== null) v.push('<span class="vj">i = <b>' + ix(e.i) + '</b></span>');
+        if (e && e.j !== null) v.push('<span class="vk">j = <b>' + ix(e.j) + '</b></span>');
+        v.push('<span>unos escritos: <b>' + (e ? e.veces : 0) + '</b></span>');
+        if (e && e.fase >= 3 && e.imp !== "presentes") v.push('<span>mediana = <b>33.5</b></span>');
+        return v;
+      },
+      demora: function (e) { return !e ? 600 : e.id === "forj" ? 320 : e.id === "si" ? 520 : e.id === "uno" ? 800 : e.id === "fori" ? 500 : 1000; }
+    });
+
+    B.numerico(cuerpo("vrPred"), {
+      pregunta: "¿Cuántas veces se va a ejecutar la línea <code>onehot[i, j] = 1</code> hasta terminar? Son 8 clientes y 3 colores.",
+      respuesta: 8, tolerancia: 0,
+      pistas: ["Esa línea solo corre cuando el color de la fila coincide con la categoría de la columna.", "Cada cliente tiene un solo color. ¿Cuántos clientes hay?"],
+      diagnostico: function (v) { if (v === 24) return "24 son las veces que se ejecuta la comparación del if (8 × 3). La asignación corre solo cuando el if es verdadero."; if (v === 3) return "Tres son las columnas. Piensa en cuántos unos tiene la matriz al final."; return null; },
+      explicacion: "Una vez por cliente: <b>8</b>. El if se evalúa 24 veces, pero en cada fila solo una columna coincide. Esa es la definición de one-hot: un único 1 por fila. Ahora dale a reproducir y mira el contador.",
+      alResolver: function (ok) { C.reto("codigo1", ok); }
+    });
+  })();
+
+  function prop(id, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple($(id), cfg);
+  }
+  prop("codigo2", {
+    pregunta: "Entrenas con <code>pd.get_dummies(train[\"color\"])</code>, que da las columnas azul, rojo, verde. En prueba solo hay clientes rojos y azules, y haces <code>pd.get_dummies(test[\"color\"])</code>. ¿Qué pasa?",
+    opciones: [
+      "Prueba sale con 2 columnas (azul, rojo) en lugar de 3, y el modelo no las puede recibir o las interpreta mal",
+      "Sale igual: get_dummies recuerda las categorías de entrenamiento",
+      "Da un error en el momento de codificar",
+      "Sale con 3 columnas, pero verde queda toda en 0"
+    ],
+    correcta: 0,
+    pistas: [null, "get_dummies no recuerda nada: mira cada conjunto por separado.", "No falla al codificar. Falla después, cuando el modelo pide 3 columnas y recibe 2.", "Eso es lo que querríamos, y es lo que hace OneHotEncoder ajustado con entrenamiento. get_dummies no."],
+    explicacion: "Lo comprobamos: entrenamiento devuelve [azul, rojo, verde] y prueba devuelve [azul, rojo]. La lista de categorías es un parámetro, y como todo parámetro se ajusta con entrenamiento: <code>OneHotEncoder(handle_unknown=\"ignore\").fit(train)</code> y después <code>transform(test)</code> devuelve las 3 columnas siempre."
+  });
+  prop("codigo3", {
+    pregunta: "Las edades de entrenamiento presentes son 25, 32, 41 y 29; las de prueba, 35 y 58. Alguien imputa los huecos con la media de <b>todas</b> las edades presentes. ¿Qué número usa y por qué está mal?",
+    opciones: [
+      "36.67, y está mal porque esa media incluye el 58 de prueba: el entrenamiento vio datos del examen",
+      "31.75, y está bien porque es la media de entrenamiento",
+      "33.5, y está mal porque es la mediana y no la media",
+      "36.67, y está bien porque usa más datos"
+    ],
+    correcta: 0,
+    pistas: [null, "31.75 sí es la media de entrenamiento, pero la pregunta dice que usó todas las edades.", "33.5 es la mediana de todos, no la media.", "Más datos no es mejor si esos datos son la respuesta del examen."],
+    explicacion: "La media de las seis edades presentes es 36.67; la de las cuatro de entrenamiento, 31.75. La diferencia viene del 58, que es de prueba. <code>SimpleImputer</code> ajustado solo con entrenamiento guarda su estadístico (mediana 30.5 en este caso) y lo aplica a prueba sin recalcular."
+  });
+
+  /* ---------------- reto: ojo clinico ---------------- */
+  (function () {
+    var cont = $("ojo");
+    var TECN = [["label", "Label"], ["onehot", "One-hot"], ["dummy", "Dummy"], ["frequency", "Frequency"], ["target", "Target"]];
+    var POOL = [["gato", "perro", "pez"], ["norte", "sur", "este"], ["bajo", "medio", "alto"], ["lunes", "martes", "jueves"], ["A", "B", "C"]];
+    cont.innerHTML = '<div class="ronda"></div><div class="tabla-wrap"><table class="tabla-mini"></table></div>' +
+      '<div class="ojo-opts"></div><div class="fb" aria-live="polite"></div><div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    var opts = cont.querySelector(".ojo-opts");
+    TECN.forEach(function (t) { var b = document.createElement("button"); b.type = "button"; b.className = "opt"; b.textContent = t[1]; b.setAttribute("data-a", t[0]); opts.appendChild(b); });
+    var secuencia, ronda, aciertos, respondida, actual;
+    function generar(tecnica) {
+      var cats = POOL[Math.floor(Math.random() * POOL.length)].slice().sort();
+      var filas = [], y = [];
+      for (var i = 0; i < 6; i++) { filas.push(cats[Math.floor(Math.random() * 3)]); y.push(Math.random() < 0.5 ? 1 : 0); }
+      var fr = cuenta(filas);
+      var cols, vals;
+      if (tecnica === "label") { cols = ["cat_num"]; vals = filas.map(function (c) { return [cats.indexOf(c)]; }); }
+      else if (tecnica === "onehot") { cols = cats; vals = filas.map(function (c) { return cats.map(function (k) { return c === k ? 1 : 0; }); }); }
+      else if (tecnica === "dummy") { cols = cats.slice(1); vals = filas.map(function (c) { return cats.slice(1).map(function (k) { return c === k ? 1 : 0; }); }); }
+      else if (tecnica === "frequency") { cols = ["cat_freq"]; vals = filas.map(function (c) { return [fr[c]]; }); }
+      else {
+        cols = ["cat_target"];
+        vals = filas.map(function (c) { var s = 0, n = 0; filas.forEach(function (k, i) { if (k === c) { s += y[i]; n++; } }); return [f(s / n)]; });
+      }
+      return { filas: filas, cols: cols, vals: vals, y: y, tecnica: tecnica };
+    }
+    function nueva() {
+      var extra = TECN[Math.floor(Math.random() * TECN.length)][0];
+      secuencia = B.mezclar(TECN.map(function (t) { return t[0]; })).slice(0, 4).concat([extra]);
+      ronda = 0; aciertos = 0;
+      mostrar();
+    }
+    function mostrar() {
+      respondida = false;
+      actual = generar(secuencia[ronda]);
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 5 · aciertos " + aciertos;
+      var h = '<thead><tr><th>categoría</th>' + (actual.tecnica === "target" ? '<th>objetivo</th>' : '') + actual.cols.map(function (c) { return '<th>' + c + '</th>'; }).join("") + '</tr></thead><tbody>';
+      actual.filas.forEach(function (c, i) { h += '<tr><td>' + c + '</td>' + (actual.tecnica === "target" ? '<td>' + actual.y[i] + '</td>' : '') + actual.vals[i].map(function (v) { return '<td>' + v + '</td>'; }).join("") + '</tr>'; });
+      cont.querySelector("table").innerHTML = h + '</tbody>';
+      [].forEach.call(opts.children, function (b) { b.disabled = false; b.className = "opt"; });
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+    }
+    opts.addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || respondida) return;
+      respondida = true;
+      var ok = b.getAttribute("data-a") === actual.tecnica;
+      if (ok) aciertos++;
+      b.classList.add(ok ? "ok" : "mal");
+      if (!ok) opts.querySelector('[data-a="' + actual.tecnica + '"]').classList.add("ok");
+      [].forEach.call(opts.children, function (x) { x.disabled = true; });
+      var porque = { label: "Una sola columna con enteros 0, 1, 2 que siguen el alfabeto.", onehot: "Tantas columnas como categorías, y un único 1 por fila.", dummy: "Una columna menos que categorías: la que falta es la referencia, y hay filas con todo 0.", frequency: "Una columna con cuántas veces aparece cada categoría: categorías iguales de frecuentes comparten número.", target: "Una columna con la media del objetivo dentro de cada categoría: decimales entre 0 y 1." }[actual.tecnica];
+      cont.querySelector(".fb").innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No.</span> ') + porque;
+      var sig = cont.querySelector(".sig");
+      sig.hidden = false;
+      if (ronda === 4) {
+        var aprobo = aciertos >= 4;
+        C.reto("ojo", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertos + " de 5" + (aprobo ? ". Aprobado." : ". Necesitas 4 para aprobar.");
+        sig.textContent = "Otra tanda";
+      } else sig.textContent = "Siguiente ronda";
+    });
+    cont.querySelector(".sig").addEventListener("click", function () { if (ronda === 4) nueva(); else { ronda++; mostrar(); } });
+    nueva();
+  })();
+
+  /* ---------------- reto: decidir la codificacion ---------------- */
+  (function () {
+    var OPC = [["onehot", "One-hot / dummy"], ["ordinal", "Ordinal"], ["target", "Target / frequency"], ["binaria", "Una columna 0/1"]];
+    var VARS = [
+      { v: "Medio de pago", d: "efectivo, tarjeta, transferencia", ok: ["onehot"], por: "Tres categorías sin orden: una columna por categoría (o dos, con referencia)." },
+      { v: "Nivel de estudios", d: "primaria, secundaria, universidad, posgrado", ok: ["ordinal"], por: "Hay un orden real: enteros 0, 1, 2, 3 que lo respetan." },
+      { v: "Código postal", d: "más de 2.000 valores distintos", ok: ["target"], por: "Alta cardinalidad: one-hot daría 2.000 columnas. Frequency o target, con las medias calculadas solo en entrenamiento." },
+      { v: "¿Es cliente nuevo?", d: "sí / no", ok: ["binaria"], por: "Dicotómica: una sola columna con 1 y 0 alcanza. Es un dummy con una categoría de referencia." },
+      { v: "Grado de dolor", d: "leve, moderado, intenso", ok: ["ordinal"], por: "Leve < moderado < intenso: ordinal." }
+    ];
+    var cont = $("constructor"), hechas = 0;
+    cont.innerHTML = '<div class="decisiones"></div>';
+    var dec = cont.querySelector(".decisiones");
+    VARS.forEach(function (va) {
+      var d = document.createElement("div");
+      d.className = "decision";
+      d.innerHTML = '<div class="var">' + va.v + '<small>' + va.d + '</small></div><div class="opciones"></div><div class="porque"></div>';
+      var op = d.querySelector(".opciones"), listo = false;
+      OPC.forEach(function (o) {
+        var b = document.createElement("button");
+        b.type = "button";
+        b.textContent = o[1];
+        b.addEventListener("click", function () {
+          if (listo) return;
+          if (va.ok.indexOf(o[0]) >= 0) {
+            listo = true; b.classList.add("ok"); d.classList.add("hecha");
+            d.querySelector(".porque").innerHTML = '<span class="si">Bien.</span> ' + va.por;
+            [].forEach.call(op.children, function (x) { x.disabled = true; });
+            hechas++;
+            if (hechas === VARS.length) C.reto("constructor", true);
+          } else {
+            b.classList.add("mal"); b.disabled = true;
+            d.querySelector(".porque").innerHTML = '<span class="no">No.</span> ' + (o[0] === "ordinal" ? "¿Hay un orden real entre esas categorías?" : o[0] === "onehot" ? "Piensa en cuántas columnas saldrían, o en si hay un orden que one-hot tiraría." : o[0] === "target" ? "Eso es para muchísimas categorías. ¿Cuántas hay aquí?" : "Una columna 0/1 solo sirve con dos categorías.");
+          }
+        });
+        op.appendChild(b);
+      });
+      dec.appendChild(d);
+    });
+  })();
+
+  /* ---------------- reto: emparejar ---------------- */
+  (function () {
+    var PARES = [
+      ["One-hot", "Tres colores sin orden, para un modelo que mide distancias (kNN)"],
+      ["Dummy", "Tres colores sin orden, para una regresión con intercepto"],
+      ["Ordinal", "Tallas S, M, L, XL"],
+      ["Target encoding", "500 ciudades, con cuidado de calcular las medias solo en entrenamiento"],
+      ["Imputar con la mediana", "Huecos en una variable numérica con valores atípicos"],
+      ["Imputar con la moda", "Huecos en una variable categórica"]
+    ];
+    var cont = $("emparejar"), sel = null, unidos = 0, fallos = 0;
+    cont.innerHTML = '<div class="pares"><div class="col izq"><h4>Técnica</h4></div><div class="col der"><h4>Situación</h4></div></div><div class="fb" aria-live="polite"></div>';
+    var izq = cont.querySelector(".izq"), der = cont.querySelector(".der");
+    B.mezclar(PARES.map(function (_, i) { return i; })).forEach(function (i) { var b = document.createElement("button"); b.type = "button"; b.textContent = PARES[i][0]; b.setAttribute("data-i", i); izq.appendChild(b); });
+    B.mezclar(PARES.map(function (_, i) { return i; })).forEach(function (i) { var b = document.createElement("button"); b.type = "button"; b.textContent = PARES[i][1]; b.setAttribute("data-i", i); der.appendChild(b); });
+    izq.addEventListener("click", function (e) {
+      var b = e.target.closest("button");
+      if (!b || b.classList.contains("unido")) return;
+      [].forEach.call(izq.children, function (x) { x.classList.remove("sel"); });
+      b.classList.add("sel"); sel = b;
+    });
+    der.addEventListener("click", function (e) {
+      var b = e.target.closest("button");
+      if (!b || b.classList.contains("unido") || !sel) return;
+      if (b.getAttribute("data-i") === sel.getAttribute("data-i")) {
+        b.classList.add("unido"); sel.classList.add("unido"); sel.classList.remove("sel"); sel = null; unidos++;
+        cont.querySelector(".fb").innerHTML = '<span class="si">Par correcto.</span>';
+        if (unidos === PARES.length) { C.reto("emparejar", true); cont.querySelector(".fb").innerHTML = '<span class="si">Los seis pares.</span> ' + (fallos ? "Con " + fallos + " intento" + (fallos > 1 ? "s" : "") + " fallido" + (fallos > 1 ? "s" : "") + " en el camino." : "Sin fallar ninguno."); }
+      } else {
+        fallos++;
+        b.classList.add("err"); setTimeout(function () { b.classList.remove("err"); }, 600);
+        cont.querySelector(".fb").innerHTML = '<span class="no">Ese no.</span> Piensa en si hay orden, cuántas categorías hay y qué tipo de modelo las recibe.';
+      }
+    });
+  })();
+
+  /* ---------------- reto: cazar el error ---------------- */
+  B.cazarError($("error"), {
+    variantes: [
+      {
+        intro: "Alguien prepara una regresión lineal con intercepto y la columna color:",
+        lineas: ["\\texttt{categorias = [azul, rojo, verde]}", "\\texttt{X = get\\_dummies(color)}\\;\\;\\text{(3 columnas: azul, rojo, verde)}", "\\texttt{X = add\\_constant(X)}\\;\\;\\text{(agrega la columna de unos)}", "\\texttt{modelo = OLS(y, X).fit()}"],
+        erronea: 1,
+        explicacion: "Con intercepto hay que quitar una categoría: <code>get_dummies(color, drop_first=True)</code>. Las tres columnas suman 1, igual que la constante, y la regresión no tiene solución única."
+      },
+      {
+        intro: "Alguien hace target encoding de ciudad para predecir compró:",
+        lineas: ["\\texttt{train, test = split(datos)}", "\\texttt{medias = datos.groupby(ciudad)[compro].mean()}", "\\texttt{train[ciudad\\_enc] = train[ciudad].map(medias)}", "\\texttt{test[ciudad\\_enc] = test[ciudad].map(medias)}"],
+        erronea: 1,
+        explicacion: "Las medias se calcularon con <code>datos</code>, que incluye prueba. Tiene que ser <code>train.groupby(...)</code>: el modelo no puede ver las respuestas de prueba a través de la columna codificada."
+      },
+      {
+        intro: "Alguien rellena los huecos de dos columnas:",
+        lineas: ["\\texttt{mediana\\_edad = train[edad].median()}", "\\texttt{train[edad] = train[edad].fillna(mediana\\_edad)}", "\\texttt{mediana\\_color = train[color].median()}", "\\texttt{train[color] = train[color].fillna(mediana\\_color)}"],
+        erronea: 2,
+        explicacion: "Color es categórica: no tiene mediana. Para una categórica se imputa con la <b>moda</b>, la categoría más frecuente: <code>train[color].mode()[0]</code>."
+      }
+    ],
+    alResolver: function (ok) { C.reto("error", ok); }
+  });
+
+  /* ---------------- retos: propiedades ---------------- */
+  prop("prop1", {
+    pregunta: "Una variable nominal con $k = 12$ categorías. ¿Cuántas columnas crea el one-hot completo y cuántas la codificación dummy?",
+    opciones: ["12 y 11", "12 y 12", "11 y 11", "1 y 1"],
+    correcta: 0,
+    pistas: [null, "Dummy quita la categoría de referencia.", "One-hot no quita ninguna: una por categoría.", "Una sola columna sería label encoding, que inventa un orden."],
+    explicacion: "One-hot: $k$ columnas. Dummy: $k - 1$, porque la categoría de referencia se lee como 'todas en cero'. En general, $k$ y $k - 1$."
+  });
+  prop("prop2", {
+    pregunta: "Con frequency encoding, Bogotá, Quito y Buenos Aires aparecen una vez cada una. ¿Qué ve el modelo?",
+    opciones: [
+      "Las tres como el mismo valor, 1: ya no puede distinguirlas",
+      "Tres valores distintos, porque son ciudades distintas",
+      "Un error, porque la frecuencia mínima es 2",
+      "Las tres como la ciudad más importante"
+    ],
+    correcta: 0,
+    pistas: [null, "La columna nueva solo guarda cuántas veces aparece cada una. ¿Cuánto da para las tres?", "No hay frecuencia mínima.", "Frecuencia 1 es la más baja, no la más alta."],
+    explicacion: "Frequency encoding reemplaza la categoría por su conteo. Categorías con el mismo conteo se vuelven indistinguibles. Es el precio de pasar de 500 columnas a una."
+  });
+  prop("prop3", {
+    pregunta: "Vas a imputar una variable numérica con valores atípicos. ¿Media o mediana, y por qué?",
+    opciones: [
+      "Mediana: los atípicos no la mueven, porque solo cuenta posiciones",
+      "Media: usa toda la información, incluidos los atípicos",
+      "Da igual: imputar no cambia la distribución",
+      "Ninguna: con atípicos hay que eliminar las filas"
+    ],
+    correcta: 0,
+    pistas: [null, "Usar toda la información incluye dejarse arrastrar por el 58.", "Imputar sí cambia la distribución: crea una pila en el valor imputado.", "Eliminar es una opción, pero pierde datos; no es obligatoria."],
+    explicacion: "La mediana resiste: en el escenario, el 58 mueve la media a 36.67 y deja la mediana en 33.5. Por eso la UD1 recomienda la mediana cuando hay outliers."
+  });
+  prop("prop4", {
+    pregunta: "Eliminas todas las filas que tienen algún hueco. ¿Cuál es el riesgo que no se ve a simple vista?",
+    opciones: [
+      "Que los huecos no sean al azar: si faltan más edades entre quienes no compraron, el conjunto que queda está sesgado",
+      "Que el modelo deje de funcionar con menos de 100 filas",
+      "Que la media de las demás columnas cambie de signo",
+      "Ninguno: eliminar es siempre la opción más segura"
+    ],
+    correcta: 0,
+    pistas: [null, "No hay un mínimo mágico de filas. Piensa en quiénes son las filas que se van.", "Las medias pueden cambiar, pero el signo no es el punto.", "Segura solo si los huecos son al azar. ¿Y si no lo son?"],
+    explicacion: "Si los huecos se concentran en un tipo de cliente, borrarlos borra a ese tipo de cliente. El conjunto que queda ya no representa a la población. Por eso eliminar solo cuando la pérdida es pequeña y, idealmente, aleatoria."
+  });
+
+  /* ---------------- pipeline de memoria ---------------- */
+  B.ordenar($("pipeline"), {
+    piezas: ["\\text{1. quitar variables de varianza casi nula}", "\\text{2. imputar faltantes (con entrenamiento)}", "\\text{3. transformar las variables sesgadas}", "\\text{4. estandarizar}", "\\text{5. reducir dimensiones (PCA)}", "\\text{6. codificar categóricas}"],
+    distractores: ["\\text{entrenar el modelo antes de imputar}", "\\text{calcular las medias con prueba}"],
+    soluciones: [[0, 1, 2, 3, 4, 5], [0, 1, 2, 3, 5, 4], [0, 1, 5, 2, 3, 4]],
+    explicacion: "Ese es el orden del resumen. Si las categóricas van a entrar en PCA, se codifican antes de reducir. Lo que nunca cambia: cada parámetro se ajusta con entrenamiento.",
+    alResolver: function (ok) { C.reto("pipeline", ok); }
+  });
+
+  /* ---------------- tarjetas ---------------- */
+  B.tarjetas($("tarjetas"), [
+    ["¿Qué le dice <b>label encoding</b> a un modelo lineal sobre tres colores?", "Que tienen un orden y unas distancias: verde (2) está el doble de lejos de azul (0) que rojo (1). Un orden inventado por el alfabeto."],
+    ["¿Qué es <b>one-hot</b>?", "Una columna por categoría, con un único 1 por fila. Todas las categorías quedan equidistantes."],
+    ["¿Por qué las <b>dummies</b> quitan una categoría?", "Porque las columnas one-hot suman 1 siempre, igual que el intercepto: colinealidad perfecta. La categoría quitada es la referencia."],
+    ["¿Cuándo conviene <b>ordinal encoding</b>?", "Cuando la variable tiene un orden real (S < M < L). Los enteros respetan el orden, aunque las distancias sigan siendo inventadas."],
+    ["¿Qué riesgo tiene el <b>target encoding</b>?", "Fuga de información: la columna se fabrica con la respuesta. Las medias se calculan solo con entrenamiento."],
+    ["¿Media o mediana para imputar con valores atípicos?", "Mediana. Los atípicos no la mueven. Para categóricas, la moda. Y cualquier imputación forma una pila en el valor imputado."],
+    ["¿Con qué datos se calcula cualquier parámetro de preprocesamiento?", "Solo con entrenamiento (fit), y después se aplica igual a entrenamiento y prueba (transform)."]
+  ]);
+
+  /* ---------------- conexiones ---------------- */
+  (function () {
+    var cat = window.CATALOGO || [], yo = cat.filter(function (c) { return c.id === "codificacion-faltantes"; })[0];
+    function norm(s) { return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase(); }
+    function pill(nombre) {
+      var c = cat.filter(function (x) { return norm(x.titulo) === norm(nombre); })[0];
+      if (c) { var a = document.createElement("a"); a.className = "pill"; a.href = "../" + c.archivo; a.textContent = nombre; return a; }
+      var s = document.createElement("span"); s.className = "pill falta"; s.textContent = nombre; return s;
+    }
+    if (!yo) return;
+    yo.prerequisitos.forEach(function (n) { $("prereq").appendChild(pill(n)); });
+    yo.siguientes.forEach(function (n) { $("siguen").appendChild(pill(n)); });
+  })();
+})();
+</script>
+</body>
+</html>
