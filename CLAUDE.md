@@ -134,7 +134,8 @@ se vuelve parte del recorrido como un recuadro `.destacado` con predicción, no 
 
 Hay dos formas de desplegar, con la misma API (`/api/salud`, `/api/progreso`, `/api/historial`):
 - **Vercel (la que usa Francisco)**: `git push` a `main`. `vercel.json` sirve `biblioteca/`, `api/index.py` guarda en
-  Upstash Redis y `middleware.js` pide contraseña (`BIBLIOTECA_USUARIO`, `BIBLIOTECA_CLAVE`). Sin PDFs. Guía: `VERCEL.md`.
+  Upstash Redis y `middleware.js` pide contraseña (`BIBLIOTECA_USUARIO`, `BIBLIOTECA_CLAVE`). Sin PDFs. Guía y estado: `VERCEL.md`.
+  Dirección: https://matematicas-studio.vercel.app. La CLI de Homebrew tiene el Node roto: usar `node /opt/homebrew/bin/vercel ...`.
 - **VPS con Docker**: `despliegue/desplegar.sh` (ver `despliegue/LEEME.md`). Caddy sirve también los PDF en `/pdf/`.
 
 - `nucleo.js` sincroniza `biblioteca:v1` solo si `/api/salud` responde `ok: true`; si no, todo sigue en localStorage.

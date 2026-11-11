@@ -7,6 +7,13 @@ libro y página, y el PDF se abre desde tu Mac.
 Piezas: `vercel.json` (sirve `biblioteca/` y manda `/api/*` a la función), `api/index.py` (la API del progreso),
 `middleware.js` (pide usuario y contraseña) y `.vercelignore`.
 
+## Estado actual
+
+- Proyecto: `matematicas-studio` en el equipo `francisco-castillos-projects-2eacffcf`, conectado a GitHub.
+- Dirección: https://matematicas-studio.vercel.app
+- Base: Upstash Redis `biblioteca-progreso` (plan Free, región iad1), conectada al proyecto.
+- `BIBLIOTECA_USUARIO=francisco` en producción. `BIBLIOTECA_CLAVE` la pone Francisco.
+
 ## Primera vez (unos 10 minutos, todo en vercel.com)
 
 1. **Importa el repo.** En vercel.com, *Add New → Project* y elige `Matematicas_Studio`.
