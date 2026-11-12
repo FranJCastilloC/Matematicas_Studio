@@ -1,0 +1,1818 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>k-means</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+/* ---------- colores de los tres grupos (solo esta pagina) ---------- */
+:root { --g0: #c96f14; --g1: #2f68c4; --g2: #2c8a47; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --g0: #f0a35a; --g1: #7aa9f2; --g2: #6cc584; }
+}
+:root[data-theme="dark"] { --g0: #f0a35a; --g1: #7aa9f2; --g2: #6cc584; }
+
+/* ---------- plano ---------- */
+.plano-svg { width: 100%; height: auto; display: block; user-select: none; -webkit-user-select: none; }
+.plano-svg.arrastrable { touch-action: none; }
+.plano-svg.clic { cursor: crosshair; }
+.plano-svg .grid { stroke: var(--line-soft); stroke-width: 1; }
+.plano-svg .grid.eje { stroke: var(--ink-3); }
+.plano-svg .tick { font: 10px var(--f-mono); fill: var(--ink-3); }
+.plano-svg .eje-tit { font: 11.5px var(--f-body); fill: var(--ink-2); }
+.plano-svg .rg { stroke: none; fill-opacity: .13; }
+.plano-svg .rg.g0 { fill: var(--g0); }
+.plano-svg .rg.g1 { fill: var(--g1); }
+.plano-svg .rg.g2 { fill: var(--g2); }
+.plano-svg .ln { stroke-width: 1.3; opacity: .55; }
+.plano-svg .ln.g0, .plano-svg .ras.g0 { stroke: var(--g0); }
+.plano-svg .ln.g1, .plano-svg .ras.g1 { stroke: var(--g1); }
+.plano-svg .ln.g2, .plano-svg .ras.g2 { stroke: var(--g2); }
+.plano-svg .ras { fill: none; stroke-width: 1.6; stroke-dasharray: 4 3; opacity: .8; }
+.plano-svg .ras-pt { fill: var(--surface); stroke-width: 1.4; }
+.plano-svg .ras-pt.g0 { stroke: var(--g0); }
+.plano-svg .ras-pt.g1 { stroke: var(--g1); }
+.plano-svg .ras-pt.g2 { stroke: var(--g2); }
+.plano-svg .pt { stroke: var(--surface); stroke-width: 1.6; transition: fill .2s; }
+.plano-svg .pt.sin { fill: var(--ink-3); }
+.plano-svg .pt.g0 { fill: var(--g0); }
+.plano-svg .pt.g1 { fill: var(--g1); }
+.plano-svg .pt.g2 { fill: var(--g2); }
+.plano-svg .pt.tenue { fill-opacity: .4; }
+.plano-svg .cen .dia { stroke: var(--surface); stroke-width: 2.2; }
+.plano-svg .cen.g0 .dia { fill: var(--g0); }
+.plano-svg .cen.g1 .dia { fill: var(--g1); }
+.plano-svg .cen.g2 .dia { fill: var(--g2); }
+.plano-svg .cen .borde { fill: none; stroke: var(--ink); stroke-width: 1.2; }
+.plano-svg .cen .hit { fill: transparent; }
+.plano-svg .cen.drag { cursor: grab; }
+.plano-svg .cen.sel .borde { stroke: var(--accent); stroke-width: 2.4; }
+.plano-svg .fan { fill: none; stroke-width: 2; stroke-dasharray: 3 2; }
+.plano-svg .fan.g0 { stroke: var(--g0); }
+.plano-svg .fan.g1 { stroke: var(--g1); }
+.plano-svg .fan.g2 { stroke: var(--g2); }
+.plano-svg .anillo { fill: none; stroke: var(--accent); stroke-width: 2.4; }
+.plano-svg .rayo { stroke: var(--ink-2); stroke-width: 1.2; stroke-dasharray: 4 3; }
+.plano-svg .rayo.mejor { stroke: var(--accent); stroke-width: 2.2; stroke-dasharray: none; }
+.plano-svg .rlab { font: 500 10.5px var(--f-mono); fill: var(--ink); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+.plano-svg .marca { stroke: var(--accent); stroke-width: 2.5; stroke-linecap: round; }
+.plano-svg .marca-lab { font: 500 10px var(--f-mono); fill: var(--accent); }
+
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.esc-head .hint { font-size: 12.5px; color: var(--ink-2); }
+.leyenda { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; font-size: 12.5px; color: var(--ink-2); }
+.leyenda[hidden] { display: none; }
+.leyenda i { display: inline-block; width: 10px; height: 10px; margin-right: 6px; vertical-align: -1px; transform: rotate(45deg); }
+.leyenda i.g0 { background: var(--g0); }
+.leyenda i.g1 { background: var(--g1); }
+.leyenda i.g2 { background: var(--g2); }
+
+/* ---------- informacion del escenario ---------- */
+.info { margin-top: 10px; font-size: 13px; color: var(--ink-2); }
+.tabla-wrap { overflow-x: auto; margin-top: 8px; }
+.tabla { width: 100%; border-collapse: collapse; font-family: var(--f-mono); font-size: 12px; font-variant-numeric: tabular-nums; }
+.tabla th { font-weight: 500; color: var(--ink-3); font-size: 11px; text-align: right; padding: 4px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.tabla td { text-align: right; padding: 3px 8px; border-bottom: 1px solid var(--line-soft); color: var(--ink-2); white-space: nowrap; }
+.tabla td.pl, .tabla th:first-child { text-align: left; }
+.tabla tr.tot td { color: var(--ink); border-top: 1px solid var(--line); border-bottom: 0; }
+.tabla td.oculto { color: var(--accent); font-weight: 600; }
+.chipg { display: inline-block; width: 9px; height: 9px; transform: rotate(45deg); margin-right: 7px; vertical-align: 0; }
+.chipg.g0 { background: var(--g0); }
+.chipg.g1 { background: var(--g1); }
+.chipg.g2 { background: var(--g2); }
+.hist { display: flex; align-items: flex-end; gap: 4px; height: 92px; margin-top: 12px; padding-top: 14px; border-top: 1px dashed var(--line); overflow-x: auto; }
+.hist .hb { flex: 0 0 auto; width: 30px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; font-family: var(--f-mono); font-size: 9.5px; color: var(--ink-3); }
+.hist .hb i { display: block; width: 18px; border-radius: 3px 3px 0 0; background: var(--ink-3); }
+.hist .hb.M i { background: var(--accent); }
+.hist .hb b { font-weight: 500; color: var(--ink-2); font-size: 9.5px; margin-bottom: 2px; }
+.hist-vacio { font-size: 12px; color: var(--ink-3); margin-top: 10px; }
+
+.grande { font-family: var(--f-mono); font-size: 14px; color: var(--ink-2); margin: 6px 0 12px; font-variant-numeric: tabular-nums; line-height: 1.6; }
+.grande b { font-size: 16px; color: var(--ink); font-weight: 500; }
+.grande:empty { display: none; }
+.btn-row.pasos-btn { margin: 10px 0 6px; }
+.zhint { font-size: 12.5px; color: var(--ink-3); }
+.barras { display: grid; gap: 6px; margin-top: 10px; }
+.barra-f { display: grid; grid-template-columns: minmax(0, 9.5em) minmax(0, 1fr) 6.5em; gap: 8px; align-items: center; font-size: 12.5px; color: var(--ink-2); }
+.barra-f .tr { height: 10px; background: var(--surface-2); border-radius: 3px; overflow: hidden; }
+.barra-f .tr i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+.barra-f .tr i.bien { background: var(--ok); }
+.barra-f b { font-family: var(--f-mono); font-weight: 500; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* ---------- vida real ---------- */
+.vr-salida { margin: 10px 0 0; padding: 8px 12px; background: var(--surface-2); border-radius: 8px; font-family: var(--f-mono); font-size: 12px; line-height: 1.5; min-height: 3em; white-space: pre; overflow-x: auto; color: var(--ink); }
+.mini-code { margin: 8px 0; padding: 8px 12px; background: var(--surface-2); border-radius: 8px; font-family: var(--f-mono); font-size: 12px; line-height: 1.55; white-space: pre; overflow-x: auto; }
+
+/* ---------- retos propios ---------- */
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.ojo-opts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
+.ojo-opts .opt { text-align: center; }
+.objetivos { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.objetivos li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.objetivos .m { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.objetivos li.hecho { color: var(--ink); }
+.objetivos li.hecho .m { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 3px var(--surface); }
+.datos-mano { border-collapse: collapse; font-family: var(--f-mono); font-size: 13.5px; margin: 4px 0 12px; }
+.datos-mano th, .datos-mano td { padding: 4px 10px; border: 1px solid var(--line); text-align: center; }
+.datos-mano th { color: var(--ink-3); font-weight: 500; font-size: 12px; }
+.datos-wrap { overflow-x: auto; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ k-means</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Agrupamiento · SM142003 UD5 y Raschka cap. 10</p>
+    <h1>k-means: poner centros, repartir y mover</h1>
+    <p class="lede">
+      Nadie te dice qué cliente va con cuál. Pones k centros, cada punto se va con el centro más cercano, cada centro se muda al promedio
+      de sus puntos, y repites. <b>Cada vuelta baja un número, la suma de cuadrados dentro de los grupos</b>, hasta que nada se mueve.
+      Lo vas a ver con 30 puntos y tres centros que arrastras con el dedo.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> Tienes 30 clientes dibujados en un plano y quieres que una computadora los separe en 3 grupos, sin decirle quién va con quién. ¿Qué instrucciones le darías? Escríbelo como te salga, aunque esté incompleto.</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: le diría que..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>Construir k-means desde cero</h2>
+      <p>Siete pasos. Cada uno termina con un chequeo: hasta que no lo resuelves, el siguiente queda cerrado. Equivocarte aquí no resta nada, es parte del método.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="Los datos">
+          <span class="etapa">Paso 1</span>
+          <h3>Treinta clientes y ninguna etiqueta</h3>
+          <p>Cada punto es un cliente de una tienda en línea: cuántas veces visitó la web en el mes (eje horizontal) y cuánto gastó, en decenas de euros (eje vertical). Los datos son inventados.</p>
+          <p>Aquí no hay una columna que diga "este cliente es de tal tipo". Solo hay puntos. Encontrar grupos así, sin respuestas escritas, se llama <b>agrupar</b> (clustering): es aprendizaje no supervisado. Lo que se busca es que los puntos de un mismo grupo se parezcan mucho entre sí y poco a los de otros grupos
+          <cite class="cita" data-fuente="km5" data-pag="3" data-ancla="what-is-clustering" data-seccion="1 What is clustering?" data-que="Qué es agrupar: una tarea no supervisada con dos objetivos, mucha similitud dentro de cada grupo y poca entre grupos, y la similitud medida como distancia euclídea." data-cuando="Al terminar este paso"></cite>.</p>
+          <div class="check" id="chk1">
+            <p class="check-tit">Antes de seguir</p>
+            <p class="q">Mira la nube y toca el plano <b>tres veces</b>: pon una marca donde crees que está el centro de cada grupo que ves.</p>
+            <div class="fb" aria-live="polite"></div>
+            <div class="btn-row" style="margin-top:8px"><button type="button" class="ghost" id="btnBorrarMarcas" hidden>Volver a marcar</button></div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Asignar">
+          <span class="etapa">Paso 2</span>
+          <h3>Cada punto se va con el centro más cercano</h3>
+          <p>La computadora no tiene tu ojo. Empieza con tres centros puestos sin pensar: el <b style="color:var(--g0)">naranja</b>, el <b style="color:var(--g1)">azul</b> y el <b style="color:var(--g2)">verde</b>. Dos quedaron en el mismo rincón, abajo a la izquierda, y el tercero a la derecha.</p>
+          <p>La primera regla es simple: <b>cada punto toma el color del centro que tiene más cerca</b>, en línea recta. Nada más. No importa si el resultado tiene sentido todavía.</p>
+          <div class="check" id="chk2"><p class="check-tit">Predice antes de pintar</p><div class="cuerpo"></div></div>
+          <p>Mira las zonas sombreadas: son las <b>regiones</b> de cada centro, todo lo que le queda más cerca a él que a los otros dos. La frontera entre dos centros es una recta, la que pasa justo a mitad de camino entre los dos y los corta en ángulo recto. <b>Arrastra los centros</b> y mira cómo cambian las regiones y los colores.</p>
+          <p>Raschka describe el algoritmo entero en cuatro pasos, y este es el segundo <cite class="cita" data-fuente="raschka10" data-pag="3" data-pimp="307" data-seccion="k-means clustering using scikit-learn" data-que="Los cuatro pasos de k-means (centros al azar, asignar al más cercano, mover al centro de lo asignado, repetir) y la distancia euclídea al cuadrado como medida de cercanía." data-cuando="Después de arrastrar los centros"></cite>.
+          Las diapositivas de la UD5 dan los mismos pasos y los llaman "Hartigan-Wong" <cite class="cita" data-fuente="km5" data-pag="16" data-ancla="k-means-algorithm" data-seccion="3.5 k-means algorithm" data-que="El algoritmo en cuatro pasos: elegir k observaciones como centros, asignar cada punto al más cercano, recalcular las medias y repetir hasta que nada cambie. Ojo: llama Hartigan-Wong a lo que en realidad es el algoritmo de Lloyd." data-cuando="Al terminar el paso 4"></cite>.
+          Es una errata: estos pasos, repartir a todos y después mover, son el <b>algoritmo de Lloyd</b>. Hartigan-Wong es otro método, el que usa R por defecto, y lo vas a ver en la vida real.</p>
+        </section>
+
+        <section class="paso card" data-titulo="Mover">
+          <span class="etapa">Paso 3</span>
+          <h3>Cada centro se muda al promedio de sus puntos</h3>
+          <p>Ahora cada centro mira a los puntos que se quedaron con su color y se mueve al <b>centro de gravedad</b> de ellos: la media de sus x y la media de sus y. Ese punto se llama <b>centroide</b>.</p>
+          <div class="fbloque">
+            <div data-tex="\mu_j = \frac{1}{|C_j|}\sum_{x_i \in C_j} x_i" data-display></div>
+            <div class="vivo" id="vivo3"></div>
+          </div>
+          <p>Aquí <span data-tex="C_j"></span> es el grupo j (los puntos de un color), <span data-tex="|C_j|"></span> cuántos puntos tiene y <span data-tex="\mu_j"></span> su nuevo centro. Es la misma media de siempre, hecha por separado en cada coordenada
+          <cite class="cita" data-fuente="km5" data-pag="9" data-ancla="introduction" data-seccion="3.1 Introduction" data-que="k fijado de antemano, grupos excluyentes, y el centroide definido como la media de las observaciones del grupo, C = (1/n) Σ X_i. Nota: k-means es particional, exclusivo y completo." data-cuando="Al terminar este paso"></cite>.</p>
+          <div class="check" id="chk3"><p class="check-tit">Calcula con los datos de ahora</p><div class="cuerpo"></div></div>
+          <div class="btn-row pasos-btn">
+            <button type="button" class="primary" id="btnMover3" disabled>Mover los centros</button>
+            <span class="zhint" id="hint3">Resuelve la cuenta para activar el botón.</span>
+          </div>
+          <details class="profundizar">
+            <summary>¿Por qué la media y no otro punto?</summary>
+            <div>
+              <p>Para un grupo fijo, la media es el punto que hace más chica la suma de las distancias al cuadrado hasta sus puntos. En una dimensión se ve con una cuenta: para cualquier c,</p>
+              <div data-tex="\sum_i (x_i - c)^2 = \sum_i (x_i - \bar{x})^2 + n\,(\bar{x} - c)^2" data-display></div>
+              <p>El primer término no depende de c y el segundo es cero solo si <span data-tex="c=\bar{x}"></span>. Es la misma descomposición en la que se apoya la varianza. En el plano pasa lo mismo coordenada por coordenada.</p>
+              <p>Si en lugar de la media exigieras que el centro sea uno de los puntos reales del grupo, tendrías un <b>medoide</b>: eso es PAM, en la página de PAM y distancia de Gower.</p>
+            </div>
+          </details>
+        </section>
+
+        <section class="paso card" data-titulo="Repetir">
+          <span class="etapa">Paso 4</span>
+          <h3>Repetir hasta que nadie cambie de grupo</h3>
+          <p>Al moverse los centros, algunos puntos quedan más cerca de otro centro. Entonces se vuelve a repartir, y se vuelve a mover. El algoritmo para cuando una vuelta de repartir <b>no cambia el color de nadie</b>.</p>
+          <p>Para saber si vamos mejorando hace falta un número. Es la <b>suma de cuadrados dentro de los grupos</b> (WSS, within sum of squares): para cada punto, la distancia a su centro al cuadrado, y se suma todo. Las rayas del plano son esas distancias.</p>
+          <div class="fbloque">
+            <div data-tex="\text{WSS} = \sum_{j=1}^{k} \; \sum_{x_i \in C_j} \lVert x_i - \mu_j \rVert^2" data-display></div>
+            <div class="vivo" id="vivo4"></div>
+          </div>
+          <p>Cuanto más chica, más apretado está cada grupo alrededor de su centro. Las diapositivas la presentan como la función objetivo <cite class="cita" data-fuente="km5" data-pag="15" data-ancla="4/7" data-seccion="3.4.2 Within sum of squares" data-que="SS_within como suma de W(C_k) sobre los k grupos: mide la compacidad y cuanto menor, mejor. Léela sabiendo que donde escribe (x_i − μ_k)² va la norma al cuadrado." data-cuando="Al terminar este paso"></cite>,
+          pero escriben <span data-tex="(x_i-\mu_k)^2"></span>. Con puntos de dos coordenadas eso no está definido: lo correcto es <span data-tex="\lVert x_i-\mu_k\rVert^2"></span>, la distancia euclídea al cuadrado, que es lo que dice su propio texto. La teoría de la UD3 de Matemáticas la escribe bien <cite class="cita" data-fuente="ud3" data-pag="33" data-seccion="3.6 Clasificación no supervisada" data-que="k-means como el problema de minimizar Σ Σ ‖x − μ_i‖², iterativo, sensible a los centroides iniciales y con k fijado a priori. No escribe los pasos del algoritmo." data-cuando="Después de la errata de las diapositivas"></cite>.</p>
+          <div class="check" id="chk4"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+          <div class="btn-row pasos-btn">
+            <button type="button" id="btnAsig4" disabled>Repartir</button>
+            <button type="button" id="btnMov4" disabled>Mover centros</button>
+            <button type="button" class="primary" id="btnFin4" disabled>Hasta que nada cambie</button>
+            <button type="button" class="ghost" id="btnRest4" disabled>Volver al inicio</button>
+          </div>
+          <div class="grande" id="estado4"></div>
+          <details class="profundizar">
+            <summary>¿Por qué la WSS nunca sube?</summary>
+            <div>
+              <p>Hay dos movimientos y ninguno puede empeorarla. Al <b>repartir</b>, cada punto elige el centro más cercano: su término de la suma baja o queda igual. Al <b>mover</b>, cada centro va a la media de su grupo, que es el punto que hace mínima la suma de cuadrados de ese grupo (el desplegable del paso 3).</p>
+              <p>Como hay una cantidad finita de formas de repartir 30 puntos en 3 grupos y la WSS no puede volver a una forma peor, el algoritmo siempre termina. Lo que no está garantizado es que termine en la <b>mejor</b> forma posible: eso es el paso 5.</p>
+            </div>
+          </details>
+          <div class="cita" id="citaHipo" hidden></div>
+        </section>
+
+        <section class="paso card" data-titulo="El inicio">
+          <span class="etapa">Paso 5</span>
+          <h3>Dónde empiezas decide dónde terminas</h3>
+          <p>Ahora otro inicio: los tres centros arrancan en tres clientes del rincón de abajo a la izquierda. Mismas reglas, mismo algoritmo.</p>
+          <div class="check" id="chk5"><p class="check-tit">Predice antes de correrlo</p><div class="cuerpo"></div></div>
+          <div class="btn-row pasos-btn">
+            <button type="button" id="btnMalo5" disabled>Inicio en el rincón</button>
+            <button type="button" id="btnAzar5" disabled>Inicio al azar</button>
+            <button type="button" class="primary" id="btnFin5" disabled>Correr hasta el final</button>
+            <button type="button" id="btnTodos5" disabled>Probar los 4060 inicios</button>
+          </div>
+          <div class="grande" id="estado5"></div>
+          <div id="enum5"></div>
+          <p>Eso es un <b>mínimo local</b>: ninguna vuelta más lo mejora, pero existe un reparto mucho mejor. k-means es codicioso, solo mira el paso siguiente. Por eso las diapositivas recomiendan entre 10 y 20 arranques al azar y quedarse con el de menor WSS
+          <cite class="cita" data-fuente="km5" data-pag="17" data-ancla="4/9" data-seccion="Random starts" data-que="Resultados distintos según el arranque, óptimo local frente a global, y la recomendación de 10 a 20 arranques quedándose con el de menor SS_within (Figure 8)." data-cuando="Después de probar los 4060 inicios"></cite>.</p>
+
+          <div class="destacado" id="destacado">
+            <p class="dest-tit">Una confusión muy común</p>
+            <h4>Si el algoritmo terminó, ¿encontró la mejor solución?</h4>
+            <p>No. "Terminó" solo significa que ningún punto quiere cambiar de grupo. Pasa en tus datos inventados y pasa en el caso del máster: con las elecciones de Madrid de 2021 y k = 3, <code>stats::kmeans</code> con 25 arranques llega a una WSS de <b>6362.05</b> con grupos de 48, 38 y 45 barrios
+            <cite class="cita" data-fuente="km5caso" data-pag="4" data-ancla="pregunta-3-análisis-clúster-kmeans-k-3" data-seccion="Pregunta 3: análisis clúster kmeans k = 3" data-que="kmeans con set.seed(2026), centers = 3 y nstart = 25 sobre 131 barrios: tamaños 48, 38 y 45, WSS total 6362.05 y between_SS / total_SS = 78.3 %." data-cuando="Al terminar este paso"></cite>,
+            y la resolución con tidyclust al final del mismo caso llega a <b>6374.5</b> con grupos de 48, 49 y 34. Los dos "terminaron"; uno se quedó en un mínimo local peor. El caso no lo comenta, pero es exactamente lo que acabas de ver.</p>
+            <div class="check" id="chk5b"><p class="check-tit">Calcula antes de seguir</p><div class="cuerpo"></div></div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="k-means++">
+          <span class="etapa">Paso 6</span>
+          <h3>Elegir los centros iniciales con cabeza: k-means++</h3>
+          <p>En vez de tirar los tres centros a ciegas, k-means++ los sortea <b>de a uno</b> y favorece a los puntos que quedan lejos de los centros ya elegidos:</p>
+          <ol>
+            <li>El primer centro es un punto al azar.</li>
+            <li>Para cada punto, calcula <span data-tex="D(x)^2"></span>: la distancia al cuadrado hasta el centro elegido más cercano.</li>
+            <li>El siguiente centro se sortea con probabilidad proporcional a esa distancia al cuadrado:</li>
+          </ol>
+          <div class="fbloque">
+            <div data-tex="P(x_i) = \frac{D(x_i)^2}{\sum_{l=1}^{n} D(x_l)^2}" data-display></div>
+            <div class="vivo" id="vivo6"></div>
+          </div>
+          <p>En el plano, el tamaño de cada punto es su <span data-tex="D(x)^2"></span>: los grandes son los que tienen más boletos en el sorteo. Un punto ya elegido tiene <span data-tex="D=0"></span> y no puede salir otra vez
+          <cite class="cita" data-fuente="raschka10" data-pag="7" data-pimp="311" data-seccion="A smarter way of placing the initial cluster centroids using k-means++" data-que="El algoritmo de k-means++ en seis pasos con la probabilidad d(μ, M)² / Σ d(x, M)², y la nota de que init='k-means++' es el valor por defecto de scikit-learn." data-cuando="Al terminar este paso"></cite>.</p>
+          <div class="check" id="chk6"><p class="check-tit">Calcula con los datos de ahora</p><div class="cuerpo"></div></div>
+          <div class="btn-row pasos-btn">
+            <button type="button" class="primary" id="btnSorteo6" disabled>Sortear el siguiente centro</button>
+            <button type="button" id="btnCorrer6" disabled>Correr k-means desde aquí</button>
+            <button type="button" class="ghost" id="btnOtra6" disabled>Otro sorteo desde cero</button>
+            <button type="button" id="btnMil6" disabled>Repetir 1000 veces</button>
+          </div>
+          <div class="grande" id="estado6"></div>
+          <p>Las diapositivas de la UD5 no mencionan k-means++; aparece en el caso de Madrid, con el paquete ClusterR <cite class="cita" data-fuente="km5caso" data-pag="8" data-ancla="extra-resolución-con-el-paquete-tidyclust" data-seccion="Extra: resolución con el paquete tidyclust" data-que="k_means con set_engine('ClusterR', initializer = 'kmeans++'): tamaños 48, 49 y 34, WSS 6374.5, peor que los 6362.05 de stats::kmeans con 25 arranques. También muestra algorithm = 'Lloyd'." data-cuando="Después de repetir 1000 veces"></cite>.
+          Y ahí ves que no es magia: un solo k-means++ quedó por encima de los 25 arranques al azar. k-means++ mejora mucho el punto de partida, pero no garantiza el mínimo global.</p>
+        </section>
+
+        <section class="paso card" data-titulo="Escalar">
+          <span class="etapa">Paso 7</span>
+          <h3>Las unidades deciden qué es "cerca"</h3>
+          <p>k-means solo sabe medir distancias, y una distancia mezcla las dos coordenadas. Hasta ahora el gasto estaba en <b>decenas de euros</b>: un cliente que gastó 25 euros aparece como 2.5. Si alguien anota el mismo gasto <b>en euros</b>, todos los valores del eje vertical se multiplican por 10. Los clientes son los mismos.</p>
+          <div class="check" id="chk7"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+          <div class="btn-row pasos-btn">
+            <button type="button" id="btnOrig7" disabled>Gasto en decenas de euros</button>
+            <button type="button" id="btnEur7" disabled>Gasto en euros (×10)</button>
+            <button type="button" id="btnZ7" disabled>Estandarizar las dos</button>
+          </div>
+          <div class="grande" id="estado7"></div>
+          <p>En euros, una diferencia de gasto de 30 pesa como una diferencia de 30 visitas, que no existe en estos datos. El eje vertical manda y k-means corta en franjas horizontales. Al <b>estandarizar</b>, cada variable queda con media 0 y desvío 1, y las dos vuelven a pesar parecido. Es la misma trampa que ves en la página de <a href="normas-distancias.html">normas y distancias</a>, y la solución está en <a href="estandarizacion.html">estandarización y normalización</a>.</p>
+          <p>Las diapositivas lo dicen con dos palabras, "Always scale" <cite class="cita" data-fuente="km5" data-pag="21" data-ancla="clustering-with-mixed-data" data-seccion="3.7 Clustering with mixed data" data-que="Cómo pasar ordinales a números y nominales a dummies, la advertencia Always scale, y el problema de dispersión cuando hay muchas dummies." data-cuando="Después de tocar los tres botones"></cite>,
+          y Raschka tiene un recuadro sobre lo mismo <cite class="cita" data-fuente="raschka10" data-pag="5" data-pimp="309" data-seccion="Feature scaling (recuadro)" data-que="El recuadro que pide estandarizar o escalar con min-max antes de usar la distancia euclídea en k-means." data-cuando="Después de tocar los tres botones"></cite>.
+          Ojo: el caso de Madrid <b>no escala</b> los datos. Ahí es defendible, porque todas las variables son porcentajes sobre el censo y están en la misma unidad, pero el caso no lo explica. La regla no es "escalar siempre a ciegas" sino "que ninguna variable gane solo por su unidad".</p>
+          <p><b>La versión del libro.</b> Raschka escribe la misma WSS con un indicador <span data-tex="w^{(i,j)}"></span> que vale 1 si el punto i está en el grupo j y 0 si no. Así la suma recorre todos los puntos y todos los grupos, y el indicador apaga los términos que no corresponden:</p>
+          <div class="fbloque"><div data-tex="SSE = \sum_{i=1}^{n}\sum_{j=1}^{k} w^{(i,j)} \, \lVert x^{(i)} - \mu^{(j)} \rVert_2^2" data-display></div></div>
+          <p>Ahí la llama SSE o inercia de los grupos, y el atributo <code>inertia_</code> de scikit-learn es ese número <cite class="cita" data-fuente="raschka10" data-pag="4" data-pimp="308" data-seccion="k-means clustering using scikit-learn" data-que="La SSE con el indicador w^(i,j), el nombre cluster inertia, y KMeans(n_clusters=3, init='random', n_init=10, max_iter=300, tol=1e-04): diez corridas y se queda con la de menor SSE." data-cuando="Antes de la parte de vida real"></cite>.
+          El superíndice <span data-tex="(i)"></span> es el punto y el <span data-tex="(j)"></span> el grupo: es la fórmula del paso 4 escrita de otra forma.</p>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+        </div>
+        <svg id="plano" tabindex="0" role="img" aria-label="Plano con 30 clientes y los centros de k-means. Los centros se arrastran con el puntero o con las flechas del teclado."></svg>
+        <div class="leyenda" id="leyenda"><span><i class="g0"></i>naranja</span><span><i class="g1"></i>azul</span><span><i class="g2"></i>verde</span></div>
+        <div class="info" id="escInfo"></div>
+        <div id="hist"></div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>El algoritmo de Lloyd escrito con bucles, con los mismos 30 clientes y los mismos tres centros iniciales del paso 2. Elige Python o R, dale a reproducir y mira cómo cada vuelta reparte a los 30 clientes y después mueve los centros. Al final se compara con la función de la librería.</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir</p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="true">Python</button>
+            <button type="button" data-lang="r" aria-pressed="false">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">1 · repartir</span><span data-f="2">2 · mover los centros</span><span data-f="3">3 · comparar con la librería</span>
+        </div>
+        <svg id="vrPlano" role="img" aria-label="Los 30 clientes y los centros en el momento de la ejecución"></svg>
+        <div class="vr-cuenta" id="vrCuenta"></div>
+        <h3 class="mini-tit vr-tit">Lo que imprime el programa</h3>
+        <div class="vr-salida" id="vrSalida"></div>
+      </div>
+    </div>
+
+    <p class="vr-nota">En la práctica nadie escribe estos bucles. En Python es <code>KMeans(n_clusters=3, n_init=10).fit(X)</code> y en R, <code>kmeans(X, centers = 3, nstart = 25)</code>, como en el caso de Madrid. Las dos hacen varios arranques y se quedan con el de menor WSS: la lección del paso 5 viene incluida, si no la apagas. Los números de esta parte se corrieron con scikit-learn 1.6.1 y R 4.6.1.</p>
+
+    <details class="profundizar">
+      <summary>La versión sin bucle de puntos</summary>
+      <div>
+        <p>El bucle que reparte a los 30 clientes se puede escribir de una vez: se calculan todas las distancias al cuadrado en una tabla de 30 × 3 y se toma, fila por fila, la columna del mínimo.</p>
+        <pre class="mini-code">d2 = ((X[:, None, :] - C[None, :, :]) ** 2).sum(axis=2)   # 30 × 3
+grupo = d2.argmin(axis=1)
+C = np.array([X[grupo == j].mean(axis=0) for j in range(k)])</pre>
+        <pre class="mini-code">d2 &lt;- sapply(1:k, function(j) colSums((t(X) - C[j, ])^2))  # 30 × 3
+grupo &lt;- apply(d2, 1, which.min)
+C &lt;- t(sapply(1:k, function(j) colMeans(X[grupo == j, ])))</pre>
+        <p>Desde los centros iniciales del paso 2, las dos dan los mismos grupos de 7, 5 y 18 clientes y los mismos centros nuevos: (2.357, 4.071), (2.2, 1.2) y (6.806, 5.306). Es una vuelta completa de Lloyd: repartir y mover.</p>
+      </div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Un solo arranque</h3><span class="estado" data-reto="codigo2"></span></div>
+        <div id="codigo2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Los mismos centros, otra respuesta</h3><span class="estado" data-reto="codigo3"></span></div>
+        <div id="codigo3"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: la biblioteca te avisa en el índice cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>¿Con quién se va?</h3><span class="estado" data-reto="ojo"></span></div>
+        <p class="desc">Tres centros puestos al azar y un cliente marcado. Decide sin calcular a qué centro se va. Apruebas con 4 de 5.</p>
+        <div id="ojo"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Construir</span><h3>Pon los centros</h3><span class="estado" data-reto="constructor"></span></div>
+        <p class="desc">Arrastra los tres centros hasta cumplir cada objetivo. Puedes usar el botón para dar una vuelta de k-means. Se marcan solos.</p>
+        <svg id="planoConstr" tabindex="0" role="img" aria-label="Plano para colocar tres centros"></svg>
+        <div class="btn-row" style="margin-top:8px">
+          <button type="button" id="constrVuelta">Una vuelta de k-means</button>
+          <button type="button" class="ghost" id="constrReset">Volver a empezar</button>
+        </div>
+        <div class="grande" id="constrVivo"></div>
+        <ul class="objetivos" id="objetivos"></ul>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>Una vuelta con lápiz</h3><span class="estado" data-reto="mano"></span></div>
+        <p class="desc">Seis puntos y dos centros. Reparte, mueve los centros y calcula la WSS nueva. Haz la cuenta completa antes de pedir pistas.</p>
+        <div id="manoDatos" class="datos-wrap"></div>
+        <div id="mano"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Alguien se equivocó</h3><span class="estado" data-reto="error"></span></div>
+        <p class="desc">Una de las líneas tiene un error. Tócala.</p>
+        <div id="error"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>La WSS entre vueltas</h3><span class="estado" data-reto="prop1"></span></div>
+        <div id="prop1"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Más grupos</h3><span class="estado" data-reto="prop2"></span></div>
+        <div id="prop2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>¿El centro es un cliente?</h3><span class="estado" data-reto="prop3"></span></div>
+        <div id="prop3"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>La forma de los grupos</h3><span class="estado" data-reto="prop4"></span></div>
+        <div id="prop4"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Metros y milímetros</h3><span class="estado" data-reto="prop5"></span></div>
+        <div id="prop5"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>¿Siempre termina?</h3><span class="estado" data-reto="prop6"></span></div>
+        <div id="prop6"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Recordar a la fuerza es lo que fija. Arma la fórmula de memoria y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Fórmula de memoria</span><h3>Arma la WSS pieza por pieza</h3><span class="estado" data-reto="formula"></span></div>
+        <p class="desc">Hay piezas de más que no pertenecen. No mires arriba.</p>
+        <div id="formula"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el libro</h2>
+      <p class="lecturas-intro">Ya construiste la idea con las manos. Ahora ve a la versión técnica y comprueba que la reconoces. Cada entrada dice qué vas a encontrar y en qué momento conviene leerla. Si abres la biblioteca con doble clic, el enlace abre el PDF o la diapositiva en ese lugar.</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> Los 30 clientes son inventados: tres grupos de 10, armados para que sus centros den exactos, (2, 2), (8, 3) y (5, 8),
+    y la mejor WSS posible con k = 3 sea 50.5. Las mismas coordenadas se usan en las páginas que siguen en la ruta de agrupamiento.
+    Los números del caso de Madrid son los del material de la UD5. Tu progreso se guarda solo en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+/*
+  DATOS COMPARTIDOS DE LA RUTA DE AGRUPAMIENTO (inventados; los reutilizan elegir k, PAM, jerarquico, DBSCAN y validacion)
+  30 clientes: [visitas al mes, gasto en decenas de euros]. Filas en este orden (indices de Python, desde 0):
+    0-9   grupo de abajo a la izquierda, centro exacto (2, 2):
+          [0.5, 2.5], [1, 1], [1.5, 3], [2, 0.5], [2, 2], [2.5, 3.5], [2.5, 1.5], [3, 2.5], [3.5, 1], [1.5, 2.5]
+    10-19 grupo de abajo a la derecha, centro exacto (8, 3):
+          [6.5, 3], [7, 4.5], [7.5, 2], [7.5, 3.5], [8, 1.5], [8, 4], [8.5, 3], [9, 2], [9, 4], [9, 2.5]
+    20-29 grupo de arriba, centro exacto (5, 8):
+          [3.5, 7.5], [4, 8.5], [4, 7], [4.5, 9.5], [5, 6.5], [5, 9], [5.5, 9], [6, 7.5], [6.5, 8.5], [6, 7]
+  Media global (5, 4.3333); desvios muestrales (ddof = 1): 2.6490 y 2.8386.
+  k = 3: WSS minima 50.5 (abajo izquierda 16, abajo derecha 16, arriba 18.5). Comprobado con las 4060 ternas de puntos como inicio:
+    3624 llegan a 50.5; 436 quedan en minimos locales (213 a 217, 227 a 229, 267 a 285).
+  Inicio del recorrido y de la vida real: filas 0, 1 y 18 -> (0.5, 2.5), (1, 1), (9, 4). Lloyd imprime
+    1 223.81 / 2 216.45 / 3 204.53 / 4 102.2 / 5 50.5 y termina en (5, 8), (2, 2), (8, 3) (Python 3, scikit-learn 1.6.1, R 4.6.1).
+  Inicio "en el rincon": filas 0, 1, 2 -> Lloyd 213.7292 (213.73); kmeans() de R con Hartigan-Wong desde ahi: 213.4167.
+  Con el gasto en euros (y * 10) el mejor reparto mezcla los dos grupos de abajo (WSS 1875.32); estandarizando vuelven los 3 grupos (WSS 6.70).
+*/
+(function () {
+  "use strict";
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var RETOS = ["ojo", "constructor", "mano", "error", "prop1", "prop2", "prop3", "prop4", "prop5", "prop6", "formula", "codigo1", "codigo2", "codigo3"];
+  var C = B.concepto({ id: "kmeans", retos: RETOS, pasos: 7 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  /* ================= logica de k-means (sin DOM) ================= */
+  var X = [[0.5, 2.5], [1, 1], [1.5, 3], [2, 0.5], [2, 2], [2.5, 3.5], [2.5, 1.5], [3, 2.5], [3.5, 1], [1.5, 2.5],
+    [6.5, 3], [7, 4.5], [7.5, 2], [7.5, 3.5], [8, 1.5], [8, 4], [8.5, 3], [9, 2], [9, 4], [9, 2.5],
+    [3.5, 7.5], [4, 8.5], [4, 7], [4.5, 9.5], [5, 6.5], [5, 9], [5.5, 9], [6, 7.5], [6.5, 8.5], [6, 7]];
+  var N = X.length;
+  var REAL = X.map(function (_, i) { return Math.floor(i / 10); });        // grupo con el que se armaron los datos
+  var OPT = [[2, 2], [8, 3], [5, 8]];
+  var S0 = [0, 1, 18], MALO = [0, 1, 2];
+  var COL = ["naranja", "azul", "verde"];
+  var UNO = [1, 1];
+
+  function copia(a) { return a.map(function (p) { return p.slice(); }); }
+  function filas(idx) { return idx.map(function (i) { return X[i].slice(); }); }
+  function dist2(a, b, w) { w = w || UNO; var dx = a[0] - b[0], dy = a[1] - b[1]; return w[0] * dx * dx + w[1] * dy * dy; }
+  function masCercano(p, cent, w) {
+    var m = 0, mejor = Infinity;
+    for (var j = 0; j < cent.length; j++) { var d = dist2(p, cent[j], w); if (d < mejor) { mejor = d; m = j; } }
+    return m;
+  }
+  function asignar(P, cent, w) { return P.map(function (p) { return masCercano(p, cent, w); }); }
+  function medias(P, g, cent) {
+    return cent.map(function (c, j) {
+      var sx = 0, sy = 0, n = 0;
+      P.forEach(function (p, i) { if (g[i] === j) { sx += p[0]; sy += p[1]; n++; } });
+      return n ? [sx / n, sy / n] : c.slice();
+    });
+  }
+  function wss(P, cent, g, w) { var s = 0; P.forEach(function (p, i) { s += dist2(p, cent[g[i]], w); }); return s; }
+  function wGrupo(P, cent, g, j, w) { var s = 0; P.forEach(function (p, i) { if (g[i] === j) s += dist2(p, cent[j], w); }); return s; }
+  function conteo(g, k) { var c = []; for (var j = 0; j < k; j++) c.push(0); g.forEach(function (v) { if (v >= 0) c[v]++; }); return c; }
+  function iguales(a, b) { if (!a || !b) return false; for (var i = 0; i < a.length; i++) if (a[i] !== b[i]) return false; return true; }
+  // Lloyd como en el programa de la vida real: repartir, si nadie cambio terminar, si no mover
+  function lloyd(P, cent0, w, max) {
+    var cent = copia(cent0), g = null, hist = [], vueltas = 0;
+    for (var it = 1; it <= (max || 100); it++) {
+      vueltas = it;
+      var nu = asignar(P, cent, w);
+      if (iguales(nu, g)) break;
+      g = nu;
+      cent = medias(P, g, cent);
+      hist.push(wss(P, cent, g, w));
+    }
+    return { cent: cent, g: g, hist: hist, w: hist[hist.length - 1], vueltas: vueltas };
+  }
+  // todas las ternas de puntos como inicio
+  function todasTernas(P, w) {
+    var res = [];
+    for (var a = 0; a < P.length; a++) for (var b = a + 1; b < P.length; b++) for (var c = b + 1; c < P.length; c++) {
+      var r = lloyd(P, [P[a], P[b], P[c]], w);
+      res.push({ w: r.w, g: r.g, cent: r.cent });
+    }
+    return res;
+  }
+  function mejorDeTodas(P, w) {
+    var best = null;
+    todasTernas(P, w).forEach(function (r) { if (!best || r.w < best.w - 1e-9) best = r; });
+    return best;
+  }
+  // inicio de k-means++: primero dado (o al azar), los demas sorteados con probabilidad D^2
+  function sortearPP(P, elegidos, rnd) {
+    rnd = rnd || Math.random;
+    var cent = elegidos.map(function (i) { return P[i]; });
+    var d = P.map(function (p) { var m = Infinity; cent.forEach(function (c) { m = Math.min(m, dist2(p, c)); }); return m; });
+    var tot = d.reduce(function (a, b) { return a + b; }, 0), u = rnd() * tot, acc = 0;
+    for (var i = 0; i < P.length; i++) { acc += d[i]; if (d[i] > 0 && u < acc) return i; }
+    for (i = P.length - 1; i >= 0; i--) if (d[i] > 0) return i;
+    return 0;
+  }
+  function dCuad(P, idx) {
+    return P.map(function (p) { var m = Infinity; idx.forEach(function (i) { m = Math.min(m, dist2(p, P[i])); }); return m; });
+  }
+  function ternaAlAzar() {
+    var a = [];
+    while (a.length < 3) { var i = Math.floor(Math.random() * N); if (a.indexOf(i) < 0) a.push(i); }
+    return a;
+  }
+  // una corrida que se avanza a mano: repartir y mover
+  function Corrida(cent0) { this.reiniciar(cent0); }
+  Corrida.prototype.reiniciar = function (cent0) {
+    if (cent0) this.ini = copia(cent0);
+    this.cent = copia(this.ini);
+    this.g = null; this.hist = []; this.sig = "asignar"; this.fin = false; this.movs = 0; this.cambios = null;
+    this.rastro = this.cent.map(function (c) { return [c.slice()]; });
+  };
+  Corrida.prototype.asignar = function () {
+    if (this.fin || this.sig !== "asignar") return;
+    var nu = asignar(X, this.cent), viejo = this.g;
+    this.cambios = viejo ? nu.filter(function (v, i) { return v !== viejo[i]; }).length : N;
+    if (viejo && this.cambios === 0) this.fin = true;
+    this.g = nu;
+    this.hist.push({ t: "R", w: wss(X, this.cent, nu) });
+    this.sig = this.fin ? "nada" : "mover";
+  };
+  Corrida.prototype.mover = function () {
+    if (this.sig !== "mover") return;
+    this.cent = medias(X, this.g, this.cent);
+    this.movs++;
+    var self = this;
+    this.rastro.forEach(function (r, j) { r.push(self.cent[j].slice()); });
+    this.hist.push({ t: "M", w: wss(X, this.cent, this.g) });
+    this.sig = "asignar";
+  };
+  Corrida.prototype.hastaFin = function () {
+    var k = 0;
+    while (!this.fin && k++ < 300) { if (this.sig === "asignar") this.asignar(); else this.mover(); }
+  };
+  Corrida.prototype.wss = function () { return this.g ? wss(X, this.cent, this.g) : null; };
+  /* ================= fin de la logica ================= */
+
+  var f = B.fmt;
+  function fn(v) { return Math.abs(v - Math.round(v)) < 1e-9 ? f(v, 0) : Math.abs(v * 10 - Math.round(v * 10)) < 1e-9 ? f(v, 1) : f(v, 2); }
+  function par(p) { return "(" + fn(p[0]) + ", " + fn(p[1]) + ")"; }
+  function chip(j) { return '<span class="chipg g' + j + '"></span>'; }
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+
+  /* ================= plano interactivo ================= */
+  var NS = "http://www.w3.org/2000/svg";
+  function nodo(tag, at, padre) {
+    var e = document.createElementNS(NS, tag);
+    for (var k in at) e.setAttribute(k, at[k]);
+    if (padre) padre.appendChild(e);
+    return e;
+  }
+  function texto(padre, at, t) { var e = nodo("text", at, padre); e.textContent = t; return e; }
+  // recorta un poligono al semiplano a*x + b*y <= c
+  function recortar(poly, a, b, c) {
+    var out = [];
+    for (var i = 0; i < poly.length; i++) {
+      var P = poly[i], Q = poly[(i + 1) % poly.length];
+      var fp = a * P[0] + b * P[1] - c, fq = a * Q[0] + b * Q[1] - c;
+      if (fp <= 0) out.push(P);
+      if ((fp < 0 && fq > 0) || (fp > 0 && fq < 0)) { var t = fp / (fp - fq); out.push([P[0] + t * (Q[0] - P[0]), P[1] + t * (Q[1] - P[1])]); }
+    }
+    return out;
+  }
+  function region(cent, j, w) {
+    var poly = [[0, 0], [10, 0], [10, 10], [0, 10]], c = cent[j];
+    for (var q = 0; q < cent.length && poly.length; q++) {
+      if (q === j) continue;
+      var o = cent[q];
+      if (o[0] === c[0] && o[1] === c[1]) { if (q < j) return []; continue; }
+      poly = recortar(poly, 2 * w[0] * (o[0] - c[0]), 2 * w[1] * (o[1] - c[1]),
+        w[0] * (o[0] * o[0] - c[0] * c[0]) + w[1] * (o[1] * o[1] - c[1] * c[1]));
+    }
+    return poly;
+  }
+
+  function crearPlano(svg, o) {
+    var W = 440, H = 340, M = { l: 40, r: 12, t: 12, b: 40 };
+    var st = {
+      cent: null, g: null, tenue: null, colorear: false, regiones: false, lineas: false, rastro: null, fantasmas: null,
+      marca: null, marcas: [], arrastrar: false, modoClic: false, tam: null, rayos: null, peso: UNO, escY: 1,
+      ejeY: "Gasto (decenas de euros)", sel: null, drag: null
+    };
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    svg.classList.add("plano-svg");
+    function sx(v) { return M.l + v / 10 * (W - M.l - M.r); }
+    function sy(v) { return H - M.b - v / 10 * (H - M.t - M.b); }
+    function ix(px) { return (px - M.l) / (W - M.l - M.r) * 10; }
+    function iy(py) { return (H - M.b - py) / (H - M.t - M.b) * 10; }
+    var gEjes = nodo("g", {}, svg), gReg = nodo("g", {}, svg), gLin = nodo("g", {}, svg), gRas = nodo("g", {}, svg);
+    var gRay = nodo("g", {}, svg), gPts = nodo("g", {}, svg), gMar = nodo("g", {}, svg), gCen = nodo("g", {}, svg);
+
+    function ejes() {
+      gEjes.innerHTML = "";
+      for (var t = 0; t <= 10; t++) {
+        nodo("line", { x1: sx(t), x2: sx(t), y1: sy(0), y2: sy(10), "class": "grid" + (t === 0 ? " eje" : "") }, gEjes);
+        nodo("line", { x1: sx(0), x2: sx(10), y1: sy(t), y2: sy(t), "class": "grid" + (t === 0 ? " eje" : "") }, gEjes);
+        if (t % 2 === 0) {
+          texto(gEjes, { x: sx(t), y: sy(0) + 16, "class": "tick", "text-anchor": "middle" }, t);
+          texto(gEjes, { x: sx(0) - 7, y: sy(t) + 3.5, "class": "tick", "text-anchor": "end" }, t * st.escY);
+        }
+      }
+      texto(gEjes, { x: sx(10), y: H - 6, "class": "eje-tit", "text-anchor": "end" }, "Visitas al mes");
+      texto(gEjes, { x: 11, y: sy(10), "class": "eje-tit", "text-anchor": "end", transform: "rotate(-90 11 " + sy(10) + ")" }, st.ejeY);
+    }
+    function diamante(padre, x, y, r, cls) {
+      return nodo("path", { d: "M" + x + " " + (y - r) + " L" + (x + r) + " " + y + " L" + x + " " + (y + r) + " L" + (x - r) + " " + y + " Z", "class": cls }, padre);
+    }
+    function render() {
+      gReg.innerHTML = ""; gLin.innerHTML = ""; gRas.innerHTML = ""; gRay.innerHTML = ""; gPts.innerHTML = ""; gMar.innerHTML = ""; gCen.innerHTML = "";
+      var cent = st.cent;
+      if (st.regiones && cent) cent.forEach(function (_, j) {
+        var poly = region(cent, j, st.peso);
+        if (poly.length < 3) return;
+        nodo("path", { d: "M" + poly.map(function (p) { return sx(p[0]) + " " + sy(p[1]); }).join(" L") + " Z", "class": "rg g" + j }, gReg);
+      });
+      if (st.lineas && cent && st.g) X.forEach(function (p, i) {
+        var c = cent[st.g[i]];
+        nodo("line", { x1: sx(p[0]), y1: sy(p[1]), x2: sx(c[0]), y2: sy(c[1]), "class": "ln g" + st.g[i] }, gLin);
+      });
+      if (st.rastro) st.rastro.forEach(function (r, j) {
+        if (r.length < 2) return;
+        nodo("polyline", { points: r.map(function (p) { return sx(p[0]) + "," + sy(p[1]); }).join(" "), "class": "ras g" + j }, gRas);
+        r.slice(0, -1).forEach(function (p) { nodo("circle", { cx: sx(p[0]), cy: sy(p[1]), r: 2.6, "class": "ras-pt g" + j }, gRas); });
+      });
+      if (st.rayos && cent) {
+        var p = X[st.rayos.i], m = st.rayos.mejor;
+        cent.forEach(function (c, j) {
+          nodo("line", { x1: sx(p[0]), y1: sy(p[1]), x2: sx(c[0]), y2: sy(c[1]), "class": "rayo" + (j === m ? " mejor" : "") }, gRay);
+          texto(gRay, { x: (sx(p[0]) + sx(c[0])) / 2, y: (sy(p[1]) + sy(c[1])) / 2 - 4, "class": "rlab", "text-anchor": "middle" }, fn(st.rayos.vals[j]));
+        });
+      }
+      X.forEach(function (p, i) {
+        var gi = st.g ? st.g[i] : -1;
+        var cls = "pt " + (st.colorear && gi >= 0 ? "g" + gi : "sin") + (st.tenue && st.tenue[i] ? " tenue" : "");
+        nodo("circle", { cx: sx(p[0]), cy: sy(p[1]), r: st.tam ? st.tam[i] : 5, "class": cls }, gPts);
+      });
+      if (st.marca !== null) { var q = X[st.marca]; nodo("circle", { cx: sx(q[0]), cy: sy(q[1]), r: 10.5, "class": "anillo" }, gMar); }
+      st.marcas.forEach(function (m, k) {
+        var mx = sx(m[0]), my = sy(m[1]);
+        nodo("line", { x1: mx - 7, y1: my - 7, x2: mx + 7, y2: my + 7, "class": "marca" }, gMar);
+        nodo("line", { x1: mx - 7, y1: my + 7, x2: mx + 7, y2: my - 7, "class": "marca" }, gMar);
+        texto(gMar, { x: mx + 9, y: my - 8, "class": "marca-lab" }, "tu " + (k + 1));
+      });
+      if (st.fantasmas) st.fantasmas.forEach(function (c, j) { diamante(gMar, sx(c[0]), sy(c[1]), 11, "fan g" + j); });
+      if (cent) cent.forEach(function (c, j) {
+        var g = nodo("g", { "class": "cen g" + j + (st.arrastrar ? " drag" : "") + (st.sel === j ? " sel" : ""), "data-j": j }, gCen);
+        nodo("circle", { cx: sx(c[0]), cy: sy(c[1]), r: 17, "class": "hit" }, g);
+        diamante(g, sx(c[0]), sy(c[1]), 9.5, "dia");
+        diamante(g, sx(c[0]), sy(c[1]), 12, "borde");
+      });
+    }
+    function coords(e) {
+      var r = svg.getBoundingClientRect();
+      return [(e.clientX - r.left) / r.width * W, (e.clientY - r.top) / r.height * H];
+    }
+    function mover(j, x, y) {
+      x = Math.max(0, Math.min(10, Math.round(x * 4) / 4));
+      y = Math.max(0, Math.min(10, Math.round(y * 4) / 4));
+      var c = st.cent[j];
+      if (c[0] === x && c[1] === y) return;
+      st.cent = copia(st.cent);
+      st.cent[j] = [x, y];
+      if (o.alMoverCentro) o.alMoverCentro(copia(st.cent), j); else render();
+    }
+    svg.addEventListener("pointerdown", function (e) {
+      var g = e.target.closest ? e.target.closest(".cen") : null;
+      if (g && st.arrastrar) {
+        var j = +g.getAttribute("data-j");
+        st.sel = j; st.drag = j;
+        try { svg.setPointerCapture(e.pointerId); } catch (err) { /* nada */ }
+        e.preventDefault();
+        render();
+        return;
+      }
+      if (st.modoClic && o.alClic) {
+        var q = coords(e), x = ix(q[0]), y = iy(q[1]);
+        if (x >= 0 && x <= 10 && y >= 0 && y <= 10) o.alClic(x, y);
+      }
+    });
+    svg.addEventListener("pointermove", function (e) {
+      if (st.drag === null) return;
+      var q = coords(e);
+      mover(st.drag, ix(q[0]), iy(q[1]));
+    });
+    function soltar() { st.drag = null; }
+    svg.addEventListener("pointerup", soltar);
+    svg.addEventListener("pointercancel", soltar);
+    svg.addEventListener("keydown", function (e) {
+      if (!st.arrastrar || !st.cent) return;
+      if (e.key === "Tab" || e.key === " ") return;
+      if (/^[123]$/.test(e.key)) { st.sel = +e.key - 1; render(); return; }
+      var d = { ArrowLeft: [-0.25, 0], ArrowRight: [0.25, 0], ArrowUp: [0, 0.25], ArrowDown: [0, -0.25] }[e.key];
+      if (!d) return;
+      if (st.sel === null) st.sel = 0;
+      e.preventDefault();
+      var c = st.cent[st.sel];
+      mover(st.sel, c[0] + d[0], c[1] + d[1]);
+    });
+
+    ejes();
+    render();
+    return {
+      st: st,
+      set: function (c) {
+        var rehacer = ("escY" in c) || ("ejeY" in c);
+        for (var k in c) st[k] = c[k];
+        if (rehacer) ejes();
+        svg.classList.toggle("arrastrable", !!st.arrastrar);
+        svg.classList.toggle("clic", !!st.modoClic);
+        render();
+      }
+    };
+  }
+
+  /* ================= estado del recorrido ================= */
+  var est = { paso: 0, marcas: [], chk1: false, chk2: false, chk3: false, chk4: false, chk5: false, chk5b: false, chk6: false, chk7: false, modo7: "orig" };
+  var run = new Corrida(filas(S0));
+  var run5 = new Corrida(filas(MALO));
+  var pp = { idx: [4], run: null };
+  var pasos, chk3num;
+  var OPTG = REAL.slice();
+
+  var plano = crearPlano($("plano"), {
+    alClic: marcar,
+    alMoverCentro: function (cent) {
+      if (est.paso === 1) { run.reiniciar(cent); run.asignar(); entrar(1); }
+    }
+  });
+
+  var HINTS = [
+    "Toca el plano tres veces",
+    "Arrastra un centro y mira cómo cambian las regiones",
+    "Mira hacia dónde se va a mover cada centro",
+    "Reparte y mueve hasta que nada cambie",
+    "Prueba inicios distintos",
+    "El tamaño de cada punto es su D²",
+    "Cambia las unidades del gasto"
+  ];
+
+  function tablaGrupos(cent, g, conW, ocultarMedia) {
+    var cnt = conteo(g, 3);
+    var h = '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>grupo</th><th>clientes</th><th>centro</th>' + (conW ? '<th>W del grupo</th>' : '') + '</tr></thead><tbody>';
+    for (var j = 0; j < 3; j++) {
+      h += '<tr><td class="pl">' + chip(j) + COL[j] + '</td><td>' + cnt[j] + '</td><td>' + par(cent[j]) + '</td>' +
+        (conW ? '<td>' + f(wGrupo(X, cent, g, j), 2) + '</td>' : '') + '</tr>';
+    }
+    if (conW) h += '<tr class="tot"><td class="pl">WSS</td><td>' + N + '</td><td></td><td>' + f(wss(X, cent, g), 2) + '</td></tr>';
+    return h + '</tbody></table></div>';
+  }
+  function pintarHist(hist) {
+    if (!hist || !hist.length) { $("hist").innerHTML = '<p class="hist-vacio">Aquí va a aparecer la WSS después de cada movimiento.</p>'; return; }
+    var tope = Math.max.apply(null, hist.map(function (h) { return h.w; }));
+    var ultimos = hist.slice(-14), base = hist.length - ultimos.length, nR = 0, nM = 0;
+    hist.slice(0, base).forEach(function (h) { if (h.t === "R") nR++; else nM++; });
+    $("hist").innerHTML = '<div class="hist" aria-label="WSS después de cada movimiento">' + ultimos.map(function (h) {
+      var et = h.t === "R" ? "R" + (++nR) : "M" + (++nM);
+      return '<span class="hb ' + h.t + '" title="' + (h.t === "R" ? "después de repartir" : "después de mover") + '"><b>' + fn(Math.round(h.w * 10) / 10) + '</b><i style="height:' + Math.max(2, h.w / tope * 52).toFixed(1) + 'px"></i>' + et + '</span>';
+    }).join("") + '</div><p class="hist-vacio">R = después de repartir · M = después de mover los centros (en violeta)</p>';
+  }
+
+  function entrar(i) {
+    est.paso = i;
+    $("escHint").textContent = HINTS[i];
+    var base = { cent: null, g: null, tenue: null, colorear: false, regiones: false, lineas: false, rastro: null, fantasmas: null,
+      marca: null, marcas: [], arrastrar: false, modoClic: false, tam: null, rayos: null, peso: UNO, escY: 1, ejeY: "Gasto (decenas de euros)" };
+    var c = Object.assign({}, base), info = "", hist = null;
+    $("hist").innerHTML = "";
+    if (i === 0) {
+      c.marcas = est.marcas;
+      c.modoClic = !est.chk1;
+      if (est.chk1) { c.fantasmas = OPT; c.g = OPTG; c.colorear = true; }
+      info = est.chk1 ? "Los rombos punteados son los centros a los que llega k-means. En los pasos que siguen vas a ver cómo los encuentra él solo."
+        : "Marcas puestas: " + est.marcas.length + " de 3.";
+    } else if (i === 1) {
+      c.cent = run.cent; c.marca = 20;
+      if (est.chk2) { c.g = run.g; c.colorear = true; c.regiones = true; c.arrastrar = true; }
+      info = est.chk2 ? tablaGrupos(run.cent, run.g, false) : "Centros iniciales: " + run.cent.map(function (p, j) { return chip(j) + par(p); }).join(" &nbsp; ");
+    } else if (i === 2 || i === 3) {
+      if (!run.g) run.asignar();
+      c.cent = run.cent; c.g = run.g; c.colorear = true; c.regiones = true; c.rastro = run.rastro;
+      if (i === 3) c.lineas = true;
+      info = tablaGrupos(run.cent, run.g, i === 3);
+      if (i === 3) hist = run.hist;
+      if (i === 2) pintarVivo3();
+      if (i === 3) pintarVivo4();
+    } else if (i === 4) {
+      c.cent = run5.cent; c.g = run5.g; c.colorear = !!run5.g; c.regiones = !!run5.g; c.rastro = run5.rastro;
+      info = run5.g ? tablaGrupos(run5.cent, run5.g, true) : "Centros iniciales: " + run5.cent.map(function (p, j) { return chip(j) + par(p); }).join(" &nbsp; ");
+      hist = run5.hist;
+    } else if (i === 5) {
+      var d = dCuad(X, pp.idx), mx = Math.max.apply(null, d);
+      c.cent = pp.idx.map(function (k) { return X[k]; });
+      if (pp.run) { c.cent = pp.run.cent; c.g = pp.run.g; c.colorear = true; c.regiones = true; c.rastro = pp.run.rastro; }
+      else c.tam = d.map(function (v) { return 2.5 + 8 * Math.sqrt(v / (mx || 1)); });
+      if (!est.chk6) c.marca = 18;
+      info = pintarInfo6();
+      hist = pp.run ? pp.run.hist : null;
+    } else if (i === 6) {
+      var r7 = resultado7();
+      c.cent = r7.cent; c.g = r7.g; c.colorear = true; c.regiones = true; c.peso = r7.peso;
+      if (est.modo7 === "eur") { c.escY = 10; c.ejeY = "Gasto (euros)"; }
+      if (!est.chk7) { c.g = null; c.colorear = false; c.regiones = false; c.cent = null; }
+      info = est.chk7 ? info7(r7) : "Los colores aparecen cuando respondas la predicción.";
+    }
+    plano.set(c);
+    $("escInfo").innerHTML = info;
+    if (hist) pintarHist(hist);
+    $("leyenda").hidden = i === 0 && !est.chk1;
+  }
+
+  /* ---------- paso 1: marcar los centros a ojo ---------- */
+  function marcar(x, y) {
+    if (est.paso !== 0 || est.chk1 || est.marcas.length >= 3) return;
+    est.marcas.push([Math.round(x * 4) / 4, Math.round(y * 4) / 4]);
+    if (est.marcas.length === 3) evaluarMarcas();
+    entrar(0);
+  }
+  function evaluarMarcas() {
+    var perms = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]], mejor = null;
+    perms.forEach(function (p) {
+      var ds = p.map(function (m, j) { return Math.sqrt(dist2(est.marcas[m], OPT[j])); });
+      var tot = ds[0] + ds[1] + ds[2];
+      if (!mejor || tot < mejor.tot) mejor = { ds: ds, tot: tot };
+    });
+    var lejos = Math.max.apply(null, mejor.ds);
+    est.chk1 = true;
+    $("chk1").querySelector(".fb").innerHTML = (lejos < 1.2 ? '<span class="si">Muy buen ojo.</span> ' : '<span class="no">Bastante cerca, pero no del todo.</span> ') +
+      "Emparejando cada marca con el grupo más cercano, quedaron a " + mejor.ds.map(function (d) { return f(d, 2); }).join(", ") +
+      " unidades de los centros reales: (2, 2), (8, 3) y (5, 8). " +
+      (lejos < 1.2 ? "Tu ojo agrupa sin esfuerzo en dos dimensiones. La computadora no tiene ojo: necesita una regla." : "Si una marca quedó lejos, puede que hayas visto los grupos de otra forma. Eso también es normal: agrupar no tiene una respuesta escrita.") +
+      " Con 13 variables ya no hay dibujo que mirar, y ahí la regla es lo único que queda.";
+    $("btnBorrarMarcas").hidden = false;
+    pasos.completar(0);
+  }
+  $("btnBorrarMarcas").addEventListener("click", function () {
+    est.marcas = []; est.chk1 = false;
+    $("chk1").querySelector(".fb").innerHTML = "";
+    this.hidden = true;
+    entrar(0);
+  });
+
+  /* ---------- paso 2: prediccion de la asignacion ---------- */
+  B.opcionMultiple(cuerpo("chk2"), {
+    pregunta: "Todavía sin colores. El cliente del anillo violeta, en (3.5, 7.5), ¿con qué centro se va a quedar?",
+    opciones: ["Con el naranja, en (0.5, 2.5)", "Con el azul, en (1, 1)", "Con el verde, en (9, 4)", "Con ninguno: está lejos de los tres"],
+    correcta: 0,
+    pistas: [null,
+      "El azul está más abajo que el naranja. Desde el cliente marcado, ¿cuál de los dos queda más cerca?",
+      "En horizontal el verde se ve lejos, y en vertical el naranja también. Compara las dos distancias en línea recta, no solo un eje.",
+      "k-means reparte a todos: cada punto se queda con algún centro, aunque esté lejos. Por eso se dice que es un agrupamiento completo."],
+    explicacion: "Las distancias en línea recta son 5.83 al naranja, 6.96 al azul y 6.52 al verde. Gana el naranja por poco, aunque el cliente está en el grupo de arriba y el naranja abajo a la izquierda: la regla no sabe nada de grupos, solo mide. <b>Ahora arrastra los centros</b> y mira cómo cambian las regiones.",
+    alResolver: function () { est.chk2 = true; if (!run.g) run.asignar(); if (est.paso === 1) entrar(1); pasos.completar(1); }
+  });
+
+  /* ---------- paso 3: mover a la media ---------- */
+  function grupoPregunta() { var cnt = conteo(run.g || asignar(X, run.cent), 3); for (var j = 0; j < 3; j++) if (cnt[j] > 0) return j; return 0; }
+  function datosGrupo(j) { var g = run.g || asignar(X, run.cent); return X.filter(function (_, i) { return g[i] === j; }); }
+  function pintarVivo3() {
+    if (!run.g) { $("vivo3").innerHTML = ""; return; }
+    var j = grupoPregunta(), pts = datosGrupo(j), sxv = pts.reduce(function (a, p) { return a + p[0]; }, 0);
+    var mu = medias(X, run.g, run.cent)[j];
+    $("vivo3").innerHTML = COL[j] + ": x = " + pts.map(function (p) { return fn(p[0]); }).join(", ") + " (suman " + fn(sxv) + ")<br>" +
+      "μ = " + (est.chk3 ? par([Math.round(mu[0] * 1000) / 1000, Math.round(mu[1] * 1000) / 1000]) : "(?, ?)");
+    if (chk3num) chk3num.refrescar();
+  }
+  chk3num = B.numerico(cuerpo("chk3"), {
+    pregunta: function () {
+      var j = grupoPregunta();
+      return "Mira el grupo " + COL[j] + " en la tabla del escenario y la lista de sus x arriba. ¿En qué coordenada x va a quedar su nuevo centro?";
+    },
+    respuesta: function () { var pts = datosGrupo(grupoPregunta()); return pts.reduce(function (a, p) { return a + p[0]; }, 0) / pts.length; },
+    tolerancia: 0.011,
+    pistas: [
+      "Es la media de las x de los puntos de ese color: súmalas y divide entre cuántos son.",
+      function () { var pts = datosGrupo(grupoPregunta()); return "Son " + pts.length + " puntos y sus x suman " + fn(pts.reduce(function (a, p) { return a + p[0]; }, 0)) + "."; }
+    ],
+    diagnostico: function (v) {
+      var pts = datosGrupo(grupoPregunta()), s = pts.reduce(function (a, p) { return a + p[0]; }, 0);
+      if (Math.abs(v - s / N) < 0.011) return "Dividiste entre los 30 clientes. Cada centro promedia solo a los de su color.";
+      if (Math.abs(v - s) < 0.011) return "Esa es la suma. Falta dividir entre cuántos puntos son.";
+      return null;
+    },
+    explicacion: function () {
+      var pts = datosGrupo(grupoPregunta()), s = pts.reduce(function (a, p) { return a + p[0]; }, 0);
+      return fn(s) + " / " + pts.length + " = " + f(s / pts.length, 3) + ". <b>Ahora toca el botón</b> y mira cómo cada centro salta al centro de gravedad de su color. La raya punteada es el camino que hizo.";
+    },
+    alResolver: function () {
+      est.chk3 = true;
+      $("btnMover3").disabled = false; $("hint3").textContent = "";
+      pintarVivo3();
+      pasos.completar(2);
+    }
+  });
+  $("btnMover3").addEventListener("click", function () {
+    if (run.sig === "asignar") run.asignar();
+    run.mover();
+    $("hint3").textContent = "Los centros se movieron " + (run.movs === 1 ? "una vez" : run.movs + " veces") + ". En el paso 4 sigues repartiendo y moviendo.";
+    entrar(2);
+  });
+
+  /* ---------- paso 4: repetir y la WSS ---------- */
+  function pintarVivo4() {
+    if (!run.g) { $("vivo4").innerHTML = ""; return; }
+    var ws = [0, 1, 2].map(function (j) { return wGrupo(X, run.cent, run.g, j); });
+    $("vivo4").innerHTML = "WSS = " + ws.map(function (w, j) { return '<span style="color:var(--g' + j + ')">' + f(w, 2) + '</span>'; }).join(" + ") + " = <b>" + f(wss(X, run.cent, run.g), 2) + "</b>";
+    var e = run.fin ? "Terminó: la última vuelta de repartir no cambió a nadie. Movió los centros " + run.movs + " veces y la WSS final es <b>" + f(run.wss(), 2) + "</b>."
+      : run.sig === "mover" ? "Toca mover los centros." + (run.cambios !== null && run.hist.length > 1 ? " En el último reparto cambiaron de color " + run.cambios + " clientes." : "")
+      : "Toca repartir de nuevo.";
+    $("estado4").innerHTML = e;
+    $("btnAsig4").disabled = !est.chk4 || run.sig !== "asignar";
+    $("btnMov4").disabled = !est.chk4 || run.sig !== "mover";
+    $("btnFin4").disabled = !est.chk4 || run.fin;
+    $("btnRest4").disabled = !est.chk4;
+  }
+  B.opcionMultiple(cuerpo("chk4"), {
+    pregunta: "Si sigues repartiendo y moviendo, vuelta tras vuelta, la WSS...",
+    opciones: ["Baja o se queda igual en cada movimiento: nunca sube", "Puede subir un poco antes de volver a bajar", "Baja siempre hasta llegar a 0", "Sube y baja sin un patrón fijo"],
+    correcta: 0,
+    pistas: [null,
+      "Piensa en el reparto: cada punto elige el centro más cercano. ¿Puede eso alargar alguna raya?",
+      "Para llegar a 0 cada punto tendría que estar encima de su centro. Con 3 centros y 30 puntos, ¿es posible?",
+      "Cada uno de los dos movimientos tiene un objetivo claro. ¿Alguno de los dos puede empeorar la suma?"],
+    explicacion: "Repartir solo puede acortar rayas, y mover a la media deja la suma más chica posible para cada grupo. <b>Ahora toca los botones</b> y mira las barras de abajo del escenario: cada una es la WSS después de un movimiento.",
+    alResolver: function () { est.chk4 = true; pintarVivo4(); pasos.completar(3); }
+  });
+  $("btnAsig4").addEventListener("click", function () { run.asignar(); entrar(3); });
+  $("btnMov4").addEventListener("click", function () { run.mover(); entrar(3); });
+  $("btnFin4").addEventListener("click", function () { run.hastaFin(); entrar(3); });
+  $("btnRest4").addEventListener("click", function () { run.reiniciar(filas(S0)); run.asignar(); entrar(3); });
+
+  /* ---------- paso 5: minimos locales ---------- */
+  function pintarEstado5(texto) {
+    var t = texto || "";
+    if (!t && run5.fin) {
+      var w = run5.wss();
+      t = "Terminó con WSS <b>" + f(w, 2) + "</b>" + (w < 50.51 ? ", el mejor reparto posible." : ". El mejor reparto da 50.50: este es " + f(w / 50.5, 1) + " veces peor y ninguna vuelta más lo arregla.");
+    }
+    $("estado5").innerHTML = t;
+  }
+  function botones5() {
+    ["btnMalo5", "btnAzar5", "btnTodos5"].forEach(function (id) { $(id).disabled = !est.chk5; });
+    $("btnFin5").disabled = !est.chk5 || run5.fin;
+  }
+  B.opcionMultiple(cuerpo("chk5"), {
+    pregunta: "Los tres centros arrancan en (0.5, 2.5), (1, 1) y (1.5, 3), todos en el rincón de abajo a la izquierda. Al correr k-means hasta que nada cambie...",
+    opciones: [
+      "Llega a los tres grupos de siempre, con WSS 50.5",
+      "Se atasca: dos centros se reparten el rincón y el tercero se queda con los otros dos grupos juntos",
+      "No termina nunca: los centros se quedan dando vueltas",
+      "Los tres centros terminan en el mismo punto"
+    ],
+    correcta: 1,
+    pistas: [
+      "Piensa en la primera vez que reparte: ¿qué centro es el más cercano para los 20 clientes de la derecha y de arriba?",
+      null,
+      "Cada movimiento baja la WSS o la deja igual, y hay una cantidad finita de formas de repartir 30 puntos. Tiene que parar.",
+      "Si dos centros coincidieran, uno se quedaría sin puntos. Los tres arrancan en lugares distintos y cada uno tiene clientes cerca."],
+    explicacion: "El centro verde, en (1.5, 3), es el más cercano para los 20 clientes de la derecha y de arriba. Se los lleva a todos y se muda al medio, a (6.5, 5.5), entre los dos grupos. Los otros dos se quedan partiendo el rincón. <b>Ahora córrelo</b> y compruébalo.",
+    alResolver: function () { est.chk5 = true; botones5(); cerrarPaso5(); }
+  });
+  function cerrarPaso5() { if (est.chk5 && est.chk5b) pasos.completar(4); }
+  $("btnMalo5").addEventListener("click", function () { run5.reiniciar(filas(MALO)); pintarEstado5("Inicio en el rincón: filas 0, 1 y 2."); $("enum5").innerHTML = ""; botones5(); entrar(4); });
+  $("btnAzar5").addEventListener("click", function () {
+    var t = ternaAlAzar();
+    run5.reiniciar(filas(t));
+    pintarEstado5("Inicio al azar: tres clientes elegidos con la misma probabilidad, como hace <code>kmeans()</code> de R por defecto.");
+    botones5(); entrar(4);
+  });
+  $("btnFin5").addEventListener("click", function () { run5.hastaFin(); pintarEstado5(); botones5(); entrar(4); });
+  $("btnTodos5").addEventListener("click", function () {
+    var res = todasTernas(X).map(function (r) { return r.w; }).sort(function (a, b) { return a - b; });
+    var grupos = [];
+    res.forEach(function (w) {
+      var ult = grupos[grupos.length - 1];
+      if (ult && w - ult.max < 5) { ult.max = w; ult.n++; } else grupos.push({ min: w, max: w, n: 1 });
+    });
+    var tot = res.length;
+    $("enum5").innerHTML = '<p class="info">Las ' + tot + ' formas de elegir 3 de los 30 clientes como centros iniciales, cada una corrida hasta el final:</p><div class="barras">' +
+      grupos.map(function (gr) {
+        var et = Math.abs(gr.max - gr.min) < 0.01 ? "WSS " + f(gr.min, 2) : "WSS " + f(gr.min, 0) + " a " + f(gr.max, 0);
+        return '<div class="barra-f"><span>' + et + '</span><span class="tr"><i class="' + (gr.min < 50.51 ? "bien" : "") + '" style="width:' + (gr.n / tot * 100).toFixed(1) + '%"></i></span><b>' + gr.n + ' · ' + f(gr.n / tot * 100, gr.n / tot < 0.01 ? 2 : 1) + ' %</b></div>';
+      }).join("") + '</div>';
+  });
+  B.opcionMultiple(cuerpo("chk5b"), {
+    pregunta: "De las 4060 formas de elegir 3 clientes como centros iniciales, 436 terminan atascadas: un 10.7 %. Si haces <b>3 arranques al azar</b> y te quedas con el de menor WSS, ¿qué probabilidad hay de quedar atascado?",
+    opciones: ["Cerca de 0.1 %", "10.7 %", "32.1 %", "3.6 %"],
+    correcta: 0,
+    pistas: [null,
+      "Ese es el riesgo de un solo arranque. Con tres, te quedas atascado solo si fallan los tres.",
+      "Sumaste el riesgo tres veces. Pero para quedar atascado tienen que fallar los tres a la vez.",
+      "Dividiste entre 3. Para que fallen los tres, las probabilidades se multiplican."],
+    explicacion: "Tienen que fallar los tres: $0.107^3 \\approx 0.0012$, un 0.12 %. Con 10 arranques es $0.107^{10}$, prácticamente cero. Por eso <code>nstart = 25</code> en el caso de Madrid y <code>n_init=10</code> en Raschka. Ojo: esto vale para estos datos; con datos más enredados el riesgo de cada arranque es mayor.",
+    alResolver: function () { est.chk5b = true; cerrarPaso5(); }
+  });
+
+  /* ---------- paso 6: k-means++ ---------- */
+  function pintarInfo6() {
+    var d = dCuad(X, pp.idx), tot = d.reduce(function (a, b) { return a + b; }, 0);
+    var h = "Centros sorteados: " + pp.idx.map(function (k, j) { return chip(j) + par(X[k]); }).join(" &nbsp; ") + "<br>";
+    if (pp.run) h += tablaGrupos(pp.run.cent, pp.run.g, true);
+    else if (pp.idx.length < 3) h += "Σ D² = <b>" + fn(tot) + "</b>" + (est.chk6 ? "" : " · el punto del anillo es (9, 4)");
+    return h;
+  }
+  function pintarVivo6() {
+    var d = dCuad(X, pp.idx), tot = d.reduce(function (a, b) { return a + b; }, 0);
+    if (pp.idx.length >= 3) { $("vivo6").innerHTML = "Ya hay 3 centros: k-means++ terminó de elegir."; return; }
+    $("vivo6").innerHTML = "Ahora: Σ D² = " + fn(tot) + ". Para (9, 4): D² = " + fn(d[18]) + " → P = " + (est.chk6 ? f(d[18] / tot, 4) : "?");
+  }
+  B.numerico(cuerpo("chk6"), {
+    pregunta: "El sorteo eligió como primer centro el cliente (2, 2). La suma de todas las distancias al cuadrado a ese centro es $\\Sigma D^2 = 870.5$. ¿Qué probabilidad tiene el cliente (9, 4), el del anillo, de ser el segundo centro? Escríbela como número entre 0 y 1.",
+    respuesta: 53 / 870.5,
+    tolerancia: 0.0011,
+    pistas: ["Primero su distancia al cuadrado hasta (2, 2): $(9-2)^2 + (4-2)^2$.", "Es $53 / 870.5$."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 100 * 53 / 870.5) < 0.11) return "Lo diste en porcentaje. Escríbelo entre 0 y 1.";
+      if (Math.abs(v - Math.sqrt(53) / 870.5) < 0.0011) return "Usaste la distancia sin elevar al cuadrado. El sorteo pesa con $D^2$.";
+      if (Math.abs(v - 1 / 30) < 0.0011) return "Eso sería un sorteo parejo entre los 30. k-means++ pesa cada punto por su distancia al cuadrado.";
+      return null;
+    },
+    explicacion: "$D^2 = 49 + 4 = 53$ y $53 / 870.5 = 0.061$: un 6.1 %, casi el doble que en un sorteo parejo (1 de 30, un 3.3 %). Los clientes lejanos tienen más boletos. <b>Ahora sortea</b> los otros dos centros y corre k-means.",
+    alResolver: function () {
+      est.chk6 = true;
+      ["btnSorteo6", "btnOtra6", "btnMil6"].forEach(function (id) { $(id).disabled = false; });
+      pintarVivo6();
+      if (est.paso === 5) entrar(5);
+      pasos.completar(5);
+    }
+  });
+  function botones6() {
+    $("btnSorteo6").disabled = !est.chk6 || pp.idx.length >= 3;
+    $("btnCorrer6").disabled = !est.chk6 || pp.idx.length < 3 || !!pp.run;
+  }
+  $("btnSorteo6").addEventListener("click", function () {
+    if (pp.idx.length >= 3) return;
+    var i = sortearPP(X, pp.idx);
+    pp.idx.push(i);
+    $("estado6").innerHTML = "Salió el cliente " + par(X[i]) + ".";
+    botones6(); pintarVivo6(); entrar(5);
+  });
+  $("btnCorrer6").addEventListener("click", function () {
+    pp.run = new Corrida(pp.idx.map(function (k) { return X[k]; }));
+    pp.run.hastaFin();
+    var w = pp.run.wss();
+    $("estado6").innerHTML = "k-means desde ese inicio terminó con WSS <b>" + f(w, 2) + "</b>" + (w < 50.51 ? ": el mejor reparto." : ": un mínimo local. Pasa poco con k-means++, pero pasa.");
+    botones6(); entrar(5);
+  });
+  $("btnOtra6").addEventListener("click", function () {
+    pp.idx = [Math.floor(Math.random() * N)]; pp.run = null;
+    $("estado6").innerHTML = "Primer centro al azar: " + par(X[pp.idx[0]]) + ". Los puntos grandes son los lejanos.";
+    botones6(); pintarVivo6(); entrar(5);
+  });
+  $("btnMil6").addEventListener("click", function () {
+    var bienPP = 0, bienAz = 0;
+    for (var r = 0; r < 1000; r++) {
+      var idx = [Math.floor(Math.random() * N)];
+      while (idx.length < 3) idx.push(sortearPP(X, idx));
+      if (lloyd(X, filas(idx)).w < 50.51) bienPP++;
+      if (lloyd(X, filas(ternaAlAzar())).w < 50.51) bienAz++;
+    }
+    $("estado6").innerHTML = "1000 inicios de cada tipo, corridos hasta el final. Llegan a 50.5:<br>k-means++ <b>" + bienPP + "</b> de 1000 · al azar <b>" + bienAz + "</b> de 1000" +
+      "<br>Los números cambian un poco cada vez que tocas el botón: es un sorteo de verdad.";
+  });
+
+  /* ---------- paso 7: escalar ---------- */
+  var MEDX = [5, 13 / 3], SD = (function () {
+    return [0, 1].map(function (d) { var s = 0; X.forEach(function (p) { s += Math.pow(p[d] - MEDX[d], 2); }); return Math.sqrt(s / (N - 1)); });
+  })();
+  var PESOS = { orig: [1, 1], eur: [1, 100], z: [1 / (SD[0] * SD[0]), 1 / (SD[1] * SD[1])] };
+  var cache7 = {};
+  function resultado7() {
+    var m = est.modo7;
+    if (!cache7[m]) {
+      var r = mejorDeTodas(X, PESOS[m]);
+      // colores como al final del paso 4: naranja el centro de mas arriba, despues azul y verde de izquierda a derecha
+      var porY = [0, 1, 2].sort(function (a, b) { return r.cent[b][1] - r.cent[a][1]; });
+      var orden = [porY[0]].concat(porY.slice(1).sort(function (a, b) { return r.cent[a][0] - r.cent[b][0]; }));
+      var mapa = []; orden.forEach(function (viejo, nuevo) { mapa[viejo] = nuevo; });
+      cache7[m] = { cent: orden.map(function (k) { return r.cent[k]; }), g: r.g.map(function (v) { return mapa[v]; }), w: r.w, peso: PESOS[m] };
+    }
+    return cache7[m];
+  }
+  function info7(r) {
+    var nom = { orig: "gasto en decenas de euros", eur: "gasto en euros", z: "las dos variables estandarizadas" }[est.modo7];
+    var h = "Mejor reparto con " + nom + ' (de las 4060 ternas de inicio). WSS en esas unidades: <b>' + f(r.w, 2) + '</b>';
+    h += '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>grupo</th><th>de abajo izq.</th><th>de abajo der.</th><th>de arriba</th></tr></thead><tbody>';
+    for (var j = 0; j < 3; j++) {
+      var c = [0, 0, 0];
+      r.g.forEach(function (v, i) { if (v === j) c[REAL[i]]++; });
+      h += '<tr><td class="pl">' + chip(j) + COL[j] + '</td><td>' + c[0] + '</td><td>' + c[1] + '</td><td>' + c[2] + '</td></tr>';
+    }
+    return h + '</tbody></table></div>';
+  }
+  function modo7(m) {
+    est.modo7 = m;
+    ["btnOrig7", "btnEur7", "btnZ7"].forEach(function (id, k) { $(id).classList.toggle("on", ["orig", "eur", "z"][k] === m); });
+    var r = resultado7();
+    $("estado7").innerHTML = m === "orig" ? "Unidades originales: los tres grupos de siempre, WSS <b>" + f(r.w, 2) + "</b>."
+      : m === "eur" ? "Gasto en euros: el eje vertical va de 0 a 100. El mejor reparto mezcla clientes de los dos grupos de abajo. Mira la tabla del escenario."
+      : "Estandarizado: cada variable menos su media y dividida entre su desvío (" + f(SD[0], 2) + " y " + f(SD[1], 2) + " en las unidades originales). Vuelven los tres grupos. Da lo mismo partir del gasto en euros o en decenas: estandarizar borra la unidad.";
+    if (est.paso === 6) entrar(6);
+  }
+  B.opcionMultiple(cuerpo("chk7"), {
+    pregunta: "Si el gasto se anota en euros (todo el eje vertical por 10) y corres k-means con el mejor de muchos arranques, ¿qué grupos encuentra?",
+    opciones: [
+      "Los mismos tres grupos: los clientes no cambiaron",
+      "Grupos en franjas horizontales: manda el gasto, y se mezclan clientes de los dos grupos de abajo",
+      "Grupos en franjas verticales: mandan las visitas",
+      "Un solo grupo gigante y dos vacíos"
+    ],
+    correcta: 1,
+    pistas: [
+      "Los clientes no cambiaron, pero las distancias sí. Una diferencia de 2 en el gasto ahora vale 20.",
+      null,
+      "¿Qué eje se estiró? Las diferencias en ese eje son las que ahora pesan más.",
+      "Cada centro se queda con los puntos que tiene más cerca: mientras los centros estén en sitios distintos, cada uno tiene clientes."],
+    explicacion: "Al multiplicar el gasto por 10, sus diferencias pesan 100 veces más en la distancia al cuadrado. Los dos grupos de abajo tienen gastos parecidos, así que para k-means pasan a ser casi lo mismo, y prefiere cortar por el gasto. <b>Ahora toca los botones</b> y compruébalo.",
+    alResolver: function () {
+      est.chk7 = true;
+      ["btnOrig7", "btnEur7", "btnZ7"].forEach(function (id) { $(id).disabled = false; });
+      modo7("eur");
+      pasos.completar(6);
+    }
+  });
+  $("btnOrig7").addEventListener("click", function () { modo7("orig"); });
+  $("btnEur7").addEventListener("click", function () { modo7("eur"); });
+  $("btnZ7").addEventListener("click", function () { modo7("z"); });
+
+  pasos = B.pasos($("recorrido"), {
+    concepto: C,
+    alEntrar: entrar,
+    alTerminar: function () { location.hash = "vidareal"; }
+  });
+  // al volver a la pagina con pasos hechos, se habilita lo que corresponde
+  if (pasos.hecho(0)) { est.chk1 = true; est.marcas = []; }
+  if (pasos.hecho(1)) { est.chk2 = true; run.asignar(); }
+  if (pasos.hecho(2)) { est.chk3 = true; $("btnMover3").disabled = false; $("hint3").textContent = ""; }
+  if (pasos.hecho(3)) est.chk4 = true;
+  if (pasos.hecho(4)) { est.chk5 = true; est.chk5b = true; botones5(); }
+  if (pasos.hecho(5)) { est.chk6 = true; ["btnSorteo6", "btnOtra6", "btnMil6"].forEach(function (id) { $(id).disabled = false; }); }
+  if (pasos.hecho(6)) { est.chk7 = true; ["btnOrig7", "btnEur7", "btnZ7"].forEach(function (id) { $(id).disabled = false; }); }
+  if (est.chk1) $("chk1").querySelector(".fb").innerHTML = "Ya resolviste este paso. Si quieres, vuelve a marcar.";
+  if (est.chk1) $("btnBorrarMarcas").hidden = false;
+  pintarVivo4();
+  pintarVivo6();
+  entrar(0);
+
+  /* ---------------- hipotesis inicial ---------------- */
+  (function () {
+    var ta = $("hipotesis"), t = null;
+    ta.value = B.nota("kmeans", "hipotesis");
+    function cita() {
+      var v = ta.value.trim(), el = $("citaHipo");
+      el.hidden = !v;
+      if (v) { el.textContent = ""; el.appendChild(document.createTextNode("Al principio escribiste: «" + v + "». ¿Se parece a repartir, mover y repetir? ¿Qué te faltaba, o qué hiciste distinto?")); }
+    }
+    cita();
+    ta.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { B.nota("kmeans", "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; cita(); }, 500);
+    });
+  })();
+
+  /* ---------------- marcadores de estado de retos ---------------- */
+  function pintarEstados() {
+    [].forEach.call(document.querySelectorAll("[data-reto]"), function (el) {
+      var ok = C.retoOk(el.getAttribute("data-reto"));
+      el.textContent = ok ? "resuelto" : "pendiente";
+      el.classList.toggle("ok", ok);
+    });
+  }
+  C.alCambiar(pintarEstados);
+
+  /* ---------------- reto: ojo clinico ---------------- */
+  (function () {
+    var cont = $("ojo");
+    cont.innerHTML = '<div class="ronda"></div><svg tabindex="-1" role="img" aria-label="Plano con tres centros y un cliente marcado"></svg>' +
+      '<div class="ojo-opts"><button type="button" class="opt" data-a="0">Naranja</button><button type="button" class="opt" data-a="1">Azul</button><button type="button" class="opt" data-a="2">Verde</button></div>' +
+      '<div class="fb" aria-live="polite"></div><div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    var p = crearPlano(cont.querySelector("svg"), {});
+    var ronda, aciertos, respondida, caso;
+    function generar() {
+      for (var t = 0; t < 500; t++) {
+        var cent = [0, 1, 2].map(function () { return [1 + Math.round(Math.random() * 32) / 4, 1 + Math.round(Math.random() * 32) / 4]; });
+        var lejos = true;
+        for (var a = 0; a < 3; a++) for (var b = a + 1; b < 3; b++) if (Math.sqrt(dist2(cent[a], cent[b])) < 3) lejos = false;
+        if (!lejos) continue;
+        var i = Math.floor(Math.random() * N);
+        var ds = cent.map(function (c) { return Math.sqrt(dist2(X[i], c)); }), ord = ds.slice().sort(function (x, y) { return x - y; });
+        var r = ord[1] / ord[0];
+        if (r > 1.06 && r < 1.5) return { cent: cent, i: i, ds: ds, ok: ds.indexOf(ord[0]) };
+      }
+      return { cent: [[2, 2], [8, 3], [5, 8]], i: 7, ds: [1.12, 5.02, 6.26], ok: 0 };
+    }
+    function nueva() { ronda = 0; aciertos = 0; mostrar(); }
+    function mostrar() {
+      respondida = false;
+      caso = generar();
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 5 · aciertos " + aciertos;
+      p.set({ cent: caso.cent, g: null, colorear: false, regiones: false, marca: caso.i, rayos: null });
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (b) { b.disabled = false; b.className = "opt"; });
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+    }
+    cont.querySelector(".ojo-opts").addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || respondida) return;
+      respondida = true;
+      var ok = +b.getAttribute("data-a") === caso.ok;
+      if (ok) aciertos++;
+      b.classList.add(ok ? "ok" : "mal");
+      if (!ok) cont.querySelector('[data-a="' + caso.ok + '"]').classList.add("ok");
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (x) { x.disabled = true; });
+      var g = asignar(X, caso.cent);
+      p.set({ g: g, colorear: true, regiones: true, rayos: { i: caso.i, vals: caso.ds.map(function (d) { return Math.round(d * 100) / 100; }), mejor: caso.ok } });
+      cont.querySelector(".fb").innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No.</span> ') +
+        "Distancias: " + caso.ds.map(function (d, j) { return COL[j] + " " + f(d, 2); }).join(", ") + ". " +
+        (ok ? "" : "El ojo se va al centro que está del mismo lado; la regla solo mira la distancia en línea recta.");
+      var sig = cont.querySelector(".sig");
+      sig.hidden = false;
+      if (ronda === 4) {
+        var aprobo = aciertos >= 4;
+        C.reto("ojo", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertos + " de 5" + (aprobo ? ". Aprobado." : ". Necesitas 4 para aprobar.");
+        sig.textContent = "Otra tanda";
+      } else sig.textContent = "Siguiente ronda";
+    });
+    cont.querySelector(".sig").addEventListener("click", function () { if (ronda === 4) nueva(); else { ronda++; mostrar(); } });
+    nueva();
+  })();
+
+  /* ---------------- reto: constructor ---------------- */
+  (function () {
+    var INI = [[3, 5], [5, 5], [7, 5]];
+    var OBJ = [
+      { t: "Deja un centro sin ningún cliente: un grupo vacío.", ok: function (s) { return s.cnt.some(function (v) { return v === 0; }); } },
+      { t: "WSS menor que 60 con los centros donde los dejaste.", ok: function (s) { return s.w < 60; } },
+      { t: "Una trampa estable: ningún grupo vacío, cada centro a menos de 0.3 de la media de su grupo (una vuelta más casi no lo mueve) y WSS mayor que 150.", ok: function (s) { return s.estable && s.w > 150; } }
+    ];
+    var logrados = [false, false, false], avisado = false, cent = copia(INI);
+    var ul = $("objetivos");
+    OBJ.forEach(function (o) { var li = document.createElement("li"); li.innerHTML = '<span class="m"></span><span>' + o.t + '</span>'; ul.appendChild(li); });
+    var p = crearPlano($("planoConstr"), { alMoverCentro: function (c) { cent = c; actualizar(); } });
+    function actualizar() {
+      var g = asignar(X, cent), cnt = conteo(g, 3), w = wss(X, cent, g), mu = medias(X, g, cent);
+      var dist = cent.map(function (c, j) { return Math.sqrt(dist2(c, mu[j])); });
+      var s = { cnt: cnt, w: w, estable: cnt.every(function (v) { return v > 0; }) && dist.every(function (d) { return d < 0.3; }) };
+      p.set({ cent: cent, g: g, colorear: true, regiones: true, arrastrar: true });
+      $("constrVivo").innerHTML = "WSS = <b>" + f(w, 2) + "</b> · clientes por grupo: " + cnt.join(", ") +
+        "<br>distancia de cada centro a la media de su grupo: " + dist.map(function (d, j) { return cnt[j] ? f(d, 2) : "vacío"; }).join(", ");
+      OBJ.forEach(function (o, i) { if (!logrados[i] && o.ok(s)) logrados[i] = true; ul.children[i].classList.toggle("hecho", logrados[i]); });
+      if (!avisado && logrados.every(Boolean)) { avisado = true; C.reto("constructor", true); }
+    }
+    $("constrVuelta").addEventListener("click", function () { cent = medias(X, asignar(X, cent), cent); actualizar(); });
+    $("constrReset").addEventListener("click", function () { cent = copia(INI); actualizar(); });
+    actualizar();
+  })();
+
+  /* ---------------- reto: a mano ---------------- */
+  (function () {
+    var D;
+    function generar() {
+      for (;;) {
+        var P = [], k;
+        for (k = 0; k < 6; k++) P.push([Math.floor(Math.random() * 10), Math.floor(Math.random() * 10)]);
+        var cent = [[Math.floor(Math.random() * 10), Math.floor(Math.random() * 10)], [Math.floor(Math.random() * 10), Math.floor(Math.random() * 10)]];
+        if (dist2(cent[0], cent[1]) < 9) continue;
+        var claro = P.every(function (p) { return Math.abs(dist2(p, cent[0]) - dist2(p, cent[1])) >= 2; });
+        if (!claro) continue;
+        var g = asignar(P, cent), cnt = conteo(g, 2);
+        if (cnt[0] < 2 || cnt[1] < 2) continue;
+        var nu = medias(P, g, cent);
+        if (nu.some(function (c) { return c.some(function (v) { return Math.abs(v * 2 - Math.round(v * 2)) > 1e-9; }); })) continue;
+        if (new Set(P.map(function (p) { return p.join(","); })).size < 6) continue;
+        D = { P: P, cent: cent, g: g, nu: nu, w: wss(P, nu, g), wViejo: wss(P, cent, g),
+          raiz: P.reduce(function (a, p, i) { return a + Math.sqrt(dist2(p, nu[g[i]])); }, 0) };
+        break;
+      }
+      $("manoDatos").innerHTML = '<table class="datos-mano"><tr><th></th>' + D.P.map(function (_, i) { return "<th>P" + (i + 1) + "</th>"; }).join("") + '</tr>' +
+        '<tr><th>x</th>' + D.P.map(function (p) { return "<td>" + p[0] + "</td>"; }).join("") + '</tr><tr><th>y</th>' + D.P.map(function (p) { return "<td>" + p[1] + "</td>"; }).join("") + '</tr></table>' +
+        '<p class="info">Centros iniciales: ' + chip(0) + 'naranja ' + par(D.cent[0]) + ' &nbsp; ' + chip(1) + 'azul ' + par(D.cent[1]) + '</p>';
+    }
+    generar();
+    function nombres(j) { return D.P.map(function (_, i) { return i; }).filter(function (i) { return D.g[i] === j; }).map(function (i) { return "P" + (i + 1); }).join(", "); }
+    B.numerico($("mano"), {
+      pregunta: "Reparte los seis puntos entre los dos centros, mueve cada centro a la media de su grupo y calcula la WSS con los centros nuevos.",
+      respuesta: function () { return D.w; },
+      tolerancia: 0.02,
+      pistas: [
+        function () { return "Reparto: naranja se queda con " + nombres(0) + "; azul con " + nombres(1) + "."; },
+        function () { return "Centros nuevos: naranja " + par(D.nu[0]) + ", azul " + par(D.nu[1]) + "."; },
+        function () { return "Distancias al cuadrado de cada punto a su centro nuevo: " + D.P.map(function (p, i) { return "P" + (i + 1) + " " + fn(dist2(p, D.nu[D.g[i]])); }).join(", ") + "."; }
+      ],
+      diagnostico: function (v) {
+        if (Math.abs(v - D.wViejo) < 0.02) return "Esa es la WSS con los centros viejos. Primero muévelos a la media de su grupo.";
+        if (Math.abs(v - D.raiz) < 0.02) return "Sumaste distancias sin elevarlas al cuadrado.";
+        return null;
+      },
+      explicacion: function () {
+        return "Naranja: " + nombres(0) + " → " + par(D.nu[0]) + ". Azul: " + nombres(1) + " → " + par(D.nu[1]) + ". " +
+          "Cuadrados: " + D.P.map(function (p, i) { return fn(dist2(p, D.nu[D.g[i]])); }).join(" + ") + " = " + fn(D.w) + ".";
+      },
+      reintentable: true,
+      textoReintentar: "Otro ejercicio",
+      antesDeReintentar: generar,
+      alResolver: function (ok) { C.reto("mano", ok); }
+    });
+  })();
+
+  /* ---------------- reto: cazar el error ---------------- */
+  B.cazarError($("error"), {
+    variantes: [
+      {
+        intro: "Un grupo tiene los puntos (1, 2), (3, 2) y (2, 5). Alguien calculó su aporte a la WSS así:",
+        lineas: ["\\mu = \\left(\\tfrac{1+3+2}{3},\\, \\tfrac{2+2+5}{3}\\right) = (2,\\, 3)",
+          "\\lVert (1,2) - \\mu \\rVert^2 = 1^2 + 1^2 = 2",
+          "\\lVert (3,2) - \\mu \\rVert^2 = 1^2 + 1^2 = 2",
+          "\\lVert (2,5) - \\mu \\rVert^2 = 0^2 + 2^2 = 2",
+          "W = 2 + 2 + 2 = 6"],
+        erronea: 3,
+        explicacion: "$0^2 + 2^2 = 4$, no 2: tomó la distancia sin elevarla al cuadrado. El aporte correcto es $W = 2 + 2 + 4 = 8$."
+      },
+      {
+        intro: "Hay 6 puntos repartidos en dos grupos. Alguien movió los centros así:",
+        lineas: ["\\text{grupo 1}: (0, 0),\\ (2, 0),\\ (1, 3)",
+          "\\mu_1 = \\left(\\tfrac{0+2+1}{6},\\, \\tfrac{0+0+3}{6}\\right) = (0.5,\\, 0.5)",
+          "\\text{grupo 2}: (6, 6),\\ (8, 6),\\ (7, 3)",
+          "\\mu_2 = \\left(\\tfrac{6+8+7}{3},\\, \\tfrac{6+6+3}{3}\\right) = (7,\\, 5)"],
+        erronea: 1,
+        explicacion: "Dividió entre los 6 puntos del total. Cada centro es la media de <b>su</b> grupo: $\\mu_1 = (3/3,\\, 3/3) = (1,\\, 1)$."
+      },
+      {
+        intro: "Centros $\\mu_1 = (2, 2)$ y $\\mu_2 = (5, 8)$. Alguien repartió el punto (4, 6) así:",
+        lineas: ["d_1^2 = (4-2)^2 + (6-2)^2 = 4 + 16 = 20",
+          "d_2^2 = (4-5)^2 + (6-8)^2 = 1 + 4 = 5",
+          "20 < 5,\\ \\text{así que (4, 6) va al grupo 1}",
+          "\\text{al mover},\\ \\mu_1\\ \\text{incluye a (4, 6) en su media}"],
+        erronea: 2,
+        explicacion: "Las dos distancias están bien, pero la comparación está al revés: $5 < 20$, así que (4, 6) va al grupo 2. La línea 4 arrastra el error."
+      }
+    ],
+    alResolver: function (ok) { C.reto("error", ok); }
+  });
+
+  /* ---------------- retos: propiedades ---------------- */
+  function prop(id, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple($(id), cfg);
+  }
+  prop("prop1", {
+    pregunta: "En una corrida de Lloyd, comparas la WSS después de mover los centros en la vuelta 3 y en la vuelta 4. La de la vuelta 4...",
+    opciones: ["Es menor o igual, nunca mayor", "Puede ser mayor si algún punto cambió de grupo", "Es siempre estrictamente menor", "No se puede saber sin los datos"],
+    correcta: 0,
+    pistas: [null, "Un punto cambia de grupo solo si el otro centro le queda más cerca. ¿Eso alarga o acorta su raya?",
+      "En la última vuelta nadie cambia, y la WSS queda exactamente igual.", "Sí se puede: vale para cualquier conjunto de datos, por cómo están hechos los dos movimientos."],
+    explicacion: "Repartir no puede alargar ninguna raya y mover a la media es lo mejor posible para cada grupo. Por eso la WSS baja o se queda igual: las barras del paso 4."
+  });
+  prop("prop2", {
+    pregunta: "Con los mismos datos, comparas la mejor WSS posible con k = 3 y con k = 4. La de k = 4...",
+    opciones: ["Es menor o igual", "Es mayor, porque hay más grupos que sumar", "Es igual: los datos no cambiaron", "Puede ser cualquier cosa"],
+    correcta: 0,
+    pistas: [null, "Con un centro más, siempre puedes copiar la solución de k = 3 y poner el cuarto centro encima de un punto. ¿Empeora algo?",
+      "Un cuarto centro puede quitarle puntos lejanos a otro grupo.", "Piensa en el caso extremo: k = 30, un centro encima de cada cliente. ¿Cuánto vale la WSS?"],
+    explicacion: "Más centros nunca empeoran la mejor WSS, y con k = n llega a 0. Por eso no se elige k buscando la WSS más chica: eso es la página de elegir k (codo, silueta y gap)."
+  });
+  prop("prop3", {
+    pregunta: "Cuando k-means termina, cada centro...",
+    opciones: ["Es la media de su grupo, y en general no coincide con ningún cliente", "Es siempre uno de los clientes", "Es el cliente más cercano a la media", "Está siempre en el medio del plano"],
+    correcta: 0,
+    pistas: [null, "En estos datos los centros finales son (2, 2), (8, 3) y (5, 8). ¿Hay un cliente en (8, 3)?",
+      "Eso sería un medoide, el centro de PAM. k-means usa la media sin redondear a un cliente.", "Cada centro se va a la media de su propio grupo, no de todos los datos."],
+    explicacion: "El centroide es una media y puede caer donde no hay nadie. En estos datos hay un cliente en (2, 2), pero no en (8, 3) ni en (5, 8). Si exiges que el centro sea un cliente real, tienes PAM."
+  });
+  prop("prop4", {
+    pregunta: "Las fronteras entre los grupos de k-means (con distancia euclídea) son...",
+    opciones: ["Tramos de recta, y cada región es un polígono convexo", "Curvas que siguen la forma de los datos", "Círculos alrededor de cada centro", "Lo que haga falta para separar cualquier forma"],
+    correcta: 0,
+    pistas: [null, "La frontera entre dos centros es el conjunto de puntos que están a la misma distancia de los dos. ¿Qué forma tiene eso?",
+      "Un círculo sería un radio máximo, y k-means no tiene radio: todo punto va a algún centro.", "Arrastra los centros del paso 2: las regiones siempre son polígonos sin entrantes."],
+    explicacion: "Cada frontera es la recta a mitad de camino entre dos centros, así que las regiones son polígonos convexos. Por eso k-means falla con grupos alargados o con forma de luna: para eso está DBSCAN."
+  });
+  prop("prop5", {
+    pregunta: "Agrupas piezas por largo (en metros, de 1 a 3) y peso (en gramos, de 200 a 900), sin escalar. ¿Qué pasa?",
+    opciones: ["El peso decide casi todo, porque sus diferencias son cientos de veces más grandes", "El largo decide, porque está en metros", "Las dos pesan igual: k-means no mira las unidades", "k-means da error si las unidades son distintas"],
+    correcta: 0,
+    pistas: [null, "Una diferencia de 2 metros contra una de 500 gramos: ¿cuál suma más a la distancia al cuadrado?",
+      "k-means no mira las unidades, y justamente por eso las diferencias grandes en número mandan.", "k-means no sabe nada de unidades: recibe números y los resta."],
+    explicacion: "La distancia suma $(\\Delta\\text{largo})^2 + (\\Delta\\text{peso})^2$ y la segunda es enorme. Es el paso 7: estandariza para que cada variable pese por lo que dice y no por su unidad."
+  });
+  prop("prop6", {
+    pregunta: "Sobre la convergencia de k-means (Lloyd) es cierto que...",
+    opciones: ["Siempre termina en una cantidad finita de vueltas, pero puede ser en un mínimo local", "Siempre termina en el mínimo global", "Puede no terminar nunca si los datos son difíciles", "Termina solo si los datos están escalados"],
+    correcta: 0,
+    pistas: [null, "Recuerda el inicio en el rincón del paso 5: terminó, pero en 213.73.", "La WSS nunca sube y hay finitas formas de repartir: no puede dar vueltas para siempre.", "Escalar cambia qué grupos encuentra, no si termina."],
+    explicacion: "Termina siempre, porque la WSS no sube y los repartos posibles son finitos. Pero puede ser en un mínimo local, como el 213.73 del paso 5. De ahí los muchos arranques."
+  });
+
+  /* ---------------- formula de memoria ---------------- */
+  B.ordenar($("formula"), {
+    piezas: ["\\text{WSS}", "=", "\\displaystyle\\sum_{j=1}^{k}", "\\displaystyle\\sum_{x_i \\in C_j}", "\\lVert x_i - \\mu_j \\rVert^{2}"],
+    distractores: ["\\dfrac{1}{n-1}", "\\lVert x_i - \\mu_j \\rVert", "\\displaystyle\\max_{j}", "(x_i - \\bar{x})"],
+    soluciones: [[0, 1, 2, 3, 4]],
+    explicacion: "Para cada grupo j, la distancia al cuadrado de cada uno de sus puntos a su centro; y se suma sobre los k grupos. Sin dividir: es una suma, no una varianza.",
+    alResolver: function (ok) { C.reto("formula", ok); }
+  });
+
+  /* ---------------- vida real: Lloyd con bucles ---------------- */
+  (function () {
+    var CODIGO = {
+      py: [
+        ["import", "import numpy as np"],
+        ["import", "from sklearn.cluster import KMeans"],
+        [null, ""],
+        [null, "# 30 clientes inventados: visitas al mes, gasto (decenas de euros)"],
+        ["datos", "X = np.array([[0.5, 2.5], [1, 1], [1.5, 3], [2, 0.5], [2, 2],"],
+        ["datos", "              [2.5, 3.5], [2.5, 1.5], [3, 2.5], [3.5, 1], [1.5, 2.5],"],
+        ["datos", "              [6.5, 3], [7, 4.5], [7.5, 2], [7.5, 3.5], [8, 1.5],"],
+        ["datos", "              [8, 4], [8.5, 3], [9, 2], [9, 4], [9, 2.5],"],
+        ["datos", "              [3.5, 7.5], [4, 8.5], [4, 7], [4.5, 9.5], [5, 6.5],"],
+        ["datos", "              [5, 9], [5.5, 9], [6, 7.5], [6.5, 8.5], [6, 7]])"],
+        ["dims", "n, k = len(X), 3"],
+        ["init", "C = X[[0, 1, 18]].copy()                     # centros iniciales: filas 0, 1 y 18"],
+        ["grupo0", "grupo = np.full(n, -1)"],
+        [null, ""],
+        ["forit", "for it in range(1, 21):"],
+        ["nuevo0", "    nuevo = np.zeros(n, dtype=int)"],
+        ["fori", "    for i in range(n):                       # 1. asignar"],
+        ["d2", "        d2 = ((C - X[i]) ** 2).sum(axis=1)   #    distancia² a cada centro"],
+        ["asignar", "        nuevo[i] = np.argmin(d2)             #    el más cercano"],
+        ["si", "    if (nuevo == grupo).all():               # nadie cambió de grupo: fin"],
+        ["break", "        break"],
+        ["grupo", "    grupo = nuevo"],
+        ["forj", "    for j in range(k):                       # 2. mover cada centro"],
+        ["media", "        C[j] = X[grupo == j].mean(axis=0)    #    a la media de su grupo"],
+        ["wss", "    wss = ((X - C[grupo]) ** 2).sum()"],
+        ["print", "    print(it, round(wss, 2))"],
+        [null, ""],
+        ["printC", "print(np.round(C, 2))"],
+        ["km", "km = KMeans(n_clusters=3, init=X[[0, 1, 18]], n_init=1).fit(X)"],
+        ["verif", "print(round(km.inertia_, 2))                 # la misma WSS"]
+      ],
+      r: [
+        [null, "# 30 clientes inventados: visitas al mes, gasto (decenas de euros)"],
+        ["datos", "X <- matrix(c(0.5, 2.5, 1, 1, 1.5, 3, 2, 0.5, 2, 2,"],
+        ["datos", "              2.5, 3.5, 2.5, 1.5, 3, 2.5, 3.5, 1, 1.5, 2.5,"],
+        ["datos", "              6.5, 3, 7, 4.5, 7.5, 2, 7.5, 3.5, 8, 1.5,"],
+        ["datos", "              8, 4, 8.5, 3, 9, 2, 9, 4, 9, 2.5,"],
+        ["datos", "              3.5, 7.5, 4, 8.5, 4, 7, 4.5, 9.5, 5, 6.5,"],
+        ["datos", "              5, 9, 5.5, 9, 6, 7.5, 6.5, 8.5, 6, 7), ncol = 2, byrow = TRUE)"],
+        ["dims", "n <- nrow(X); k <- 3"],
+        ["init", "C <- X[c(1, 2, 19), ]                        # centros iniciales: filas 1, 2 y 19"],
+        ["grupo0", "grupo <- rep(0, n)"],
+        [null, ""],
+        ["forit", "for (it in 1:20) {"],
+        ["nuevo0", "  nuevo <- integer(n)"],
+        ["fori", "  for (i in 1:n) {                           # 1. asignar"],
+        ["d2", "    d2 <- colSums((t(C) - X[i, ])^2)         #    distancia² a cada centro"],
+        ["asignar", "    nuevo[i] <- which.min(d2)                #    el más cercano"],
+        [null, "  }"],
+        ["si", "  if (all(nuevo == grupo)) {                 # nadie cambió de grupo: fin"],
+        ["break", "    break"],
+        [null, "  }"],
+        ["grupo", "  grupo <- nuevo"],
+        ["forj", "  for (j in 1:k) {                           # 2. mover cada centro"],
+        ["media", "    C[j, ] <- colMeans(X[grupo == j, ])      #    a la media de su grupo"],
+        [null, "  }"],
+        ["wss", "  wss <- sum((X - C[grupo, ])^2)"],
+        ["print", "  cat(it, round(wss, 2), \"\\n\")"],
+        [null, "}"],
+        [null, ""],
+        ["printC", "print(round(C, 2))"],
+        ["km", "km <- kmeans(X, centers = X[c(1, 2, 19), ], algorithm = \"Lloyd\")"],
+        ["verif", "round(km$tot.withinss, 2)                    # la misma WSS"]
+      ]
+    };
+    // lo que imprimio cada lenguaje (corrido con Python 3 + scikit-learn 1.6.1 y con R 4.6.1)
+    var SAL_PY_C = "[[5. 8.]\n [2. 2.]\n [8. 3.]]", SAL_R_C = "     [,1] [,2]\n[1,]    5    8\n[2,]    2    2\n[3,]    8    3";
+    var SAL_PY_KM = "50.5", SAL_R_KM = "[1] 50.5";
+    function r2(v) { return String(Math.round(v * 100) / 100); }
+
+    var EV = [];
+    (function () {
+      var cent = filas(S0), grupo = X.map(function () { return -1; }), nuevo = null, fase = 0, it = 0, salidas = [], ultWss = null;
+      var tray = cent.map(function (c) { return [c.slice()]; });
+      function foto(id, extra) {
+        EV.push(Object.assign({ id: id, fase: fase, it: it, cent: copia(cent), grupo: grupo.slice(), nuevo: nuevo ? nuevo.slice() : null,
+          tray: tray.map(function (t) { return copia(t); }), salidas: salidas.slice(), wss: ultWss, i: null, j: null, d2: null, fin: false }, extra || {}));
+      }
+      foto("import"); foto("datos"); foto("dims"); foto("init"); foto("grupo0");
+      for (it = 1; it <= 20; it++) {
+        fase = 1;
+        foto("forit");
+        nuevo = X.map(function () { return 0; });
+        foto("nuevo0");
+        for (var i = 0; i < N; i++) {
+          foto("fori", { i: i, hasta: i });
+          var ds = cent.map(function (c) { return dist2(X[i], c); });
+          foto("d2", { i: i, d2: ds, hasta: i });
+          nuevo[i] = masCercano(X[i], cent);
+          foto("asignar", { i: i, d2: ds, hasta: i + 1 });
+        }
+        var camb = nuevo.filter(function (v, k) { return v !== grupo[k]; }).length;
+        foto("si", { cambios: camb, hasta: N });
+        if (camb === 0) { foto("break", { hasta: N, finBucle: true }); break; }
+        grupo = nuevo.slice();
+        foto("grupo", { cambios: camb });
+        fase = 2;
+        for (var j = 0; j < 3; j++) {
+          foto("forj", { j: j });
+          var antes = cent[j].slice();
+          cent[j] = medias(X, grupo, cent)[j];
+          tray[j].push(cent[j].slice());
+          foto("media", { j: j, antes: antes, n: grupo.filter(function (v) { return v === j; }).length });
+        }
+        ultWss = wss(X, cent, grupo);
+        foto("wss");
+        salidas.push(it + " " + r2(ultWss));
+        foto("print");
+      }
+      fase = 3; nuevo = null;
+      salidas.push("@C"); foto("printC", { fin: true });
+      foto("km", { fin: true });
+      salidas.push("@KM"); foto("verif", { fin: true });
+    })();
+
+    function salidaTexto(e, lang) {
+      return e.salidas.map(function (s) {
+        if (s === "@C") return lang === "py" ? SAL_PY_C : SAL_R_C;
+        if (s === "@KM") return lang === "py" ? SAL_PY_KM : SAL_R_KM;
+        return lang === "py" ? s : s + " ";
+      }).join("\n");
+    }
+    function grupoTxt(j, ctx) { return '<span style="color:var(--g' + j + ')">' + COL[j] + "</span> (" + ctx.ix(j) + ")"; }
+    function narrar(e, ctx) {
+      var py = ctx.lang() === "py", ix = ctx.ix;
+      switch (e.id) {
+        case "import": return py ? "Carga NumPy y la clase <b>KMeans</b> de scikit-learn, que se usa solo al final para comparar." : "R trae <b>kmeans()</b> de serie, en el paquete stats: no hay nada que importar.";
+        case "datos": return "Los 30 clientes del recorrido, una fila por cliente: visitas y gasto.";
+        case "dims": return "<b>n = 30</b> clientes y <b>k = 3</b> centros.";
+        case "init": return "Los centros iniciales son tres filas de X: la " + ix(0) + ", la " + ix(1) + " y la " + ix(18) + ", es decir (0.5, 2.5), (1, 1) y (9, 4). Los mismos del paso 2.";
+        case "grupo0": return py ? "Todos empiezan con grupo <b>−1</b>: nadie tiene grupo todavía, así que en la primera vuelta todos cambian." : "Todos empiezan con grupo <b>0</b>, que no es ningún grupo de R (van de 1 a 3): en la primera vuelta todos cambian.";
+        case "forit": return "Empieza la vuelta <b>" + e.it + "</b>.";
+        case "nuevo0": return "Un vector vacío para anotar el grupo nuevo de cada cliente.";
+        case "fori": return "Cliente <b>i = " + ix(e.i) + "</b>, en " + par(X[e.i]) + ".";
+        case "d2": return "Distancia al cuadrado a los tres centros: " + e.d2.map(function (d, j) { return grupoTxt(j, ctx) + " <b>" + fn(Math.round(d * 1000) / 1000) + "</b>"; }).join(", ") + ".";
+        case "asignar": var m = e.nuevo[e.i]; return "La menor es la del " + grupoTxt(m, ctx) + ": <b>nuevo[" + ix(e.i) + "] = " + ix(m) + "</b>.";
+        case "si": return e.cambios === 0 ? "Compara con la vuelta anterior: <b>nadie cambió de grupo</b>." : "Compara con la vuelta anterior: cambiaron <b>" + e.cambios + "</b> clientes. Sigue.";
+        case "break": return "Sale del bucle. Movió los centros " + (e.it - 1) + " veces y la vuelta " + e.it + " solo sirvió para confirmar.";
+        case "grupo": return "Guarda el reparto nuevo.";
+        case "forj": return "Centro <b>j = " + ix(e.j) + "</b>, el " + grupoTxt(e.j, ctx) + ".";
+        case "media": return "Se muda a la media de sus " + e.n + " clientes: de " + par(e.antes.map(function (v) { return Math.round(v * 1000) / 1000; })) + " a <b>" + par(e.cent[e.j].map(function (v) { return Math.round(v * 1000) / 1000; })) + "</b>.";
+        case "wss": return "WSS con los centros nuevos: <b>" + f(e.wss, 4) + "</b>.";
+        case "print": return "Imprime <b>" + e.it + " " + r2(e.wss) + "</b>: la vuelta y la WSS redondeada.";
+        case "printC": return "Imprime los centros finales: <b>(5, 8), (2, 2) y (8, 3)</b>. Son los centros de los tres grupos, aunque el naranja empezó abajo a la izquierda y terminó arriba.";
+        case "km": return py ? "La librería, con los <b>mismos centros iniciales</b> y <b>n_init=1</b> (un solo arranque). Por defecto KMeans usa este mismo algoritmo, Lloyd."
+          : "La librería, con los <b>mismos centros iniciales</b> y <b>algorithm = \"Lloyd\"</b>. Sin ese argumento R usaría Hartigan-Wong, otro algoritmo.";
+        case "verif": return "Imprime <b>" + (py ? "50.5" : "[1] 50.5") + "</b>: la misma WSS que el bucle.";
+      }
+      return "";
+    }
+    var vrPlano = crearPlano($("vrPlano"), {});
+    function visual(e, anterior, ctx) {
+      var lang = ctx.lang();
+      $("vrSalida").textContent = e ? salidaTexto(e, lang) : "";
+      if (!e) { vrPlano.set({ cent: null, g: null, colorear: false, marca: null, rayos: null, rastro: null, tenue: null }); $("vrCuenta").innerHTML = ""; return; }
+      var conCent = ["import", "datos", "dims"].indexOf(e.id) < 0;
+      var g, tenue = null;
+      if (e.fase === 1 && e.nuevo && e.hasta != null) {
+        g = X.map(function (_, k) { return k < e.hasta ? e.nuevo[k] : e.grupo[k]; });
+        tenue = X.map(function (_, k) { return k >= e.hasta; });
+      } else g = e.grupo;
+      var cfg = { cent: conCent ? e.cent : null, g: g, tenue: tenue, colorear: true, rastro: e.tray, marca: e.i, rayos: null };
+      if (e.id === "d2" || e.id === "asignar") cfg.rayos = { i: e.i, vals: e.d2.map(function (d) { return Math.round(d * 100) / 100; }), mejor: e.id === "asignar" ? e.nuevo[e.i] : -1 };
+      vrPlano.set(cfg);
+      var cu = "";
+      if (e.id === "d2" || e.id === "asignar") cu = "d² = " + e.d2.map(function (d) { return fn(Math.round(d * 1000) / 1000); }).join(", ") + (e.id === "asignar" ? " → mínimo en " + ctx.ix(e.nuevo[e.i]) : "");
+      else if (e.id === "media") cu = "C[" + ctx.ix(e.j) + "] = media de " + e.n + " clientes = <b>" + par(e.cent[e.j].map(function (v) { return Math.round(v * 1000) / 1000; })) + "</b>";
+      else if (e.id === "wss" || e.id === "print") cu = "WSS = <b>" + f(e.wss, 2) + "</b>";
+      else if (e.id === "si") cu = "cambios en esta vuelta: <b>" + e.cambios + "</b>";
+      else if (e.fin) cu = "Bucle: <b>50.5</b> · librería: <b>50.5</b>";
+      $("vrCuenta").innerHTML = cu;
+    }
+    B.vidaReal($("vidareal"), {
+      codigo: CODIGO,
+      eventos: EV,
+      narrar: narrar,
+      vars: function (e, ctx) {
+        var v = [];
+        if (e && e.it && e.fase > 0 && !e.fin) v.push('<span>it = <b>' + e.it + '</b></span>');
+        if (e && e.i !== null) v.push('<span>i = <b>' + ctx.ix(e.i) + '</b></span>');
+        if (e && e.j !== null) v.push('<span>j = <b>' + ctx.ix(e.j) + '</b></span>');
+        if (e && e.wss !== null) v.push('<span>última WSS = <b>' + f(e.wss, 2) + '</b></span>');
+        var veces = e ? EV.slice(0, EV.indexOf(e) + 1).filter(function (x) { return x.id === "d2"; }).length : 0;
+        v.push('<span>la línea de d2 corrió <b>' + veces + '</b> veces</span>');
+        return v;
+      },
+      visual: visual,
+      demora: function (e) {
+        if (!e) return 600;
+        return { fori: 45, d2: 110, asignar: 110, forit: 900, si: 1000, "break": 1200, media: 900, forj: 450, print: 1000, wss: 800 }[e.id] || 700;
+      }
+    });
+
+    /* prediccion y trampas reales */
+    var VECES_D2 = EV.filter(function (x) { return x.id === "d2"; }).length;
+    B.numerico(cuerpo("vrPred"), {
+      pregunta: "Desde estos mismos centros iniciales, en el paso 4 viste cuántas veces se movieron los centros. ¿Cuántas veces se va a ejecutar la línea de <code>d2</code>, la distancia de un cliente a los tres centros, hasta que el programa termine?",
+      respuesta: VECES_D2,
+      tolerancia: 0,
+      pistas: [
+        "Cada vuelta del bucle grande reparte a los 30 clientes: la línea de d2 corre 30 veces por vuelta.",
+        "Los centros se movieron 5 veces. Pero el programa se entera de que terminó en una vuelta más, que reparte a todos y descubre que nadie cambió."
+      ],
+      diagnostico: function (v) {
+        if (v === 150) return "Esas son las 5 vueltas que movieron centros. Falta la última, la que reparte y descubre que nadie cambió.";
+        if (v === 6 || v === 5) return "Esas son vueltas. En cada una, la línea de d2 se ejecuta una vez por cliente.";
+        if (v === 540 || v === 450) return "La línea de d2 calcula las tres distancias de una sola vez: corre una vez por cliente, no una por centro.";
+        return null;
+      },
+      explicacion: "6 vueltas por 30 clientes: <b>" + VECES_D2 + "</b>. Cinco vueltas mueven centros y la sexta solo confirma que nadie cambió. Ahora dale a reproducir y mira el contador.",
+      alResolver: function (ok) { C.reto("codigo1", ok); }
+    });
+    prop("codigo2", {
+      pregunta: "Con los 30 clientes corres k-means 100 veces, con 100 semillas distintas y <b>un solo arranque</b> cada vez, y cuentas cuántas veces la WSS queda por encima de 50.5:" +
+        '<pre class="mini-code">malos = 0\nfor s in range(100):\n    km = KMeans(n_clusters=3, init="random", n_init=1, random_state=s).fit(X)\n    malos += km.inertia_ &gt; 50.6\nprint(malos)</pre>' +
+        "En R, lo mismo con <code>set.seed(s)</code> y <code>kmeans(X, 3)</code>, sin <code>nstart</code>. ¿Qué imprime cada uno?",
+      opciones: [
+        "Python 10 y R 7: alrededor de 1 de cada 10 corridas se atasca",
+        "0 en los dos: con datos tan limpios nunca falla",
+        "100 en los dos: sin varios arranques siempre falla",
+        "Python 10 y R da error porque falta nstart"
+      ],
+      correcta: 0,
+      pistas: [null,
+        "Recuerda el paso 5: de las 4060 ternas de inicio, 436 se atascan.",
+        "En el paso 5, la mayoría de los inicios al azar llegaron a 50.5.",
+        "nstart tiene un valor por defecto en R: 1. No falla, hace un solo arranque."],
+      explicacion: "Imprimen <b>10</b> en Python y <b>7</b> en R, cerca del 10.7 % del paso 5 (R usa Hartigan-Wong, que se atasca un poco menos). Con <code>n_init=10</code> o <code>nstart = 25</code> los dos dan <b>0</b>. Ojo con dos detalles: <code>kmeans()</code> de R hace <b>un</b> arranque si no le pides más, y en scikit-learn 1.6 <code>KMeans</code> sin argumentos usa <code>n_init='auto'</code>, que con k-means++ es un solo arranque. Raschka escribe <code>n_init=10</code> en casi todos sus ejemplos porque cuando escribió el libro el valor por defecto era 10."
+    });
+    prop("codigo3", {
+      pregunta: "Cambias el inicio a las tres primeras filas, las del rincón del paso 5. Tu bucle de Lloyd termina con WSS <b>213.73</b>. Entonces pruebas en R:" +
+        '<pre class="mini-code">kmeans(X, centers = X[1:3, ])&#36;tot.withinss                        # 213.4167\nkmeans(X, centers = X[1:3, ], algorithm = "Lloyd")&#36;tot.withinss   # 213.7292</pre>' +
+        "Mismos centros iniciales y dos respuestas. ¿Por qué?",
+      opciones: [
+        "Sin algorithm, R usa Hartigan-Wong, que mueve los puntos de a uno y puede parar en otro mínimo local",
+        "La primera línea usa una semilla al azar distinta",
+        "Tu bucle tiene un error: debería dar 213.4167",
+        "R estandariza los datos por dentro y tu bucle no"
+      ],
+      correcta: 0,
+      pistas: [null,
+        "Cuando le das los centros iniciales, kmeans() no sortea nada: no hay azar en juego.",
+        "La segunda línea, con algorithm = \"Lloyd\", da exactamente lo mismo que tu bucle.",
+        "kmeans() no toca la escala de los datos. Si lo hiciera, la WSS saldría en otras unidades."],
+      explicacion: "El algoritmo por defecto de <code>kmeans()</code> es <b>Hartigan-Wong</b>: en vez de repartir a todos y después mover, prueba pasar cada punto a otro grupo y lo hace si así baja la WSS. Desde el mismo inicio puede llegar a otro mínimo local, aquí 213.42 en vez de 213.73. Ninguno de los dos llega a 50.5: los dos se atascan. Por eso las diapositivas se equivocan al llamar Hartigan-Wong a los pasos de Lloyd. En Python, <code>KMeans(n_clusters=3, init=X[:3], n_init=1)</code> usa Lloyd y da 213.729..., igual que tu bucle."
+    });
+  })();
+
+  /* ---------------- tarjetas ---------------- */
+  B.tarjetas($("tarjetas"), [
+    ["¿Cuáles son los dos movimientos de cada vuelta de k-means (Lloyd)?", "Repartir: cada punto al centro más cercano. Mover: cada centro a la media de su grupo."],
+    ["¿Cuándo para el algoritmo?", "Cuando una vuelta de repartir no cambia el grupo de ningún punto."],
+    ["¿Qué mide la WSS?", "La suma de las distancias al cuadrado de cada punto a su centro: $\\sum_j \\sum_{x_i \\in C_j} \\lVert x_i - \\mu_j \\rVert^2$. Cuanto menor, más compactos los grupos."],
+    ["¿Puede subir la WSS entre una vuelta y la siguiente?", "No. Repartir no alarga ninguna distancia y la media es el mejor centro para cada grupo."],
+    ["Si terminó, ¿encontró la mejor solución?", "No necesariamente: puede ser un mínimo local. Por eso se hacen varios arranques (nstart, n_init) y se queda el de menor WSS."],
+    ["¿Qué hace k-means++?", "Sortea los centros iniciales de a uno, con probabilidad proporcional a $D(x)^2$: favorece puntos lejos de los centros ya elegidos."],
+    ["¿Por qué hay que escalar antes?", "Porque la distancia mezcla las variables y la de números más grandes manda. Estandarizar hace que ninguna gane por su unidad."],
+    ["¿Qué algoritmo usa kmeans() de R por defecto?", "Hartigan-Wong, no Lloyd. Para Lloyd hay que pedir algorithm = \"Lloyd\"."]
+  ]);
+
+  /* ---------------- conexiones ---------------- */
+  B.conexiones("kmeans");
+})();
+</script>
+</body>
+</html>

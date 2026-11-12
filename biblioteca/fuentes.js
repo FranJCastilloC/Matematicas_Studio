@@ -67,6 +67,20 @@ window.FUENTES = {
     archivo: "/Users/franciscocastillo/brain/02-Biblioteca/Machine-Learning/PyTorch-Scikit-Learn/Cap06 - Learning Best Practices for Model Evaluation and Hyperparameter Tuning.pdf",
     nota: "Validación cruzada, curvas de aprendizaje, búsqueda de hiperparámetros, matriz de confusión, ROC y desbalance. Página PDF = impresa − 170."
   },
+  raschka7: {
+    corto: "Raschka cap. 7",
+    titulo: "Machine Learning with PyTorch and Scikit-Learn, cap. 7: Combining Different Models for Ensemble Learning",
+    autor: "Raschka, Liu y Mirjalili",
+    archivo: "/Users/franciscocastillo/brain/02-Biblioteca/Machine-Learning/PyTorch-Scikit-Learn/Cap07 - Combining Different Models for Ensemble Learning.pdf",
+    nota: "Voto mayoritario, bagging, AdaBoost y gradient boosting. Página PDF = impresa − 204. Parte del código ya no corre con scikit-learn 1.6."
+  },
+  raschka10: {
+    corto: "Raschka cap. 10",
+    titulo: "Machine Learning with PyTorch and Scikit-Learn, cap. 10: Working with Unlabeled Data – Clustering Analysis",
+    autor: "Raschka, Liu y Mirjalili",
+    archivo: "/Users/franciscocastillo/brain/02-Biblioteca/Machine-Learning/PyTorch-Scikit-Learn/Cap10 - Working with Unlabeled Data – Clustering Analysis.pdf",
+    nota: "k-means, k-means++, codo, silueta, jerárquico con dendrograma y DBSCAN. Página PDF = impresa − 304."
+  },
   raschka9: {
     corto: "Raschka cap. 9",
     titulo: "Machine Learning with PyTorch and Scikit-Learn, cap. 9: Predicting Continuous Target Variables with Regression Analysis",
@@ -105,6 +119,100 @@ window.FUENTES = {
     archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142003 - Clasificaciones y agrupaciones/UD3. kNN/Unidad_3_Caso_real workflow.html",
     tipo: "documento",
     nota: "Flujo completo con tidymodels: curva ROC construida a mano e importancia de variables."
+  },
+  nb4: {
+    corto: "UD4 Naive Bayes",
+    titulo: "UD4. Naive Bayes",
+    autor: "Máster en IA, UAX. Técnicas de IA: clasificaciones y agrupaciones (Jorge Colomer)",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142003 - Clasificaciones y agrupaciones/UD4. Naive Bayes/ud 04 - naive bayes 2025-2026.html",
+    tipo: "documento",
+    nota: "Probabilidad, Bayes, el algoritmo, Laplace y el filtro de spam, con tres casos en R. Tiene erratas en las tablas y en Laplace."
+  },
+  fe1: {
+    corto: "UD1 Feature engineering",
+    titulo: "UD1. Feature and target engineering. Diapositivas",
+    autor: "Máster en IA, UAX. Técnicas de IA: clasificaciones y agrupaciones (Jorge Colomer)",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142003 - Clasificaciones y agrupaciones/UD1. Feature Engineering/ud1-feature-target-engineering.html",
+    tipo: "diapositivas",
+    nota: "Transformaciones del target, faltantes, filtros, codificaciones, WoE e IV y fuga de información (91 diapositivas). El signo del WoE cambia entre diapositivas."
+  },
+  fe1p2: {
+    corto: "FE práctica 2",
+    titulo: "UD1. Práctica 2: binarización y discretización",
+    autor: "Máster en IA, UAX. Técnicas de IA: clasificaciones y agrupaciones",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142003 - Clasificaciones y agrupaciones/UD1. Feature Engineering/Practica2FeatureEngineering.html",
+    tipo: "documento",
+    nota: "Binarizar y discretizar variables en R."
+  },
+  fe1p3: {
+    corto: "FE práctica 3",
+    titulo: "UD1. Práctica 3: transformaciones y escalado",
+    autor: "Máster en IA, UAX. Técnicas de IA: clasificaciones y agrupaciones",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142003 - Clasificaciones y agrupaciones/UD1. Feature Engineering/Practica3FeatureEngineering.html",
+    tipo: "documento",
+    nota: "Log10, Box-Cox con car::bcPower, min-max y z-score."
+  },
+  fe1p4: {
+    corto: "FE práctica 4",
+    titulo: "UD1. Práctica 4: codificaciones, WoE e IV",
+    autor: "Máster en IA, UAX. Técnicas de IA: clasificaciones y agrupaciones",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142003 - Clasificaciones y agrupaciones/UD1. Feature Engineering/Practica4FeatureEngineering.html",
+    tipo: "documento",
+    nota: "One-hot, dummy y effect coding, y WoE e IV a mano y con step_woe. Su fórmula del WoE tiene las condicionales al revés."
+  },
+  rf3: {
+    corto: "Random Forest UD3 teoría",
+    titulo: "UD3. Random Forest. Contenido teórico",
+    autor: "Máster en IA, UAX. Técnicas de IA: regresiones, deep learning y otros",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142004 - Regresiones, deep learning y otros/UD3. Random Forest/Contenido teórico Random Forest.pdf",
+    nota: "Entropía, Gini, CART, parada y poda, bootstrap, bagging, Random Forest e importancia. Tiene erratas: la proporción del bootstrap al revés en p. 12."
+  },
+  rf3diapo: {
+    corto: "Random Forest UD3 diapositivas",
+    titulo: "Técnicas de IA, Unidad 3. Diapositivas",
+    autor: "Máster en IA, UAX. Técnicas de IA: regresiones, deep learning y otros",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142004 - Regresiones, deep learning y otros/UD3. Random Forest/Tecnicas IA Unidad 3.pdf",
+    nota: "Las diapositivas de árboles y Random Forest, solo imagen. Se citan por la página del PDF."
+  },
+  km5: {
+    corto: "UD5 K-means",
+    titulo: "UD5. K-means. Diapositivas",
+    autor: "Máster en IA, UAX. Técnicas de IA: clasificaciones y agrupaciones (Jorge Colomer)",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142003 - Clasificaciones y agrupaciones/UD5. K-Means/ud5-kmeans.html",
+    tipo: "diapositivas",
+    nota: "Distancias, el algoritmo, elegir k, Gower, PAM y CLARA (27 diapositivas). Llama Hartigan-Wong a los pasos de Lloyd."
+  },
+  km5caso: {
+    corto: "K-means caso Madrid",
+    titulo: "UD5. Caso: elecciones de Madrid 2021",
+    autor: "Máster en IA, UAX. Técnicas de IA: clasificaciones y agrupaciones (Jorge Colomer)",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142003 - Clasificaciones y agrupaciones/UD5. K-Means/ud5-caso.html",
+    tipo: "documento",
+    nota: "El caso completo en R; no escala los datos y muestra un óptimo local real."
+  },
+  db6: {
+    corto: "UD6 DBSCAN",
+    titulo: "UD6. DBSCAN. Diapositivas",
+    autor: "Máster en IA, UAX. Técnicas de IA: clasificaciones y agrupaciones (Jorge Colomer)",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142003 - Clasificaciones y agrupaciones/UD6. DBSCAN/ud6-dbscan.html",
+    tipo: "diapositivas",
+    nota: "Densidad, ε y MinPts, núcleo, borde y ruido, k-distancias (16 diapositivas)."
+  },
+  db6caso: {
+    corto: "DBSCAN caso",
+    titulo: "UD6. Caso: estaciones meteorológicas",
+    autor: "Máster en IA, UAX. Técnicas de IA: clasificaciones y agrupaciones (Jorge Colomer)",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142003 - Clasificaciones y agrupaciones/UD6. DBSCAN/ud6-caso.html",
+    tipo: "documento",
+    nota: "DBSCAN en R sobre datos reales."
+  },
+  val7: {
+    corto: "Validación de clusters",
+    titulo: "Unit 7. Cluster validation. Diapositivas",
+    autor: "Máster en IA, UAX. Técnicas de IA: clasificaciones y agrupaciones (Jorge Colomer)",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142003 - Clasificaciones y agrupaciones/UD6. DBSCAN/ud7-cluster-validation.html",
+    tipo: "diapositivas",
+    nota: "Tendencia de agrupamiento, silueta, gap, índices internos y externos (48 diapositivas). Su fórmula de Hopkins contradice la regla que aplica."
   },
   intro3: {
     corto: "UD0 Intro ML",
@@ -149,6 +257,28 @@ window.FUENTES = {
     archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142001 - Matematicas y estadistica para la IA/UD3. Decisión y clasificación estadística/SM142001_MUIA_UD3_CONTENIDO TEÓRICO-1.pdf",
     nota: "Pérdidas, riesgo, criterios de decisión, clasificadores y métricas. Sin ejemplos numéricos y con erratas: llama precisión a la exactitud."
   },
+  eda6: {
+    corto: "Programación UD6 EDA",
+    titulo: "UD6. Análisis exploratorio de datos. Contenido teórico",
+    autor: "Máster en IA, UAX. Programación y entorno de trabajo para la IA",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142002 - Programacion y entorno de trabajo para la IA/UD6. EDA/SM142002_MUIA_UD6_CONTENIDO TEÓRICO.pdf",
+    nota: "EDA en R: densidades, correlaciones y gráficos. Solo código, sin fórmulas."
+  },
+  eda6doc: {
+    corto: "Programación UD6 EDA II",
+    titulo: "Unidad 6. EDA II",
+    autor: "Máster en IA, UAX. Programación y entorno de trabajo para la IA",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142002 - Programacion y entorno de trabajo para la IA/UD6. EDA/Unidad 6 - EDA II.html",
+    tipo: "documento",
+    nota: "Tablas descriptivas, Pearson frente a Spearman, correlación no es causalidad y faltantes con naniar."
+  },
+  eda5: {
+    corto: "Programación UD5 R",
+    titulo: "UD5. R. Contenido teórico",
+    autor: "Máster en IA, UAX. Programación y entorno de trabajo para la IA",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142002 - Programacion y entorno de trabajo para la IA/UD5. R/SM142002_MUIA_UD5_CONTENIDO TEÓRICO.pdf",
+    nota: "Tidyverse y gráficos en R: conteos, faltantes, histogramas y cajas."
+  },
   rl1: {
     corto: "Regresión UD1 teoría",
     titulo: "UD1. Regresión lineal. Contenido teórico",
@@ -190,6 +320,20 @@ window.FUENTES = {
     autor: "Máster en IA, UAX. Técnicas de IA: regresiones, deep learning y otros",
     archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142004 - Regresiones, deep learning y otros/UD2. Regresion logistica/Calculo_coefs_rlog.pdf",
     nota: "Tres páginas escaneadas con la derivación paso a paso de la log-verosimilitud."
+  },
+  ud4: {
+    corto: "UD4 teoría",
+    titulo: "UD4. Estadística bayesiana. Contenido teórico",
+    autor: "Máster en IA, UAX. Matemáticas y estadística para la IA",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142001 - Matematicas y estadistica para la IA/UD4. Estadística bayesiana/UD4 Contenido Teórico.pdf",
+    nota: "Bayes, prior y posterior, MCMC, Metropolis-Hastings, Gibbs y modelos jerárquicos. Tiene erratas: llama precisión a la sensibilidad y su traza de ejemplo no converge."
+  },
+  ud5: {
+    corto: "UD5 teoría",
+    titulo: "UD5. Datos sintéticos e imputación. Contenido teórico",
+    autor: "Máster en IA, UAX. Matemáticas y estadística para la IA",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142001 - Matematicas y estadistica para la IA/UD5. Datos sintéticos e imputación/UD5 Contenido Teorico .pdf",
+    nota: "Datos sintéticos e imputación, sin fórmulas. Su ejemplo de KNN no usa vecinos y el de GAN es un generador sin entrenar."
   },
   nield1: {
     corto: "Nield cap. 1",
@@ -309,6 +453,20 @@ window.FUENTES = {
     autor: "Jorge Brasil",
     archivo: "/Users/franciscocastillo/brain/02-Biblioteca/Matematicas/Before-ML-Vol3-ProbStats/04 Cap 4 Bayes.pdf",
     nota: "Teorema de Bayes, priors beta y Naive Bayes. Página PDF = impresa − 245."
+  },
+  brasil5v3: {
+    corto: "Brasil vol. 3 cap. 5",
+    titulo: "Before Machine Learning, vol. 3: Probability and Statistics, cap. 5: Markov Models",
+    autor: "Jorge Brasil",
+    archivo: "/Users/franciscocastillo/brain/02-Biblioteca/Matematicas/Before-ML-Vol3-ProbStats/05 Cap 5 Markov Models.pdf",
+    nota: "Cadenas de Markov, normal multivariante, MCMC y Gibbs. Página PDF = impresa − 290. Muchas cuentas mal: las páginas lo avisan."
+  },
+  brasil6v3: {
+    corto: "Brasil vol. 3 cap. 6",
+    titulo: "Before Machine Learning, vol. 3: Probability and Statistics, cap. 6: Hierarchical Bayesian Models",
+    autor: "Jorge Brasil",
+    archivo: "/Users/franciscocastillo/brain/02-Biblioteca/Matematicas/Before-ML-Vol3-ProbStats/06 Cap 6 Hierarchical Bayesian Models.pdf",
+    nota: "Metropolis-Hastings y el modelo jerárquico. Página PDF = impresa − 359. Varias razones de aceptación mal calculadas."
   },
   jansen13: {
     corto: "Jansen cap. 13",

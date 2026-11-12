@@ -21,7 +21,7 @@ if "{{" in s: errores.append("placeholder {{ sin reemplazar")
 texto = re.sub(r"<script>.*?</script>", "", s, flags=re.S)
 texto = re.sub(r"<style>.*?</style>", "", texto, flags=re.S)
 texto = re.sub(r"<[^>]+>", " ", texto)
-ok = set("qué está más así sí después revés ahí esté además inglés irá demás estás aquí allí allá cuál quién cómo dónde también según tú él mí dé jamás atrás través país raíz aún".split())
+ok = set("qué está más así sí después revés ahí esté además inglés irá demás estás aquí allí allá cuál quién cómo dónde también según tú él mí dé jamás atrás detrás sé través país raíz aún".split())
 raros = sorted({w for w in re.findall(r"(?<![\wáéíóúñ])[A-Za-zñÑ]+(?:á|é|í)s?(?![\wáéíóúñ])", texto) if w.lower() not in ok})
 if raros: avisos.append("posible voseo: " + ", ".join(raros[:15]))
 rio = re.findall(r"\b(acá|vos|dar vuelta|darlas vuelta|fijate|pensalo|agarr[aá]\w*)\b", texto, re.I)
@@ -71,7 +71,9 @@ for c in sorted(set(citas)):
 for m in re.finditer(r'<cite[^>]*data-fuente="([^"]+)"[^>]*>', s):
     tag, f = m.group(0), m.group(1)
     pg = re.search(r'data-pag="(\d+)[^"]*"', tag)
-    if not pg: avisos.append("cita sin data-pag: " + f); continue
+    if not pg:
+        if FU.get(f, {}).get("tipo") != "documento": avisos.append("cita sin data-pag: " + f)
+        continue
     if FU.get(f, {}).get("tipo") in ("diapositivas", "documento") and "data-ancla=" not in tag:
         errores.append("cita a %s sin data-ancla" % f)
     if npag.get(f) and int(pg.group(1)) > npag[f]:

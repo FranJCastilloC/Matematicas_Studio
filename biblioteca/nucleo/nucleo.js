@@ -154,6 +154,8 @@
     return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; });
   }
   function val(x) { return typeof x === "function" ? x() : x; }
+  // Lee una clave propia: evita que ids como "constructor" devuelvan lo heredado de Object.prototype.
+  function propio(o, k) { return o && Object.prototype.hasOwnProperty.call(o, k) ? o[k] : undefined; }
 
   var B = window.Biblioteca = {};
   B.mezclar = mezclar;
@@ -203,7 +205,7 @@
       },
       reto: function (rid, ok) {
         actualizar(id, function (p) {
-          var r = p.retos[rid] || { intentos: 0, ok: false, primera: null };
+          var r = propio(p.retos, rid) || { intentos: 0, ok: false, primera: null };
           r.intentos++;
           if (r.primera === null) r.primera = !!ok;
           if (ok) r.ok = true;
@@ -214,10 +216,10 @@
         });
         avisar();
       },
-      retoOk: function (rid) { var r = B.progreso(id).retos[rid]; return !!(r && r.ok); },
+      retoOk: function (rid) { var r = propio(B.progreso(id).retos, rid); return !!(r && r.ok); },
       dominio: function () {
         var p = B.progreso(id), n = 0;
-        cfg.retos.forEach(function (r) { if (p.retos[r] && p.retos[r].ok) n++; });
+        cfg.retos.forEach(function (r) { var x = propio(p.retos, r); if (x && x.ok) n++; });
         return cfg.retos.length ? n / cfg.retos.length : 0;
       },
       alCambiar: function (fn) { oyentes.push(fn); fn(); }
@@ -656,7 +658,7 @@
   }
   function lugar(d) {
     if (esDiapo(d.f)) return d.pag ? "diapositiva " + d.pag : "";
-    if (esDoc(d.f)) return d.pag ? "sección " + d.pag : "";
+    if (esDoc(d.f)) return d.pag ? "sección " + d.pag : d.seccion ? "sección «" + d.seccion + "»" : "";
     if (d.pimp) return "p. " + d.pimp;
     return d.pag ? "p. " + d.pag + " del PDF" : "";
   }

@@ -1,0 +1,1610 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Naive Bayes y suavizado de Laplace</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+/* ---------- escenario ---------- */
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.esc-head .hint { font-size: 12.5px; color: var(--ink-2); }
+.esc-sec { margin-top: 14px; }
+.esc-sec:first-child { margin-top: 0; }
+.esc-sec h4 { margin: 0 0 6px; font-family: var(--f-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); font-weight: 500; }
+
+/* mensajes */
+.msgs { display: grid; gap: 5px; }
+.msg { display: grid; grid-template-columns: 62px minmax(0, 1fr); gap: 8px; align-items: center; padding: 6px 9px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; color: var(--ink-2); background: var(--surface); }
+.msg .tag { font-family: var(--f-mono); font-size: 10.5px; text-align: center; padding: 2px 0; border-radius: 5px; background: var(--surface-2); color: var(--ink-3); }
+.msg .tag.spam { background: var(--k-soft); color: var(--k); }
+.msg .tag.normal { background: var(--j-soft); color: var(--j); }
+.msg.igual { box-shadow: 0 0 0 2px var(--accent); }
+.msg.atenuado { opacity: .45; }
+.w { font-weight: 600; color: var(--ink); border-bottom: 2px solid var(--accent); }
+.nuevo { margin-top: 10px; padding: 9px 11px; border: 1.5px dashed var(--accent); border-radius: 9px; font-size: 13.5px; }
+.nuevo small { display: block; font-family: var(--f-mono); font-size: 10.5px; color: var(--accent); letter-spacing: .05em; text-transform: uppercase; margin-bottom: 3px; }
+
+/* tablas */
+.tabla-wrap { overflow-x: auto; }
+.tabla { width: 100%; border-collapse: collapse; font-family: var(--f-mono); font-size: 12px; font-variant-numeric: tabular-nums; }
+.tabla th { font-weight: 500; color: var(--ink-3); font-size: 11px; text-align: right; padding: 4px 7px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.tabla td { text-align: right; padding: 3px 7px; border-bottom: 1px solid var(--line-soft); color: var(--ink-2); white-space: nowrap; }
+.tabla td.pl, .tabla th:first-child { text-align: left; color: var(--ink-3); }
+.tabla .cs { color: var(--k); }
+.tabla .cn { color: var(--j); }
+.tabla td.oculto { color: var(--accent); font-weight: 600; }
+.tabla td.cero { color: var(--bad); font-weight: 600; background: color-mix(in oklab, var(--bad) 12%, transparent); }
+.tabla td.aus { opacity: .75; }
+.tabla td small { color: var(--ink-3); font-size: 10.5px; }
+.tabla tr.tot td { color: var(--ink); border-top: 1px solid var(--line); border-bottom: 0; }
+.tabla tr.on td { background: var(--accent-soft); color: var(--ink); }
+
+/* palabras como interruptores */
+.palabras { display: flex; flex-wrap: wrap; gap: 6px; }
+.palabras button { font-family: var(--f-mono); font-size: 12.5px; padding: 6px 10px; border-radius: 999px; }
+.palabras button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+.palabras button[aria-pressed="false"] { text-decoration: line-through; color: var(--ink-3); }
+.presets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.presets button { font-size: 11.5px; padding: 4px 9px; }
+.fila-alfa { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.fila-alfa .nota { font-size: 12px; color: var(--ink-3); }
+
+/* barras de clase */
+.barras { display: grid; gap: 6px; margin-top: 8px; }
+.bar { display: grid; grid-template-columns: 70px minmax(0, 1fr) 76px; align-items: center; gap: 8px; font-size: 12px; color: var(--ink-2); }
+.bar .pista-b { height: 12px; background: var(--surface-2); border-radius: 3px; overflow: hidden; }
+.bar .pista-b i { display: block; height: 100%; border-radius: 3px; transition: width .25s; }
+.bar i.spam { background: var(--k); }
+.bar i.normal { background: var(--j); }
+.bar b { font-family: var(--f-mono); font-weight: 500; text-align: right; font-variant-numeric: tabular-nums; color: var(--ink); }
+.bar b.oculto { color: var(--accent); }
+.veredicto { margin-top: 10px; padding-top: 9px; border-top: 1px dashed var(--line); font-family: var(--f-mono); font-size: 13px; color: var(--ink-2); }
+.veredicto b { font-size: 15px; color: var(--ink); padding: 1px 7px; border-radius: 6px; border: 1px solid var(--line); }
+.veredicto b.spam { border-color: var(--k); color: var(--k); }
+.veredicto b.normal { border-color: var(--j); color: var(--j); }
+.veredicto b.oculto { border-color: var(--accent); color: var(--accent); }
+.veredicto b.malo { border-color: var(--bad); color: var(--bad); }
+
+/* barras en log */
+.logfila { margin-top: 10px; }
+.logfila .cab { display: flex; justify-content: space-between; font-family: var(--f-mono); font-size: 12px; color: var(--ink-2); margin-bottom: 4px; }
+.logfila .cab b { color: var(--ink); font-weight: 500; }
+.logbar { display: flex; height: 26px; border-radius: 4px; overflow: hidden; background: var(--surface-2); }
+.logbar span { display: grid; place-items: center; font-family: var(--f-mono); font-size: 9.5px; color: var(--surface); border-right: 1px solid var(--surface); overflow: hidden; white-space: nowrap; min-width: 0; }
+.logbar.spam span { background: var(--k); }
+.logbar.normal span { background: var(--j); }
+.logbar span.prior { opacity: .55; }
+.logbar span.aus { opacity: .75; }
+.logbar span.inf { background: repeating-linear-gradient(45deg, var(--bad), var(--bad) 5px, transparent 5px, transparent 9px); color: var(--bad); flex: 1 1 auto; }
+.escala-log { font-size: 11.5px; color: var(--ink-3); margin-top: 6px; }
+.hundir { margin-top: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; }
+.hundir input { width: 100%; }
+.hundir .linea-n { font-family: var(--f-mono); font-size: 12.5px; color: var(--ink-2); margin-top: 4px; font-variant-numeric: tabular-nums; }
+.hundir .linea-n b { color: var(--ink); font-weight: 500; }
+.hundir .linea-n b.malo { color: var(--bad); }
+
+/* gaussiano */
+.gauss-svg { width: 100%; height: auto; display: block; }
+.gauss-svg .grid { stroke: var(--line-soft); }
+.gauss-svg .eje { stroke: var(--ink-3); }
+.gauss-svg .tick { font: 10px var(--f-mono); fill: var(--ink-3); }
+.gauss-svg .curva { fill: none; stroke-width: 2.2; }
+.gauss-svg .curva.spam { stroke: var(--k); }
+.gauss-svg .curva.normal { stroke: var(--j); }
+.gauss-svg .area.spam { fill: var(--k); fill-opacity: .1; }
+.gauss-svg .area.normal { fill: var(--j); fill-opacity: .1; }
+.gauss-svg .pt.spam { fill: var(--k); }
+.gauss-svg .pt.normal { fill: var(--j); }
+.gauss-svg .media { stroke-dasharray: 4 3; stroke-width: 1.3; }
+.gauss-svg .media.spam { stroke: var(--k); }
+.gauss-svg .media.normal { stroke: var(--j); }
+.gauss-svg .cursor { stroke: var(--accent); stroke-width: 2; }
+.gauss-svg .lab { font: 500 10.5px var(--f-mono); }
+.gauss-svg .lab.spam { fill: var(--k); }
+.gauss-svg .lab.normal { fill: var(--j); }
+.gauss-svg .lab.acc { fill: var(--accent); }
+.hora { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; margin-top: 8px; font-family: var(--f-mono); font-size: 12.5px; color: var(--ink-2); }
+.hora input { width: 100%; }
+
+.grande { font-family: var(--f-mono); font-size: 13.5px; color: var(--ink-2); margin: 8px 0; font-variant-numeric: tabular-nums; }
+.grande b { color: var(--ink); font-weight: 500; }
+.mini-tabla { border-collapse: collapse; font-size: 13px; margin: 8px 0; }
+.mini-tabla th, .mini-tabla td { padding: 4px 10px; border: 1px solid var(--line); text-align: left; }
+.mini-tabla th { color: var(--ink-3); font-weight: 500; font-size: 12px; }
+.copias { margin-top: 10px; font-family: var(--f-mono); font-size: 13px; color: var(--ink-2); }
+.copias b { color: var(--ink); font-weight: 500; }
+.pred-opts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+
+/* vida real */
+.vr-visual .tabla td.act { background: var(--accent-soft); color: var(--ink); font-weight: 600; }
+.vr-salida { margin-top: 12px; padding: 8px 12px; background: var(--surface-2); border-radius: 8px; font-family: var(--f-mono); font-size: 12px; white-space: pre; overflow-x: auto; color: var(--ink); min-height: 1.5em; }
+.vr-salida:empty { display: none; }
+
+/* retos */
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.ojo-msg { margin: 10px 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; font-size: 14px; }
+.ojo-opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.ojo-opts .opt { text-align: center; }
+.objetivos { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.objetivos li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.objetivos .m { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.objetivos li.hecho { color: var(--ink); }
+.objetivos li.hecho .m { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 3px var(--surface); }
+.datos-mano { border-collapse: collapse; font-family: var(--f-mono); font-size: 13px; margin: 4px 0 12px; }
+.datos-mano th, .datos-mano td { padding: 4px 12px; border: 1px solid var(--line); text-align: center; }
+.datos-mano th { color: var(--ink-3); font-weight: 500; font-size: 12px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ Naive Bayes</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Aprendizaje automático · Clasificación · UD4 de SM142003 (Naive Bayes)</p>
+    <h1>Naive Bayes y suavizado de Laplace</h1>
+    <p class="lede">
+      Un filtro de spam que aprende contando. Para cada palabra cuenta en qué fracción de los spam y de los mensajes normales aparece,
+      y para decidir <b>multiplica esas fracciones, palabra por palabra</b>. Vas a ver por qué ese atajo es "ingenuo", por qué una sola palabra
+      nunca vista puede arruinarlo todo, y cómo se arregla sumando 1.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> Tienes ocho mensajes ya etiquetados como spam o normales. Llega uno nuevo. Si solo pudieras usar esos ocho para decidir, ¿qué contarías? ¿Qué harías con una palabra que nunca apareció en un spam? Escríbelo como te salga.</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: contaría cuántas veces..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>Construir un filtro de spam desde cero</h2>
+      <p>Ocho pasos. Cada uno termina con un chequeo: hasta que no lo resuelves, el siguiente queda cerrado. Equivocarte aquí no resta nada, es parte del método.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="Tu apuesta">
+          <span class="etapa">Paso 1</span>
+          <h3>Ocho mensajes y uno nuevo</h3>
+          <p>En el escenario hay ocho mensajes cortos de entrenamiento. Tres son spam y cinco son normales, pero por ahora las etiquetas están tapadas. Solo nos importan cinco palabras, las subrayadas: <b>gratis, premio, oferta, reunión y mañana</b>. El resto del texto se ignora.</p>
+          <p>Abajo llega un mensaje nuevo: <b>«Premio gratis y oferta: hablamos en la reunión»</b>. Tiene tres palabras con cara de spam y una con cara de trabajo.</p>
+          <div class="check" id="chk1">
+            <p class="check-tit">Antes de seguir</p>
+            <p class="q">Sin hacer ninguna cuenta: ¿el mensaje nuevo es spam o normal?</p>
+            <div class="pred-opts">
+              <button type="button" class="opt" data-pred="spam">Spam</button>
+              <button type="button" class="opt" data-pred="normal">Normal</button>
+            </div>
+            <div class="fb" aria-live="polite"></div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Contar">
+          <span class="etapa">Paso 2</span>
+          <h3>Contar cada palabra dentro de cada clase</h3>
+          <p>Ya ves las etiquetas. Lo primero que hace el filtro es una tabla: para cada palabra, <b>en cuántos spam aparece</b> y <b>en cuántos mensajes normales aparece</b>. No importa cuántas veces se repite dentro de un mensaje: solo si está o no está.</p>
+          <p>"Gratis" aparece en 2 de los 3 spam. Dicho de otra forma: si eliges un spam al azar, hay 2 de 3 posibilidades de que diga "gratis". Esa fracción es lo único que el filtro aprende de cada palabra.</p>
+          <p>Fíjate en "reunión": aparece en 0 de los 3 spam. Guarda ese cero, vuelve en el paso 6.</p>
+          <div class="check" id="chk2"><p class="check-tit">Antes de seguir</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Bayes">
+          <span class="etapa">Paso 3</span>
+          <h3>Con una sola palabra, es el teorema de Bayes</h3>
+          <p>Empecemos con una sola palabra. Llega un mensaje que dice "gratis". ¿Qué tan probable es que sea spam? Hay dos cosas que mezclar:</p>
+          <p>Cuánto spam hay en general: 3 de 8 mensajes. Es el <b>prior</b>, <span data-tex="P(\text{spam}) = 3/8"></span>. Y qué tan típica es la palabra dentro de cada clase: <span data-tex="P(\text{gratis}\mid\text{spam}) = 2/3"></span> frente a <span data-tex="P(\text{gratis}\mid\text{normal}) = 1/5"></span>. Es la <b>verosimilitud</b>, la tabla del paso 2.</p>
+          <div class="fbloque">
+            <div data-tex="P(\text{spam}\mid \text{gratis}) = \frac{P(\text{gratis}\mid\text{spam})\,P(\text{spam})}{P(\text{gratis}\mid\text{spam})\,P(\text{spam}) + P(\text{gratis}\mid\text{normal})\,P(\text{normal})}" data-display></div>
+            <div class="vivo" id="vivoBayes"></div>
+          </div>
+          <p>Es exactamente el teorema de Bayes de su propia página: multiplicar prior por verosimilitud en cada clase y después repartir para que las dos sumen 1. En el escenario lo ves en tres filas de barras. Elige otras palabras arriba y mira qué pasa con "reunión".</p>
+          <p>El material de la unidad arma lo mismo con la palabra "Viagra" en una tabla de frecuencias
+            <cite class="cita" data-fuente="nb4" data-pag="2.1.3" data-ancla="computing-conditional-probability-with-bayes-theorem" data-seccion="Computing conditional probability with Bayes' theorem" data-que="La tabla de frecuencias de Viagra (4 de 20 spam y 1 de 80 normales), los nombres prior, likelihood, marginal likelihood y posterior, y la cuenta P(spam | Viagra) = 0.80. Ojo: llama teorema de Bayes a P(A | B) = P(A ∩ B) / P(B), que es la definición de condicional; el teorema es la segunda fórmula." data-cuando="Al terminar este paso"></cite>,
+            y la UD4 de Matemáticas lo hace en Python con una sola palabra
+            <cite class="cita" data-fuente="ud4" data-pag="19" data-seccion="Ejemplo práctico de spam" data-que="Spam con una palabra: P(spam) = 0.2, P(palabra | spam) = 0.7 y P(palabra | no spam) = 0.1; la marginal es 0.22 y la posterior 0.64." data-cuando="Para repasar con otros números"></cite>.</p>
+          <div class="check" id="chk3"><p class="check-tit">Calcula con los datos</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Lo ingenuo">
+          <span class="etapa">Paso 4</span>
+          <h3>Con varias palabras: el supuesto ingenuo</h3>
+          <p>El mensaje real tiene varias palabras a la vez. Bayes pide <span data-tex="P(\text{mensaje}\mid\text{spam})"></span>: la fracción de spam que tiene <b>exactamente</b> esa combinación de palabras presentes y ausentes. Prueba en el escenario: activa y apaga palabras y mira cuántos mensajes de entrenamiento coinciden exactamente.</p>
+          <p>Casi siempre la respuesta es cero de tres y cero de cinco. Con cinco palabras hay <span data-tex="2^5 = 32"></span> combinaciones posibles y solo ocho mensajes. En un filtro real hay miles de palabras: ningún mensaje nuevo se parece exactamente a uno viejo. Contar combinaciones enteras no funciona.</p>
+          <p>La salida ingenua: suponer que, <b>dentro de cada clase</b>, saber si aparece una palabra no dice nada sobre las otras. Así la probabilidad del mensaje entero se parte en un producto de probabilidades de una palabra, que sí sabemos contar:</p>
+          <div class="fbloque">
+            <div data-tex="P(x_1, \dots, x_5 \mid \text{spam}) \;\approx\; P(x_1\mid\text{spam})\,P(x_2\mid\text{spam})\cdots P(x_5\mid\text{spam}) = \prod_{j=1}^{5} P(x_j\mid\text{spam})" data-display></div>
+          </div>
+          <p>Aquí <span data-tex="x_j"></span> es "sí" o "no": si la palabra j aparece o no en el mensaje. Es la <b>independencia condicional a la clase</b>. El material la presenta en su lista de fortalezas y debilidades
+            <cite class="cita" data-fuente="nb4" data-pag="2.2" data-ancla="the-naive-bayes-algorithm" data-seccion="The naive Bayes algorithm" data-que="La tabla de fortalezas y debilidades y el supuesto ingenuo: todas las variables igual de importantes e independientes. Dice que casi nunca se cumple y aun así funciona, y que las probabilidades que da son menos fiables que las clases que predice." data-cuando="Al terminar este paso"></cite>
+            y la UD3 de Matemáticas la escribe como producto con la regla de decisión, avisando que sufre con características correlacionadas
+            <cite class="cita" data-fuente="ud3" data-pag="22" data-seccion="Naive Bayes" data-que="P(x | C_k) = ∏ P(x_i | C_k), la posterior con P(x) abajo y la regla arg max de P(C_k) ∏ P(x_i | C_k). Menciona que falla cuando las características están correlacionadas." data-cuando="Al terminar este paso"></cite>.</p>
+          <div class="check" id="chk4"><p class="check-tit">Antes de seguir</p><div class="cuerpo"></div></div>
+
+          <div class="destacado" id="destacado">
+            <p class="dest-tit">Una confusión muy común</p>
+            <h4>Si el supuesto es falso, ¿por qué funciona?</h4>
+            <p>En los datos, "premio" y "gratis" claramente van juntas. El supuesto es falso y Naive Bayes clasifica bien igual, porque para decidir solo importa <b>qué clase gana</b>, no por cuánto. Lo que sí se estropea son las probabilidades: cuando dos palabras dicen lo mismo, el modelo cuenta esa evidencia dos veces y se vuelve demasiado seguro.</p>
+            <p>Para verlo, imagina el caso extremo: una columna copiada. Usa solo la palabra "gratis", sin las demás. Con una copia, el paso 3 te dio <span data-tex="P(\text{spam}\mid\text{gratis}) = 2/3"></span>.</p>
+            <div class="check" id="chk4b"><p class="check-tit">Predice antes de tocar el botón</p><div class="cuerpo"></div></div>
+            <div class="btn-row" style="margin-top:12px">
+              <button type="button" class="primary" id="btnCopia" disabled>Copiar otra vez la columna de "gratis"</button>
+              <span class="zhint" id="copiaHint">Responde la predicción para activar el botón.</span>
+            </div>
+            <div class="copias" id="copias"></div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Multiplicar">
+          <span class="etapa">Paso 5</span>
+          <h3>Multiplicar, palabra por palabra</h3>
+          <p>Ahora el filtro completo. Para cada clase se empieza con el prior y se multiplica un factor por cada palabra del vocabulario:</p>
+          <ul>
+            <li>si la palabra <b>aparece</b> en el mensaje, el factor es <span data-tex="P(\text{palabra}\mid\text{clase})"></span>;</li>
+            <li>si <b>no aparece</b>, también cuenta: el factor es <span data-tex="1 - P(\text{palabra}\mid\text{clase})"></span>. Que un mensaje no diga "reunión" también es evidencia.</li>
+          </ul>
+          <div class="fbloque">
+            <div data-tex="\text{puntaje}(c) = P(c)\prod_{j=1}^{5} P(x_j\mid c) \qquad P(c\mid\text{mensaje}) = \frac{\text{puntaje}(c)}{\text{puntaje}(\text{spam}) + \text{puntaje}(\text{normal})}" data-display></div>
+            <div class="vivo" id="vivoProd"></div>
+          </div>
+          <p>Los dos puntajes no suman 1: son números pequeños que solo sirven para comparar. Dividir entre su suma los convierte en probabilidades. Por eso el denominador de Bayes se puede ignorar si solo quieres la clase: es el mismo para las dos. Activa y apaga palabras en el escenario y mira la tabla.</p>
+          <p>El material hace esta misma cuenta con cuatro palabras, incluidas las ausentes, y tiene dos detalles que conviene que reconozcas: en su tabla 4 la fila de "Groceries" en los normales da 8/80 y 71/80, que suman 79/80 (debería sumar 1), y redondea antes de dividir: con los valores exactos la posterior de spam es 0.851, no 0.857
+            <cite class="cita" data-fuente="nb4" data-pag="2.2.1" data-ancla="classification-with-naive-bayes" data-seccion="Classification with naive Bayes" data-que="La tabla 4 con Viagra, Money, Groceries y Unsubscribe; por qué la fórmula completa es intratable y cómo la independencia condicional la vuelve un producto; la cuenta 0.012 contra 0.002 y la fórmula general con 1/Z." data-cuando="Al terminar este paso"></cite>.</p>
+          <div class="cita" id="citaHipo" hidden></div>
+          <div class="check" id="chk5"><p class="check-tit">Calcula con los datos</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="El cero">
+          <span class="etapa">Paso 6</span>
+          <h3>Una palabra nunca vista lo anula todo</h3>
+          <p>Vuelve al mensaje del paso 1: «Premio gratis y oferta: hablamos en la reunión». Mira la columna de spam en el escenario. "Reunión" apareció en 0 de los 3 spam, así que su factor es <span data-tex="0/3 = 0"></span>. Y cualquier cosa multiplicada por cero da cero: <b>el puntaje de spam es 0</b>, aunque las otras tres palabras griten spam. El filtro dice 0 % de spam con total seguridad.</p>
+          <p>Que una palabra no haya aparecido en tres mensajes no significa que sea imposible. El arreglo de Laplace es sumar un número pequeño <span data-tex="\alpha"></span> (casi siempre 1) a cada cuenta, como si hubieras visto cada caso una vez más. Pero ojo: hay que sumarlo a <b>cada resultado posible</b> de la palabra. Aquí hay dos, "sí" y "no", así que abajo se suma <span data-tex="2\alpha"></span>:</p>
+          <div class="fbloque">
+            <div data-tex="P(\text{sí}\mid c) = \frac{N_{\text{sí},c} + \alpha}{N_c + 2\alpha} \qquad P(\text{no}\mid c) = \frac{N_{\text{no},c} + \alpha}{N_c + 2\alpha}" data-display></div>
+            <div class="vivo" id="vivoLaplace"></div>
+          </div>
+          <p>Con eso las dos probabilidades siguen sumando 1. En general, si una variable tiene <span data-tex="|X|"></span> categorías, se suma <span data-tex="\alpha|X|"></span> abajo, que es como lo escribe la UD3 de Matemáticas
+            <cite class="cita" data-fuente="ud3" data-pag="23" data-seccion="Suavizado de Laplace" data-que="La fórmula correcta: (N(x_i, C_k) + α) / (N(C_k) + α|X|), con |X| el número de categorías de la variable y α normalmente 1." data-cuando="Al terminar este paso"></cite>.
+            El prior <span data-tex="3/8"></span> no se toca: Laplace es para las verosimilitudes.</p>
+          <div class="check" id="chk6"><p class="check-tit">Predice antes de activar Laplace</p><div class="cuerpo"></div></div>
+          <details class="profundizar">
+            <summary>El "+4" del material de la unidad</summary>
+            <div>
+              <p>El apunte de la UD4 explica Laplace con cuatro palabras y dice que, al sumar 1 a cada numerador, hay que sumar 4 al denominador "porque hay cuatro palabras". No es así: cada palabra es su propia variable con dos niveles, sí y no, y el denominador sube en 2 (de 20 a 22 y de 80 a 82). Con +4 la probabilidad del "sí" y la del "no" ya no suman 1. Es lo que hace <code>e1071</code> por dentro: (cuenta + laplace) / (n + laplace · niveles). Con el +2 correcto el resultado del ejemplo cambia poco (spam cerca del 84 % en vez del 80 %), pero la regla es otra.</p>
+              <p>En la misma sección escribe <span data-tex="P(\text{spam}\mid\text{groceries}) = 0"></span>, cuando lo que vale cero es la verosimilitud <span data-tex="P(\text{groceries}\mid\text{spam}) = 0/20"></span>. Y aclara bien que Laplace no se aplica a los priors
+                <cite class="cita" data-fuente="nb4" data-pag="2.2.2" data-ancla="the-laplace-estimator" data-seccion="The Laplace estimator" data-que="El mensaje con las cuatro palabras que da spam = 0 por Groceries, la suma de 1 a cada cuenta y la cuenta 0.0004 contra 0.0001 (80 % spam). Ahí está el «+4» que debería ser +2." data-cuando="Después de resolver el chequeo de este paso"></cite>.</p>
+            </div>
+          </details>
+        </section>
+
+        <section class="paso card" data-titulo="Logaritmos">
+          <span class="etapa">Paso 7</span>
+          <h3>Sumar logaritmos para no hundirse en cero</h3>
+          <p>Con cinco palabras los puntajes ya son del orden de 0.01. Un filtro real multiplica miles de factores menores que 1. Mueve el deslizador de abajo del escenario: la computadora guarda números de hasta unos <span data-tex="10^{-308}"></span> con precisión completa, y por debajo de unos <span data-tex="10^{-324}"></span> el resultado se convierte en un <b>cero exacto</b>. A los dos puntajes les pasa lo mismo y la comparación se pierde. Se llama desbordamiento por abajo.</p>
+          <p>La salida es la regla de los logaritmos: el logaritmo de un producto es la suma de los logaritmos. En vez de multiplicar factores se suman sus logaritmos, que son números negativos de tamaño razonable.</p>
+          <div class="fbloque">
+            <div data-tex="\ln \text{puntaje}(c) = \ln P(c) + \sum_{j=1}^{5} \ln P(x_j\mid c) \qquad \hat c = \arg\max_c \,\ln \text{puntaje}(c)" data-display></div>
+            <div class="vivo" id="vivoLog"></div>
+          </div>
+          <p>En el escenario cada factor es un tramo de barra de largo <span data-tex="-\ln P"></span>: un factor cercano a 1 casi no ocupa lugar y un factor pequeño es un tramo largo. Gana la clase con la <b>barra más corta</b>. Como el logaritmo es creciente, el orden no cambia: la clase que gana con productos gana con sumas de logaritmos. Brasil escribe la regla final como un arg max, sin dividir entre la evidencia
+            <cite class="cita" data-fuente="brasil4v3" data-pag="41" data-pimp="286" data-seccion="4.4 Naive Bayes" data-que="La regla de decisión de Naive Bayes como arg max de prior por verosimilitudes (ec. 4.50): elegir la clase sin calcular el denominador." data-cuando="Al terminar este paso"></cite>.
+            La página de Logaritmos muestra la regla del producto con más calma.</p>
+          <div class="check" id="chk7"><p class="check-tit">Calcula con los datos</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Números">
+          <span class="etapa">Paso 8</span>
+          <h3>Variables numéricas: una campana por clase</h3>
+          <p>Hasta aquí cada variable era sí o no. ¿Y si la variable es un número, como la <b>hora de envío</b>? No se puede contar "en cuántos spam se mandó a las 7:13". Hay dos salidas.</p>
+          <p>La que enseña el material es <b>discretizar</b>: partir la hora en tramos (madrugada, mañana, tarde, noche) y tratar cada tramo como una categoría. Funciona, pero pierde información y depende de dónde cortes. Los objetivos de la unidad prometen explicar los predictores continuos, y la sección solo trae esta salida
+            <cite class="cita" data-fuente="nb4" data-pag="2.2.3" data-ancla="using-numeric-features-with-naive-bayes" data-seccion="Using numeric features with naive Bayes" data-que="Discretizar la hora de un correo en cuatro tramos a partir de un histograma, o con cuantiles si no hay cortes naturales, y el costo: pocos tramos ocultan tendencias y muchos dejan cuentas pequeñas. El NB gaussiano no aparece." data-cuando="Al terminar este paso"></cite>.</p>
+          <p>La otra, que no viene en el material de la unidad pero es la que usa <code>naiveBayes()</code> de <code>e1071</code> con columnas numéricas y <code>GaussianNB</code> de scikit-learn, es el <b>Naive Bayes gaussiano</b>: dentro de cada clase la variable se modela con una normal, con la media y el desvío de esa clase. La verosimilitud es la altura de la campana en el valor observado:</p>
+          <div class="fbloque">
+            <div data-tex="P(\text{hora}=h \mid c) \;\to\; f_c(h) = \frac{1}{\sigma_c\sqrt{2\pi}}\, e^{-\frac{(h-\mu_c)^2}{2\sigma_c^2}}" data-display></div>
+            <div class="vivo" id="vivoGauss"></div>
+          </div>
+          <p>Las horas son inventadas: los spam se mandaron a la 1, 3 y 5 (media 3, desvío 2) y los normales a las 8, 10, 12, 14 y 16 (media 12, desvío <span data-tex="\sqrt{10}\approx 3.16"></span>, con n − 1). El factor gaussiano se multiplica con los de las palabras como uno más. Brasil construye así su clasificador de dígitos, con una normal por rasgo
+            <cite class="cita" data-fuente="brasil4v3" data-pag="34" data-pimp="279" data-seccion="Bayes para clasificar; independencia condicional" data-que="Ecuaciones 4.39 a 4.46: la independencia condicional que permite multiplicar, la verosimilitud gaussiana de cada rasgo y la previa por frecuencia." data-cuando="Al terminar este paso"></cite>,
+            y lo resuelve con números en la tabla 4.5. Esa tabla tiene erratas: varias medias y varianzas no salen de los datos de su tabla 4.3, y en la página siguiente dice σ = 6.52 donde la raíz de 170.5 es 13.06. Rehaz las cuentas antes de seguirlas
+            <cite class="cita" data-fuente="brasil4v3" data-pag="37" data-pimp="282" data-seccion="Ejemplo numérico del clasificador" data-que="El clasificador gaussiano aplicado a s1 = [230, 5, 6, 0]: 3.13 × 10⁻⁷ contra 0.00034, gana el 9; y por qué los dos puntajes no suman 1. Tabla 4.5 con erratas." data-cuando="Después de mover la hora en el escenario"></cite>.</p>
+          <div class="check" id="chk8"><p class="check-tit">Predice antes de ver las campanas</p><div class="cuerpo"></div></div>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+        </div>
+        <div id="esc"></div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>El filtro completo de los pasos 5 a 7, con Laplace (α = 1) y en logaritmos, escrito como lo haría un programa. Los mismos ocho mensajes, el mismo mensaje nuevo. Elige Python o R, dale a reproducir y mira cómo se llena la tabla, clase por clase y palabra por palabra.</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir <span class="estado" data-reto="codigo1"></span></p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="true">Python</button>
+            <button type="button" data-lang="r" aria-pressed="false">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">1 · los datos</span><span data-f="2">2 · clase normal</span><span data-f="3">3 · clase spam</span><span data-f="4">4 · comparar</span>
+        </div>
+        <h3 class="mini-tit vr-tit" id="vrTablaTit">Las cuentas de cada palabra</h3>
+        <div class="tabla-wrap"><table class="tabla" id="vrTabla"></table></div>
+        <div class="vr-cuenta" id="vrCuenta"></div>
+        <h3 class="mini-tit vr-tit">Los dos puntajes en log</h3>
+        <div id="vrLog"></div>
+        <div class="vr-salida" id="vrSalida"></div>
+      </div>
+    </div>
+
+    <p class="vr-nota">En la práctica nadie escribe estos bucles. En Python, <code>BernoulliNB(alpha=1)</code> de scikit-learn hace exactamente este modelo de palabras sí o no; en R, <code>naiveBayes(datos, clase, laplace = 1)</code> de <code>e1071</code>, con cada palabra como factor. El material lo usa así en el caso del spam por SMS, aunque deja <code>laplace = 0</code>, el valor por defecto
+      <cite class="cita" data-fuente="nb4" data-pag="3.3.7" data-ancla="training-a-model-on-the-data" data-seccion="Training a model on the data" data-que="La sintaxis naiveBayes(train, class, laplace = 0) y predict(m, test, type = «class» o «raw») en la tabla 5, y el entrenamiento del filtro de SMS sin Laplace." data-cuando="Después de reproducir el programa hasta el final"></cite>.
+      Escribirlo una vez sirve para saber qué hay dentro y para no caer en las trampas de abajo.</p>
+
+    <details class="profundizar">
+      <summary>La versión sin el bucle de palabras</summary>
+      <div>
+        <p>El bucle de adentro se puede escribir con operaciones sobre arreglos. En Python, para una clase:</p>
+        <pre class="vr-pre" style="padding:8px 12px">P = (X[y == clase].sum(axis=0) + alfa) / (n_c + 2 * alfa)
+log_p = np.log(n_c / len(X)) + np.sum(nuevo * np.log(P) + (1 - nuevo) * np.log(1 - P))</pre>
+        <p><code>nuevo * np.log(P)</code> deja el logaritmo del "sí" donde la palabra aparece, y <code>(1 - nuevo) * np.log(1 - P)</code> el del "no" donde no aparece. Da los mismos −5.6352 y −4.6336. Es la fórmula que vas a ver en los libros para el modelo de Bernoulli: <span data-tex="\sum_j x_j \ln p_j + (1-x_j)\ln(1-p_j)"></span>.</p>
+      </div>
+    </details>
+
+    <details class="profundizar">
+      <summary>e1071 esconde los ceros: el argumento <code>threshold</code></summary>
+      <div>
+        <p>Si entrenas con <code>laplace = 0</code> y predices el mensaje de la reunión, esperarías 0 % de spam. <code>predict()</code> de <code>e1071</code> da <b>0.0581</b>: por defecto reemplaza cada probabilidad igual a 0 por <code>threshold = 0.001</code>. Es un parche silencioso, no Laplace. El caso oncológico de la unidad entrena así y su salida tiene probabilidades condicionales iguales a cero (por ejemplo grosor 9 y 10 en los benignos), sin comentarlo
+          <cite class="cita" data-fuente="nb4" data-pag="3.1" data-ancla="example-1-oncology-patients" data-seccion="Example 1: oncology patients" data-que="e1071::naiveBayes(class ~ ., data) sobre BreastCancer, con los priors 0.655 y 0.345 y las tablas condicionales por nivel; hay ceros en cl_thickness 9 y 10 para benign, justo después de explicar Laplace." data-cuando="Cuando hagas el caso práctico de la unidad"></cite>.</p>
+      </div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Otro Naive Bayes de scikit-learn</h3><span class="estado" data-reto="codigo2"></span></div>
+        <div id="codigo2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Columnas con 0 y 1 en e1071</h3><span class="estado" data-reto="codigo3"></span></div>
+        <div id="codigo3"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: la biblioteca te avisa en el índice cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>¿Spam o normal?</h3><span class="estado" data-reto="ojo"></span></div>
+        <p class="desc">Cinco mensajes con las palabras del filtro, entrenado con los ocho del recorrido y α = 1. Decide sin calcular, con la tabla del paso 2 en la cabeza. Después te muestro la probabilidad. Apruebas con 4 de 5.</p>
+        <div id="ojo"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Construir</span><h3>Arma el mensaje</h3><span class="estado" data-reto="constructor"></span></div>
+        <p class="desc">Activa palabras y elige α hasta cumplir cada objetivo. Se marcan solos.</p>
+        <div id="constr"></div>
+        <ul class="objetivos" id="objetivos"></ul>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>Calcúlalo con lápiz</h3><span class="estado" data-reto="mano"></span></div>
+        <p class="desc">Otro filtro, con dos palabras. El mensaje nuevo contiene las dos. Usa Laplace con α = 1. Haz la cuenta en papel antes de pedir pistas.</p>
+        <div id="manoDatos"></div>
+        <div id="mano"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Alguien se equivocó</h3><span class="estado" data-reto="error"></span></div>
+        <p class="desc">Con los datos del recorrido. Una de las líneas tiene un error. Tócala.</p>
+        <div id="error"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>El denominador que desaparece</h3><span class="estado" data-reto="prop1"></span></div>
+        <div id="prop1"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Un α enorme</h3><span class="estado" data-reto="prop2"></span></div>
+        <div id="prop2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Palabras que van juntas</h3><span class="estado" data-reto="prop3"></span></div>
+        <div id="prop3"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>La palabra que no está</h3><span class="estado" data-reto="prop4"></span></div>
+        <div id="prop4"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Recordar a la fuerza es lo que fija. Arma la regla de decisión de memoria y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Fórmula de memoria</span><h3>Arma la regla de Naive Bayes</h3><span class="estado" data-reto="formula"></span></div>
+        <p class="desc">Hay piezas de más que no pertenecen. No mires arriba.</p>
+        <div id="formula"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el material</h2>
+      <p class="lecturas-intro">Ya construiste el filtro con las manos. Ahora ve a la versión técnica y comprueba que la reconoces. Cada entrada dice qué vas a encontrar y en qué momento conviene leerla. Si abres la biblioteca con doble clic, el enlace abre el documento o el PDF en ese lugar.</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> Los ocho mensajes, el mensaje nuevo y las horas de envío son inventados, elegidos para que las cuentas sean limpias
+    (tres spam y cinco normales, así los denominadores con Laplace son 5 y 7). El material de la unidad trabaja con 5559 SMS reales; la idea es la misma.
+    Tu progreso se guarda solo en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+(function () {
+  "use strict";
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+  var ID = "naive-bayes";
+
+  var RETOS = ["ojo", "constructor", "mano", "error", "formula", "prop1", "prop2", "prop3", "prop4", "codigo1", "codigo2", "codigo3"];
+  var C = B.concepto({ id: "naive-bayes", retos: RETOS, pasos: 8 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  /* ---------------- utilidades ---------------- */
+  function f(v, d) { return B.fmt(v, d == null ? 3 : d); }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+  function pct(v) { return isNaN(v) ? "?" : B.fmt(v * 100, 1) + " %"; }
+  function cien(v) { return Math.max(0, Math.min(100, v * 100)).toFixed(1) + "%"; }
+
+  /* ---------------- datos del filtro ---------------- */
+  var VOC = ["gratis", "premio", "oferta", "reunión", "mañana"];
+  var MSG = [
+    { t: "Premio gratis, reclámalo mañana", c: "spam", x: [1, 1, 0, 0, 1], h: 3 },
+    { t: "Oferta gratis solo hoy", c: "spam", x: [1, 0, 1, 0, 0], h: 1 },
+    { t: "Gana un premio con esta oferta", c: "spam", x: [0, 1, 1, 0, 0], h: 5 },
+    { t: "La reunión es mañana a las diez", c: "normal", x: [0, 0, 0, 1, 1], h: 10 },
+    { t: "Te paso las notas de la reunión", c: "normal", x: [0, 0, 0, 1, 0], h: 14 },
+    { t: "Mañana hay café gratis en la oficina", c: "normal", x: [1, 0, 0, 0, 1], h: 8 },
+    { t: "Revisa la oferta antes de la reunión", c: "normal", x: [0, 0, 1, 1, 0], h: 12 },
+    { t: "Mañana entregan el premio de la rifa", c: "normal", x: [0, 1, 0, 0, 1], h: 16 }
+  ];
+  var NUEVO = [1, 1, 1, 1, 0], NUEVO_T = "Premio gratis y oferta: hablamos en la reunión";
+  var OFERTA = [1, 1, 1, 0, 0], OFERTA_T = "Premio gratis en esta oferta";
+  var CL = ["spam", "normal"], NOMC = { spam: "spam", normal: "normal" };
+  var N = { spam: 0, normal: 0 }, CNT = { spam: [0, 0, 0, 0, 0], normal: [0, 0, 0, 0, 0] };
+  MSG.forEach(function (m) { N[m.c]++; m.x.forEach(function (v, j) { CNT[m.c][j] += v; }); });
+  var TOTAL = MSG.length;
+
+  function pSi(c, j, a) { return (CNT[c][j] + a) / (N[c] + 2 * a); }
+  function fac(c, j, x, a) { var p = pSi(c, j, a); return x[j] ? p : 1 - p; }
+  function prior(c) { return N[c] / TOTAL; }
+  function puntaje(c, x, a) { var s = prior(c); for (var j = 0; j < VOC.length; j++) s *= fac(c, j, x, a); return s; }
+  function post(x, a) {
+    var s = puntaje("spam", x, a), h = puntaje("normal", x, a), t = s + h;
+    return { s: s, h: h, p: t > 0 ? s / t : NaN };
+  }
+  function entero(a) { return Math.abs(a - Math.round(a)) < 1e-9; }
+  // la fraccion del factor, escrita como se cuenta
+  function frac(c, j, x, a) {
+    if (!entero(a)) return f(fac(c, j, x, a));
+    var den = N[c] + 2 * a, si = CNT[c][j] + a;
+    return (x[j] ? si : den - si) + "/" + den;
+  }
+  function fracSi(c, j, a) { return entero(a) ? (CNT[c][j] + a) + "/" + (N[c] + 2 * a) : f(pSi(c, j, a)); }
+  function marcar(t) {
+    return esc(t).replace(/(gratis|premio|oferta|reunión|mañana)/gi, '<span class="w">$1</span>');
+  }
+  function textoDe(x) {
+    var ws = VOC.filter(function (_, j) { return x[j]; });
+    return ws.length ? ws.join(" · ") : "(ninguna de las cinco palabras)";
+  }
+  function gana(r) { return isNaN(r.p) ? null : r.p >= 0.5 ? "spam" : "normal"; }
+
+  /* ---------------- estado del recorrido ---------------- */
+  var est = { paso: 0, pred: B.nota(ID, "prediccion") || "", x: OFERTA.slice(), alfa: 0, pal: 0, copias: 1, n: 60, hora: 7,
+    chk2: false, chk3: false, chk5: false, chk6: false, chk7: false, chk8: false, chk4: false, chk4b: false };
+  var pasos;
+
+  var MODOS = [
+    { hint: "Las etiquetas están tapadas hasta que apuestes" },
+    { hint: "La tabla de cuentas por clase" },
+    { hint: "Elige una palabra: prior por verosimilitud" },
+    { hint: "Activa palabras y busca mensajes idénticos", x: OFERTA },
+    { hint: "Activa y apaga palabras", x: OFERTA },
+    { hint: "El mensaje del paso 1, con y sin Laplace", x: NUEVO },
+    { hint: "Cada factor como tramo de barra", x: NUEVO },
+    { hint: "La hora de envío de los ocho mensajes" }
+  ];
+
+  /* piezas del escenario */
+  function htmlMensajes(conClase, x) {
+    return '<div class="msgs">' + MSG.map(function (m) {
+      var igual = x && m.x.every(function (v, j) { return v === x[j]; });
+      return '<div class="msg' + (igual ? " igual" : x ? " atenuado" : "") + '"><span class="tag ' + (conClase ? m.c : "") + '">' +
+        (conClase ? NOMC[m.c] : "?") + '</span><span>' + marcar(m.t) + '</span></div>';
+    }).join("") + '</div>';
+  }
+  function htmlNuevo(t) { return '<div class="nuevo"><small>Mensaje nuevo</small>' + marcar(t) + '</div>'; }
+  function htmlConteos(ocultar) {
+    var h = '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>palabra</th><th class="cs">en spam (de ' + N.spam + ')</th><th class="cn">en normales (de ' + N.normal + ')</th></tr></thead><tbody>';
+    VOC.forEach(function (w, j) {
+      var oc = ocultar && j === 4;
+      h += '<tr><td class="pl">' + w + '</td><td class="cs' + (CNT.spam[j] === 0 ? " cero" : "") + '">' + CNT.spam[j] + ' de ' + N.spam + '</td>' +
+        (oc ? '<td class="oculto">?</td>' : '<td class="cn' + (CNT.normal[j] === 0 ? " cero" : "") + '">' + CNT.normal[j] + ' de ' + N.normal + '</td>') + '</tr>';
+    });
+    h += '<tr class="tot"><td class="pl">mensajes</td><td class="cs">' + N.spam + ' de ' + TOTAL + '</td><td class="cn">' + N.normal + ' de ' + TOTAL + '</td></tr>';
+    return h + '</tbody></table></div>';
+  }
+  function htmlPalabras(x, dis) {
+    return '<div class="palabras">' + VOC.map(function (w, j) {
+      return '<button type="button" data-w="' + j + '" aria-pressed="' + (x[j] ? "true" : "false") + '"' + (dis ? " disabled" : "") + '>' + w + '</button>';
+    }).join("") + '</div>';
+  }
+  function htmlAlfa(a, bloqueado, nota) {
+    return '<div class="fila-alfa"><span class="seg-lab">α de Laplace</span><div class="seg" role="group" aria-label="Alfa">' +
+      [0, 0.5, 1, 2, 10].map(function (v) {
+        return '<button type="button" data-alfa="' + v + '" aria-pressed="' + (v === a ? "true" : "false") + '"' + (bloqueado ? " disabled" : "") + '>' + v + '</button>';
+      }).join("") + '</div>' + (nota ? '<span class="nota">' + nota + '</span>' : '') + '</div>';
+  }
+  function barra(lab, cls, v, txt, oculto) {
+    return '<div class="bar"><span>' + lab + '</span><span class="pista-b"><i class="' + cls + '" style="width:' + (oculto ? "0%" : cien(v)) + '"></i></span><b' +
+      (oculto ? ' class="oculto"' : '') + '>' + (oculto ? "?" : txt) + '</b></div>';
+  }
+  function veredicto(r, oculto) {
+    if (oculto) return '<div class="veredicto">P(spam | mensaje) = <b class="oculto">?</b></div>';
+    if (isNaN(r.p)) return '<div class="veredicto">P(spam | mensaje) = 0 / 0 = <b class="malo">sin definir</b>: las dos clases tienen un cero.</div>';
+    var g = gana(r);
+    return '<div class="veredicto">P(spam | mensaje) = <b class="' + g + '">' + pct(r.p) + '</b> → ' + (g === "spam" ? "spam" : "normal") +
+      (r.s === 0 ? ' <span style="color:var(--bad)">(el puntaje de spam es exactamente 0)</span>' : '') + '</div>';
+  }
+
+  /* paso 3: una palabra */
+  function htmlUnaPalabra() {
+    var j = est.pal, oc = !est.chk3;
+    var ls = CNT.spam[j] / N.spam, ln = CNT.normal[j] / N.normal;
+    var us = prior("spam") * ls, un = prior("normal") * ln, t = us + un;
+    var h = '<div class="esc-sec"><h4>La palabra</h4><div class="palabras">' + VOC.map(function (w, k) {
+      return '<button type="button" data-pal="' + k + '" aria-pressed="' + (k === j ? "true" : "false") + '">' + w + '</button>';
+    }).join("") + '</div></div>';
+    h += '<div class="esc-sec"><h4>1 · prior</h4><div class="barras">' +
+      barra("spam", "spam", prior("spam"), "3/8 = " + f(prior("spam")), false) + barra("normal", "normal", prior("normal"), "5/8 = " + f(prior("normal")), false) + '</div></div>';
+    h += '<div class="esc-sec"><h4>2 · prior × P(' + VOC[j] + ' | clase)</h4><div class="barras">' +
+      barra("spam", "spam", us, "× " + CNT.spam[j] + "/" + N.spam + " = " + f(us), false) +
+      barra("normal", "normal", un, "× " + CNT.normal[j] + "/" + N.normal + " = " + f(un), false) + '</div>' +
+      '<p class="escala-log">No suman 1: suman ' + f(t) + '.</p></div>';
+    h += '<div class="esc-sec"><h4>3 · repartir para que sumen 1</h4><div class="barras">' +
+      barra("spam", "spam", t ? us / t : 0, t ? f(us / t) : "0/0", oc) + barra("normal", "normal", t ? un / t : 0, t ? f(un / t) : "0/0", oc) + '</div></div>';
+    return h;
+  }
+  function vivoBayes() {
+    var j = est.pal, w = VOC[j];
+    var us = prior("spam") * CNT.spam[j] / N.spam, un = prior("normal") * CNT.normal[j] / N.normal, t = us + un;
+    $("vivoBayes").innerHTML = "Con «" + w + "»: (" + CNT.spam[j] + "/" + N.spam + " · 3/8) / (" + CNT.spam[j] + "/" + N.spam + " · 3/8 + " + CNT.normal[j] + "/" + N.normal + " · 5/8) = " +
+      f(us) + " / " + f(t) + " = " + (est.chk3 ? "<b>" + (t ? f(us / t) : "?") + "</b>" : "?");
+  }
+
+  /* paso 4: coincidencias exactas */
+  function htmlExacto() {
+    var x = est.x, cs = 0, cn = 0;
+    MSG.forEach(function (m) { if (m.x.every(function (v, j) { return v === x[j]; })) { if (m.c === "spam") cs++; else cn++; } });
+    return '<div class="esc-sec"><h4>Tu mensaje: qué palabras tiene</h4>' + htmlPalabras(x) + '</div>' +
+      '<div class="esc-sec"><h4>Mensajes de entrenamiento idénticos</h4>' + htmlMensajes(true, x) + '</div>' +
+      '<div class="veredicto">P(mensaje | spam) = <b class="' + (cs ? "spam" : "malo") + '">' + cs + '/' + N.spam + '</b> &nbsp; P(mensaje | normal) = <b class="' + (cn ? "normal" : "malo") + '">' + cn + '/' + N.normal + '</b></div>' +
+      (cs + cn === 0 ? '<p class="escala-log">Ningún mensaje coincide: con este método no hay nada que comparar.</p>' : '<p class="escala-log">Encontraste una combinación que sí está. Prueba con el mensaje del paso 1.</p>');
+  }
+
+  /* pasos 5 y 6: tabla de factores */
+  function htmlFactores(x, a, opt) {
+    opt = opt || {};
+    var r = post(x, a), ocultar = opt.ocultar || {};
+    var h = '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>factor</th><th>en el mensaje</th><th class="cs">spam</th><th class="cn">normal</th></tr></thead><tbody>';
+    h += '<tr><td class="pl">prior</td><td></td><td class="cs">3/8</td><td class="cn">5/8</td></tr>';
+    VOC.forEach(function (w, j) {
+      h += '<tr><td class="pl">' + w + '</td><td>' + (x[j] ? "sí" : "no") + '</td>';
+      CL.forEach(function (c) {
+        var v = fac(c, j, x, a), oc = ocultar[c + j];
+        var cls = (c === "spam" ? "cs" : "cn") + (v === 0 ? " cero" : "") + (x[j] ? "" : " aus");
+        if (oc) { h += '<td class="oculto">?</td>'; return; }
+        h += '<td class="' + cls + '">' + (x[j] ? "" : '<small>1 − ' + fracSi(c, j, a) + ' = </small>') + frac(c, j, x, a) + '</td>';
+      });
+      h += '</tr>';
+    });
+    var ocS = opt.ocultarSpam;
+    h += '<tr class="tot"><td class="pl">puntaje</td><td></td><td class="cs' + (r.s === 0 ? " cero" : "") + '">' + (ocS ? "?" : f(r.s, 5)) + '</td><td class="cn' + (r.h === 0 ? " cero" : "") + '">' + f(r.h, 5) + '</td></tr>';
+    h += '</tbody></table></div>';
+    var t = r.s + r.h;
+    h += '<div class="barras">' + barra("spam", "spam", t ? r.s / t : 0, t ? f(r.s / t) : "0/0", ocS) + barra("normal", "normal", t ? r.h / t : 0, t ? f(r.h / t) : "0/0", ocS) + '</div>';
+    h += veredicto(r, ocS);
+    return h;
+  }
+  function htmlConstructorPaso(alfaVisible, bloqueado, nota) {
+    var x = est.x;
+    var h = '<div class="esc-sec"><h4>Tu mensaje: toca una palabra para ponerla o quitarla</h4>' + htmlPalabras(x) +
+      '<div class="presets"><button type="button" data-preset="nuevo">' + NUEVO_T + '</button><button type="button" data-preset="oferta">' + OFERTA_T + '</button></div></div>';
+    if (alfaVisible) h += htmlAlfa(est.alfa, bloqueado, nota);
+    var ocultar = {};
+    if (est.paso === 4 && !est.chk5) ocultar.spam4 = true;
+    h += '<div class="esc-sec">' + htmlFactores(x, est.alfa, { ocultar: ocultar, ocultarSpam: est.paso === 4 && !est.chk5 }) + '</div>';
+    return h;
+  }
+  function vivoProd() {
+    var x = est.x, a = est.alfa, r = post(x, a), oc = est.paso === 4 && !est.chk5;
+    function linea(c) {
+      return (c === "spam" ? "3/8" : "5/8") + " · " + VOC.map(function (_, j) { return (oc && c === "spam" && j === 4) ? "?" : frac(c, j, x, a); }).join(" · ") +
+        " = " + (oc && c === "spam" ? "?" : f(c === "spam" ? r.s : r.h, 5));
+    }
+    $("vivoProd").innerHTML = "spam: " + linea("spam") + "<br>normal: " + linea("normal") +
+      "<br>P(spam | mensaje) = " + (oc ? "?" : isNaN(r.p) ? "0 / 0" : f(r.s, 5) + " / (" + f(r.s, 5) + " + " + f(r.h, 5) + ") = <b>" + f(r.p) + "</b>");
+  }
+  function vivoLaplace() {
+    var a = est.alfa;
+    $("vivoLaplace").innerHTML = "Con α = " + a + ": P(reunión | spam) = (0 + " + a + ") / (3 + " + (2 * a) + ") = <b>" + f(pSi("spam", 3, a)) + "</b>" +
+      " &nbsp;·&nbsp; P(sin reunión | spam) = (3 + " + a + ") / (3 + " + (2 * a) + ") = " + f(1 - pSi("spam", 3, a));
+  }
+
+  /* paso 7: barras en log */
+  function htmlLog(x, a, ocultarPost) {
+    var h = '<div class="esc-sec"><h4>Tu mensaje</h4>' + htmlPalabras(x) + '</div>' + htmlAlfa(a, false, a === 0 ? "con α = 0 aparece un −∞" : "");
+    var tramos = {}, tot = {}, maxL = 0;
+    CL.forEach(function (c) {
+      var seg = [{ n: "prior", v: -Math.log(prior(c)), cls: "prior" }];
+      VOC.forEach(function (w, j) {
+        var p = fac(c, j, x, a);
+        seg.push({ n: (x[j] ? "" : "no ") + w, v: p > 0 ? -Math.log(p) : Infinity, cls: x[j] ? "" : "aus" });
+      });
+      tramos[c] = seg;
+      tot[c] = seg.reduce(function (s, t) { return s + t.v; }, 0);
+      if (isFinite(tot[c])) maxL = Math.max(maxL, tot[c]);
+    });
+    maxL = Math.max(maxL, 1) * 1.05;
+    CL.forEach(function (c) {
+      var lnp = -tot[c];
+      h += '<div class="logfila"><div class="cab"><span style="color:var(--' + (c === "spam" ? "k" : "j") + ')">' + c + '</span><span>ln puntaje = <b>' +
+        (isFinite(lnp) ? f(lnp, 4) : "−∞") + '</b></span></div><div class="logbar ' + c + '">';
+      tramos[c].forEach(function (t) {
+        if (!isFinite(t.v)) { h += '<span class="inf" title="' + t.n + ': ln 0 = −∞">' + t.n + ' = −∞</span>'; return; }
+        var w = t.v / maxL * 100;
+        h += '<span class="' + t.cls + '" style="width:' + w.toFixed(2) + '%" title="' + t.n + ': −ln = ' + f(t.v, 3) + '">' + (w > 9 ? t.n : "") + '</span>';
+      });
+      h += '</div></div>';
+    });
+    h += '<p class="escala-log">Cada tramo mide −ln del factor. Más corto es mejor. Los tramos claros son palabras ausentes y el primero es el prior.</p>';
+    var r = post(x, a);
+    h += veredicto(r, ocultarPost);
+    h += '<div class="hundir"><b style="font-size:13px">¿Y con muchas palabras?</b> Imagina un mensaje con <b id="nVal">' + est.n + '</b> palabras, cada una con factor 0.01.' +
+      '<input type="range" id="nSlider" min="10" max="300" step="5" value="' + est.n + '" aria-label="Número de palabras">' +
+      '<div class="linea-n" id="nOut"></div></div>';
+    return h;
+  }
+  function pintarHundir() {
+    var n = est.n, p = 1;
+    for (var i = 0; i < n; i++) p *= 0.01;
+    var out = $("nOut");
+    if (!out) return;
+    $("nVal").textContent = n;
+    out.innerHTML = "multiplicando: 0.01<sup>" + n + "</sup> = " + (p === 0 ? '<b class="malo">0 exacto</b>' : "<b>" + p.toExponential(2) + "</b>") +
+      "<br>sumando logs: " + n + " × ln 0.01 = <b>" + f(n * Math.log(0.01), 1) + "</b>" + (p === 0 ? " (sigue siendo un número normal)" : "");
+  }
+  function vivoLog() {
+    var x = est.x, a = est.alfa, ls = Math.log(puntaje("spam", x, a)), ln = Math.log(puntaje("normal", x, a));
+    $("vivoLog").innerHTML = "ln puntaje(spam) = " + (isFinite(ls) ? f(ls, 4) : "−∞") + " &nbsp;·&nbsp; ln puntaje(normal) = " + (isFinite(ln) ? f(ln, 4) : "−∞") +
+      (isFinite(ls) && isFinite(ln) ? "<br>diferencia = " + f(ls - ln, 4) + (est.chk7 ? " → spam es e<sup>" + f(ls - ln, 4) + "</sup> = <b>" + f(Math.exp(ls - ln)) + "</b> veces más probable" : "") : "");
+  }
+
+  /* paso 8: gaussiano */
+  var HS = MSG.filter(function (m) { return m.c === "spam"; }).map(function (m) { return m.h; });
+  var HN = MSG.filter(function (m) { return m.c === "normal"; }).map(function (m) { return m.h; });
+  function media(a) { return a.reduce(function (s, v) { return s + v; }, 0) / a.length; }
+  function desvio(a) { var m = media(a); return Math.sqrt(a.reduce(function (s, v) { return s + (v - m) * (v - m); }, 0) / (a.length - 1)); }
+  var GS = { spam: { m: media(HS), s: desvio(HS) }, normal: { m: media(HN), s: desvio(HN) } };
+  function dnorm(x, m, s) { return Math.exp(-(x - m) * (x - m) / (2 * s * s)) / (s * Math.sqrt(2 * Math.PI)); }
+  function htmlGauss() {
+    var W = 440, H = 230, M = { l: 34, r: 12, t: 14, b: 56 };
+    function sx(h) { return M.l + h / 24 * (W - M.l - M.r); }
+    var top = 0.22;
+    function sy(d) { return H - M.b - d / top * (H - M.t - M.b); }
+    var s = '<svg class="gauss-svg" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Horas de envío por clase y sus campanas">';
+    for (var t = 0; t <= 24; t += 4) {
+      s += '<line class="grid" x1="' + sx(t) + '" x2="' + sx(t) + '" y1="' + sy(0) + '" y2="' + sy(top) + '"/>';
+      s += '<text class="tick" x="' + sx(t) + '" y="' + (sy(0) + 14) + '" text-anchor="middle">' + t + ' h</text>';
+    }
+    s += '<line class="eje" x1="' + sx(0) + '" x2="' + sx(24) + '" y1="' + sy(0) + '" y2="' + sy(0) + '"/>';
+    if (est.chk8) CL.forEach(function (c) {
+      var g = GS[c], d = "M" + sx(0) + " " + sy(0), dl = "";
+      for (var k = 0; k <= 240; k++) { var hh = k / 10; d += " L" + sx(hh).toFixed(1) + " " + sy(dnorm(hh, g.m, g.s)).toFixed(1); dl += (k ? " L" : "M") + sx(hh).toFixed(1) + " " + sy(dnorm(hh, g.m, g.s)).toFixed(1); }
+      s += '<path class="area ' + c + '" d="' + d + ' L' + sx(24) + ' ' + sy(0) + ' Z"/><path class="curva ' + c + '" d="' + dl + '"/>';
+    });
+    CL.forEach(function (c, i) {
+      var g = GS[c];
+      s += '<line class="media ' + c + '" x1="' + sx(g.m) + '" x2="' + sx(g.m) + '" y1="' + sy(0) + '" y2="' + sy(top * 0.92) + '"/>';
+      s += '<text class="lab ' + c + '" x="' + (sx(g.m) + 4) + '" y="' + (M.t + 10 + i * 13) + '">' + c + ': μ = ' + f(g.m, 0) + ', σ = ' + f(g.s, 2) + '</text>';
+    });
+    MSG.forEach(function (m) {
+      var yy = sy(0) + 28 + (m.c === "spam" ? 0 : 10);
+      s += '<circle class="pt ' + m.c + '" cx="' + sx(m.h) + '" cy="' + yy + '" r="4.5"/>';
+    });
+    var hx = sx(est.hora);
+    s += '<line class="cursor" x1="' + hx + '" x2="' + hx + '" y1="' + sy(0) + '" y2="' + sy(top) + '"/>';
+    s += '<text class="lab acc" x="' + (hx + 4) + '" y="' + (sy(0) - 6) + '">' + B.fmt(est.hora, 1) + ' h</text>';
+    if (est.chk8) CL.forEach(function (c) {
+      var dv = dnorm(est.hora, GS[c].m, GS[c].s);
+      s += '<circle class="pt ' + c + '" cx="' + hx + '" cy="' + sy(dv) + '" r="4"/>';
+    });
+    s += '</svg>';
+    var h = '<div class="esc-sec"><h4>Hora de envío de los ocho mensajes</h4>' + s +
+      '<div class="hora"><span>hora</span><input type="range" id="horaSlider" min="0" max="24" step="0.5" value="' + est.hora + '"' + (est.chk8 ? "" : " disabled") +
+      ' aria-label="Hora del mensaje nuevo"><b id="horaVal">' + B.fmt(est.hora, 1) + ' h</b></div></div>';
+    h += '<div class="esc-sec" id="gaussNums"></div>';
+    return h;
+  }
+  function pintarGaussNums() {
+    var el = $("gaussNums");
+    if (!el) return;
+    if (!est.chk8) { el.innerHTML = '<p class="escala-log">Las campanas y sus alturas aparecen cuando respondas la predicción.</p>'; return; }
+    var fs = dnorm(est.hora, GS.spam.m, GS.spam.s), fn = dnorm(est.hora, GS.normal.m, GS.normal.s);
+    var us = prior("spam") * fs, un = prior("normal") * fn, p = us / (us + un);
+    el.innerHTML = '<div class="barras">' + barra("f spam", "spam", fs / 0.22, f(fs, 4), false) + barra("f normal", "normal", fn / 0.22, f(fn, 4), false) + '</div>' +
+      '<div class="veredicto">Solo con la hora: P(spam | ' + B.fmt(est.hora, 1) + ' h) = 3/8 · ' + f(fs, 4) + ' / (3/8 · ' + f(fs, 4) + ' + 5/8 · ' + f(fn, 4) + ') = <b class="' + (p >= 0.5 ? "spam" : "normal") + '">' + pct(p) + '</b></div>';
+  }
+  function vivoGauss() {
+    var h = est.hora;
+    $("vivoGauss").innerHTML = est.chk8
+      ? "f<sub>spam</sub>(" + B.fmt(h, 1) + ") = " + f(dnorm(h, GS.spam.m, GS.spam.s), 4) + " &nbsp;·&nbsp; f<sub>normal</sub>(" + B.fmt(h, 1) + ") = " + f(dnorm(h, GS.normal.m, GS.normal.s), 4)
+      : "f<sub>spam</sub>(7) = ? &nbsp;·&nbsp; f<sub>normal</sub>(7) = ?";
+  }
+
+  /* render general del escenario */
+  function render() {
+    var p = est.paso, h = "";
+    if (p === 0) h = '<div class="esc-sec"><h4>Entrenamiento</h4>' + htmlMensajes(!!est.pred) + htmlNuevo(NUEVO_T) + '</div>';
+    else if (p === 1) h = '<div class="esc-sec"><h4>Cuentas por clase</h4>' + htmlConteos(!est.chk2) + '</div><div class="esc-sec"><h4>Entrenamiento</h4>' + htmlMensajes(true) + '</div>';
+    else if (p === 2) h = htmlUnaPalabra() + '<div class="esc-sec"><h4>Cuentas por clase</h4>' + htmlConteos(false) + '</div>';
+    else if (p === 3) h = htmlExacto();
+    else if (p === 4) h = htmlConstructorPaso(false);
+    else if (p === 5) h = htmlConstructorPaso(true, !est.chk6, est.chk6 ? "" : "Responde la predicción para cambiar α.");
+    else if (p === 6) h = htmlLog(est.x, est.alfa, !est.chk7);
+    else h = htmlGauss();
+    $("esc").innerHTML = h;
+    if (p === 2) vivoBayes();
+    if (p === 4 || p === 5) vivoProd();
+    if (p === 5) vivoLaplace();
+    if (p === 6) { pintarHundir(); vivoLog(); }
+    if (p === 7) { pintarGaussNums(); vivoGauss(); }
+  }
+
+  function entrar(i) {
+    est.paso = i;
+    var m = MODOS[i];
+    $("escHint").textContent = m.hint;
+    if (m.x) est.x = m.x.slice();
+    if (i === 4) est.alfa = 0;
+    if (i === 5) est.alfa = est.chk6 ? 1 : 0;
+    if (i === 6) est.alfa = 1;
+    render();
+  }
+
+  $("esc").addEventListener("click", function (e) {
+    var b = e.target.closest("button");
+    if (!b || b.disabled) return;
+    if (b.hasAttribute("data-w")) { var j = +b.getAttribute("data-w"); est.x[j] = est.x[j] ? 0 : 1; render(); }
+    else if (b.hasAttribute("data-alfa")) { est.alfa = +b.getAttribute("data-alfa"); render(); }
+    else if (b.hasAttribute("data-pal")) { est.pal = +b.getAttribute("data-pal"); render(); }
+    else if (b.hasAttribute("data-preset")) { est.x = (b.getAttribute("data-preset") === "nuevo" ? NUEVO : OFERTA).slice(); render(); }
+  });
+  $("esc").addEventListener("input", function (e) {
+    if (e.target.id === "nSlider") { est.n = +e.target.value; pintarHundir(); }
+    if (e.target.id === "horaSlider") {
+      est.hora = +e.target.value;
+      $("horaVal").textContent = B.fmt(est.hora, 1) + " h";
+      var hx = $("esc").querySelector(".gauss-svg");
+      if (hx) { var nuevo = document.createElement("div"); nuevo.innerHTML = htmlGauss(); hx.parentNode.replaceChild(nuevo.querySelector(".gauss-svg"), hx); }
+      pintarGaussNums(); vivoGauss();
+    }
+  });
+
+  /* ---------------- chequeos de cada paso ---------------- */
+  // paso 1: apuesta libre
+  (function () {
+    var cont = $("chk1");
+    function mostrar() {
+      [].forEach.call(cont.querySelectorAll("[data-pred]"), function (b) {
+        b.disabled = true;
+        b.classList.toggle("ok", b.getAttribute("data-pred") === est.pred);
+      });
+      cont.querySelector(".fb").innerHTML = "Apostaste <b>" + est.pred + "</b>. Es lo que diría casi cualquiera" + (est.pred === "spam" ? "" : " que se fije en «reunión»") +
+        ". Ahora ves las etiquetas reales de los ocho. Guarda tu apuesta: en el paso 6 vas a ver que la cuenta más directa dice <b>0 % de spam</b> con total seguridad, por culpa de una sola palabra.";
+    }
+    cont.querySelector(".pred-opts").addEventListener("click", function (e) {
+      var b = e.target.closest("[data-pred]");
+      if (!b || est.pred) return;
+      est.pred = b.getAttribute("data-pred");
+      B.nota(ID, "prediccion", est.pred);
+      mostrar();
+      if (est.paso === 0) render();
+      pasos.completar(0);
+    });
+    if (est.pred) mostrar();
+  })();
+
+  B.numerico(cuerpo("chk2"), {
+    pregunta: "La celda marcada con ? está tapada. ¿En qué fracción de los mensajes <b>normales</b> aparece «mañana»? Escríbela como decimal.",
+    respuesta: 0.6,
+    tolerancia: 0.011,
+    pistas: ["Mira los cinco mensajes con etiqueta normal y cuenta en cuántos está «mañana».", "Está en 3 de los 5."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 4 / 8) < 0.011) return "Contaste los 4 mensajes con «mañana» sobre los 8. La pregunta es dentro de los normales: el denominador es 5.";
+      if (Math.abs(v - 3 / 8) < 0.011) return "El numerador está bien, pero dividiste entre los 8 mensajes. Dentro de los normales hay 5.";
+      if (Math.abs(v - 1 / 3) < 0.011) return "Esa es la fracción dentro de los spam. La pregunta es por los normales.";
+      return null;
+    },
+    explicacion: "3 de 5 = 0.6. Es la verosimilitud $P(\\text{mañana}\\mid\\text{normal})$: el denominador es siempre el total de la clase, no el de todos los mensajes.",
+    alResolver: function () { est.chk2 = true; if (est.paso === 1) render(); pasos.completar(1); }
+  });
+
+  B.numerico(cuerpo("chk3"), {
+    pregunta: "Usando solo la palabra «gratis»: ¿cuánto vale $P(\\text{spam}\\mid\\text{gratis})$? Con tres decimales.",
+    respuesta: 2 / 3,
+    tolerancia: 0.006,
+    pistas: ["Primero prior por verosimilitud en cada clase: $3/8 \\cdot 2/3$ y $5/8 \\cdot 1/5$.", "Son $0.250$ y $0.125$. Ahora divide el de spam entre la suma de los dos."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 0.25) < 0.006) return "Ese es el numerador, prior por verosimilitud. Falta dividir entre la suma de las dos clases.";
+      if (Math.abs(v - (2 / 3) / (2 / 3 + 1 / 5)) < 0.006) return "Te olvidaste del prior: hay menos spam (3 de 8) que normales (5 de 8).";
+      return null;
+    },
+    explicacion: "$0.250 / (0.250 + 0.125) = 2/3 \\approx 0.667$. Mira el truco: también es la fracción de mensajes con «gratis» que son spam, 2 de 3. Con una sola palabra, Bayes es contar.",
+    alResolver: function () { est.chk3 = true; if (est.paso === 2) render(); pasos.completar(2); }
+  });
+
+  B.opcionMultiple(cuerpo("chk4"), {
+    pregunta: "¿Qué supone exactamente Naive Bayes sobre las palabras?",
+    opciones: [
+      "Que, dentro de cada clase, la presencia de una palabra no dice nada sobre las otras",
+      "Que las palabras son independientes en todos los mensajes mezclados, sin mirar la clase",
+      "Que todas las palabras tienen la misma probabilidad de aparecer",
+      "Que un mensaje nuevo es idéntico a alguno de entrenamiento"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "Si fuera sin mirar la clase, «gratis» y «premio» serían independientes también entre todos los mensajes, y no lo son: las dos viven en el spam. La presentación de la unidad explica la hipótesis así y es un error; sus propias cuentas multiplican dentro de cada clase.",
+      "Las probabilidades de cada palabra son distintas: 2/3, 0/3, 1/3 en spam. El supuesto es sobre cómo se combinan, no sobre su tamaño.",
+      "Es justo lo contrario: el supuesto existe porque casi nunca hay un mensaje idéntico."],
+    explicacion: "Es <b>independencia condicional a la clase</b>: se multiplica $P(x_j\\mid\\text{spam})$ dentro del spam y $P(x_j\\mid\\text{normal})$ dentro de los normales. No dice que las palabras sean independientes en general. Ahora mira el recuadro de abajo.",
+    alResolver: function () { est.chk4 = true; cerrarPaso4(); }
+  });
+  B.opcionMultiple(cuerpo("chk4b"), {
+    pregunta: "Si el filtro usa dos columnas idénticas de «gratis» (la misma palabra contada dos veces), $P(\\text{spam}\\mid\\text{gratis})$...",
+    opciones: ["Sube por encima de 2/3", "Sigue en 2/3, porque no hay información nueva", "Baja", "Pasa a 1"],
+    correcta: 0,
+    pistas: [null, "Eso es lo que debería pasar. Pero el modelo no sabe que las columnas son la misma: multiplica el factor dos veces.",
+      "Multiplicar dos veces por la misma evidencia la refuerza, no la debilita.",
+      "Sube, pero no llega a 1: el factor de los normales es pequeño pero no cero."],
+    explicacion: "Con dos copias el spam queda $3/8 \\cdot (2/3)^2 = 1/6$ y el normal $5/8 \\cdot (1/5)^2 = 1/40$: la posterior sube a 0.870, sin ninguna información nueva. <b>Ahora toca el botón</b> y mira con tres copias.",
+    alResolver: function () {
+      est.chk4b = true;
+      $("btnCopia").disabled = false;
+      $("copiaHint").textContent = "";
+      pintarCopias();
+      cerrarPaso4();
+    }
+  });
+  function pintarCopias() {
+    var k = est.copias, s = prior("spam") * Math.pow(2 / 3, k), n = prior("normal") * Math.pow(1 / 5, k);
+    $("copias").innerHTML = k + (k === 1 ? " copia" : " copias") + ": spam 3/8 · (2/3)<sup>" + k + "</sup> = " + f(s, 4) + ", normal 5/8 · (1/5)<sup>" + k + "</sup> = " + f(n, 4) +
+      " → P(spam | gratis) = <b>" + f(s / (s + n)) + "</b>" + (k > 1 ? ". Misma evidencia, más seguridad." : "");
+  }
+  $("btnCopia").addEventListener("click", function () { est.copias = est.copias >= 4 ? 1 : est.copias + 1; pintarCopias(); });
+  function cerrarPaso4() { if (est.chk4 && est.chk4b) pasos.completar(3); }
+
+  B.numerico(cuerpo("chk5"), {
+    pregunta: "Para el mensaje «" + OFERTA_T + "», la celda de «mañana» en la columna de spam está tapada. ¿Cuánto vale ese factor? Tres decimales.",
+    respuesta: 2 / 3,
+    tolerancia: 0.006,
+    pistas: ["«Mañana» apareció en 1 de los 3 spam. ¿Está en este mensaje?", "No está. Entonces el factor es $1 - P(\\text{mañana}\\mid\\text{spam})$."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 1 / 3) < 0.006) return "Esa es la probabilidad de que «mañana» aparezca. En este mensaje no aparece: el factor es la probabilidad de que no aparezca.";
+      if (Math.abs(v - 1) < 0.006) return "Una palabra ausente no se salta en este modelo: también aporta su factor, $1 - P$.";
+      return null;
+    },
+    explicacion: "«Mañana» no está en el mensaje, así que el factor es $1 - 1/3 = 2/3 \\approx 0.667$. El puntaje de spam queda $3/8 \\cdot 2/3 \\cdot 2/3 \\cdot 2/3 \\cdot 1 \\cdot 2/3 = 0.0741$ contra $0.0008$ de los normales: 98.9 % spam.",
+    alResolver: function () { est.chk5 = true; if (est.paso === 4) render(); pasos.completar(4); }
+  });
+
+  B.numerico(cuerpo("chk6"), {
+    pregunta: "Con Laplace y $\\alpha = 1$, ¿cuánto pasa a valer $P(\\text{reunión}\\mid\\text{spam})$, que hoy es $0/3$? Escríbelo como decimal.",
+    respuesta: 0.2,
+    tolerancia: 0.006,
+    pistas: ["Arriba se suma α a la cuenta de «sí»: 0 + 1.", "Abajo se suma α por cada resultado posible de la palabra. ¿Cuántos resultados tiene: aparece o no aparece?"],
+    diagnostico: function (v) {
+      if (Math.abs(v - 0.25) < 0.006) return "Sumaste 1 abajo. Pero la palabra tiene dos resultados, sí y no, y cada uno recibe su +1: abajo se suma 2. Si no, P(sí) + P(no) no daría 1.";
+      if (Math.abs(v - 1 / 8) < 0.006) return "Sumaste 5 abajo, uno por cada palabra del vocabulario. Es el error del material de la unidad con su «+4». Cada palabra es su propia variable con dos niveles: +2.";
+      if (Math.abs(v - 1 / 3) < 0.006) return "Sumaste 1 arriba y nada abajo. Abajo también hay que sumar.";
+      return null;
+    },
+    explicacion: "$(0 + 1)/(3 + 2) = 1/5 = 0.2$. Ya no es cero, así que el spam vuelve a tener puntaje. <b>Ahora cambia α a 1</b> en el escenario y mira qué dice el filtro del mensaje del paso 1.",
+    alResolver: function () { est.chk6 = true; if (est.paso === 5) render(); pasos.completar(5); }
+  });
+
+  B.numerico(cuerpo("chk7"), {
+    pregunta: "Con $\\alpha = 1$ y el mensaje del paso 1, los log-puntajes son $-4.6336$ (spam) y $-5.6352$ (normal). ¿Cuántas veces más probable es spam que normal? Dos decimales.",
+    respuesta: Math.exp(-4.6336 + 5.6352),
+    tolerancia: 0.02,
+    pistas: ["Restar logaritmos es dividir: $\\ln a - \\ln b = \\ln(a/b)$.", "La diferencia es $1.0016$. Para volver de un logaritmo al número, usa $e^{x}$."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 1.0016) < 0.02) return "Esa es la diferencia de los logaritmos. Te falta volver al número con $e^{x}$.";
+      if (Math.abs(v - 4.6336 / 5.6352) < 0.02 || Math.abs(v - 5.6352 / 4.6336) < 0.02) return "Los logaritmos no se dividen: se restan, y después se aplica $e^{x}$.";
+      return null;
+    },
+    explicacion: "$e^{-4.6336 + 5.6352} = e^{1.0016} \\approx 2.72$. Spam es 2.72 veces más probable: $2.72 / (2.72 + 1) = 0.731$, la posterior de 73.1 %. Para decidir ni siquiera hace falta el $e^x$: basta ver qué log-puntaje es mayor.",
+    alResolver: function () { est.chk7 = true; if (est.paso === 6) render(); pasos.completar(6); }
+  });
+
+  B.opcionMultiple(cuerpo("chk8"), {
+    pregunta: "Llega un mensaje a las 7 h. Está a 4 horas de la media del spam (3 h) y a 5 de la de los normales (12 h). ¿Qué campana es más alta a las 7 h?",
+    opciones: [
+      "La de los normales, porque es más ancha",
+      "La de spam, porque las 7 h están más cerca de su media",
+      "Son iguales, porque las dos distancias son parecidas",
+      "No se puede decir sin el prior"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "Cerca en horas no es cerca en desvíos. El spam tiene σ = 2, así que 4 horas son 2 desvíos. Los normales tienen σ ≈ 3.16: 5 horas son 1.58 desvíos.",
+      "Las distancias en horas se parecen, pero las campanas tienen anchos distintos.",
+      "La altura de cada campana no depende del prior. El prior entra después, al multiplicar."],
+    explicacion: "A las 7 h el spam está a 2 desvíos de su media y los normales a 1.58: $f_{\\text{spam}}(7) = 0.0270$ y $f_{\\text{normal}}(7) = 0.0361$. Lo que manda es la distancia medida en desvíos. Ahora mueve la hora y busca dónde se cruzan las campanas.",
+    alResolver: function () { est.chk8 = true; if (est.paso === 7) render(); pasos.completar(7); }
+  });
+
+  pasos = B.pasos($("recorrido"), {
+    concepto: C,
+    alEntrar: entrar,
+    alTerminar: function () { location.hash = "retos"; }
+  });
+  est.chk2 = pasos.hecho(1);
+  est.chk3 = pasos.hecho(2);
+  est.chk5 = pasos.hecho(4);
+  est.chk6 = pasos.hecho(5);
+  est.chk7 = pasos.hecho(6);
+  est.chk8 = pasos.hecho(7);
+  if (pasos.hecho(3)) { est.chk4b = true; $("btnCopia").disabled = false; $("copiaHint").textContent = ""; pintarCopias(); }
+  if (est.pred && !pasos.hecho(0)) pasos.completar(0);
+  entrar(0);
+
+  /* ---------------- hipotesis inicial ---------------- */
+  (function () {
+    var ta = $("hipotesis"), t = null;
+    ta.value = B.nota(ID, "hipotesis");
+    function cita() {
+      var v = ta.value.trim(), el = $("citaHipo");
+      el.hidden = !v;
+      if (v) { el.textContent = ""; el.appendChild(document.createTextNode("Al principio escribiste: «" + v + "». ¿Contabas por palabra o por mensaje entero? ¿Qué hacías con las palabras que no aparecen?")); }
+    }
+    cita();
+    ta.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { B.nota(ID, "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; cita(); }, 500);
+    });
+  })();
+
+  /* ---------------- marcadores de estado de retos ---------------- */
+  function pintarEstados() {
+    [].forEach.call(document.querySelectorAll("[data-reto]"), function (el) {
+      var ok = C.retoOk(el.getAttribute("data-reto"));
+      el.textContent = ok ? "resuelto" : "pendiente";
+      el.classList.toggle("ok", ok);
+    });
+  }
+  C.alCambiar(pintarEstados);
+
+  /* ---------------- reto: ojo clinico ---------------- */
+  (function () {
+    var cont = $("ojo");
+    var CLAROS = [];
+    for (var k = 0; k < 32; k++) {
+      var x = [0, 1, 2, 3, 4].map(function (j) { return (k >> (4 - j)) & 1; });
+      var r = post(x, 1);
+      if (r.p > 0.7 || r.p < 0.3) CLAROS.push({ x: x, p: r.p });
+    }
+    cont.innerHTML = '<div class="ronda"></div><div class="ojo-msg"></div>' +
+      '<div class="ojo-opts"><button type="button" class="opt" data-a="spam">Spam</button><button type="button" class="opt" data-a="normal">Normal</button></div>' +
+      '<div class="fb" aria-live="polite"></div><div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    var rondas, ronda, aciertos, respondida;
+    function nueva() {
+      var sp = B.mezclar(CLAROS.filter(function (c) { return c.p > 0.5; })), no = B.mezclar(CLAROS.filter(function (c) { return c.p < 0.5; }));
+      var nS = Math.random() < 0.5 ? 2 : 3;
+      rondas = B.mezclar(sp.slice(0, nS).concat(no.slice(0, 5 - nS)));
+      ronda = 0; aciertos = 0;
+      mostrar();
+    }
+    function mostrar() {
+      respondida = false;
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 5 · aciertos " + aciertos;
+      cont.querySelector(".ojo-msg").innerHTML = "Palabras del mensaje: <b>" + textoDe(rondas[ronda].x) + "</b>";
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (b) { b.disabled = false; b.className = "opt"; });
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+    }
+    cont.querySelector(".ojo-opts").addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || respondida) return;
+      respondida = true;
+      var r = rondas[ronda], correcta = r.p > 0.5 ? "spam" : "normal", ok = b.getAttribute("data-a") === correcta;
+      if (ok) aciertos++;
+      b.classList.add(ok ? "ok" : "mal");
+      if (!ok) cont.querySelector('[data-a="' + correcta + '"]').classList.add("ok");
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (x) { x.disabled = true; });
+      var porque = r.x[3] && correcta === "spam" ? "«Reunión» empuja hacia normal, pero con Laplace ya no es un veto: las tres palabras de spam le ganan." :
+        r.x[3] ? "«Reunión» pesa mucho hacia normal: apareció en 3 de 5 normales y en ningún spam." :
+        correcta === "spam" ? "Varias de gratis, premio y oferta juntas, y sin «reunión»." :
+        "Pocas palabras de spam: las ausencias de gratis, premio y oferta también son evidencia de normal, y el prior favorece a los normales (5 de 8).";
+      cont.querySelector(".fb").innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No.</span> ') + "P(spam) = " + pct(r.p) + ". " + porque;
+      var sig = cont.querySelector(".sig");
+      sig.hidden = false;
+      if (ronda === 4) {
+        var aprobo = aciertos >= 4;
+        C.reto("ojo", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertos + " de 5" + (aprobo ? ". Aprobado." : ". Necesitas 4 para aprobar.");
+        sig.textContent = "Otra tanda";
+      } else sig.textContent = "Siguiente ronda";
+    });
+    cont.querySelector(".sig").addEventListener("click", function () { if (ronda === 4) nueva(); else { ronda++; mostrar(); } });
+    nueva();
+  })();
+
+  /* ---------------- reto: constructor ---------------- */
+  (function () {
+    var st = { x: [0, 0, 0, 0, 0], a: 1 };
+    var OBJ = [
+      { t: "Con α = 1, un mensaje con P(spam) mayor que 0.9.", ok: function () { return st.a === 1 && post(st.x, 1).p > 0.9; } },
+      { t: "Un mensaje que sin Laplace (α = 0) da exactamente 0 % de spam y con α = 1 da más de 50 %.", ok: function () { return post(st.x, 0).s === 0 && post(st.x, 0).h > 0 && post(st.x, 1).p > 0.5; } },
+      { t: "Un α y un mensaje con P(spam) entre 0.45 y 0.55.", ok: function () { var p = post(st.x, st.a).p; return p >= 0.45 && p <= 0.55; } },
+      { t: "Con α = 10, cualquier mensaje: mira a qué número se acerca P(spam) y compáralo con el prior 3/8.", ok: function () { return st.a === 10; } }
+    ];
+    var logrados = OBJ.map(function () { return false; }), avisado = false;
+    var ul = $("objetivos");
+    OBJ.forEach(function (o) { var li = document.createElement("li"); li.innerHTML = '<span class="m"></span><span>' + o.t + '</span>'; ul.appendChild(li); });
+    var cont = $("constr");
+    function pintar() {
+      var r = post(st.x, st.a);
+      cont.innerHTML = htmlPalabras(st.x) + htmlAlfa(st.a, false, "") +
+        '<div class="grande">P(spam | mensaje) = <b>' + (isNaN(r.p) ? "0 / 0" : f(r.p)) + '</b> &nbsp;·&nbsp; sin Laplace: <b>' + (isNaN(post(st.x, 0).p) ? "0 / 0" : f(post(st.x, 0).p)) + '</b></div>';
+      OBJ.forEach(function (o, i) { if (!logrados[i] && o.ok()) logrados[i] = true; ul.children[i].classList.toggle("hecho", logrados[i]); });
+      if (!avisado && logrados.every(Boolean)) { avisado = true; C.reto("constructor", true); }
+    }
+    cont.addEventListener("click", function (e) {
+      var b = e.target.closest("button");
+      if (!b) return;
+      if (b.hasAttribute("data-w")) { var j = +b.getAttribute("data-w"); st.x[j] = st.x[j] ? 0 : 1; }
+      if (b.hasAttribute("data-alfa")) st.a = +b.getAttribute("data-alfa");
+      pintar();
+    });
+    pintar();
+  })();
+
+  /* ---------------- reto: a mano ---------------- */
+  (function () {
+    var D;
+    function ent(a, b) { return a + Math.floor(Math.random() * (b - a + 1)); }
+    function cuenta(d, lap) {
+      var a = lap ? 1 : 0;
+      var s = d.ns / (d.ns + d.nn) * (d.s1 + a) / (d.ns + 2 * a) * (d.s2 + a) / (d.ns + 2 * a);
+      var n = d.nn / (d.ns + d.nn) * (d.n1 + a) / (d.nn + 2 * a) * (d.n2 + a) / (d.nn + 2 * a);
+      return { s: s, n: n, p: s + n > 0 ? s / (s + n) : NaN };
+    }
+    function generar() {
+      for (;;) {
+        var d = { ns: ent(2, 4), nn: ent(3, 6) };
+        d.s1 = ent(0, d.ns); d.s2 = ent(0, d.ns); d.n1 = ent(0, d.nn); d.n2 = ent(0, d.nn);
+        var r = cuenta(d, true);
+        if (r.p < 0.08 || r.p > 0.92 || Math.abs(r.p - 0.5) < 0.05) continue;
+        if (d.s1 + d.s2 + d.n1 + d.n2 < 2) continue;
+        d.r = r;
+        D = d;
+        break;
+      }
+      $("manoDatos").innerHTML = '<table class="datos-mano"><tr><th></th><th>spam (' + D.ns + ' mensajes)</th><th>normales (' + D.nn + ' mensajes)</th></tr>' +
+        '<tr><th>contienen «bono»</th><td>' + D.s1 + '</td><td>' + D.n1 + '</td></tr>' +
+        '<tr><th>contienen «urgente»</th><td>' + D.s2 + '</td><td>' + D.n2 + '</td></tr></table>';
+    }
+    var cfg = {
+      pregunta: "El mensaje nuevo dice «bono» y «urgente» (el vocabulario son solo esas dos palabras). Con $\\alpha = 1$, ¿cuánto vale $P(\\text{spam}\\mid\\text{mensaje})$? Tres decimales.",
+      respuesta: function () { return D.r.p; },
+      tolerancia: 0.006,
+      pistas: [
+        function () { return "Priors: $" + D.ns + "/" + (D.ns + D.nn) + "$ y $" + D.nn + "/" + (D.ns + D.nn) + "$. Con Laplace, cada cuenta va como $(c + 1)/(n + 2)$."; },
+        function () { return "Spam: $" + D.ns + "/" + (D.ns + D.nn) + " \\cdot " + (D.s1 + 1) + "/" + (D.ns + 2) + " \\cdot " + (D.s2 + 1) + "/" + (D.ns + 2) + " = " + f(D.r.s, 4) + "$. Normales: $" + D.nn + "/" + (D.ns + D.nn) + " \\cdot " + (D.n1 + 1) + "/" + (D.nn + 2) + " \\cdot " + (D.n2 + 1) + "/" + (D.nn + 2) + " = " + f(D.r.n, 4) + "$."; },
+        function () { return "Divide el puntaje de spam entre la suma: $" + f(D.r.s, 4) + " / (" + f(D.r.s, 4) + " + " + f(D.r.n, 4) + ")$."; }
+      ],
+      diagnostico: function (v) {
+        var sin = cuenta(D, false);
+        if (!isNaN(sin.p) && Math.abs(v - sin.p) < 0.006 && Math.abs(sin.p - D.r.p) > 0.006) return "Ese es el resultado sin Laplace. Suma 1 a cada cuenta y 2 a cada denominador.";
+        var a = 1, s1 = (D.s1 + a) / (D.ns + a) * (D.s2 + a) / (D.ns + a) * D.ns, n1 = (D.n1 + a) / (D.nn + a) * (D.n2 + a) / (D.nn + a) * D.nn;
+        if (Math.abs(v - s1 / (s1 + n1)) < 0.006) return "Sumaste 1 abajo. Cada palabra tiene dos resultados, sí y no: abajo se suma 2.";
+        var s2 = (D.s1 + 1) / (D.ns + 2) * (D.s2 + 1) / (D.ns + 2), n2 = (D.n1 + 1) / (D.nn + 2) * (D.n2 + 1) / (D.nn + 2);
+        if (Math.abs(v - s2 / (s2 + n2)) < 0.006 && D.ns !== D.nn) return "Te olvidaste del prior: multiplica cada puntaje por la fracción de mensajes de esa clase.";
+        if (Math.abs(v - D.r.s) < 0.006) return "Ese es el puntaje de spam. Falta dividir entre la suma de los dos.";
+        return null;
+      },
+      explicacion: function () { return "Spam " + f(D.r.s, 4) + ", normales " + f(D.r.n, 4) + ", y " + f(D.r.s, 4) + " / " + f(D.r.s + D.r.n, 4) + " = " + f(D.r.p) + "."; },
+      reintentable: true,
+      textoReintentar: "Otro ejercicio",
+      antesDeReintentar: generar,
+      alResolver: function (ok) { C.reto("mano", ok); }
+    };
+    generar();
+    B.numerico($("mano"), cfg);
+  })();
+
+  /* ---------------- reto: cazar el error ---------------- */
+  B.cazarError($("error"), {
+    variantes: [
+      {
+        intro: "Alguien aplicó Laplace con $\\alpha = 1$ a «reunión» en la clase spam (0 de 3):",
+        lineas: ["N_{\\text{sí},\\text{spam}} = 0,\\quad N_{\\text{spam}} = 3", "P(\\text{reunión}\\mid\\text{spam}) = (0+1)/(3+1) = 0.25",
+          "P(\\text{sin reunión}\\mid\\text{spam}) = (3+1)/(3+1) = 1", "\\text{la palabra ya no anula el puntaje de spam}"],
+        erronea: 1,
+        explicacion: "Abajo se suma α por cada nivel: sí y no. Es $(0+1)/(3+2) = 0.2$. Con +1 abajo la línea siguiente da $P(\\text{no}) = 1$ y las dos suman 1.25, imposible."
+      },
+      {
+        intro: "Mensaje «" + OFERTA_T + "», sin Laplace. Alguien calculó el puntaje de spam:",
+        lineas: ["P(\\text{spam}) = 3/8", "\\text{gratis, premio, oferta}:\\; 2/3 \\cdot 2/3 \\cdot 2/3", "\\text{reunión (no está)}:\\; 1 - 0/3 = 1",
+          "\\text{mañana (no está)}:\\; 1/3", "\\text{puntaje} = 3/8 \\cdot 8/27 \\cdot 1 \\cdot 1/3 = 0.037"],
+        erronea: 3,
+        explicacion: "«Mañana» no está en el mensaje: el factor es $1 - 1/3 = 2/3$, no $1/3$. El puntaje correcto es $3/8 \\cdot 8/27 \\cdot 2/3 = 0.074$."
+      },
+      {
+        intro: "Con una sola palabra, «gratis», alguien calculó la posterior:",
+        lineas: ["P(\\text{gratis}\\mid\\text{spam}) = 2/3,\\quad P(\\text{gratis}\\mid\\text{normal}) = 1/5", "\\text{spam}:\\; 2/3 \\cdot 3/8 = 0.250",
+          "\\text{normal}:\\; 1/5 \\cdot 3/8 = 0.075", "P(\\text{spam}\\mid\\text{gratis}) = 0.250 / 0.325 = 0.769"],
+        erronea: 2,
+        explicacion: "Usó el prior del spam en la clase normal. El prior de los normales es $5/8$: $1/5 \\cdot 5/8 = 0.125$, y la posterior es $0.250 / 0.375 = 0.667$."
+      }
+    ],
+    alResolver: function (ok) { C.reto("error", ok); }
+  });
+
+  /* ---------------- retos: propiedades ---------------- */
+  function prop(id, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple($(id), cfg);
+  }
+  prop("prop1", {
+    pregunta: "Para decidir la clase, Naive Bayes compara $P(c)\\prod_j P(x_j\\mid c)$ y no divide entre $P(\\text{mensaje})$. ¿Por qué puede ignorarlo?",
+    opciones: [
+      "Porque es el mismo número para las dos clases, así que no cambia cuál gana",
+      "Porque siempre vale 1",
+      "Porque es muy pequeño y no influye",
+      "Porque con Laplace se cancela"
+    ],
+    correcta: 0,
+    pistas: [null, "Si valiera 1, los puntajes ya sumarían 1. En el paso 5 suman mucho menos.",
+      "Ser pequeño no lo hace despreciable: dividir entre un número pequeño agranda mucho. Lo importante es que es igual en las dos clases.",
+      "Laplace toca las verosimilitudes, no este denominador."],
+    explicacion: "Dividir los dos puntajes entre el mismo número no cambia cuál es mayor. Solo hace falta para obtener probabilidades que sumen 1, y entonces es la suma de los puntajes."
+  });
+  prop("prop2", {
+    pregunta: "Si usas un $\\alpha$ enorme (por ejemplo 1000), $P(\\text{spam}\\mid\\text{mensaje})$ tiende a...",
+    opciones: ["El prior, 3/8 = 0.375", "0.5", "1", "0"],
+    correcta: 0,
+    pistas: [null, "Cada verosimilitud tiende a $\\alpha/(2\\alpha) = 1/2$, igual en las dos clases. ¿Qué queda distinto entre spam y normal?",
+      "Con α enorme las palabras dejan de distinguir. Nada empuja hacia el spam.",
+      "Laplace nunca produce ceros: suma, no resta."],
+    explicacion: "Con α enorme cada factor vale casi 1/2 en las dos clases, así que las palabras se cancelan y solo queda el prior: 3/8. Demasiado suavizado borra lo que aprendiste. Pruébalo con α = 10 en el reto de construir."
+  });
+  prop("prop3", {
+    pregunta: "En un corpus real, «oferta» y «descuento» casi siempre aparecen juntas. ¿Qué le pasa a Naive Bayes?",
+    opciones: [
+      "Suele acertar la clase, pero da probabilidades demasiado extremas",
+      "Deja de funcionar y hay que borrar una de las dos",
+      "No pasa nada: el supuesto se cumple igual",
+      "Las dos palabras se cancelan entre sí"
+    ],
+    correcta: 0,
+    pistas: [null, "El material dice que el supuesto casi nunca se cumple y el modelo funciona igual. ¿Qué parte de la salida sufre?",
+      "Si van juntas, dentro de cada clase saber una sí dice algo de la otra: el supuesto no se cumple.",
+      "Las dos empujan para el mismo lado, como las copias de «gratis» del paso 4."],
+    explicacion: "Cuenta la misma evidencia dos veces, como las copias de «gratis» del paso 4. La clase ganadora suele ser la misma, pero la probabilidad se va hacia 0 o 1. Por eso el material avisa que sus probabilidades son menos fiables que sus clases."
+  });
+  prop("prop4", {
+    pregunta: "El mensaje nuevo no contiene «mañana». En el modelo de esta página (palabras sí o no, como <code>BernoulliNB</code> o <code>e1071</code> con factores), esa ausencia...",
+    opciones: [
+      "Aporta el factor $1 - P(\\text{mañana}\\mid c)$ en cada clase",
+      "No aporta nada: solo cuentan las palabras presentes",
+      "Aporta $P(\\text{mañana}\\mid c)$, igual que si estuviera",
+      "Hace que el puntaje sea cero"
+    ],
+    correcta: 0,
+    pistas: [null, "Eso hace el modelo multinomial, que solo mira las palabras que aparecen. En este modelo cada palabra del vocabulario es una variable sí o no.",
+      "Si la palabra no está, la probabilidad que importa es la de que no esté.",
+      "Solo sería cero si «mañana» hubiera aparecido en todos los mensajes de la clase y no usaras Laplace."],
+    explicacion: "Cada palabra del vocabulario es una variable con dos valores. Si no aparece, su factor es la probabilidad del «no»: $1 - P(\\text{sí}\\mid c)$. Que un mensaje no diga «reunión» es evidencia de spam."
+  });
+
+  /* ---------------- formula de memoria ---------------- */
+  B.ordenar($("formula"), {
+    piezas: ["\\hat{c}", "=", "\\arg\\max_{c}", "P(c)", "\\displaystyle\\prod_{j=1}^{p}", "P(x_j \\mid c)"],
+    distractores: ["\\displaystyle\\sum_{j=1}^{p}", "P(c \\mid x_j)", "P(x_j)", "\\arg\\min_{c}"],
+    soluciones: [[0, 1, 2, 3, 4, 5], [0, 1, 2, 4, 5, 3]],
+    explicacion: "La clase con mayor prior por producto de verosimilitudes. En la computadora se usa la versión en log: $\\ln P(c) + \\sum_j \\ln P(x_j\\mid c)$, con las verosimilitudes suavizadas por Laplace.",
+    alResolver: function (ok) { C.reto("formula", ok); }
+  });
+
+  /* ---------------- vida real: el algoritmo en codigo ---------------- */
+  (function () {
+    var CODIGO = {
+      py: [
+        ["import", "import numpy as np"],
+        ["import", "from sklearn.naive_bayes import BernoulliNB"],
+        [null, ""],
+        ["vocab", "vocab = [\"gratis\", \"premio\", \"oferta\", \"reunión\", \"mañana\"]"],
+        [null, "# 1 = la palabra aparece en el mensaje; una fila por mensaje"],
+        ["datos", "X = np.array([[1, 1, 0, 0, 1],    # spam:   Premio gratis, reclámalo mañana"],
+        ["datos", "              [1, 0, 1, 0, 0],    # spam:   Oferta gratis solo hoy"],
+        ["datos", "              [0, 1, 1, 0, 0],    # spam:   Gana un premio con esta oferta"],
+        ["datos", "              [0, 0, 0, 1, 1],    # normal: La reunión es mañana a las diez"],
+        ["datos", "              [0, 0, 0, 1, 0],    # normal: Te paso las notas de la reunión"],
+        ["datos", "              [1, 0, 0, 0, 1],    # normal: Mañana hay café gratis en la oficina"],
+        ["datos", "              [0, 0, 1, 1, 0],    # normal: Revisa la oferta antes de la reunión"],
+        ["datos", "              [0, 1, 0, 0, 1]])   # normal: Mañana entregan el premio de la rifa"],
+        ["y", "y = np.array([\"spam\"] * 3 + [\"normal\"] * 5)"],
+        ["nuevo", "nuevo = np.array([1, 1, 1, 1, 0])  # Premio gratis y oferta: hablamos en la reunión"],
+        ["alfa", "alfa = 1                           # Laplace"],
+        [null, ""],
+        ["puntaje0", "puntaje = {}"],
+        ["forc", "for clase in [\"normal\", \"spam\"]:"],
+        ["filas", "    filas = X[y == clase]"],
+        ["nc", "    n_c = len(filas)"],
+        ["prior", "    log_p = np.log(n_c / len(X))                   # el prior"],
+        ["forj", "    for j in range(len(vocab)):"],
+        ["cuenta", "        cuenta = filas[:, j].sum()"],
+        ["psi", "        p_si = (cuenta + alfa) / (n_c + 2 * alfa)  # +alfa por cada nivel: sí y no"],
+        ["p", "        p = p_si if nuevo[j] == 1 else 1 - p_si"],
+        ["logp", "        log_p += np.log(p)                         # sumar logs = multiplicar"],
+        ["guardar", "    puntaje[clase] = log_p"],
+        ["imprimir", "    print(clase, round(log_p, 4))"],
+        [null, ""],
+        ["exp", "s = np.exp(np.array([puntaje[\"normal\"], puntaje[\"spam\"]]))"],
+        ["post", "print(np.round(s / s.sum(), 4))                    # normalizar"],
+        [null, ""],
+        ["modelo", "modelo = BernoulliNB(alpha=1).fit(X, y)"],
+        ["comparar", "print(modelo.classes_, np.round(modelo.predict_proba([nuevo]), 4))"]
+      ],
+      r: [
+        ["import", "library(e1071)"],
+        [null, ""],
+        ["vocab", "vocab <- c(\"gratis\", \"premio\", \"oferta\", \"reunión\", \"mañana\")"],
+        [null, "# 1 = la palabra aparece en el mensaje; una fila por mensaje"],
+        ["datos", "X <- matrix(c(1, 1, 0, 0, 1,    # spam:   Premio gratis, reclámalo mañana"],
+        ["datos", "              1, 0, 1, 0, 0,    # spam:   Oferta gratis solo hoy"],
+        ["datos", "              0, 1, 1, 0, 0,    # spam:   Gana un premio con esta oferta"],
+        ["datos", "              0, 0, 0, 1, 1,    # normal: La reunión es mañana a las diez"],
+        ["datos", "              0, 0, 0, 1, 0,    # normal: Te paso las notas de la reunión"],
+        ["datos", "              1, 0, 0, 0, 1,    # normal: Mañana hay café gratis en la oficina"],
+        ["datos", "              0, 0, 1, 1, 0,    # normal: Revisa la oferta antes de la reunión"],
+        ["datos", "              0, 1, 0, 0, 1),   # normal: Mañana entregan el premio de la rifa"],
+        ["datos", "            ncol = 5, byrow = TRUE)"],
+        ["y", "y <- c(rep(\"spam\", 3), rep(\"normal\", 5))"],
+        ["nuevo", "nuevo <- c(1, 1, 1, 1, 0)  # Premio gratis y oferta: hablamos en la reunión"],
+        ["alfa", "alfa <- 1                  # Laplace"],
+        [null, ""],
+        ["puntaje0", "puntaje <- c(normal = 0, spam = 0)"],
+        ["forc", "for (clase in c(\"normal\", \"spam\")) {"],
+        ["filas", "  filas <- X[y == clase, , drop = FALSE]"],
+        ["nc", "  n_c <- nrow(filas)"],
+        ["prior", "  log_p <- log(n_c / nrow(X))                   # el prior"],
+        ["forj", "  for (j in 1:length(vocab)) {"],
+        ["cuenta", "    cuenta <- sum(filas[, j])"],
+        ["psi", "    p_si <- (cuenta + alfa) / (n_c + 2 * alfa)  # +alfa por cada nivel: sí y no"],
+        ["p", "    p <- if (nuevo[j] == 1) p_si else 1 - p_si"],
+        ["logp", "    log_p <- log_p + log(p)                     # sumar logs = multiplicar"],
+        [null, "  }"],
+        ["guardar", "  puntaje[clase] <- log_p"],
+        ["imprimir", "  print(paste(clase, round(log_p, 4)))"],
+        [null, "}"],
+        [null, ""],
+        ["exp", "s <- exp(puntaje)"],
+        ["post", "print(round(s / sum(s), 4))                     # normalizar"],
+        [null, ""],
+        ["modelo", "datos <- as.data.frame(lapply(as.data.frame(X), factor, levels = c(0, 1)))"],
+        ["modelo", "nuevo_df <- as.data.frame(lapply(as.data.frame(t(nuevo)), factor, levels = c(0, 1)))"],
+        ["modelo", "modelo <- naiveBayes(datos, factor(y), laplace = 1)"],
+        ["comparar", "print(round(predict(modelo, nuevo_df, type = \"raw\"), 4))"]
+      ]
+    };
+    var SALIDA = {"py": "normal -5.6352\nspam -4.6336\n[0.2686 0.7314]\n['normal' 'spam'] [[0.2686 0.7314]]", "r": "[1] \"normal -5.6352\"\n[1] \"spam -4.6336\"\nnormal   spam \n0.2686 0.7314 \n     normal   spam\n[1,] 0.2686 0.7314"};
+    var A = 1, ORDEN = ["normal", "spam"];
+    var EV = [];
+    (function () {
+      var res = { normal: null, spam: null }, fase = 1, veces = 0, filas = {};
+      function foto(id, extra) {
+        EV.push(Object.assign({ id: id, fase: fase, res: { normal: res.normal, spam: res.spam }, veces: veces, filas: Object.assign({}, filas),
+          clase: null, j: null, nc: null, logp: null, cuenta: null, psi: null, p: null }, extra || {}));
+      }
+      foto("import"); foto("vocab"); foto("datos"); foto("y"); foto("nuevo"); foto("alfa"); foto("puntaje0");
+      ORDEN.forEach(function (c, ci) {
+        fase = 2 + ci;
+        foto("forc", { clase: c });
+        foto("filas", { clase: c });
+        foto("nc", { clase: c, nc: N[c] });
+        var lp = Math.log(N[c] / TOTAL);
+        foto("prior", { clase: c, nc: N[c], logp: lp });
+        for (var j = 0; j < VOC.length; j++) {
+          foto("forj", { clase: c, nc: N[c], j: j, logp: lp });
+          foto("cuenta", { clase: c, nc: N[c], j: j, logp: lp, cuenta: CNT[c][j] });
+          var ps = pSi(c, j, A);
+          veces++;
+          foto("psi", { clase: c, nc: N[c], j: j, logp: lp, cuenta: CNT[c][j], psi: ps });
+          var p = NUEVO[j] ? ps : 1 - ps;
+          filas[c + j] = { cuenta: CNT[c][j], psi: ps, p: p };
+          foto("p", { clase: c, nc: N[c], j: j, logp: lp, cuenta: CNT[c][j], psi: ps, p: p });
+          lp += Math.log(p);
+          foto("logp", { clase: c, nc: N[c], j: j, logp: lp, cuenta: CNT[c][j], psi: ps, p: p });
+        }
+        res[c] = lp;
+        foto("guardar", { clase: c, logp: lp });
+        foto("imprimir", { clase: c, logp: lp });
+      });
+      fase = 4;
+      foto("exp"); foto("post", { fin: true, post: true }); foto("modelo", { fin: true, post: true }); foto("comparar", { fin: true, post: true, lib: true });
+    })();
+
+    function n4(v) { return B.fmt(v, 4); }
+    function narrar(e, ctx) {
+      var py = ctx.lang() === "py", ix = ctx.ix;
+      switch (e.id) {
+        case "import": return py ? "Carga NumPy y el modelo <b>BernoulliNB</b> de scikit-learn, que solo se usa al final para comparar." : "Carga <b>e1071</b>, el paquete que usa la unidad. Solo se usa al final para comparar.";
+        case "vocab": return "Las cinco palabras del vocabulario. Todo lo demás del texto se ignora.";
+        case "datos": return "Los ocho mensajes como una tabla de unos y ceros: <b>1</b> si la palabra aparece. Es la tabla del paso 2, mensaje por mensaje.";
+        case "y": return "Las etiquetas: los tres primeros son spam y los cinco siguientes, normales.";
+        case "nuevo": return "El mensaje nuevo: gratis, premio, oferta y reunión sí; mañana no.";
+        case "alfa": return "<b>alfa = 1</b>: Laplace, para que «reunión» no anule el spam.";
+        case "puntaje0": return "Aquí se guardará el log-puntaje de cada clase.";
+        case "forc": return "Empieza la clase <b>" + e.clase + "</b>.";
+        case "filas": return "Se queda solo con los mensajes de la clase " + e.clase + ".";
+        case "nc": return "Son <b>n_c = " + e.nc + "</b> mensajes.";
+        case "prior": return "Arranca con el log del prior: ln(" + e.nc + "/8) = <b>" + n4(e.logp) + "</b>.";
+        case "forj": return "Palabra <b>j = " + ix(e.j) + "</b>: «" + VOC[e.j] + "».";
+        case "cuenta": return "«" + VOC[e.j] + "» aparece en <b>" + e.cuenta + "</b> de los " + e.nc + " mensajes " + e.clase + ".";
+        case "psi": return "Con Laplace: (" + e.cuenta + " + 1) / (" + e.nc + " + 2) = <b>" + n4(e.psi) + "</b>." + (e.cuenta === 0 ? " Sin Laplace habría sido 0." : "");
+        case "p": return NUEVO[e.j] ? "La palabra está en el mensaje: el factor es p_si = <b>" + n4(e.p) + "</b>." : "La palabra no está: el factor es 1 − " + n4(e.psi) + " = <b>" + n4(e.p) + "</b>.";
+        case "logp": return "Suma ln(" + n4(e.p) + ") = " + n4(Math.log(e.p)) + ". El log-puntaje va en <b>" + n4(e.logp) + "</b>.";
+        case "guardar": return "Guarda el log-puntaje de " + e.clase + ": <b>" + n4(e.logp) + "</b>.";
+        case "imprimir": return "Lo imprime: " + e.clase + " " + n4(e.logp) + ".";
+        case "exp": return "Vuelve de los logs con exp. Aquí no hay riesgo: son solo dos números de tamaño razonable.";
+        case "post": return "Divide entre la suma: normal <b>0.2686</b> y spam <b>0.7314</b>. Es el 73.1 % del paso 6.";
+        case "modelo": return py ? "Entrena <b>BernoulliNB(alpha=1)</b> con los mismos datos." : "Pasa cada columna a factor con niveles 0 y 1, y entrena <b>naiveBayes(..., laplace = 1)</b>.";
+        case "comparar": return "La librería da exactamente lo mismo: <b>0.2686</b> y <b>0.7314</b>.";
+      }
+      return "";
+    }
+    function visual(e, anterior, ctx) {
+      var clase = e && e.clase, lang = ctx.lang();
+      var h = '<thead><tr><th>palabra</th><th>en el nuevo</th>';
+      ORDEN.forEach(function (c) { h += '<th class="' + (c === "spam" ? "cs" : "cn") + '">' + c + ': cuenta → p_si → p</th>'; });
+      h += '</tr></thead><tbody>';
+      VOC.forEach(function (w, j) {
+        h += '<tr' + (e && e.j === j ? ' class="on"' : '') + '><td class="pl">' + ix0(ctx, j) + ' ' + w + '</td><td>' + (NUEVO[j] ? "1" : "0") + '</td>';
+        ORDEN.forEach(function (c) {
+          var r = e && e.filas[c + j], act = e && e.clase === c && e.j === j;
+          var txt = "";
+          if (act) {
+            txt = e.cuenta !== null ? e.cuenta + "/" + e.nc : "";
+            if (e.psi !== null) txt += " → " + n4(e.psi);
+            if (e.p !== null) txt += " → <b>" + n4(e.p) + "</b>";
+          } else if (r) txt = r.cuenta + "/" + N[c] + " → " + n4(r.psi) + " → <b>" + n4(r.p) + "</b>";
+          h += '<td class="' + (c === "spam" ? "cs" : "cn") + (act ? " act" : "") + '">' + txt + '</td>';
+        });
+        h += '</tr>';
+      });
+      $("vrTabla").innerHTML = h + '</tbody>';
+      $("vrCuenta").innerHTML = e && e.id === "logp" ? "log_p = " + n4(e.logp - Math.log(e.p)) + " + ln(" + n4(e.p) + ") = <b>" + n4(e.logp) + "</b>"
+        : e && e.id === "prior" ? "log_p = ln(" + e.nc + "/8) = <b>" + n4(e.logp) + "</b>"
+        : e && e.post ? "exp(−5.6352) = " + n4(Math.exp(e.res.normal)) + " &nbsp;·&nbsp; exp(−4.6336) = " + n4(Math.exp(e.res.spam)) + " → <b>0.2686</b> y <b>0.7314</b>" : "";
+      var lh = "";
+      ORDEN.forEach(function (c) {
+        var v = e ? (e.res[c] !== null ? e.res[c] : (e.clase === c && e.logp !== null ? e.logp : null)) : null;
+        var w = v === null ? 0 : Math.min(100, -v / 6.5 * 100);
+        lh += '<div class="bar"><span style="color:var(--' + (c === "spam" ? "k" : "j") + ')">' + c + '</span><span class="pista-b"><i class="' + c + '" style="width:' + w.toFixed(1) + '%"></i></span><b>' + (v === null ? "" : n4(v)) + '</b></div>';
+      });
+      $("vrLog").innerHTML = '<div class="barras">' + lh + '</div><p class="escala-log">Largo de la barra = −log_p. La más corta gana.</p>';
+      var sal = "";
+      if (e) {
+        var lineasSal = SALIDA[lang].split("\n");
+        var cuantas = 0;
+        EV.slice(0, EV.indexOf(e) + 1).forEach(function (x) {
+          if (x.id === "imprimir") cuantas += 1;
+          if (x.id === "post") cuantas += lang === "py" ? 1 : 2;
+          if (x.id === "comparar") cuantas += lang === "py" ? 1 : 2;
+        });
+        sal = lineasSal.slice(0, cuantas).join("\n");
+      }
+      $("vrSalida").textContent = sal;
+    }
+    function ix0(ctx, j) { return "[" + ctx.ix(j) + "]"; }
+    B.vidaReal($("vidareal"), {
+      codigo: CODIGO,
+      eventos: EV,
+      narrar: narrar,
+      vars: function (e, ctx) {
+        var v = [];
+        if (e && e.clase) v.push('<span>clase = <b>' + e.clase + '</b></span>');
+        if (e && e.nc !== null) v.push('<span>n_c = <b>' + e.nc + '</b></span>');
+        if (e && e.j !== null) v.push('<span class="vj">j = <b>' + ctx.ix(e.j) + '</b></span>');
+        if (e && e.cuenta !== null) v.push('<span>cuenta = <b>' + e.cuenta + '</b></span>');
+        if (e && e.psi !== null) v.push('<span>p_si = <b>' + n4(e.psi) + '</b></span>');
+        if (e && e.p !== null) v.push('<span>p = <b>' + n4(e.p) + '</b></span>');
+        if (e && e.logp !== null) v.push('<span>log_p = <b>' + n4(e.logp) + '</b></span>');
+        v.push('<span>p_si se calculó <b>' + (e ? e.veces : 0) + '</b> veces</span>');
+        return v;
+      },
+      visual: visual,
+      demora: function (e) { return !e ? 600 : e.id === "forj" ? 300 : e.id === "cuenta" || e.id === "psi" || e.id === "p" ? 650 : e.id === "logp" ? 800 : 1000; }
+    });
+
+    /* chequeo de prediccion y trampas reales */
+    B.numerico(cuerpo("vrPred"), {
+      pregunta: "¿Cuántas veces se va a ejecutar la línea de Laplace, <code>p_si = (cuenta + alfa) / (n_c + 2 * alfa)</code>, hasta terminar?",
+      respuesta: 10,
+      tolerancia: 0,
+      pistas: ["El bucle de afuera recorre las clases y el de adentro las palabras.", "Hay 2 clases y 5 palabras en el vocabulario."],
+      diagnostico: function (v) {
+        if (v === 5) return "Eso es por una sola clase. El bucle de afuera corre para normal y para spam.";
+        if (v === 8 || v === 40 || v === 16) return "El bucle no recorre los mensajes: la cuenta de cada palabra sale de una suma de una columna. Recorre clases y palabras.";
+        if (v === 4) return "La palabra ausente también se calcula: el bucle recorre todo el vocabulario.";
+        return null;
+      },
+      explicacion: "2 clases por 5 palabras: <b>10</b>. Fíjate que no depende de cuántos mensajes hay: la cuenta de una palabra es una suma de su columna. Ahora dale a reproducir y mira el contador.",
+      alResolver: function (ok) { C.reto("codigo1", ok); }
+    });
+    prop("codigo2", {
+      pregunta: "Con los mismos datos, <code>MultinomialNB(alpha=1)</code> de scikit-learn da <b>[0.516, 0.484]</b> en vez de <b>[0.2686, 0.7314]</b>: dice que el mensaje es normal. ¿Por qué?",
+      opciones: [
+        "Es otro modelo: cuenta palabras sobre el total de palabras de la clase y no usa las ausentes",
+        "Tiene un error de redondeo",
+        "MultinomialNB no usa el prior",
+        "alpha=1 en MultinomialNB significa sin Laplace"
+      ],
+      correcta: 0,
+      pistas: [null, "La diferencia es enorme, 0.48 contra 0.73. Un redondeo no hace eso.",
+        "Sí usa el prior, 3/8 y 5/8. La diferencia está en las verosimilitudes.",
+        "alpha=1 es Laplace en los dos modelos. Lo que cambia es sobre qué se cuenta."],
+      explicacion: "<code>MultinomialNB</code> estima la probabilidad de cada palabra como (veces en la clase + 1) / (palabras totales de la clase + 5): en spam hay 7 palabras, así que reunión = 1/12 y gratis = 3/12. Y solo multiplica las palabras presentes: la ausencia de «mañana» no cuenta. Para palabras sí o no, el modelo de esta página es <code>BernoulliNB</code>, que coincide con <code>e1071</code> con factores."
+    });
+    prop("codigo3", {
+      pregunta: "En R entrenas <code>naiveBayes(as.data.frame(X), factor(y), laplace = 1)</code> con las columnas de 0 y 1 como números, sin pasarlas a factor. P(spam) sale <b>0.0511</b> en vez de 0.7314. ¿Qué pasó?",
+      opciones: [
+        "Trató cada columna como numérica y usó una normal por clase: Naive Bayes gaussiano, donde laplace no actúa",
+        "laplace = 1 se ignora siempre en e1071",
+        "R cambió el orden de las clases",
+        "Faltó normalizar la salida"
+      ],
+      correcta: 0,
+      pistas: [null, "Con factores, laplace = 1 sí funciona: da 0.7314. ¿Qué cambia cuando las columnas son números?",
+        "El orden es normal y spam en los dos casos. El número cambió de verdad.",
+        "type = \"raw\" ya devuelve probabilidades que suman 1."],
+      explicacion: "Con columnas numéricas, <code>e1071</code> calcula media y desvío por clase: el modelo gaussiano del paso 8. «Reunión» en spam tiene media 0 y desvío 0, una campana sin ancho, y el suavizado de Laplace solo se aplica a variables categóricas. El resultado, 0.0511, no tiene sentido. Siempre pasa las palabras a <code>factor</code>."
+    });
+  })();
+
+  /* ---------------- tarjetas ---------------- */
+  B.tarjetas($("tarjetas"), [
+    ["¿Qué supone Naive Bayes, exactamente?", "Que dentro de cada clase las variables son independientes: $P(x_1,\\dots,x_p\\mid c) = \\prod_j P(x_j\\mid c)$. No que sean independientes en general."],
+    ["¿Por qué hace falta ese supuesto?", "Porque contar combinaciones enteras de palabras es imposible: casi ningún mensaje nuevo es idéntico a uno de entrenamiento."],
+    ["En el modelo de palabras sí o no, ¿qué aporta una palabra ausente?", "El factor $1 - P(\\text{sí}\\mid c)$. La ausencia también es evidencia."],
+    ["¿Qué problema resuelve Laplace?", "Una cuenta de cero vuelve cero todo el producto, y una sola palabra nunca vista veta toda la evidencia."],
+    ["Laplace con $\\alpha$ para una palabra sí o no:", "$(N_{\\text{sí},c} + \\alpha)/(N_c + 2\\alpha)$. Se suma α por cada nivel de la variable, no por cada palabra del vocabulario. El prior no se toca."],
+    ["¿Por qué se suman logaritmos?", "Porque el producto de miles de factores pequeños se hunde en un cero exacto en la computadora. $\\ln$ es creciente, así que la clase ganadora no cambia."],
+    ["¿Y con una variable numérica?", "O se discretiza en tramos, o se usa NB gaussiano: una normal por clase con su media y su desvío, y el factor es la altura de la campana."],
+    ["¿Qué tan confiables son sus probabilidades?", "Menos que sus clases. Si hay variables que dicen lo mismo, cuenta la evidencia de más y las probabilidades quedan demasiado extremas."]
+  ]);
+
+  /* ---------------- conexiones ---------------- */
+  B.conexiones(ID);
+})();
+</script>
+</body>
+</html>

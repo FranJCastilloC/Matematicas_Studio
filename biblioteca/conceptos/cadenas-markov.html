@@ -1,0 +1,1742 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cadenas de Markov</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+/* ---------- colores de los tres estados (propios de esta pagina) ---------- */
+:root { --s0: #b97a06; --s1: #6b7685; --s2: #2a6fb0; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --s0: #f0b84a; --s1: #a3adbb; --s2: #6aa8e6; }
+}
+:root[data-theme="dark"] { --s0: #f0b84a; --s1: #a3adbb; --s2: #6aa8e6; }
+[hidden] { display: none !important; }
+
+/* ---------- grafo de estados ---------- */
+.grafo { width: 100%; height: auto; display: block; user-select: none; -webkit-user-select: none; }
+.grafo .arista { fill: none; stroke-linecap: round; opacity: .72; transition: opacity .2s, stroke-width .25s; }
+.grafo .arista.s0, .grafo .punta.s0 { stroke: var(--s0); fill: var(--s0); }
+.grafo .arista.s1, .grafo .punta.s1 { stroke: var(--s1); fill: var(--s1); }
+.grafo .arista.s2, .grafo .punta.s2 { stroke: var(--s2); fill: var(--s2); }
+.grafo .arista { fill: none !important; }
+.grafo .arista.tenue { opacity: .12; }
+.grafo .arista.foco { opacity: 1; }
+.grafo .plab { font: 500 11.5px var(--f-mono); fill: var(--ink); paint-order: stroke; stroke: var(--surface); stroke-width: 4px; text-anchor: middle; dominant-baseline: middle; transition: opacity .2s; }
+.grafo .plab.tenue { opacity: .2; }
+.grafo .plab.oculto { fill: var(--accent); font-weight: 600; }
+.grafo .nodo { cursor: default; }
+.grafo.clic .nodo { cursor: pointer; }
+.grafo .nodo circle { stroke-width: 2.2; }
+.grafo .nodo.s0 circle { stroke: var(--s0); fill: color-mix(in oklab, var(--s0) 16%, var(--surface)); }
+.grafo .nodo.s1 circle { stroke: var(--s1); fill: color-mix(in oklab, var(--s1) 16%, var(--surface)); }
+.grafo .nodo.s2 circle { stroke: var(--s2); fill: color-mix(in oklab, var(--s2) 16%, var(--surface)); }
+.grafo .nodo.foco circle { stroke-width: 4; }
+.grafo .nodo text { font: 600 12.5px var(--f-body); fill: var(--ink); text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
+.grafo .ficha { transition: transform .32s cubic-bezier(.3,.7,.4,1); }
+.grafo .ficha circle { fill: var(--accent); stroke: var(--surface); stroke-width: 2.5; }
+@media (prefers-reduced-motion: reduce) { .grafo .ficha { transition: none; } }
+
+/* ---------- paneles del escenario ---------- */
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+.esc-head .hint { font-size: 12.5px; color: var(--ink-2); }
+.panel { border-top: 1px dashed var(--line); padding-top: 10px; margin-top: 8px; }
+.sim-ctrl { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 8px; }
+.sim-ctrl button { font-size: 12.5px; padding: 6px 10px; }
+.sim-ctrl .dia { margin-left: auto; font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.hist { display: grid; gap: 6px; }
+.hrow { display: grid; grid-template-columns: 58px minmax(0, 1fr) 112px; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink-2); }
+.hrow .track { position: relative; height: 13px; background: var(--surface-2); border-radius: 4px; }
+.hrow .track i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; transition: width .25s; }
+.hrow .track i.s0 { background: var(--s0); } .hrow .track i.s1 { background: var(--s1); } .hrow .track i.s2 { background: var(--s2); }
+.hrow .track .meta { position: absolute; top: -4px; bottom: -4px; width: 0; border-left: 2px dashed var(--ink); }
+.hrow b { font-family: var(--f-mono); font-weight: 500; text-align: right; font-variant-numeric: tabular-nums; color: var(--ink); font-size: 12px; }
+.hrow b small { color: var(--ink-3); font-weight: 400; }
+.hrow b.oculto { color: var(--accent); }
+.leyenda { font-size: 12px; color: var(--ink-3); margin: 6px 0 0; }
+.leyenda .rayita { display: inline-block; width: 0; height: 11px; border-left: 2px dashed var(--ink); vertical-align: -1px; margin: 0 4px 0 2px; }
+.desl { display: flex; align-items: center; gap: 10px; margin: 4px 0 8px; font-family: var(--f-mono); font-size: 12.5px; color: var(--ink-2); }
+.desl input[type=range] { flex: 1; min-width: 0; accent-color: var(--accent); }
+.desl b { color: var(--ink); font-weight: 500; min-width: 3ch; text-align: right; }
+.vivo-v { font-family: var(--f-mono); font-size: 12.5px; color: var(--ink-2); margin-top: 8px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.vivo-v b { color: var(--ink); font-weight: 500; }
+
+/* ---------- matriz ---------- */
+.pmat { display: grid; grid-template-columns: 56px repeat(3, minmax(0, 1fr)); gap: 4px; max-width: 360px; margin: 6px 0; }
+.pmat .lab { font-family: var(--f-mono); font-size: 11px; color: var(--ink-3); display: grid; place-items: center; min-height: 20px; }
+.pmat .lab.fila { justify-items: end; padding-right: 6px; }
+.pmat .c { aspect-ratio: 1.9; border-radius: 6px; display: grid; place-items: center; font-family: var(--f-mono); font-size: 13px; font-variant-numeric: tabular-nums; color: var(--ink); box-shadow: inset 0 0 0 1px var(--line-soft); transition: background .2s; }
+.pmat .c.on { box-shadow: 0 0 0 2px var(--ink); }
+.pmat .c.oculto { color: var(--accent); font-weight: 600; box-shadow: 0 0 0 2px var(--accent); }
+.pmat .sumas { grid-column: 2 / span 3; font-family: var(--f-mono); font-size: 11px; color: var(--ink-3); }
+.mini-tit.sub { margin: 4px 0 2px; }
+.lect { font-size: 13px; color: var(--ink-2); margin: 4px 0 0; }
+.lect b { color: var(--ink); font-family: var(--f-mono); font-weight: 500; }
+
+/* ---------- textos de los pasos ---------- */
+.grande { font-family: var(--f-mono); font-size: 13.5px; color: var(--ink-2); margin: 6px 0 12px; font-variant-numeric: tabular-nums; line-height: 1.7; overflow-wrap: anywhere; }
+.grande b { color: var(--ink); font-weight: 500; }
+.formas { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }
+.formas button.on { background: var(--ink); color: var(--surface); }
+.st0 { color: var(--s0); font-weight: 600; } .st1 { color: var(--s1); font-weight: 600; } .st2 { color: var(--s2); font-weight: 600; }
+
+/* ---------- vida real ---------- */
+.regla { position: relative; display: flex; height: 26px; border-radius: 6px; overflow: hidden; margin: 6px 0 22px; box-shadow: inset 0 0 0 1px var(--line); }
+.regla span { display: grid; place-items: center; font-family: var(--f-mono); font-size: 11px; color: var(--surface); opacity: .45; transition: opacity .2s; }
+.regla span.s0 { background: var(--s0); } .regla span.s1 { background: var(--s1); } .regla span.s2 { background: var(--s2); }
+.regla span.on { opacity: 1; }
+.regla-wrap { position: relative; }
+.regla-wrap .marca { position: absolute; top: -4px; height: 34px; width: 0; border-left: 2px solid var(--accent); }
+.regla-wrap .marca-lab { position: absolute; top: 32px; transform: translateX(-50%); font-family: var(--f-mono); font-size: 11px; color: var(--accent); white-space: nowrap; }
+.regla-wrap .acum { position: absolute; top: -4px; height: 34px; width: 0; border-left: 2px dashed var(--ink); }
+.camino { display: flex; flex-wrap: wrap; gap: 5px; min-height: 28px; margin: 4px 0 10px; }
+.camino span { font-family: var(--f-mono); font-size: 12px; padding: 3px 8px; border-radius: 12px; color: var(--surface); }
+.camino span.s0 { background: var(--s0); } .camino span.s1 { background: var(--s1); } .camino span.s2 { background: var(--s2); }
+.salida { font-family: var(--f-mono); font-size: 12.5px; background: var(--surface-2); border-radius: 6px; padding: 6px 10px; margin-top: 6px; white-space: pre; overflow-x: auto; color: var(--ink); }
+
+/* ---------- retos ---------- */
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.ojo-opts { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; margin-top: 10px; }
+.ojo-svg { max-width: 360px; margin: 0 auto; }
+.objetivos { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.objetivos li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.objetivos .m { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.objetivos li.hecho { color: var(--ink); }
+.objetivos li.hecho .m { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 3px var(--surface); }
+.filas-c { display: grid; gap: 4px; margin: 8px 0; }
+.fila-c { display: grid; grid-template-columns: 58px minmax(0, 1fr) minmax(0, 1fr); gap: 8px; align-items: center; font-family: var(--f-mono); font-size: 11.5px; color: var(--ink-2); }
+.fila-c label { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.fila-c input[type=range] { flex: 1; min-width: 0; accent-color: var(--accent); }
+.datos-mano { border-collapse: collapse; font-family: var(--f-mono); font-size: 13.5px; margin: 4px 0 12px; }
+.datos-mano th, .datos-mano td { padding: 4px 12px; border: 1px solid var(--line); text-align: center; }
+.datos-mano th { color: var(--ink-3); font-weight: 500; font-size: 12px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ Cadenas de Markov</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Estadística bayesiana · UD4 de SM142001 · Brasil vol. 3, cap. 5</p>
+    <h1>Cadenas de Markov: saltar sin memoria y llegar siempre al mismo sitio</h1>
+    <p class="lede">
+      Una ficha salta cada día entre <span class="st0">sol</span>, <span class="st1">nubes</span> y <span class="st2">lluvia</span>, y solo mira dónde está hoy para decidir.
+      Con eso basta para que, a la larga, el tiempo que pasa en cada estado se estabilice en unos números fijos que no dependen de cómo empezó.
+      Esa distribución es un <b>eigenvector de valor 1</b>, y es la idea que hace funcionar el muestreo MCMC de la estadística bayesiana.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> Hoy hace sol. ¿Cómo calcularías la probabilidad de que haga sol dentro de un año? ¿Crees que el sol de hoy cambia mucho esa respuesta? Escríbelo como te salga, aunque esté mal.</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: miraría cuántos días de sol hubo..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>De una ficha que salta a la distribución estacionaria</h2>
+      <p>Siete pasos. Cada uno termina con un chequeo que abre el siguiente. Equivocarte aquí no resta nada: el primero está pensado para que falles.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="Predicción">
+          <span class="etapa">Paso 1</span>
+          <h3>Una ficha que salta cada día</h3>
+          <p>En el escenario hay tres estados del clima. Cada día la ficha violeta salta siguiendo una de las flechas que salen de donde está: <b>cuanto más gruesa la flecha, más probable ese salto</b>. Hay flechas que vuelven al mismo estado: el clima puede repetirse.</p>
+          <p>Mira las flechas que salen del sol. La más gruesa vuelve al sol: si hoy hace sol, lo más probable es que mañana también. Pero la ficha no recuerda nada más: no sabe cuántos días lleva ahí ni de dónde vino.</p>
+          <div class="check" id="chk1"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+          <p id="txt1" hidden>Ahora compruébalo. Dale a <b>Correr</b> o a <b>+1000 días</b> y mira las barras: es la fracción de días que la ficha pasó en cada estado. Después elige otro estado en <b>Empezar en</b>, reinicia y vuelve a correr. Las barras terminan en el mismo sitio.</p>
+        </section>
+
+        <section class="paso card" data-titulo="Estados y flechas">
+          <span class="etapa">Paso 2</span>
+          <h3>Estados, flechas y la regla de no recordar</h3>
+          <p>Cada flecha lleva ahora su probabilidad. Toca un estado en el escenario para ver solo las flechas que salen de él. Las de un mismo estado <b>suman 1</b>: desde nubes, mañana hay sol (0.4), nubes (0.5) o lluvia (0.1), y alguna de las tres tiene que pasar.</p>
+          <p>La regla que hace a esto una <b>cadena de Markov</b> es que el salto de mañana depende solo del estado de hoy. Si sabes que hoy hay nubes, saber que ayer llovió no cambia nada. Es una probabilidad condicional a la que se le permite olvidar todo lo anterior.</p>
+          <p>Brasil llega a esta idea desde los pares de dígitos de un teclado: en vez de mirar el código completo, solo mira qué dígito sigue a cuál
+            <cite class="cita" data-fuente="brasil4v3" data-pag="43" data-pimp="288" data-seccion="4.4 Little Naive Bayes Thought He Could Be a Classifier" data-que="El final del capítulo de Bayes: pasa de clasificar dígitos a modelar qué dígito sigue a cuál, y escribe por primera vez la propiedad de Markov (ec. 4.51 a 4.53)." data-cuando="Antes de este paso, si vienes del capítulo de Bayes"></cite>
+            y lo formaliza al empezar el capítulo siguiente
+            <cite class="cita" data-fuente="brasil5v3" data-pag="4" data-pimp="294" data-seccion="5.1.1 Have You Heard the Latest? Markov Broke the Chains and Escaped" data-que="La definición de cadena de Markov con estados y probabilidades de transición, y la ecuación 5.2 de la propiedad de Markov: el futuro condicionado a todo el pasado es igual al futuro condicionado al presente." data-cuando="Al terminar este paso"></cite>.</p>
+          <div class="check" id="chk2"><p class="check-tit">Antes de seguir</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="La matriz">
+          <span class="etapa">Paso 3</span>
+          <h3>Todas las flechas en una tabla: la matriz de transición</h3>
+          <p>Las nueve flechas caben en una tabla de 3 × 3. La <b>fila</b> es el estado de hoy y la <b>columna</b> el de mañana. La entrada de la fila i y la columna j es</p>
+          <div class="fbloque">
+            <div data-tex="p_{ij} = P(X_{t+1} = j \mid X_t = i) \qquad\qquad P = \begin{bmatrix} p_{\text{sol},\text{sol}} & p_{\text{sol},\text{nub}} & p_{\text{sol},\text{llu}} \\ p_{\text{nub},\text{sol}} & p_{\text{nub},\text{nub}} & p_{\text{nub},\text{llu}} \\ p_{\text{llu},\text{sol}} & p_{\text{llu},\text{nub}} & p_{\text{llu},\text{llu}} \end{bmatrix}" data-display></div>
+          </div>
+          <p>Por lo que viste en el paso 2, <b>cada fila suma 1</b> y ninguna entrada es negativa. Las columnas no tienen por qué sumar 1: mira la de lluvia en el escenario. Toca un estado y se marca su fila.</p>
+          <p>Brasil construye su matriz contando pares de dígitos y dividiendo cada fila entre su total, y lista estas mismas propiedades
+            <cite class="cita" data-fuente="brasil5v3" data-pag="6" data-pimp="296" data-seccion="5.1.1 Have You Heard the Latest? Markov Broke the Chains and Escaped" data-que="De la matriz de frecuencias a la de probabilidades normalizando por filas, y las propiedades de la matriz de transición: n × n, entradas entre 0 y 1, filas que suman 1." data-cuando="Al terminar este paso"></cite>.</p>
+          <details class="profundizar">
+            <summary>¿Filas o columnas? Dos convenciones</summary>
+            <div>
+              <p>Aquí, como en Brasil vol. 3, las filas suman 1 y la distribución es un vector fila que multiplica por la izquierda: <span data-tex="v_{t+1} = v_t P"></span>. En la página de diagonalización el ejemplo del clima usa la otra convención: columnas que suman 1 y <span data-tex="x_{t+1} = M x_t"></span>, con el vector a la derecha.</p>
+              <p>Son la misma cadena: <span data-tex="M = P^{\top}"></span>. Lo único que cambia es si la estacionaria es un eigenvector de <span data-tex="P^{\top}"></span> o de <span data-tex="M"></span>. Antes de usar una matriz de transición de otro libro o de una librería, mira qué suma 1.</p>
+            </div>
+          </details>
+          <div class="check" id="chk3"><p class="check-tit">Antes de seguir</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Varios días">
+          <span class="etapa">Paso 4</span>
+          <h3>Pasado mañana: la matriz elevada a n</h3>
+          <p>Hasta ahora la ficha estaba en un estado concreto. Ahora sigue la <b>probabilidad</b>: un vector <span data-tex="v_t"></span> con la probabilidad de cada estado el día t. Hoy hace sol con certeza, <span data-tex="v_0 = (1,\ 0,\ 0)"></span>.</p>
+          <p>Para mañana, la probabilidad de cada estado junta todas las formas de llegar a él desde hoy. Eso es exactamente un producto vector por matriz, el de la página de la matriz como transformación:</p>
+          <div class="fbloque">
+            <div data-tex="v_{t+1}[j] = \sum_{i} v_t[i]\; p_{ij} \qquad v_1 = v_0 P,\quad v_2 = v_0 P^2,\quad \dots,\quad v_n = v_0 P^n" data-display></div>
+            <div class="vivo" id="vivo4"></div>
+          </div>
+          <p>La entrada <span data-tex="(i, j)"></span> de <span data-tex="P^n"></span> es la probabilidad de ir de i a j en n días, sumando sobre todos los caminos intermedios. Mueve n en el escenario (de momento solo llega a 1).</p>
+          <p>Es la ecuación 5.11 de Brasil, con un vector inicial uniforme sobre seis dígitos
+            <cite class="cita" data-fuente="brasil5v3" data-pag="11" data-pimp="301" data-seccion="5.1.1 Have You Heard the Latest? Markov Broke the Chains and Escaped" data-que="La deducción de v_n = v_0 · P^n multiplicando paso a paso, y el ejemplo v_7, con un 55% en el dígito 9." data-cuando="Al terminar este paso"></cite>.
+            Ojo con dos cuentas de esas páginas. En la p. 298 pone 0.16 en cada uno de los seis estados, así que el vector suma 0.96 y no 1 (tendría que ser 1/6), y en la p. 300 afirma que <span data-tex="v_1"></span> suma 1, cuando también suma 0.96. Y en la p. 300 dice "la primera columna de P" pero escribe la primera fila. El resultado que da, 0.144, sí sale de la columna: es justo la confusión filas contra columnas del paso anterior.</p>
+          <details class="profundizar">
+            <summary>Calcular <span data-tex="P^{30}"></span> sin multiplicar 30 veces</summary>
+            <div>
+              <p>Si P se puede diagonalizar, <span data-tex="P^n = Q\Lambda^n Q^{-1}"></span> y elevar Λ es elevar tres números. Los de esta cadena son 1, 0.5 y 0.2, así que <span data-tex="P^n"></span> es una parte fija más un trozo que se encoge como <span data-tex="0.5^n"></span> y otro como <span data-tex="0.2^n"></span>. Es el truco de la página de diagonalización, que Brasil motiva justo con el clima y las cadenas de Markov
+                <cite class="cita" data-fuente="brasil4" data-pag="62" data-pimp="99" data-seccion="4.3.2 Matrix Diagonalization" data-que="La motivación de la diagonalización con el clima y las cadenas de Markov, y la cuenta A² = PΛP⁻¹PΛP⁻¹ = PΛ²P⁻¹." data-cuando="Si quieres ver por qué la potencia se estabiliza"></cite>.</p>
+            </div>
+          </details>
+          <div class="check" id="chk4"><p class="check-tit">Calcula antes de mover n</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="La estacionaria">
+          <span class="etapa">Paso 5</span>
+          <h3>El punto fijo: la distribución estacionaria</h3>
+          <p>En el paso anterior, empezando en sol, <span data-tex="v_n"></span> dejó de moverse a partir de unos 15 días. ¿Es una casualidad de haber empezado con sol?</p>
+          <div class="check" id="chk5"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+
+          <div id="tras5" hidden>
+            <p>Ese vector al que llega desde cualquier inicio se llama <b>distribución estacionaria</b>, π. Es estacionaria porque un paso más no la cambia:</p>
+            <div class="fbloque">
+              <div data-tex="\pi P = \pi \qquad\qquad \pi = (0.45,\ 0.35,\ 0.20)" data-display></div>
+              <div class="vivo" id="vivo5"></div>
+            </div>
+            <p>Lee la ecuación con la página de eigenvectores en la cabeza: π es un vector que la matriz deja igual, <b>un eigenvector con eigenvalor 1</b>. Como π multiplica por la izquierda, es un eigenvector de <span data-tex="P^{\top}"></span>: <span data-tex="P^{\top}\pi^{\top} = \pi^{\top}"></span>. Y se escala para que sume 1, porque es una distribución.</p>
+            <p>Brasil lo ve igual: busca la potencia en la que P deja de cambiar, reconoce la ecuación de un eigenvector con λ = 1 y la resuelve con el ordenador. Con su matriz de seis dígitos le sale un 69% en el 9
+              <cite class="cita" data-fuente="brasil5v3" data-pag="13" data-pimp="303" data-seccion="5.1.1 Have You Heard the Latest? Markov Broke the Chains and Escaped" data-que="La norma de Frobenius entre potencias consecutivas de P (Fig 5.4), la ecuación πP = π leída como eigenvector con λ = 1 y la estacionaria π = [0.112, 0.053, 0.031, 0.051, 0.06, 0.69]." data-cuando="Al terminar este paso"></cite>.
+              Esa π es correcta (la recalculamos). Lo que no cuadra es la distancia entre P y P²: la P² que escribe en la p. 302 es correcta, pero con ella la norma de Frobenius de P − P² da 1.200, no el 1.439 de la p. 303.</p>
+            <details class="profundizar">
+              <summary>¿Por qué siempre existe el eigenvalor 1, y qué tan rápido se llega?</summary>
+              <div>
+                <p>Multiplica P por el vector de unos: cada entrada del resultado es la suma de una fila, que vale 1. Así que <span data-tex="P\,(1,1,1)^{\top} = (1,1,1)^{\top}"></span>: el vector de unos es un eigenvector de P (por la derecha) con λ = 1. P y <span data-tex="P^{\top}"></span> tienen los mismos eigenvalores, así que <span data-tex="P^{\top}"></span> también tiene el 1, y su eigenvector es π. Ojo: el de P es el de unos, que no sirve para nada aquí.</p>
+                <p>La velocidad la decide el segundo eigenvalor en valor absoluto. Aquí es 0.5: la distancia a π se reduce a la mitad cada día, y en 15 días queda por debajo de una diezmilésima. Una cadena con <span data-tex="|\lambda_2| = 0.95"></span> tardaría unos 180 días en lo mismo.</p>
+                <p>Con solo dos estados hay un atajo: en equilibrio, lo que pasa de sol a lluvia tiene que igualar lo que vuelve, <span data-tex="\pi_{\text{sol}}\,p_{\text{sol,llu}} = \pi_{\text{llu}}\,p_{\text{llu,sol}}"></span>. Lo vas a usar en uno de los retos.</p>
+              </div>
+            </details>
+            <div class="cita" id="citaHipo" hidden></div>
+
+            <div class="destacado" id="destacado">
+              <p class="dest-tit">Una confusión muy común</p>
+              <h4>Si la cadena es estacionaria, ¿el clima deja de cambiar?</h4>
+              <p>La palabra engaña. Lo que se queda quieto es la <b>distribución</b>, no el estado. Piensa en una ciudad con un millón de fichas, cada una saltando por su cuenta: cada día muchas cambian de estado, pero siempre hay unas 450 000 en sol, porque las que se van del sol se compensan con las que llegan.</p>
+              <div class="check" id="chk5b"><p class="check-tit">Predice antes de correr la ficha</p><div class="cuerpo"></div></div>
+              <p>Brasil hace una distinción útil: la estacionaria responde "dónde va a estar el sistema dentro de muchos pasos", mientras que un histograma de los datos que juntaste responde "qué pasó". En una cadena como esta, el histograma de <b>una sola ficha que corre mucho tiempo</b> sí termina en π: es el teorema ergódico, y es lo que muestran las barras del paso 1.</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Cuándo no converge">
+          <span class="etapa">Paso 6</span>
+          <h3>Tres cadenas que no se portan bien</h3>
+          <p>Que todo inicio termine en la misma π no es gratis. Hacen falta dos cosas: poder ir de cualquier estado a cualquier otro (<b>irreducible</b>) y no estar atrapado en un ritmo fijo de vueltas (<b>aperiódica</b>). Una cadena con las dos se llama <b>ergódica</b>.</p>
+          <p>Prueba estas cadenas en el escenario. Para cada una, cambia el estado de hoy y mueve n:</p>
+          <div class="formas" id="cadenas"></div>
+          <div class="grande" id="vivo6"></div>
+          <div class="check" id="chk6"><p class="check-tit">Predice antes de tocar «Ciclo»</p><div class="cuerpo"></div></div>
+          <p>Brasil dibuja las mismas situaciones con cadenas pequeñas: una irreducible frente a otra con un estado aislado, y una aperiódica frente a una de periodo 3
+            <cite class="cita" data-fuente="brasil5v3" data-pag="16" data-pimp="306" data-seccion="5.1.1 Have You Heard the Latest? Markov Broke the Chains and Escaped" data-que="Las dos condiciones, irreducible y aperiódica, y el nombre ergódica. En las páginas siguientes, las figuras 5.6 y 5.7 con los contraejemplos." data-cuando="Al terminar este paso"></cite>.
+            Después agrega al teclado los estados Start y Enter, y Enter resulta absorbente, como la "lluvia eterna": una vez ahí no se sale y se pierde la ergodicidad
+            <cite class="cita" data-fuente="brasil5v3" data-pag="18" data-pimp="308" data-seccion="5.1.1 Have You Heard the Latest? Markov Broke the Chains and Escaped" data-que="La matriz 5.14 con Start y Enter, y por qué Enter, al ser absorbente, rompe la ergodicidad. Ojo: en esa matriz la fila del 0 suma 0.99." data-cuando="Después de probar «Lluvia eterna»"></cite>.</p>
+          <details class="profundizar">
+            <summary>Lo que dicen los eigenvalores de cada cadena</summary>
+            <div>
+              <p>El clima tiene 1, 0.5 y 0.2: un solo eigenvalor de módulo 1, así que todo lo demás se apaga. El ciclo tiene 1 y dos complejos, <span data-tex="-\tfrac12 \pm \tfrac{\sqrt3}{2}i"></span>, que también tienen módulo 1: nunca se apagan y por eso <span data-tex="v_n"></span> gira para siempre. Las dos islas tienen el 1 dos veces: hay dos estacionarias distintas y cualquier mezcla de ellas también lo es. La lluvia eterna tiene 1, 0.9 y 0.2: converge, pero lento, y toda la probabilidad termina en lluvia.</p>
+            </div>
+          </details>
+        </section>
+
+        <section class="paso card" data-titulo="Puente a MCMC">
+          <span class="etapa">Paso 7</span>
+          <h3>Al revés: fabricar una cadena para una π que tú eliges</h3>
+          <p>Hasta aquí la pregunta era: dada P, ¿cuál es π? En estadística bayesiana la pregunta es la contraria. Tienes una distribución que no sabes muestrear directamente, la posterior, y quieres sacar muestras de ella. La idea de <b>MCMC</b> (Markov chain Monte Carlo) es fabricar una cadena cuya estacionaria sea justo esa distribución, dejarla correr y anotar por dónde pasa: por el paso 5, el histograma termina pareciéndose a π.</p>
+          <p>Supón una posterior inventada sobre los tres estados, <span data-tex="\pi^{*} = (0.2,\ 0.4,\ 0.4)"></span>. La receta de Metropolis es:</p>
+          <div class="fbloque">
+            <ol style="margin:0;padding-left:20px">
+              <li>Propón uno de los otros dos estados, mitad y mitad.</li>
+              <li>Acéptalo con probabilidad <span data-tex="\min\!\left(1,\ \pi^{*}_{\text{destino}} / \pi^{*}_{\text{actual}}\right)"></span>.</li>
+              <li>Si no lo aceptas, quédate: mañana repite el estado de hoy.</li>
+            </ol>
+          </div>
+          <p>Si el destino es más probable, se acepta siempre. Si es menos probable, a veces. El escenario muestra la cadena que sale de esa receta. Fíjate en que tiene flechas que vuelven al mismo estado: son los rechazos.</p>
+          <div class="check" id="chk7"><p class="check-tit">Calcula antes de mirar las flechas</p><div class="cuerpo"></div></div>
+          <div id="tras7" hidden>
+            <p>Ahora dale a <b>Correr</b> o a <b>+1000 días</b>: las barras se acercan a las líneas punteadas, que son π*. Reinicia y mira los primeros días. Como empieza en sol, al principio hay demasiado sol: esos primeros días todavía recuerdan el inicio. En MCMC se descartan y se llaman <b>burn-in</b> (calentamiento).</p>
+            <p>El material del máster lo cuenta así: una cadena de Markov cuyo estado siguiente solo depende del actual y que converge a una distribución estacionaria que es la posterior
+              <cite class="cita" data-fuente="ud4" data-pag="11" data-seccion="5 Herramientas avanzadas" data-que="Qué es MCMC: muestras de la posterior sin calcular integrales, la cadena de Markov que converge a la estacionaria y la parte Monte Carlo. La figura x₀ → x₁ → ... marca x_B, el final del calentamiento, sin explicarlo." data-cuando="Al terminar este paso"></cite>.
+              Una página antes lo presenta como "Muestreo de Monte Carlo (MCMC)", como si fueran lo mismo
+              <cite class="cita" data-fuente="ud4" data-pag="10" data-seccion="5 Herramientas avanzadas" data-que="El panorama de MCMC, Gibbs, Metropolis-Hastings y Hamiltonian Monte Carlo." data-cuando="Antes de la p. 11"></cite>.
+              No lo son: Monte Carlo es cualquier método que aproxima con muestras al azar, y MCMC es Monte Carlo con muestras que salen de una cadena de Markov. Brasil usa MCMC como nombre paraguas para Gibbs y Metropolis-Hastings
+              <cite class="cita" data-fuente="brasil5v3" data-pag="40" data-pimp="330" data-seccion="5.2.2 Wait, Did Markov Brake the Chains and Run Away To Monte Carlo?" data-que="La sección donde las cadenas de Markov se vuelven herramienta de muestreo, justo antes del algoritmo de Gibbs." data-cuando="Cuando llegues a Gibbs"></cite>.</p>
+            <p>Un error de Brasil que esta cadena deja ver: en su ejemplo de Metropolis-Hastings dice que, si se rechaza, se vuelve a proponer hasta que algún salto se acepte
+              <cite class="cita" data-fuente="brasil6v3" data-pag="14" data-pimp="373" data-seccion="6.1.1 Against the Clock: The Exponential Distribution" data-que="El ejemplo bivariante de Metropolis-Hastings con su razón de aceptación. Lee con cuidado lo que hace al rechazar: en el algoritmo correcto el estado actual se repite." data-cuando="Cuando estudies la página de Metropolis-Hastings"></cite>.
+              Eso borra las flechas que vuelven al mismo estado, y con ellas la estacionaria deja de ser π*. En el algoritmo correcto, rechazar significa repetir el estado actual como muestra siguiente.</p>
+          </div>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+        </div>
+        <svg id="grafo" role="img" aria-label="Grafo de la cadena de Markov con tres estados"></svg>
+
+        <div class="panel" id="simPanel">
+          <div class="sim-ctrl">
+            <button type="button" id="simUno">Un día</button>
+            <button type="button" class="primary" id="simCorrer">Correr</button>
+            <button type="button" id="simMil">+1000 días</button>
+            <button type="button" class="ghost" id="simReset">Reiniciar</button>
+          </div>
+          <div class="sim-ctrl">
+            <span class="seg-lab">Empezar en</span>
+            <div class="seg" id="simInicio" role="group" aria-label="Estado inicial"></div>
+            <span class="dia" id="simDia"></span>
+          </div>
+          <h3 class="mini-tit sub">Fracción de días en cada estado</h3>
+          <div class="hist" id="simHist"></div>
+          <p class="leyenda" id="simLey" hidden><span class="rayita"></span> la distribución a la que se acerca</p>
+        </div>
+
+        <div class="panel" id="distPanel">
+          <div class="desl"><span>n</span><input type="range" id="nSl" min="0" max="30" step="1" value="0" aria-label="Número de días n"><b id="nVal">0</b></div>
+          <div class="sim-ctrl">
+            <span class="seg-lab">Hoy</span>
+            <div class="seg" id="distInicio" role="group" aria-label="Estado de hoy"></div>
+          </div>
+          <h3 class="mini-tit sub" id="distTit">Probabilidad de cada estado dentro de n días</h3>
+          <div class="hist" id="distHist"></div>
+          <p class="leyenda" id="distLey" hidden><span class="rayita"></span> la estacionaria π</p>
+        </div>
+
+        <div class="panel" id="matPanel">
+          <h3 class="mini-tit sub" id="matTit">P: fila = hoy, columna = mañana</h3>
+          <div class="pmat" id="pmat"></div>
+          <p class="lect" id="matLect"></p>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>La misma cadena del clima, escrita como lo haría un programa. Cuatro partes: simular un día con la regla de la fila, simular diez mil días con semilla, calcular π con potencias y calcularla con eigenvectores. Elige Python o R y dale a reproducir.</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir</p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="true">Python</button>
+            <button type="button" data-lang="r" aria-pressed="false">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">1 · un día</span><span data-f="2">2 · diez mil días</span><span data-f="3">3 · potencias</span><span data-f="4">4 · eigenvector</span>
+        </div>
+        <h3 class="mini-tit vr-tit">La fila de hoy como regla de 0 a 1</h3>
+        <div class="regla-wrap" id="vrReglaWrap"><div class="regla" id="vrRegla"></div></div>
+        <h3 class="mini-tit vr-tit">El camino de la ficha</h3>
+        <div class="camino" id="vrCamino"></div>
+        <h3 class="mini-tit vr-tit" id="vrBarTit">Dónde está la probabilidad</h3>
+        <div class="hist" id="vrBarras"></div>
+        <div class="vr-cuenta" id="vrCuenta"></div>
+      </div>
+    </div>
+
+    <p class="vr-nota">Simular con la regla de la fila es lo que Brasil describe para generar códigos: un número al azar entre 0 y 1 cae en un tramo de la suma acumulada de la fila
+      <cite class="cita" data-fuente="brasil5v3" data-pag="22" data-pimp="312" data-seccion="5.1.1 Have You Heard the Latest? Markov Broke the Chains and Escaped" data-que="La CDF discreta de una fila y los intervalos que se asignan a cada estado; el orden de los estados no importa. Ojo: en las pp. 312 a 314 los intervalos de la fila del 3 están mal etiquetados; por ejemplo, llama «State 3» a un tramo, cuando desde el 3 no se puede volver al 3." data-cuando="Después de reproducir la parte 1"></cite>.
+      Con su matriz 5.14 simula 10 000 códigos, pero los conteos que da no salen de esa matriz: el camino Start, 0, 4, 9, Enter tiene probabilidad 0.3 · 0.28 · 0.2 · 0.8 = 0.0134, unos 134 de cada 10 000, no 478
+      <cite class="cita" data-fuente="brasil5v3" data-pag="24" data-pimp="314" data-seccion="5.1.1 Have You Heard the Latest? Markov Broke the Chains and Escaped" data-que="Los pasos del muestreo y la tabla 5.17 con los códigos más frecuentes entre 10 000 simulados. Compara los conteos con la matriz 5.14." data-cuando="Después de reproducir la parte 2"></cite>.
+      En la práctica, para la estacionaria basta con una línea: <code>np.linalg.matrix_power(P, 30)[0]</code> en Python, o el bloque de <code>eigen</code> de la parte 4 en R, que no trae potencia de matrices de serie.</p>
+
+    <details class="profundizar">
+      <summary>Sin bucles ni eigenvectores: resolver un sistema lineal</summary>
+      <div>
+        <p>πP = π son tres ecuaciones, pero una sobra (las tres suman lo mismo a cada lado). Se cambia una por "π suma 1" y se resuelve el sistema: en Python, <code>A = np.vstack([(P.T - np.eye(3))[:2], np.ones(3)])</code> y <code>np.linalg.solve(A, [0, 0, 1])</code>; en R, <code>A &lt;- rbind((t(P) - diag(3))[1:2, ], 1)</code> y <code>solve(A, c(0, 0, 1))</code>. Los dos devuelven 0.45, 0.35 y 0.20. Es lo que Brasil llama resolver el sistema lineal 5.13.</p>
+      </div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>El eigenvector equivocado</h3><span class="estado" data-reto="codigo2"></span></div>
+        <div id="codigo2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Un eigenvector que no suma 1</h3><span class="estado" data-reto="codigo3"></span></div>
+        <div id="codigo3"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>La misma semilla, otro resultado</h3><span class="estado" data-reto="codigo4"></span></div>
+        <div id="codigo4"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: el índice te avisa cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>¿Se estabiliza?</h3><span class="estado" data-reto="ojo"></span></div>
+        <p class="desc">Cinco cadenas. Mira las flechas y decide sin calcular qué pasa con <span data-tex="v_n"></span> cuando n crece. Apruebas con 4 de 5.</p>
+        <div id="ojo"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Construir</span><h3>Diseña el clima</h3><span class="estado" data-reto="constructor"></span></div>
+        <p class="desc">Mueve las probabilidades de cada fila (la tercera es lo que falta para 1) hasta cumplir cada objetivo. Se marcan solos.</p>
+        <svg id="grafoConstr" class="ojo-svg" role="img" aria-label="Grafo de la cadena que estás construyendo"></svg>
+        <div class="filas-c" id="filasConstr"></div>
+        <div class="hist" id="constrHist"></div>
+        <div class="grande" id="constrVivo"></div>
+        <ul class="objetivos" id="objetivos"></ul>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>Dentro de dos días</h3><span class="estado" data-reto="mano"></span></div>
+        <p class="desc">Una cadena nueva. Calcula con papel antes de pedir pistas.</p>
+        <div id="manoDatos"></div>
+        <div id="mano"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>La estacionaria de dos estados</h3><span class="estado" data-reto="mano2"></span></div>
+        <p class="desc">Solo sol y lluvia. Encuentra la fracción de días de lluvia a la larga.</p>
+        <div id="mano2Datos"></div>
+        <div id="mano2"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Alguien se equivocó</h3><span class="estado" data-reto="error"></span></div>
+        <p class="desc">Una de las líneas tiene un error. Tócala. Todas usan la cadena del clima de esta página.</p>
+        <div id="error"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Qué suma 1</h3><span class="estado" data-reto="prop1"></span></div>
+        <div id="prop1"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Sin memoria</h3><span class="estado" data-reto="prop2"></span></div>
+        <div id="prop2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>El eigenvalor que nunca falta</h3><span class="estado" data-reto="prop3"></span></div>
+        <div id="prop3"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>El ciclo, a la larga</h3><span class="estado" data-reto="prop4"></span></div>
+        <div id="prop4"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Quién olvida antes</h3><span class="estado" data-reto="prop5"></span></div>
+        <div id="prop5"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Para qué el burn-in</h3><span class="estado" data-reto="prop6"></span></div>
+        <div id="prop6"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Recordar a la fuerza es lo que fija. Arma la ecuación de memoria y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Fórmula de memoria</span><h3>La ecuación de la estacionaria, entrada por entrada</h3><span class="estado" data-reto="formula"></span></div>
+        <p class="desc">Es πP = π escrita para el estado j. Hay piezas de más que no pertenecen. No mires arriba.</p>
+        <div id="formula"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el libro</h2>
+      <p class="lecturas-intro">Ya viste la cadena saltar y la estacionaria aparecer. Ahora ve a la versión técnica y comprueba que la reconoces: Brasil con el código del garaje y el material de la UD4 con MCMC. Cada entrada dice qué vas a encontrar y en qué momento conviene leerla. Si abres la biblioteca con doble clic, el enlace abre el PDF en esa página.</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> La cadena del clima es inventada, elegida para que la estacionaria dé exacta (0.45, 0.35, 0.20) y los eigenvalores sean 1, 0.5 y 0.2.
+    La posterior del paso 7 también es inventada. Las simulaciones del escenario usan números al azar del navegador, así que cada vez salen un poco distintas; las de la vida real usan semilla
+    y muestran lo que imprimió cada lenguaje. La matriz de seis dígitos que se menciona es la 5.7 de Brasil. Tu progreso se guarda en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+(function () {
+  "use strict";
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var RETOS = ["ojo", "constructor", "mano", "mano2", "error", "prop1", "prop2", "prop3", "prop4", "prop5", "prop6", "formula", "codigo1", "codigo2", "codigo3", "codigo4"];
+  var C = B.concepto({ id: "cadenas-markov", retos: RETOS, pasos: 7 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  /* ---------------- utilidades ---------------- */
+  var f = B.fmt;
+  var NOM = ["Sol", "Nubes", "Lluvia"];
+  var nom = ["sol", "nubes", "lluvia"];
+  function copiaM(M) { return M.map(function (r) { return r.slice(); }); }
+  function vecPorMat(v, P) { return [0, 1, 2].map(function (j) { return v[0] * P[0][j] + v[1] * P[1][j] + v[2] * P[2][j]; }); }
+  function matPorMat(A, Bm) { return A.map(function (fila) { return vecPorMat(fila, Bm); }); }
+  function potencia(P, n) { var R = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]; for (var k = 0; k < n; k++) R = matPorMat(R, P); return R; }
+  function unidad(i) { var v = [0, 0, 0]; v[i] = 1; return v; }
+  function det3(P) {
+    return P[0][0] * (P[1][1] * P[2][2] - P[1][2] * P[2][1]) - P[0][1] * (P[1][0] * P[2][2] - P[1][2] * P[2][0]) + P[0][2] * (P[1][0] * P[2][1] - P[1][1] * P[2][0]);
+  }
+  // eigenvalores distintos del 1: raices de l^2 - (traza - 1) l + det
+  function otrosLambda(P) {
+    var s = P[0][0] + P[1][1] + P[2][2] - 1, d = det3(P), disc = s * s - 4 * d;
+    if (disc >= -1e-12) { var r = Math.sqrt(Math.max(0, disc)); return { real: true, a: (s + r) / 2, b: (s - r) / 2, mod: Math.max(Math.abs((s + r) / 2), Math.abs((s - r) / 2)) }; }
+    return { real: false, re: s / 2, im: Math.sqrt(-disc) / 2, mod: Math.sqrt(d) };
+  }
+  // estacionaria por cofactores de I - P (teorema del arbol de Markov); null si no es unica
+  function estacionaria(P) {
+    var a = (1 - P[1][1]) * (1 - P[2][2]) - P[1][2] * P[2][1];
+    var b = (1 - P[0][0]) * (1 - P[2][2]) - P[0][2] * P[2][0];
+    var c = (1 - P[0][0]) * (1 - P[1][1]) - P[0][1] * P[1][0];
+    var s = a + b + c;
+    if (Math.abs(s) < 1e-9) return null;
+    return [a / s, b / s, c / s];
+  }
+  function vtxt(v, d) { return "(" + v.map(function (x) { return f(x, d == null ? 2 : d); }).join(", ") + ")"; }
+  function rand(n) { return Math.floor(Math.random() * n); }
+
+  var P0 = [[0.6, 0.3, 0.1], [0.4, 0.5, 0.1], [0.2, 0.2, 0.6]];
+  var PI0 = [0.45, 0.35, 0.2];
+  var PMH = [[0, 0.5, 0.5], [0.25, 0.25, 0.5], [0.25, 0.5, 0.25]];
+  var PIMH = [0.2, 0.4, 0.4];
+  var CADENAS = [
+    { n: "Clima (la de siempre)", P: P0 },
+    { n: "Ciclo", P: [[0, 1, 0], [0, 0, 1], [1, 0, 0]] },
+    { n: "Lluvia eterna", P: [[0.6, 0.3, 0.1], [0.4, 0.5, 0.1], [0, 0, 1]] },
+    { n: "Dos islas", P: [[0.7, 0.3, 0], [0.4, 0.6, 0], [0, 0, 1]] }
+  ];
+
+  /* ---------------- grafo de estados ---------------- */
+  var NS = "http://www.w3.org/2000/svg";
+  function nodo(tag, at, padre) {
+    var e = document.createElementNS(NS, tag);
+    for (var k in at) e.setAttribute(k, at[k]);
+    if (padre) padre.appendChild(e);
+    return e;
+  }
+  function texto(padre, at, t) { var e = nodo("text", at, padre); e.textContent = t; return e; }
+  var POS = [[190, 92], [86, 250], [294, 250]], CEN = [190, 197], R = 31;
+  function unit(v) { var l = Math.hypot(v[0], v[1]); return [v[0] / l, v[1] / l]; }
+  function rot(v, a) { var c = Math.cos(a), s = Math.sin(a); return [v[0] * c - v[1] * s, v[0] * s + v[1] * c]; }
+  function sum(a, b, k) { return [a[0] + b[0] * k, a[1] + b[1] * k]; }
+  function pt(p) { return p[0].toFixed(1) + "," + p[1].toFixed(1); }
+
+  function crearGrafo(svg, o) {
+    svg.setAttribute("viewBox", "0 0 380 340");
+    svg.classList.add("grafo");
+    var pre = o.id;
+    var defs = nodo("defs", {}, svg);
+    [0, 1, 2].forEach(function (i) {
+      var m = nodo("marker", { id: pre + "m" + i, viewBox: "0 0 10 10", refX: "7", refY: "5", markerWidth: "11", markerHeight: "11", markerUnits: "userSpaceOnUse", orient: "auto" }, defs);
+      nodo("path", { d: "M0,0 L10,5 L0,10 z", "class": "punta s" + i }, m);
+    });
+    var gA = nodo("g", {}, svg), gN = nodo("g", {}, svg), gL = nodo("g", {}, svg);
+    var gF = nodo("g", { "class": "ficha" }, svg);
+    nodo("circle", { cx: 0, cy: 0, r: 9 }, gF);
+    var st = { P: o.P, etiquetas: true, ocultar: [], foco: null, ficha: null, clic: !!o.alTocar };
+    if (st.clic) svg.classList.add("clic");
+
+    function geom(i, j) {
+      if (i === j) {
+        var d = unit([POS[i][0] - CEN[0], POS[i][1] - CEN[1]]);
+        var s = sum(POS[i], rot(d, -0.55), R), e = sum(POS[i], rot(d, 0.55), R + 4);
+        var c1 = sum(POS[i], rot(d, -0.5), R + 46), c2 = sum(POS[i], rot(d, 0.5), R + 46);
+        return { d: "M" + pt(s) + " C" + pt(c1) + " " + pt(c2) + " " + pt(e), lab: sum(POS[i], d, R + 44) };
+      }
+      var a = POS[i], b = POS[j], v = unit([b[0] - a[0], b[1] - a[1]]), nrm = [-v[1], v[0]];
+      var c = sum([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], nrm, 30);
+      var s2 = sum(a, unit([c[0] - a[0], c[1] - a[1]]), R), e2 = sum(b, unit([c[0] - b[0], c[1] - b[1]]), R + 5);
+      var mid = [0.25 * s2[0] + 0.5 * c[0] + 0.25 * e2[0], 0.25 * s2[1] + 0.5 * c[1] + 0.25 * e2[1]];
+      return { d: "M" + pt(s2) + " Q" + pt(c) + " " + pt(e2), lab: sum(mid, nrm, 11) };
+    }
+    function oculta(i, j) { return st.ocultar.some(function (q) { return q[0] === i && q[1] === j; }); }
+    function render() {
+      gA.innerHTML = ""; gN.innerHTML = ""; gL.innerHTML = "";
+      for (var i = 0; i < 3; i++) for (var j = 0; j < 3; j++) {
+        var p = st.P[i][j];
+        if (p < 1e-9) continue;
+        var g = geom(i, j), tenue = st.foco !== null && st.foco !== i;
+        nodo("path", { d: g.d, "class": "arista s" + i + (tenue ? " tenue" : st.foco === i ? " foco" : ""), "stroke-width": (1.4 + 9 * p).toFixed(2), "marker-end": "url(#" + pre + "m" + i + ")" }, gA);
+        if (st.etiquetas) {
+          var oc = oculta(i, j);
+          texto(gL, { x: g.lab[0].toFixed(1), y: g.lab[1].toFixed(1), "class": "plab" + (tenue ? " tenue" : "") + (oc ? " oculto" : "") }, oc ? "?" : String(+p.toFixed(2)));
+        }
+      }
+      for (var k = 0; k < 3; k++) {
+        var gn = nodo("g", { "class": "nodo s" + k + (st.foco === k ? " foco" : ""), "data-i": k }, gN);
+        nodo("circle", { cx: POS[k][0], cy: POS[k][1], r: R }, gn);
+        texto(gn, { x: POS[k][0], y: POS[k][1] }, NOM[k]);
+      }
+      if (st.ficha === null) gF.style.display = "none";
+      else {
+        gF.style.display = "";
+        gF.style.transform = "translate(" + (POS[st.ficha][0] + 20) + "px," + (POS[st.ficha][1] - 21) + "px)";
+      }
+    }
+    svg.addEventListener("click", function (e) {
+      if (!o.alTocar) return;
+      var g = e.target.closest ? e.target.closest(".nodo") : null;
+      o.alTocar(g ? +g.getAttribute("data-i") : null);
+    });
+    render();
+    return {
+      set: function (c) {
+        ["P", "etiquetas", "ocultar", "foco", "ficha"].forEach(function (k) { if (k in c) st[k] = c[k]; });
+        render();
+      }
+    };
+  }
+
+  /* barras horizontales compartidas */
+  function barras(el, vals, o) {
+    o = o || {};
+    var h = "";
+    for (var i = 0; i < 3; i++) {
+      var v = vals[i], txt = o.ocultar && o.ocultar.indexOf(i) >= 0 ? null : o.texto ? o.texto(i) : f(v, o.dec == null ? 3 : o.dec);
+      h += '<div class="hrow"><span class="st' + i + '">' + NOM[i] + '</span><span class="track"><i class="s' + i + '" style="width:' + (Math.max(0, Math.min(1, v)) * 100).toFixed(1) + '%"></i>' +
+        (o.meta ? '<span class="meta" style="left:' + (o.meta[i] * 100).toFixed(1) + '%"></span>' : '') + '</span>' +
+        '<b' + (txt === null ? ' class="oculto"' : '') + '>' + (txt === null ? "?" : txt) + '</b></div>';
+    }
+    el.innerHTML = h;
+  }
+
+  /* matriz en celdas */
+  function pintarMat(el, M, o) {
+    o = o || {};
+    var h = '<span class="lab"></span>' + nom.map(function (c) { return '<span class="lab">' + c + '</span>'; }).join("");
+    for (var i = 0; i < 3; i++) {
+      h += '<span class="lab fila">' + nom[i] + '</span>';
+      for (var j = 0; j < 3; j++) {
+        var oc = o.ocultar && o.ocultar.some(function (q) { return q[0] === i && q[1] === j; });
+        var on = o.fila === i;
+        var bg = oc ? "" : ' style="background:color-mix(in oklab, var(--s' + j + ') ' + Math.round(M[i][j] * 55) + '%, var(--cell-zero))"';
+        h += '<span class="c' + (oc ? " oculto" : on ? " on" : "") + '"' + bg + '>' + (oc ? "?" : f(M[i][j], o.dec == null ? 2 : o.dec)) + '</span>';
+      }
+    }
+    if (o.sumas) h += '<span class="lab"></span><span class="sumas">cada fila suma 1</span>';
+    el.innerHTML = h;
+  }
+
+  /* ---------------- estado del recorrido ---------------- */
+  var est = { paso: 0, chk1: false, chk3: false, chk4: false, chk5: false, chk5b: false, chk6: false, chk7: false, foco: null, n: 0, ini: 0, cadena: 0 };
+  var pasos;
+  var grafo = crearGrafo($("grafo"), { id: "g", P: P0, alTocar: function (i) { if (!MODOS[est.paso].clic) return; est.foco = est.foco === i ? null : i; refrescar(); } });
+
+  var MODOS = [
+    { hint: "Responde la predicción para soltar la ficha", sim: true, etiquetas: false },
+    { hint: "Toca un estado para ver sus flechas", sim: true, clic: true },
+    { hint: "Toca un estado para marcar su fila", clic: true, mat: "P" },
+    { hint: "Mueve n y mira cómo se reparte la probabilidad", dist: true, mat: "Pn", inicioFijo: true },
+    { hint: "Cambia el estado de hoy y mueve n", dist: true, sim: true, meta: true },
+    { hint: "Elige una cadena, cambia el estado de hoy y mueve n", dist: true, mat: "Pn", cadenas: true },
+    { hint: "La cadena que fabrica Metropolis para π*", sim: true, mh: true }
+  ];
+  function Pactual() {
+    var m = MODOS[est.paso];
+    if (m.mh) return PMH;
+    if (m.cadenas) return CADENAS[est.cadena].P;
+    return P0;
+  }
+
+  /* ---- simulacion de la ficha ---- */
+  var sim = { P: P0, x: 0, ini: 0, dia: 0, cuenta: [0, 0, 0], t: null };
+  function simPaso() {
+    var u = Math.random(), fila = sim.P[sim.x], acum = 0, j = 2;
+    for (var k = 0; k < 3; k++) { acum += fila[k]; if (u < acum) { j = k; break; } }
+    sim.x = j; sim.dia++; sim.cuenta[j]++;
+  }
+  function simParar() { if (sim.t) clearInterval(sim.t); sim.t = null; $("simCorrer").textContent = "Correr"; }
+  function simReiniciar() { simParar(); sim.x = sim.ini; sim.dia = 0; sim.cuenta = [0, 0, 0]; pintarSim(); }
+  function bloqueadoSim() { return est.paso === 0 && !est.chk1; }
+  function pintarSim() {
+    var m = MODOS[est.paso];
+    grafo.set({ ficha: m.sim ? sim.x : null });
+    var fr = sim.cuenta.map(function (c) { return sim.dia ? c / sim.dia : 0; });
+    var meta = m.mh ? (est.chk7 ? PIMH : null) : (m.meta || est.chk5 ? PI0 : null);
+    barras($("simHist"), fr, { meta: meta, texto: function (i) { return (sim.dia ? (fr[i] * 100).toFixed(1) : "0.0") + '% <small>' + sim.cuenta[i] + '</small>'; } });
+    $("simLey").hidden = !meta;
+    $("simDia").textContent = "día " + sim.dia + " · hoy: " + nom[sim.x];
+    var lock = bloqueadoSim();
+    ["simUno", "simCorrer", "simMil", "simReset"].forEach(function (id) { $(id).disabled = lock; });
+    [].forEach.call($("simInicio").children, function (b, i) { b.disabled = lock; b.setAttribute("aria-pressed", i === sim.ini ? "true" : "false"); });
+  }
+  NOM.forEach(function (n, i) {
+    var b = document.createElement("button");
+    b.type = "button"; b.textContent = nom[i];
+    b.addEventListener("click", function () { sim.ini = i; simReiniciar(); });
+    $("simInicio").appendChild(b);
+  });
+  $("simUno").addEventListener("click", function () { simParar(); simPaso(); pintarSim(); });
+  $("simMil").addEventListener("click", function () { simParar(); for (var k = 0; k < 1000; k++) simPaso(); pintarSim(); });
+  $("simReset").addEventListener("click", simReiniciar);
+  $("simCorrer").addEventListener("click", function () {
+    if (sim.t) { simParar(); return; }
+    $("simCorrer").textContent = "Pausa";
+    sim.t = setInterval(function () { simPaso(); pintarSim(); if (sim.dia >= 5000) simParar(); }, 110);
+  });
+
+  /* ---- distribucion v_n ---- */
+  NOM.forEach(function (n, i) {
+    var b = document.createElement("button");
+    b.type = "button"; b.textContent = nom[i];
+    b.addEventListener("click", function () { if (inicioBloqueado()) return; est.ini = i; refrescar(); });
+    $("distInicio").appendChild(b);
+  });
+  function inicioBloqueado() { var m = MODOS[est.paso]; return !!m.inicioFijo || (est.paso === 4 && !est.chk5); }
+  $("nSl").addEventListener("input", function () { est.n = +this.value; refrescar(); });
+  function nMax() { return est.paso === 3 && !est.chk4 ? 1 : 30; }
+
+  function pintarDist(P) {
+    var m = MODOS[est.paso], ini = m.inicioFijo ? 0 : est.ini;
+    var sl = $("nSl"), mx = nMax();
+    sl.max = mx;
+    if (est.n > mx) est.n = mx;
+    sl.value = est.n;
+    $("nVal").textContent = est.n;
+    var v = vecPorMat(unidad(ini), potencia(P, est.n));
+    var meta = m.meta || (est.paso === 5 && est.cadena === 0) ? PI0 : null;
+    barras($("distHist"), v, { meta: meta });
+    $("distLey").hidden = !meta;
+    $("distTit").innerHTML = "v<sub>" + est.n + "</sub>: probabilidad de cada estado dentro de " + est.n + (est.n === 1 ? " día" : " días") + ", si hoy es " + nom[ini];
+    [].forEach.call($("distInicio").children, function (b, i) { b.disabled = inicioBloqueado() && i !== ini; b.setAttribute("aria-pressed", i === ini ? "true" : "false"); });
+    return v;
+  }
+
+  function refrescar() {
+    var m = MODOS[est.paso], P = Pactual();
+    sim.P = P;
+    var ocultarG = [];
+    if (est.paso === 2 && !est.chk3) ocultarG = [[0, 2]];
+    grafo.set({
+      P: P,
+      etiquetas: m.etiquetas !== false && !(m.mh && !est.chk7),
+      ocultar: ocultarG,
+      foco: m.clic ? est.foco : null
+    });
+    $("simPanel").hidden = !m.sim;
+    $("distPanel").hidden = !m.dist;
+    $("matPanel").hidden = !m.mat;
+    if (m.sim) pintarSim(); else grafo.set({ ficha: null });
+    var v = null;
+    if (m.dist) v = pintarDist(P);
+    if (m.mat === "P") {
+      $("matTit").textContent = "P: fila = hoy, columna = mañana";
+      pintarMat($("pmat"), P, { ocultar: est.chk3 ? [] : [[0, 2]], fila: est.foco, sumas: true });
+      $("matLect").innerHTML = est.foco === null ? "Toca un estado del grafo para marcar su fila."
+        : "Fila de " + nom[est.foco] + ": " + P[est.foco].map(function (p, j) { return (est.paso === 2 && !est.chk3 && est.foco === 0 && j === 2) ? "?" : f(p, 1); }).join(" + ") +
+          (est.paso === 2 && !est.chk3 && est.foco === 0 ? " = 1" : " = <b>1</b>") + ". Son las flechas que salen de " + nom[est.foco] + ".";
+    } else if (m.mat === "Pn") {
+      var Pn = potencia(P, est.n), ini = m.inicioFijo ? 0 : est.ini;
+      $("matTit").innerHTML = "P<sup>" + est.n + "</sup>: fila = hoy, columna = dentro de " + est.n + (est.n === 1 ? " día" : " días");
+      pintarMat($("pmat"), Pn, { ocultar: est.paso === 3 && !est.chk4 && est.n === 2 ? [[0, 2]] : [], fila: ini, dec: est.n > 2 ? 3 : 2 });
+      $("matLect").innerHTML = "La fila marcada es la de hoy (" + nom[ini] + "): es justo v<sub>" + est.n + "</sub>.";
+    }
+    if (est.paso === 3) {
+      $("vivo4").innerHTML = est.n === 0 ? "v<sub>0</sub> = (1, 0, 0): hoy es sol con certeza."
+        : est.n === 1 ? "v<sub>1</sub> = (1, 0, 0) · P = la fila de sol = " + vtxt(v) + "."
+        : "v<sub>" + est.n + "</sub> = (1, 0, 0) · P<sup>" + est.n + "</sup> = " + vtxt(v, 3) + ".";
+    }
+    if (est.paso === 5) pintarVivo6(v);
+  }
+
+  function entrar(i) {
+    est.paso = i;
+    var m = MODOS[i], P = Pactual();
+    $("escHint").textContent = m.hint;
+    if (sim.P !== P) { sim.P = P; simReiniciar(); }
+    if (!m.sim) simParar();
+    if (i !== 1 && i !== 2) est.foco = null;
+    if (i === 3) est.ini = 0;
+    refrescar();
+  }
+
+  /* paso 5: vivo de piP */
+  (function () {
+    var piP = vecPorMat(PI0, P0);
+    $("vivo5").innerHTML = "πP en sol = 0.45 · 0.6 + 0.35 · 0.4 + 0.20 · 0.2 = 0.27 + 0.14 + 0.04 = <b>" + f(piP[0]) + "</b><br>" +
+      "πP en nubes = 0.45 · 0.3 + 0.35 · 0.5 + 0.20 · 0.2 = <b>" + f(piP[1]) + "</b> · πP en lluvia = 0.45 · 0.1 + 0.35 · 0.1 + 0.20 · 0.6 = <b>" + f(piP[2]) + "</b>";
+  })();
+
+  /* paso 6: cadenas */
+  CADENAS.forEach(function (c, i) {
+    var b = document.createElement("button");
+    b.type = "button"; b.textContent = c.n;
+    b.addEventListener("click", function () {
+      if (i > 0 && !est.chk6) return;
+      est.cadena = i;
+      [].forEach.call($("cadenas").children, function (x, k) { x.classList.toggle("on", k === i); });
+      refrescar();
+    });
+    $("cadenas").appendChild(b);
+  });
+  function pintarCadenas() {
+    [].forEach.call($("cadenas").children, function (x, k) { x.disabled = k > 0 && !est.chk6; x.classList.toggle("on", k === est.cadena); });
+  }
+  function pintarVivo6(v) {
+    var P = CADENAS[est.cadena].P, l = otrosLambda(P), ini = est.ini;
+    var lam = l.real ? "eigenvalores 1, " + f(l.a, 2) + " y " + f(l.b, 2) : "eigenvalores 1 y " + f(l.re, 2) + " ± " + f(l.im, 3) + "i (módulo " + f(l.mod, 2) + ")";
+    var veredicto = [
+      "Converge a π = (0.45, 0.35, 0.20) desde cualquier estado.",
+      "v<sub>n</sub> gira sol, nubes, lluvia y vuelve: nunca se estabiliza. La fracción de tiempo, en cambio, sí tiende a 1/3 en cada estado.",
+      "Converge, pero toda la probabilidad termina en lluvia: una vez ahí, no se sale. Con λ₂ = 0.9 tarda bastante más.",
+      "Se estabiliza, pero depende de dónde empieces: desde sol o nubes nunca llegas a lluvia, y desde lluvia nunca sales."
+    ][est.cadena];
+    $("vivo6").innerHTML = "<b>" + CADENAS[est.cadena].n + "</b>: " + lam + ".<br>Hoy " + nom[ini] + ", v<sub>" + est.n + "</sub> = " + vtxt(v, 3) + ".<br>" + veredicto;
+    pintarCadenas();
+  }
+
+  /* ---------------- chequeos de cada paso ---------------- */
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+
+  B.opcionMultiple(cuerpo("chk1"), {
+    pregunta: "Hoy hace sol y la ficha empieza en sol. Dentro de un mes, ¿cuánto importa que hoy haya hecho sol?",
+    opciones: [
+      "Casi nada: después de unos días la ficha olvida dónde empezó",
+      "Mucho: el sol de hoy vuelve más probable el sol de dentro de un mes",
+      "Depende de la suerte: si la ficha se queda en sol los primeros días, sigue en sol",
+      "Nada, ni siquiera para mañana"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "Para mañana sí importa. Pero cada día la ficha decide de nuevo mirando solo dónde está, y en un mes decide treinta veces.",
+      "La flecha de sol a sol no es 1: tarde o temprano sale. Y cuando sale, ya no recuerda que empezó en sol.",
+      "Para mañana sí importa: desde el sol, la flecha más gruesa vuelve al sol."],
+    explicacion: "Mañana depende mucho de hoy, pero cada salto nuevo diluye el recuerdo del inicio. En un mes, la probabilidad de sol es casi la misma empieces donde empieces. Ahora pruébalo en el escenario.",
+    alResolver: function () { est.chk1 = true; $("txt1").hidden = false; pintarSim(); pasos.completar(0); }
+  });
+
+  B.numerico(cuerpo("chk2"), {
+    pregunta: "Ayer llovió y hoy hay nubes. ¿Qué probabilidad hay de que mañana <b>no</b> llueva?",
+    respuesta: 0.9,
+    tolerancia: 0.001,
+    pistas: ["¿Importa que ayer lloviera? Mira solo las flechas que salen de nubes.", "No llover es sol o nubes: 0.4 + 0.5. O también 1 menos la flecha de nubes a lluvia."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 0.4) < 0.001) return "Sumaste las flechas que salen de lluvia hacia sol y nubes. Pero lluvia fue ayer: la cadena solo mira hoy, que son nubes.";
+      if (Math.abs(v - 0.1) < 0.001) return "Esa es la probabilidad de que sí llueva. La pregunta es la contraria.";
+      if (Math.abs(v - 0.8) < 0.001) return "Esa sale de la fila de lluvia: 1 menos 0.2. Pero lluvia fue ayer, y ayer no cuenta.";
+      if (Math.abs(v - 0.5) < 0.001) return "Ese es solo quedarse en nubes. No llover también incluye que salga el sol.";
+      return null;
+    },
+    explicacion: "Desde nubes: sol 0.4 + nubes 0.5 = <b>0.9</b>, o 1 − 0.1. Que ayer lloviera no cambia nada: esa es la propiedad de Markov.",
+    alResolver: function () { pasos.completar(1); }
+  });
+
+  B.numerico(cuerpo("chk3"), {
+    pregunta: "En el escenario está tapada la probabilidad de ir de sol a lluvia. ¿Cuánto vale?",
+    respuesta: 0.1,
+    tolerancia: 0.001,
+    pistas: ["Mira la fila de sol en la matriz: tiene dos valores visibles.", "La fila suma 1: 1 − 0.6 − 0.3."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 0.3) < 0.001) return "Completaste la columna de lluvia hasta 1. Las que suman 1 son las filas: desde un mismo hoy, algún mañana tiene que pasar.";
+      return null;
+    },
+    explicacion: "La fila de sol suma 1: 1 − 0.6 − 0.3 = <b>0.1</b>. La columna de lluvia suma 0.1 + 0.1 + 0.6 = 0.8, y no pasa nada: las columnas no tienen por qué sumar 1.",
+    alResolver: function () { est.chk3 = true; refrescar(); pasos.completar(2); }
+  });
+
+  B.numerico(cuerpo("chk4"), {
+    pregunta: "Hoy hace sol. ¿Qué probabilidad hay de que llueva <b>pasado mañana</b>? Es la entrada (sol, lluvia) de $P^2$.",
+    respuesta: 0.15,
+    tolerancia: 0.001,
+    pistas: [
+      "Mañana puede pasar cualquier cosa. Hay tres caminos: sol → sol → lluvia, sol → nubes → lluvia y sol → lluvia → lluvia.",
+      "Cada camino es un producto de dos flechas. Después se suman: $0.6 \\cdot 0.1 + 0.3 \\cdot 0.1 + 0.1 \\cdot 0.6$."
+    ],
+    diagnostico: function (v) {
+      if (Math.abs(v - 0.1) < 0.001) return "Esa es la probabilidad de lluvia mañana, en un solo salto. La pregunta es a dos días.";
+      if (Math.abs(v - 0.06) < 0.001) return "Ese es un solo camino. Suma los otros dos.";
+      if (Math.abs(v - 0.01) < 0.001) return "Elevaste al cuadrado la entrada 0.1. $P^2$ no eleva cada entrada: suma sobre el estado de mañana.";
+      if (Math.abs(v - 0.09) < 0.001) return "Te faltó un camino. Son tres: el estado de mañana puede ser sol, nubes o lluvia.";
+      return null;
+    },
+    explicacion: "0.6 · 0.1 + 0.3 · 0.1 + 0.1 · 0.6 = 0.06 + 0.03 + 0.06 = <b>0.15</b>. Es la fila de sol por la columna de lluvia: un producto de matrices. Ahora n llega hasta 30. Llévalo despacio y mira cuándo las barras dejan de moverse.",
+    alResolver: function () { est.chk4 = true; refrescar(); pasos.completar(3); }
+  });
+
+  B.opcionMultiple(cuerpo("chk5"), {
+    pregunta: "Ahora hoy llueve: $v_0 = (0, 0, 1)$. Antes de cambiarlo en el escenario, ¿a qué se parece $v_{30}$?",
+    opciones: [
+      "A (0.45, 0.35, 0.20), lo mismo que empezando con sol",
+      "A (0.20, 0.20, 0.60), la fila de lluvia",
+      "A (1/3, 1/3, 1/3): a la larga todo se empareja",
+      "A algo con más lluvia, como (0.30, 0.30, 0.40), porque empezó lloviendo"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "Esa es la distribución de mañana, $v_1$. En 30 días la cadena saltó 30 veces.",
+      "Se empareja la influencia del inicio, no los estados: la cadena prefiere el sol.",
+      "La lluvia del inicio pesa cada vez menos: cada día se multiplica su efecto por algo menor que 1."],
+    explicacion: "Desde lluvia, desde nubes o desde sol, $v_{30}$ es (0.45, 0.35, 0.20). <b>Pruébalo</b> con los botones de Hoy. Fíjate también en el paso 4: a partir de unos 15 días las tres filas de $P^n$ son iguales.",
+    alResolver: function () { est.chk5 = true; $("tras5").hidden = false; refrescar(); cerrarPaso5(); }
+  });
+
+  B.opcionMultiple(cuerpo("chk5b"), {
+    pregunta: "La ficha ya lleva 1000 días y su distribución es π. ¿Qué hace mañana?",
+    opciones: [
+      "Sigue saltando como siempre; lo que no cambia es la proporción de tiempo en cada estado",
+      "Se queda quieta en el estado más probable, el sol",
+      "Salta, pero siempre al estado de mayor probabilidad en π",
+      "Salta con probabilidades π, sin importar dónde está"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "La matriz no cambió: desde sol sigue habiendo un 40% de irse.",
+      "Las flechas siguen siendo las mismas que el primer día.",
+      "Eso sería olvidar también el día de hoy. Mañana sigue dependiendo de hoy, con la fila de su estado."],
+    explicacion: "Nada en las reglas cambió: mañana se decide con la fila del estado de hoy. Corre la ficha en el escenario: salta todo el rato, y aun así las barras se quedan quietas cerca de las líneas punteadas.",
+    alResolver: function () { est.chk5b = true; cerrarPaso5(); }
+  });
+  function cerrarPaso5() { if (est.chk5 && est.chk5b) pasos.completar(4); }
+
+  B.opcionMultiple(cuerpo("chk6"), {
+    pregunta: "En el ciclo la ficha va siempre sol → nubes → lluvia → sol. Si hoy es sol, ¿qué pasa con $v_n$ cuando n crece?",
+    opciones: [
+      "Gira para siempre: (1, 0, 0), (0, 1, 0), (0, 0, 1), (1, 0, 0)...",
+      "Llega a (1/3, 1/3, 1/3)",
+      "Se queda en (1, 0, 0)",
+      "Termina en (0, 0, 1)"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "1/3 es la fracción del tiempo que pasa en cada estado. Pero si hoy es sol con certeza, ¿dónde está en exactamente 3 días?",
+      "Desde sol la única flecha va a nubes: mañana no puede seguir en sol.",
+      "Desde lluvia hay una flecha a sol, así que lluvia no es el final."],
+    explicacion: "Con certeza en el día 0, hay certeza en todos los días: sol, nubes, lluvia, sol... $v_n$ no converge porque la cadena es <b>periódica</b>, de periodo 3. Lo que sí converge es la fracción de tiempo, a 1/3. Ahora prueba las otras dos cadenas.",
+    alResolver: function () { est.chk6 = true; pintarCadenas(); pasos.completar(5); }
+  });
+
+  B.numerico(cuerpo("chk7"), {
+    pregunta: "La ficha está en nubes ($\\pi^{*} = 0.4$) y la propuesta es ir a sol ($\\pi^{*} = 0.2$). ¿Con qué probabilidad se acepta el salto?",
+    respuesta: 0.5,
+    tolerancia: 0.001,
+    pistas: ["Es $\\min(1,\\ \\pi^{*}_{\\text{destino}} / \\pi^{*}_{\\text{actual}})$. El destino es sol.", "$0.2 / 0.4$."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 2) < 0.001) return "Pusiste el cociente al revés, y una probabilidad no puede pasar de 1. Es destino entre actual, y con el mínimo.";
+      if (Math.abs(v - 1) < 0.001) return "Se acepta siempre solo si el destino es igual o más probable. Sol (0.2) es menos probable que nubes (0.4).";
+      if (Math.abs(v - 0.25) < 0.001) return "Esa es la flecha completa de nubes a sol: proponer (1/2) por aceptar. La pregunta es solo la aceptación.";
+      if (Math.abs(v - 0.2) < 0.001) return "Ese es π* de sol. La aceptación compara los dos estados con un cociente.";
+      return null;
+    },
+    explicacion: "$\\min(1,\\ 0.2/0.4) = $ <b>0.5</b>. La flecha de nubes a sol vale proponer por aceptar: $\\tfrac12 \\cdot 0.5 = 0.25$. Ir de sol a nubes se acepta siempre, así que esa flecha vale $\\tfrac12$. Con flujos 0.2 · 0.5 = 0.4 · 0.25 en las dos direcciones, π* queda en equilibrio. Ahora mira las flechas y corre la ficha.",
+    alResolver: function () { est.chk7 = true; $("tras7").hidden = false; refrescar(); pasos.completar(6); }
+  });
+
+  pasos = B.pasos($("recorrido"), {
+    concepto: C,
+    alEntrar: entrar,
+    alTerminar: function () { location.hash = "retos"; }
+  });
+  est.chk1 = pasos.hecho(0);
+  est.chk3 = pasos.hecho(2);
+  est.chk4 = pasos.hecho(3);
+  est.chk5 = est.chk5b = pasos.hecho(4);
+  est.chk6 = pasos.hecho(5);
+  est.chk7 = pasos.hecho(6);
+  if (est.chk1) $("txt1").hidden = false;
+  if (est.chk5) $("tras5").hidden = false;
+  if (est.chk7) $("tras7").hidden = false;
+  entrar(0);
+
+  /* ---------------- hipotesis inicial ---------------- */
+  (function () {
+    var ta = $("hipotesis"), t = null;
+    ta.value = B.nota("cadenas-markov", "hipotesis");
+    function cita() {
+      var v = ta.value.trim(), el = $("citaHipo");
+      el.hidden = !v;
+      if (v) { el.textContent = ""; el.appendChild(document.createTextNode("Al principio escribiste: «" + v + "». ¿Se parece a lo que acabas de ver? ¿Importaba el sol de hoy?")); }
+    }
+    cita();
+    ta.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { B.nota("cadenas-markov", "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; cita(); }, 500);
+    });
+  })();
+
+  /* ---------------- marcadores de estado de retos ---------------- */
+  function pintarEstados() {
+    [].forEach.call(document.querySelectorAll("[data-reto]"), function (el) {
+      var ok = C.retoOk(el.getAttribute("data-reto"));
+      el.textContent = ok ? "resuelto" : "pendiente";
+      el.classList.toggle("ok", ok);
+    });
+  }
+  C.alCambiar(pintarEstados);
+
+  /* ---------------- reto: ojo clinico ---------------- */
+  function filaAzar() {
+    for (;;) { var a = 1 + rand(8), b = 1 + rand(8), c = 10 - a - b; if (c >= 1) return [a / 10, b / 10, c / 10]; }
+  }
+  function permutarM(P, s) {
+    var Q = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+    for (var i = 0; i < 3; i++) for (var j = 0; j < 3; j++) Q[s[i]][s[j]] = P[i][j];
+    return Q;
+  }
+  function clasificar(P) {
+    var A = potencia(P, 64), A2 = matPorMat(A, P), dif = 0, filas = 0;
+    for (var i = 0; i < 3; i++) for (var j = 0; j < 3; j++) { dif = Math.max(dif, Math.abs(A[i][j] - A2[i][j])); filas = Math.max(filas, Math.abs(A[i][j] - A[0][j])); }
+    if (dif > 1e-4) return "nunca";
+    return filas < 1e-4 ? "igual" : "depende";
+  }
+  function cadenaOjo(tipo) {
+    var P;
+    if (tipo === "igual") P = [filaAzar(), filaAzar(), filaAzar()];
+    else if (tipo === "abs") { P = [filaAzar(), filaAzar(), [0, 0, 1]]; }
+    else if (tipo === "ciclo") P = [[0, 1, 0], [0, 0, 1], [1, 0, 0]];
+    else if (tipo === "bip") { var p = (2 + rand(6)) / 10; P = [[0, 1, 0], [p, 0, +(1 - p).toFixed(1)], [0, 1, 0]]; }
+    else if (tipo === "dos") { var r = filaAzar(); P = [[1, 0, 0], r, [0, 0, 1]]; }
+    else { var a = (3 + rand(5)) / 10, b = (2 + rand(5)) / 10; P = [[a, +(1 - a).toFixed(1), 0], [b, +(1 - b).toFixed(1), 0], [0, 0, 1]]; }
+    return permutarM(P, B.mezclar([0, 1, 2]));
+  }
+  (function () {
+    var cont = $("ojo");
+    cont.innerHTML = '<div class="ronda"></div><svg class="ojo-svg" role="img" aria-label="Cadena de la ronda"></svg>' +
+      '<div class="ojo-opts"><button type="button" class="opt" data-a="igual">Se estabiliza en lo mismo, empiece donde empiece</button>' +
+      '<button type="button" class="opt" data-a="depende">Se estabiliza, pero depende de dónde empiece</button>' +
+      '<button type="button" class="opt" data-a="nunca">Nunca se estabiliza: gira en círculo</button></div>' +
+      '<div class="fb" aria-live="polite"></div><div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    var g = crearGrafo(cont.querySelector("svg"), { id: "go", P: P0 });
+    var tipos, ronda, aciertos, respondida, Pr;
+    function nueva() {
+      var extra = ["igual", "abs", "ciclo", "bip", "dos", "isla"][rand(6)];
+      tipos = B.mezclar(["igual", "abs", rand(2) ? "ciclo" : "bip", rand(2) ? "dos" : "isla", extra]);
+      ronda = 0; aciertos = 0;
+      mostrar();
+    }
+    function mostrar() {
+      respondida = false;
+      Pr = cadenaOjo(tipos[ronda]);
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 5 · aciertos " + aciertos;
+      g.set({ P: Pr, etiquetas: true });
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (b) { b.disabled = false; b.className = "opt"; });
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+    }
+    cont.querySelector(".ojo-opts").addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || respondida) return;
+      respondida = true;
+      var correcta = clasificar(Pr), ok = b.getAttribute("data-a") === correcta;
+      if (ok) aciertos++;
+      b.classList.add(ok ? "ok" : "mal");
+      if (!ok) cont.querySelector('[data-a="' + correcta + '"]').classList.add("ok");
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (x) { x.disabled = true; });
+      var A = potencia(Pr, 60), tipo = tipos[ronda];
+      var porque = {
+        igual: "Desde cualquier estado se llega a cualquier otro y hay flechas que vuelven al mismo estado: es ergódica.",
+        abs: "Hay un estado sin salida, y se llega a él desde los otros dos: toda la probabilidad termina ahí, empiece donde empiece.",
+        ciclo: "Cada estado tiene una sola salida y forman un ciclo: la probabilidad gira sin parar.",
+        bip: "Los saltos alternan entre el estado del centro y los otros dos: periodo 2, nunca se estabiliza.",
+        dos: "Hay dos estados sin salida: depende de en cuál caigas.",
+        isla: "Hay dos grupos sin flechas entre ellos: desde un grupo nunca llegas al otro."
+      }[tipo];
+      cont.querySelector(".fb").innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No.</span> ') + porque +
+        " Filas de P<sup>60</sup>: " + A.map(function (r) { return vtxt(r, 2); }).join(", ") + ".";
+      var sig = cont.querySelector(".sig");
+      sig.hidden = false;
+      if (ronda === 4) {
+        var aprobo = aciertos >= 4;
+        C.reto("ojo", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertos + " de 5" + (aprobo ? ". Aprobado." : ". Necesitas 4 para aprobar.");
+        sig.textContent = "Otra tanda";
+      } else sig.textContent = "Siguiente ronda";
+    });
+    cont.querySelector(".sig").addEventListener("click", function () { if (ronda === 4) nueva(); else { ronda++; mostrar(); } });
+    nueva();
+  })();
+
+  /* ---------------- reto: constructor ---------------- */
+  (function () {
+    var M = [[60, 30, 10], [40, 50, 10], [20, 20, 60]]; // en centesimas
+    var OBJ = [
+      { t: "Que llueva al menos la mitad del tiempo: π de lluvia de 0.50 o más.", ok: function (pi) { return pi && pi[2] >= 0.5 - 1e-9; } },
+      { t: "Un clima repartido: los tres valores de π entre 0.32 y 0.35, sin dejar ninguna fila igual a otra.", ok: function (pi, l, P) {
+          var distintas = JSON.stringify(P[0]) !== JSON.stringify(P[1]) && JSON.stringify(P[1]) !== JSON.stringify(P[2]) && JSON.stringify(P[0]) !== JSON.stringify(P[2]);
+          return pi && distintas && pi.every(function (x) { return x >= 0.32 - 1e-9 && x <= 0.35 + 1e-9; }); } },
+      { t: "Que olvide el inicio casi de inmediato: |λ₂| de 0.10 o menos.", ok: function (pi, l) { return pi && l.mod <= 0.1 + 1e-9; } }
+    ];
+    var logrados = [false, false, false], avisado = false;
+    var ul = $("objetivos");
+    OBJ.forEach(function (o) { var li = document.createElement("li"); li.innerHTML = '<span class="m"></span><span>' + o.t + '</span>'; ul.appendChild(li); });
+    var g = crearGrafo($("grafoConstr"), { id: "gc", P: P0 });
+    var cont = $("filasConstr");
+    M.forEach(function (fila, i) {
+      var d = document.createElement("div");
+      d.className = "fila-c";
+      d.innerHTML = '<span class="st' + i + '">' + nom[i] + '</span>' +
+        '<label>→' + nom[0].slice(0, 3) + ' <input type="range" min="0" max="100" step="5" data-i="' + i + '" data-j="0" aria-label="De ' + nom[i] + ' a sol"></label>' +
+        '<label>→' + nom[1].slice(0, 3) + ' <input type="range" min="0" max="100" step="5" data-i="' + i + '" data-j="1" aria-label="De ' + nom[i] + ' a nubes"></label>';
+      cont.appendChild(d);
+    });
+    function aP() { return M.map(function (r) { return r.map(function (x) { return x / 100; }); }); }
+    function pintar() {
+      [].forEach.call(cont.querySelectorAll("input"), function (inp) { inp.value = M[+inp.getAttribute("data-i")][+inp.getAttribute("data-j")]; });
+      var P = aP(), pi = estacionaria(P), l = otrosLambda(P);
+      g.set({ P: P });
+      barras($("constrHist"), pi || [0, 0, 0], { texto: function (i) { return pi ? f(pi[i], 3) : "—"; } });
+      var lam = l.real ? f(l.a, 2) + " y " + f(l.b, 2) : f(l.re, 2) + " ± " + f(l.im, 2) + "i";
+      $("constrVivo").innerHTML = "filas: " + P.map(function (r, i) { return nom[i] + " " + vtxt(r, 2); }).join(" · ") +
+        "<br>otros eigenvalores: " + lam + " · |λ₂| = <b>" + f(l.mod, 2) + "</b>" + (pi ? "" : "<br>π no es única: hay más de un grupo cerrado.");
+      OBJ.forEach(function (o, i) { if (!logrados[i] && o.ok(pi, l, P)) logrados[i] = true; ul.children[i].classList.toggle("hecho", logrados[i]); });
+      if (!avisado && logrados.every(Boolean)) { avisado = true; C.reto("constructor", true); }
+    }
+    cont.addEventListener("input", function (e) {
+      var inp = e.target, i = +inp.getAttribute("data-i"), j = +inp.getAttribute("data-j"), k = 1 - j;
+      var v = +inp.value;
+      M[i][j] = v;
+      if (M[i][0] + M[i][1] > 100) M[i][k] = 100 - v;
+      M[i][2] = 100 - M[i][0] - M[i][1];
+      pintar();
+    });
+    pintar();
+  })();
+
+  /* ---------------- reto: a mano, dos dias ---------------- */
+  (function () {
+    var D;
+    function generar() {
+      var P = [filaAzar(), filaAzar(), filaAzar()], i = rand(3), j = rand(3);
+      var r = P[i][0] * P[0][j] + P[i][1] * P[1][j] + P[i][2] * P[2][j];
+      D = { P: P, i: i, j: j, r: Math.round(r * 100) / 100, t: [0, 1, 2].map(function (k) { return P[i][k] * P[k][j]; }) };
+      $("manoDatos").innerHTML = '<table class="datos-mano"><tr><th>hoy \\ mañana</th>' + nom.map(function (n) { return "<th>" + n + "</th>"; }).join("") + "</tr>" +
+        P.map(function (r, a) { return "<tr><th>" + nom[a] + "</th>" + r.map(function (x) { return "<td>" + f(x, 1) + "</td>"; }).join("") + "</tr>"; }).join("") + "</table>";
+    }
+    function prods() { return [0, 1, 2].map(function (k) { return f(D.P[D.i][k], 1) + " · " + f(D.P[k][D.j], 1); }).join(" + "); }
+    generar();
+    B.numerico($("mano"), {
+      pregunta: function () { return "Hoy es <b>" + nom[D.i] + "</b>. ¿Qué probabilidad hay de que dentro de dos días sea <b>" + nom[D.j] + "</b>?"; },
+      respuesta: function () { return D.r; },
+      tolerancia: 0.001,
+      pistas: [
+        function () { return "Hay tres caminos, uno por cada estado posible de mañana: " + nom[D.i] + " → k → " + nom[D.j] + "."; },
+        function () { return "Cada camino es fila de " + nom[D.i] + " por columna de " + nom[D.j] + ": " + prods() + "."; },
+        function () { return "Los tres productos son " + D.t.map(function (x) { return f(x, 2); }).join(", ") + ". Súmalos."; }
+      ],
+      diagnostico: function (v) {
+        if (Math.abs(v - D.P[D.i][D.j]) < 0.001) return "Esa es la probabilidad a un día. A dos días hay que pasar por el estado de mañana.";
+        if (Math.abs(v - D.P[D.i][D.j] * D.P[D.i][D.j]) < 0.001) return "Elevaste al cuadrado una entrada. $P^2$ suma sobre los tres estados de mañana.";
+        if (D.t.some(function (x) { return Math.abs(v - x) < 0.001; })) return "Ese es un solo camino. Faltan los otros dos.";
+        return null;
+      },
+      explicacion: function () { return prods() + " = " + D.t.map(function (x) { return f(x, 2); }).join(" + ") + " = <b>" + f(D.r, 2) + "</b>."; },
+      reintentable: true,
+      textoReintentar: "Otra cadena",
+      antesDeReintentar: generar,
+      alResolver: function (ok) { C.reto("mano", ok); }
+    });
+  })();
+
+  /* ---------------- reto: a mano, estacionaria de dos estados ---------------- */
+  (function () {
+    var D;
+    function generar() {
+      for (;;) {
+        var a = 1 + rand(8), b = 1 + rand(8);
+        if ([2, 4, 5, 8, 10].indexOf(a + b) < 0) continue;
+        D = { a: a / 10, b: b / 10, r: a / (a + b) };
+        break;
+      }
+      $("mano2Datos").innerHTML = '<table class="datos-mano"><tr><th>hoy \\ mañana</th><th>sol</th><th>lluvia</th></tr>' +
+        '<tr><th>sol</th><td>' + f(1 - D.a, 1) + '</td><td>' + f(D.a, 1) + '</td></tr>' +
+        '<tr><th>lluvia</th><td>' + f(D.b, 1) + '</td><td>' + f(1 - D.b, 1) + '</td></tr></table>';
+    }
+    generar();
+    B.numerico($("mano2"), {
+      pregunta: "¿Qué fracción de los días llueve a la larga? Da π de lluvia con dos o tres decimales.",
+      respuesta: function () { return D.r; },
+      tolerancia: 0.006,
+      pistas: [
+        "En equilibrio, lo que pasa de sol a lluvia cada día tiene que ser igual a lo que vuelve de lluvia a sol.",
+        function () { return "Con $x$ = π de lluvia: $(1 - x) \\cdot " + f(D.a, 1) + " = x \\cdot " + f(D.b, 1) + "$."; },
+        function () { return "Despeja: $x = " + f(D.a, 1) + " / (" + f(D.a, 1) + " + " + f(D.b, 1) + ")$."; }
+      ],
+      diagnostico: function (v) {
+        if (Math.abs(v - (1 - D.r)) < 0.006) return "Esa es la fracción de sol. La pregunta es la de lluvia.";
+        if (Math.abs(v - (1 - D.b)) < 0.006) return "Ese es quedarse en lluvia un día. A la larga también cuenta cuánto se sale del sol.";
+        return null;
+      },
+      explicacion: function () { return "$x = " + f(D.a, 1) + " / (" + f(D.a, 1) + " + " + f(D.b, 1) + ") = $ <b>" + f(D.r, 3) + "</b>. Cuanto más fácil es entrar en lluvia y más difícil salir, más tiempo se pasa ahí."; },
+      reintentable: true,
+      textoReintentar: "Otra cadena",
+      antesDeReintentar: generar,
+      alResolver: function (ok) { C.reto("mano2", ok); }
+    });
+  })();
+
+  /* ---------------- reto: cazar el error ---------------- */
+  B.cazarError($("error"), {
+    variantes: [
+      {
+        intro: "Hoy es mitad sol, mitad nubes: $v_0 = (0.5,\\ 0.5,\\ 0)$. Alguien calculó $v_1 = v_0 P$ así:",
+        lineas: [
+          "v_1[\\text{sol}] = 0.5 \\cdot 0.6 + 0.5 \\cdot 0.4 + 0 \\cdot 0.2 = 0.5",
+          "v_1[\\text{nubes}] = 0.5 \\cdot 0.4 + 0.5 \\cdot 0.5 + 0 \\cdot 0.1 = 0.45",
+          "v_1[\\text{lluvia}] = 0.5 \\cdot 0.1 + 0.5 \\cdot 0.1 + 0 \\cdot 0.6 = 0.1",
+          "v_1 = (0.5,\\ 0.45,\\ 0.1)"
+        ],
+        erronea: 1,
+        explicacion: "Para nubes mañana se usa la <b>columna</b> de nubes, (0.3, 0.5, 0.2), y en la línea 2 usó la fila de nubes. Bien: $0.5 \\cdot 0.3 + 0.5 \\cdot 0.5 = 0.4$, y $v_1 = (0.5, 0.4, 0.1)$, que sí suma 1. El resultado mal sumaba 1.05: comprobar la suma caza este error."
+      },
+      {
+        intro: "Alguien sacó la estacionaria con eigenvectores:",
+        lineas: [
+          "\\text{eig}(P^{\\top}) \\text{ da } \\lambda = 1,\\ 0.2,\\ 0.5",
+          "\\text{el eigenvector de } \\lambda = 1 \\text{ es } (-0.745,\\ -0.579,\\ -0.331)",
+          "\\pi = -1 \\cdot (-0.745,\\ -0.579,\\ -0.331) = (0.745,\\ 0.579,\\ 0.331)",
+          "\\text{a la larga hace sol el } 74.5\\% \\text{ de los días}"
+        ],
+        erronea: 2,
+        explicacion: "Cambiar el signo quita los negativos, pero no arregla la escala: ese vector tiene largo 1 y suma 1.655. Una distribución tiene que sumar 1, así que se divide entre la suma: $\\pi = (0.45, 0.35, 0.20)$. Hace sol el 45% de los días."
+      },
+      {
+        intro: "Hoy hace sol. Alguien calculó la probabilidad de lluvia pasado mañana:",
+        lineas: [
+          "\\text{caminos: sol} \\to \\text{sol} \\to \\text{lluvia},\\ \\text{sol} \\to \\text{nubes} \\to \\text{lluvia},\\ \\text{sol} \\to \\text{lluvia} \\to \\text{lluvia}",
+          "\\text{sol} \\to \\text{sol} \\to \\text{lluvia}:\\ 0.6 \\cdot 0.1 = 0.06",
+          "\\text{sol} \\to \\text{nubes} \\to \\text{lluvia}:\\ 0.3 \\cdot 0.1 = 0.03",
+          "\\text{sol} \\to \\text{lluvia} \\to \\text{lluvia}:\\ 0.1 \\cdot 0.1 = 0.01",
+          "\\text{total} = 0.06 + 0.03 + 0.01 = 0.10"
+        ],
+        erronea: 3,
+        explicacion: "El segundo salto sale de lluvia: lluvia → lluvia vale 0.6, no 0.1. Ese camino es $0.1 \\cdot 0.6 = 0.06$ y el total, 0.15."
+      }
+    ],
+    alResolver: function (ok) { C.reto("error", ok); }
+  });
+
+  /* ---------------- retos: propiedades ---------------- */
+  function prop(id, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple($(id), cfg);
+  }
+  prop("prop1", {
+    pregunta: "En una matriz de transición escrita como en esta página (fila = hoy), ¿qué suma siempre 1?",
+    opciones: ["Cada fila", "Cada columna", "La matriz entera", "La diagonal"],
+    correcta: 0,
+    pistas: [null, "Mira la columna de lluvia: 0.1 + 0.1 + 0.6. Y piensa qué pasaría con la otra convención, la de la página de diagonalización.",
+      "La matriz entera suma el número de estados, 3, porque cada fila aporta 1.",
+      "La diagonal es la probabilidad de repetir estado. Puede sumar cualquier cosa entre 0 y 3."],
+    explicacion: "Cada fila es una distribución: desde un mismo hoy, algún mañana tiene que pasar. En la convención de columnas (la de diagonalización) suman 1 las columnas."
+  });
+  prop("prop2", {
+    pregunta: "La propiedad de Markov dice que...",
+    opciones: [
+      "Si conoces el estado de hoy, el pasado no agrega nada para predecir mañana",
+      "Mañana es independiente de hoy",
+      "A la larga todos los estados son igual de probables",
+      "La cadena siempre llega a una distribución estacionaria"
+    ],
+    correcta: 0,
+    pistas: [null, "Mañana sí depende de hoy: desde sol, sol vuelve con 0.6; desde lluvia, con 0.2.",
+      "La estacionaria del clima es (0.45, 0.35, 0.20): nada parejo.",
+      "El ciclo y las dos islas cumplen la propiedad de Markov y no llegan a una única estacionaria."],
+    explicacion: "$P(X_{t+1} \\mid X_t, X_{t-1}, \\dots) = P(X_{t+1} \\mid X_t)$. Depende de hoy y solo de hoy. Converger es otra cosa: necesita además irreducible y aperiódica."
+  });
+  prop("prop3", {
+    pregunta: "¿Por qué toda matriz de transición tiene el eigenvalor 1?",
+    opciones: [
+      "Porque cada fila suma 1, y entonces P por el vector de unos da el vector de unos",
+      "Porque su determinante vale 1",
+      "Porque su diagonal tiene unos",
+      "Solo lo tienen las cadenas ergódicas"
+    ],
+    correcta: 0,
+    pistas: [null, "El determinante del clima es 1 · 0.5 · 0.2 = 0.1, el producto de sus eigenvalores. No vale 1.",
+      "La diagonal del clima es 0.6, 0.5 y 0.6.",
+      "El ciclo y las dos islas también tienen el 1. Lo que cambia es si hay otros de módulo 1."],
+    explicacion: "$P(1,1,1)^{\\top} = (1,1,1)^{\\top}$ porque cada entrada es la suma de una fila. Como $P$ y $P^{\\top}$ tienen los mismos eigenvalores, $P^{\\top}$ también tiene el 1, y su eigenvector es π."
+  });
+  prop("prop4", {
+    pregunta: "En el ciclo sol → nubes → lluvia → sol, ¿qué fracción de los primeros 3000 días pasa la ficha en sol?",
+    opciones: ["Exactamente 1/3, aunque $v_n$ nunca se estabilice", "No se puede saber, porque la cadena no converge", "1, porque empezó en sol", "Depende de la suerte de la simulación"],
+    correcta: 0,
+    pistas: [null, "No converge $v_n$. Pero la ficha pasa por los tres estados en orden, uno por día.",
+      "Mañana ya está en nubes, pasado en lluvia.",
+      "En el ciclo no hay azar: cada estado tiene una sola salida."],
+    explicacion: "1000 de cada 3000 días. La periodicidad impide que $v_n$ converja, pero la fracción de tiempo sí tiene límite. Por eso en MCMC se mira el histograma de la cadena, no un día suelto."
+  });
+  prop("prop5", {
+    pregunta: "Dos cadenas ergódicas tienen $|\\lambda_2| = 0.5$ y $|\\lambda_2| = 0.95$. ¿Cuál olvida antes su estado inicial?",
+    opciones: ["La de 0.5", "La de 0.95", "Las dos igual, porque las dos son ergódicas", "Depende de cuál tenga la π más pareja"],
+    correcta: 0,
+    pistas: [null, "La distancia a π se multiplica por $|\\lambda_2|$ cada día. ¿Qué número la achica más rápido?",
+      "Ergódica dice que llega, no cuándo.",
+      "La velocidad la pone el segundo eigenvalor, no la forma de π."],
+    explicacion: "Con 0.5 la distancia se reduce a la mitad cada día: $0.5^{15} \\approx 0.00003$. Con 0.95, en 15 días solo baja a $0.95^{15} \\approx 0.46$. En MCMC, una cadena lenta necesita mucho más burn-in."
+  });
+  prop("prop6", {
+    pregunta: "En MCMC se descartan las primeras muestras (burn-in) porque...",
+    opciones: [
+      "Todavía dependen del punto de partida: la cadena no llegó a su estacionaria",
+      "Casi todas son rechazos",
+      "Tienen más error de redondeo",
+      "Así la cadena se vuelve aperiódica"
+    ],
+    correcta: 0,
+    pistas: [null, "Un rechazo repite el estado actual, y esa repetición también es una muestra válida.",
+      "El redondeo es el mismo al principio y al final.",
+      "Ser aperiódica depende de las flechas, no de qué muestras guardas."],
+    explicacion: "Los primeros días recuerdan el inicio, como el exceso de sol del paso 7. Se tiran hasta que el histograma ya no depende de dónde empezó la cadena. La figura de la UD4 (p. 11) marca ese punto como $x_B$."
+  });
+
+  /* ---------------- formula de memoria ---------------- */
+  B.ordenar($("formula"), {
+    piezas: ["\\pi_j", "=", "\\displaystyle\\sum_{i}", "\\pi_i", "\\,p_{ij}"],
+    distractores: ["\\,p_{ji}", "\\dfrac{1}{n}", "\\lambda", "P^{n}"],
+    soluciones: [[0, 1, 2, 3, 4], [0, 1, 2, 4, 3]],
+    explicacion: "La probabilidad de estar en j es la suma, sobre cada estado i, de estar en i por la flecha de i a j. Es la columna j de P, y por eso π es un eigenvector de $P^{\\top}$.",
+    alResolver: function (ok) { C.reto("formula", ok); }
+  });
+
+  /* ---------------- vida real: el algoritmo en codigo ---------------- */
+  (function () {
+    var CODIGO = {
+      py: [
+        ["import", "import numpy as np"],
+        [null, ""],
+        [null, "# filas = hoy, columnas = mañana: sol, nubes, lluvia"],
+        ["P", "P = np.array([[0.6, 0.3, 0.1],"],
+        ["P", "              [0.4, 0.5, 0.1],"],
+        ["P", "              [0.2, 0.2, 0.6]])"],
+        [null, ""],
+        ["def", "def paso(x, u):                     # un día: la CDF de la fila x"],
+        ["acum0", "    acum = 0.0"],
+        ["forj", "    for j in range(3):"],
+        ["acum", "        acum += P[x, j]"],
+        ["si", "        if u < acum: return j"],
+        ["ultimo", "    return 2"],
+        [null, ""],
+        [null, "# 1. cinco días con números al azar ya sorteados"],
+        ["x0", "x = 0                               # hoy: soleado"],
+        ["camino0", "camino = [x]"],
+        ["foru", "for u in [0.72, 0.15, 0.95, 0.35, 0.55]:"],
+        ["llamar", "    x = paso(x, u)"],
+        ["anotar", "    camino.append(x)"],
+        ["printcamino", "print(camino)"],
+        [null, ""],
+        [null, "# 2. diez mil días con semilla"],
+        ["semilla", "rng = np.random.default_rng(1)"],
+        ["cuenta0", "cuenta = np.zeros(3)"],
+        ["fort", "for t in range(10000):"],
+        ["llamar2", "    x = paso(x, rng.random())"],
+        ["contar", "    cuenta[x] += 1"],
+        ["printfrec", "print(cuenta / 10000)"],
+        [null, ""],
+        [null, "# 3. potencias: v_n = v_0 P^n"],
+        ["v0", "v = np.array([1.0, 0.0, 0.0])"],
+        ["forn", "for n in range(30):"],
+        ["vP", "    v = v @ P"],
+        ["printv", "print(np.round(v, 4))"],
+        [null, ""],
+        [null, "# 4. eigenvector de valor 1 de P transpuesta"],
+        ["eig", "w, V = np.linalg.eig(P.T)"],
+        ["printw", "print(np.round(w, 4))"],
+        ["k", "k = np.argmin(np.abs(w - 1))"],
+        ["norm", "estac = V[:, k] / V[:, k].sum()"],
+        ["printestac", "print(np.round(estac, 4))"],
+        ["verificar", "print(np.allclose(v, estac))        # True"]
+      ],
+      r: [
+        [null, "# filas = hoy, columnas = mañana: sol, nubes, lluvia"],
+        ["P", "P <- matrix(c(0.6, 0.3, 0.1,"],
+        ["P", "              0.4, 0.5, 0.1,"],
+        ["P", "              0.2, 0.2, 0.6), nrow = 3, byrow = TRUE)"],
+        [null, ""],
+        ["def", "paso <- function(x, u) {            # un día: la CDF de la fila x"],
+        ["acum0", "  acum <- 0"],
+        ["forj", "  for (j in 1:3) {"],
+        ["acum", "    acum <- acum + P[x, j]"],
+        ["si", "    if (u < acum) return(j)"],
+        [null, "  }"],
+        ["ultimo", "  3"],
+        [null, "}"],
+        [null, ""],
+        [null, "# 1. cinco días con números al azar ya sorteados"],
+        ["x0", "x <- 1                              # hoy: soleado"],
+        ["camino0", "camino <- c(x)"],
+        ["foru", "for (u in c(0.72, 0.15, 0.95, 0.35, 0.55)) {"],
+        ["llamar", "  x <- paso(x, u)"],
+        ["anotar", "  camino <- c(camino, x)"],
+        [null, "}"],
+        ["printcamino", "print(camino)"],
+        [null, ""],
+        [null, "# 2. diez mil días con semilla"],
+        ["semilla", "set.seed(1)"],
+        ["cuenta0", "cuenta <- c(0, 0, 0)"],
+        ["fort", "for (t in 1:10000) {"],
+        ["llamar2", "  x <- paso(x, runif(1))"],
+        ["contar", "  cuenta[x] <- cuenta[x] + 1"],
+        [null, "}"],
+        ["printfrec", "print(cuenta / 10000)"],
+        [null, ""],
+        [null, "# 3. potencias: v_n = v_0 P^n"],
+        ["v0", "v <- c(1, 0, 0)"],
+        ["forn", "for (n in 1:30) {"],
+        ["vP", "  v <- as.vector(v %*% P)"],
+        [null, "}"],
+        ["printv", "print(round(v, 4))"],
+        [null, ""],
+        [null, "# 4. eigenvector de valor 1 de P transpuesta"],
+        ["eig", "e <- eigen(t(P))"],
+        ["printw", "print(round(e$values, 4))"],
+        ["k", "k <- which.min(abs(e$values - 1))"],
+        ["norm", "estac <- e$vectors[, k] / sum(e$vectors[, k])"],
+        ["printestac", "print(round(estac, 4))"],
+        ["verificar", "print(isTRUE(all.equal(v, estac)))  # TRUE"]
+      ]
+    };
+    var U = [0.72, 0.15, 0.95, 0.35, 0.55];
+    // lo que imprimio cada lenguaje (corrido con python3 y Rscript)
+    var SALIDA = {
+      py: { camino: "[0, 1, 0, 2, 1, 1]", frec: "[0.4493 0.3441 0.2066]", v: "[0.45 0.35 0.2 ]", w: "[1.  0.2 0.5]", estac: "[0.45 0.35 0.2 ]", ver: "True" },
+      r: { camino: "[1] 1 2 1 3 2 2", frec: "[1] 0.4519 0.3394 0.2087", v: "[1] 0.45 0.35 0.20", w: "[1] 1.0 0.5 0.2", estac: "[1] 0.45 0.35 0.20", ver: "[1] TRUE" }
+    };
+    // primeros tres dias de la simulacion larga en cada lenguaje (estados desde 0)
+    var LARGO = {
+      py: { us: [0.5118, 0.9505, 0.1442], xs: [1, 2, 0], frec: [0.4493, 0.3441, 0.2066] },
+      r: { us: [0.2655, 0.3721, 0.5729], xs: [0, 0, 0], frec: [0.4519, 0.3394, 0.2087] }
+    };
+    var VEC = [-0.7448, -0.5793, -0.3310];
+
+    var EV = [];
+    function foto(id, fase, extra) { EV.push(Object.assign({ id: id, fase: fase }, extra || {})); }
+    (function () {
+      foto("import", 1); foto("P", 1); foto("def", 1, { def: true });
+      var x = 0, camino = [0];
+      foto("x0", 1, { x: 0, camino: [] });
+      foto("camino0", 1, { x: 0, camino: [0] });
+      U.forEach(function (u, t) {
+        foto("foru", 1, { x: x, u: u, t: t, camino: camino.slice() });
+        var acum = 0, j;
+        foto("acum0", 1, { x: x, u: u, acum: 0, camino: camino.slice(), dentro: true });
+        for (j = 0; j < 3; j++) {
+          foto("forj", 1, { x: x, u: u, j: j, acum: acum, camino: camino.slice(), dentro: true });
+          acum += P0[x][j];
+          foto("acum", 1, { x: x, u: u, j: j, acum: acum, camino: camino.slice(), dentro: true });
+          var ok = u < acum;
+          foto("si", 1, { x: x, u: u, j: j, acum: acum, ok: ok, camino: camino.slice(), dentro: true });
+          if (ok) break;
+        }
+        var desde = x;
+        x = j;
+        foto("llamar", 1, { x: x, desde: desde, u: u, camino: camino.slice() });
+        camino.push(x);
+        foto("anotar", 1, { x: x, camino: camino.slice() });
+      });
+      foto("printcamino", 1, { x: x, camino: camino.slice(), sale: "camino" });
+      foto("semilla", 2, { camino: camino.slice() });
+      foto("cuenta0", 2, { t: 0, camino: camino.slice() });
+      for (var t = 0; t < 3; t++) {
+        foto("fort", 2, { t: t, camino: camino.slice() });
+        foto("llamar2", 2, { t: t, camino: camino.slice() });
+        foto("contar", 2, { t: t + 1, camino: camino.slice() });
+      }
+      foto("fort", 2, { salto: true, camino: camino.slice() });
+      foto("printfrec", 2, { fin2: true, camino: camino.slice(), sale: "frec" });
+      var v = [1, 0, 0];
+      foto("v0", 3, { n: 0, v: v.slice(), camino: camino.slice() });
+      for (var n = 0; n < 30; n++) {
+        foto("forn", 3, { n: n, v: v.slice(), camino: camino.slice() });
+        v = vecPorMat(v, P0);
+        foto("vP", 3, { n: n + 1, v: v.slice(), camino: camino.slice() });
+      }
+      foto("printv", 3, { n: 30, v: v.slice(), camino: camino.slice(), sale: "v" });
+      foto("eig", 4, { v: v.slice(), camino: camino.slice() });
+      foto("printw", 4, { v: v.slice(), camino: camino.slice(), sale: "w" });
+      foto("k", 4, { v: v.slice(), camino: camino.slice() });
+      foto("norm", 4, { v: v.slice(), estac: PI0, camino: camino.slice() });
+      foto("printestac", 4, { v: v.slice(), estac: PI0, camino: camino.slice(), sale: "estac" });
+      foto("verificar", 4, { v: v.slice(), estac: PI0, camino: camino.slice(), sale: "ver", fin: true });
+    })();
+
+    // cuenta de la simulacion larga despues de t dias, por lenguaje
+    function cuentaLarga(lang, t) { var c = [0, 0, 0]; for (var k = 0; k < t; k++) c[LARGO[lang].xs[k]]++; return c; }
+    function estadoLargo(lang, t) { return t === 0 ? 1 : LARGO[lang].xs[t - 1]; }
+
+    function narrar(e, ctx) {
+      var py = ctx.lang() === "py", ix = ctx.ix, L = py ? "py" : "r";
+      switch (e.id) {
+        case "import": return py ? "Carga NumPy." : "R trae matrices y números al azar de serie: no hay nada que importar.";
+        case "P": return "La matriz del clima. Fila = hoy, columna = mañana, y cada fila suma 1.";
+        case "def": return "Define la función que simula <b>un día</b>. Todavía no corre: se usa más abajo.";
+        case "x0": return "Hoy es sol: el estado <b>" + ix(0) + "</b>" + (py ? " (Python cuenta desde 0)." : " (R cuenta desde 1).");
+        case "camino0": return "El camino empieza con el estado de hoy.";
+        case "foru": return "Día " + (e.t + 1) + ": el número al azar es <b>u = " + e.u + "</b>. Están escritos a mano para que Python y R hagan exactamente lo mismo.";
+        case "acum0": return "Dentro de <code>paso</code>: la suma acumulada de la fila de " + nom[e.x] + " empieza en 0.";
+        case "forj": return "Prueba el estado <b>j = " + ix(e.j) + "</b> (" + nom[e.j] + ").";
+        case "acum": return "Suma la flecha de " + nom[e.x] + " a " + nom[e.j] + ": la suma va en <b>" + f(e.acum, 1) + "</b>.";
+        case "si": return e.ok ? "u = " + e.u + " es menor que " + f(e.acum, 1) + ": cae en el tramo de " + nom[e.j] + ". Devuelve <b>" + ix(e.j) + "</b>."
+          : "u = " + e.u + " no es menor que " + f(e.acum, 1) + ": todavía no, sigue con el estado siguiente.";
+        case "llamar": return "De " + nom[e.desde] + " salta a <b>" + nom[e.x] + "</b>.";
+        case "anotar": return "Lo anota en el camino.";
+        case "printcamino": return "Imprime <code>" + SALIDA[L].camino + "</code>: sol, nubes, sol, lluvia, nubes, nubes." + (py ? "" : " En R los estados van de 1 a 3.");
+        case "semilla": return py ? "Un generador de números al azar con semilla 1: cada vez que corras el programa salen los mismos números."
+          : "Fija la semilla en 1: cada vez que corras el programa salen los mismos números. Pero no los mismos que en Python.";
+        case "cuenta0": return "Un contador de días por estado, en cero.";
+        case "fort": return e.salto ? "El bucle sigue igual hasta completar 10 000 días. La animación se salta el resto."
+          : "Día " + (e.t + 1) + " de 10 000.";
+        case "llamar2": var u = LARGO[L].us[e.t], de = estadoLargo(L, e.t), a = LARGO[L].xs[e.t];
+          return "Sortea u = " + u + " y llama a <code>paso</code>: de " + nom[de] + " a <b>" + nom[a] + "</b>.";
+        case "contar": return "Suma un día a " + nom[LARGO[L].xs[e.t - 1]] + ".";
+        case "printfrec": return "Imprime <code>" + SALIDA[L].frec + "</code>. Cerca de (0.45, 0.35, 0.20), pero no igual: son 10 000 días al azar." +
+          " El otro lenguaje da otros números con la misma semilla.";
+        case "v0": return "Ahora sin azar: la distribución de hoy, sol con certeza.";
+        case "forn": return "Día <b>n = " + ix(e.n) + "</b> del bucle.";
+        case "vP": return "Multiplica por P: v<sub>" + e.n + "</sub> = " + vtxt(e.v, 4) + ".";
+        case "printv": return "Imprime <code>" + SALIDA[L].v + "</code>: después de 30 días, la estacionaria.";
+        case "eig": return py ? "Los eigenvalores y eigenvectores de <b>P.T</b>. Con P sin transponer saldría el vector de unos." : "Los eigenvalores y eigenvectores de <b>t(P)</b>. Con P sin transponer saldría el vector de unos.";
+        case "printw": return "Imprime <code>" + SALIDA[L].w + "</code>. " + (py ? "NumPy no los ordena: el 0.2 sale antes que el 0.5." : "R los ordena de mayor a menor.");
+        case "k": return "Busca la posición del eigenvalor más cercano a 1: <b>k = " + ix(0) + "</b>.";
+        case "norm": return "El eigenvector viene con largo 1 y con signo negativo: " + vtxt(VEC, 4) + ". Al dividir entre su suma, " + f(VEC[0] + VEC[1] + VEC[2], 4) + ", queda una distribución.";
+        case "printestac": return "Imprime <code>" + SALIDA[L].estac + "</code>. La misma que con potencias.";
+        case "verificar": return "Compara las dos formas: <code>" + SALIDA[L].ver + "</code>.";
+      }
+      return "";
+    }
+
+    function visual(e, anterior, ctx) {
+      var L = ctx.lang() === "py" ? "py" : "r";
+      // regla de la fila de hoy
+      var x = null, u = null, acum = null, jOn = -1;
+      if (e && e.fase === 1 && e.dentro) { x = e.x; u = e.u; acum = e.acum; jOn = e.j == null ? -1 : e.j; }
+      else if (e && e.fase === 1 && (e.id === "foru" || e.id === "llamar")) { x = e.id === "llamar" ? e.desde : e.x; u = e.u; }
+      else if (e && e.fase === 2 && e.id === "llamar2") { x = estadoLargo(L, e.t); u = LARGO[L].us[e.t]; }
+      var regla = $("vrRegla"), wrap = $("vrReglaWrap");
+      [].forEach.call(wrap.querySelectorAll(".marca, .marca-lab, .acum"), function (n) { n.remove(); });
+      if (x === null) { regla.innerHTML = '<span style="flex:1;opacity:1;color:var(--ink-3);background:var(--surface-2)">sin día en curso</span>'; }
+      else {
+        regla.innerHTML = P0[x].map(function (p, j) {
+          var on = jOn < 0 || j <= jOn;
+          return '<span class="s' + j + (on ? " on" : "") + '" style="width:' + (p * 100) + '%">' + nom[j] + " " + f(p, 1) + "</span>";
+        }).join("");
+        var mk = document.createElement("span"); mk.className = "marca"; mk.style.left = (u * 100) + "%"; wrap.appendChild(mk);
+        var ml = document.createElement("span"); ml.className = "marca-lab"; ml.style.left = (u * 100) + "%"; ml.textContent = "u = " + u; wrap.appendChild(ml);
+        if (acum !== null && acum > 0) { var ac = document.createElement("span"); ac.className = "acum"; ac.style.left = Math.min(100, acum * 100) + "%"; wrap.appendChild(ac); }
+      }
+      // camino
+      var cam = e && e.camino ? e.camino : [];
+      $("vrCamino").innerHTML = cam.length ? cam.map(function (s) { return '<span class="s' + s + '">' + nom[s] + '</span>'; }).join("") : '<span style="background:var(--surface-2);color:var(--ink-3)">vacío</span>';
+      // barras
+      var tit = "Dónde está la probabilidad", vals = [0, 0, 0], txt = null;
+      if (e && e.fase === 2) {
+        var t = e.fin2 || e.salto ? 10000 : e.id === "contar" ? e.t : (e.t || 0);
+        if (e.fin2 || e.salto) { vals = LARGO[L].frec; tit = "Fracción de los 10 000 días"; txt = function (i) { return f(vals[i], 4); }; }
+        else { var c = cuentaLarga(L, t); vals = c.map(function (k) { return t ? k / t : 0; }); tit = "Días contados hasta ahora: " + t; txt = function (i) { return String(c[i]); }; }
+      } else if (e && e.fase === 3) { vals = e.v; tit = "v después de " + e.n + (e.n === 1 ? " día" : " días"); txt = function (i) { return f(vals[i], 4); }; }
+      else if (e && e.fase === 4) { vals = e.estac || e.v; tit = e.estac ? "π con el eigenvector" : "v después de 30 días"; txt = function (i) { return f(vals[i], 4); }; }
+      $("vrBarTit").textContent = tit;
+      barras($("vrBarras"), vals, { meta: e && e.fase >= 2 ? PI0 : null, texto: txt || function () { return "—"; } });
+      // salida
+      $("vrCuenta").innerHTML = e && e.sale ? '<div class="salida">' + ctx.esc(SALIDA[L][e.sale]) + '</div>' : "";
+    }
+
+    B.vidaReal($("vidareal"), {
+      codigo: CODIGO,
+      eventos: EV,
+      narrar: narrar,
+      vars: function (e, ctx) {
+        var v = [], ix = ctx.ix, L = ctx.lang() === "py" ? "py" : "r";
+        if (e && e.fase === 1 && e.x != null) v.push('<span>x = <b>' + ix(e.x) + '</b> (' + nom[e.x] + ')</span>');
+        if (e && e.u != null) v.push('<span>u = <b>' + e.u + '</b></span>');
+        if (e && e.dentro && e.j != null) v.push('<span class="vj">j = <b>' + ix(e.j) + '</b></span>');
+        if (e && e.dentro) v.push('<span>acum = <b>' + f(e.acum, 1) + '</b></span>');
+        if (e && e.fase === 2 && e.id !== "semilla") {
+          var t = e.salto || e.fin2 ? 10000 : e.t || 0;
+          v.push('<span>t = <b>' + (e.salto || e.fin2 ? "10000" : t) + '</b></span>');
+          if (!(e.salto || e.fin2)) v.push('<span>cuenta = <b>' + cuentaLarga(L, e.id === "contar" ? e.t : t).join(", ") + '</b></span>');
+        }
+        if (e && e.fase === 3 && e.n != null) v.push('<span>n = <b>' + e.n + '</b> días</span>');
+        return v;
+      },
+      visual: visual,
+      demora: function (e) {
+        if (!e) return 600;
+        if (e.fase === 3) return e.id === "vP" ? 260 : 120;
+        if (e.id === "forj" || e.id === "acum0") return 450;
+        if (e.id === "si" || e.id === "llamar" || e.id === "printcamino" || e.id === "printfrec") return 1200;
+        return 850;
+      }
+    });
+
+    /* chequeo de prediccion y trampas reales */
+    B.opcionMultiple(cuerpo("vrPred"), {
+      pregunta: "La fila del sol es (0.6, 0.3, 0.1) y el primer número al azar es u = 0.72. La función suma la fila de izquierda a derecha y se detiene cuando la suma pasa a u. ¿A qué estado salta?",
+      opciones: ["A nubes", "A sol", "A lluvia", "No se puede saber sin la semilla"],
+      correcta: 0,
+      pistas: [null, "Después de sumar sol la cuenta va en 0.6, y 0.72 no es menor que 0.6. Todavía no se detiene.",
+        "Después de sumar nubes la cuenta va en 0.9, y 0.72 ya es menor. Se detiene antes de llegar a lluvia.",
+        "u ya está sorteado. Con u fijo, lo que sigue no tiene azar."],
+      explicacion: "0.72 cae entre 0.6 y 0.9, el tramo de nubes. Es la regla del escenario de la derecha: cada estado ocupa en la regla de 0 a 1 un tramo tan largo como su probabilidad. Ahora dale a reproducir y mira la marca violeta.",
+      alResolver: function (ok) { C.reto("codigo1", ok); }
+    });
+    prop("codigo2", {
+      pregunta: "Escribes <code>np.linalg.eig(P)</code> (o <code>eigen(P)</code> en R), sin transponer, tomas el eigenvector de λ = 1 y lo divides entre su suma. ¿Qué obtienes?",
+      opciones: [
+        "(0.333, 0.333, 0.333): el vector de unos escalado, que no es la estacionaria",
+        "La misma π = (0.45, 0.35, 0.20)",
+        "Un error, porque P no es simétrica",
+        "π con las entradas en otro orden"
+      ],
+      correcta: 0,
+      pistas: [null, "P y Pᵀ comparten eigenvalores, pero no eigenvectores. ¿Qué vector deja P igual al multiplicarlo por la derecha?",
+        "eig funciona con cualquier matriz cuadrada. No falla: devuelve otra cosa, y por eso la trampa es peligrosa.",
+        "Multiplica P por (1, 1, 1): cada entrada es la suma de una fila."],
+      explicacion: "$P(1,1,1)^{\\top} = (1,1,1)^{\\top}$ porque las filas suman 1: ese es el eigenvector de P por la derecha. La estacionaria cumple $\\pi P = \\pi$, que es $P^{\\top}\\pi^{\\top} = \\pi^{\\top}$: hay que transponer. Si tu matriz tiene las columnas sumando 1, es al revés."
+    });
+    prop("codigo3", {
+      pregunta: "Para λ = 1, <code>eig</code> devuelve el eigenvector (−0.7448, −0.5793, −0.3310). ¿Qué haces para obtener π?",
+      opciones: ["Dividirlo entre su suma", "Cambiarle el signo", "Dividirlo entre su norma", "Nada: ya es π"],
+      correcta: 0,
+      pistas: [null, "Sin el signo menos suma 1.655. Una distribución tiene que sumar 1.",
+        "eig ya lo devuelve con norma 1. Lo que necesitas es suma 1, que es otra cosa.",
+        "Tiene entradas negativas: no puede ser una distribución de probabilidad."],
+      explicacion: "Cualquier múltiplo de un eigenvector es eigenvector, y la librería elige el de largo 1 con el signo que le toque. Dividir entre la suma arregla las dos cosas de una vez: $-0.7448 / -1.6551 = 0.45$."
+    });
+    prop("codigo4", {
+      pregunta: "Con la semilla 1, Python dio (0.4493, 0.3441, 0.2066) y R dio (0.4519, 0.3394, 0.2087). ¿Qué pasó?",
+      opciones: [
+        "Nada raro: cada lenguaje tiene su propio generador, y la misma semilla da números distintos. Los dos rondan π",
+        "Uno de los dos programas tiene un error",
+        "Con 10 000 días tendrían que coincidir exactamente",
+        "R cuenta los estados desde 1 y por eso las frecuencias cambian"
+      ],
+      correcta: 0,
+      pistas: [null, "Los dos usan la misma P y la misma función paso. La diferencia está en los números sorteados.",
+        "10 000 días al azar dejan un error de alrededor de un punto porcentual. Ni siquiera el mismo lenguaje con otra semilla coincide.",
+        "El índice cambia la etiqueta del estado, no cuántos días cae en cada uno."],
+      explicacion: "<code>default_rng</code> de NumPy y <code>set.seed</code> de R usan generadores distintos. La semilla garantiza repetir los resultados dentro de un mismo lenguaje, no entre lenguajes. Por eso la parte 1 usa números sorteados a mano: así los dos lenguajes hacen lo mismo."
+    });
+  })();
+
+  /* ---------------- tarjetas ---------------- */
+  B.tarjetas($("tarjetas"), [
+    ["¿Qué dice la propiedad de Markov?", "Que mañana depende solo de hoy: $P(X_{t+1} \\mid X_t, X_{t-1}, \\dots) = P(X_{t+1} \\mid X_t)$."],
+    ["¿Qué significa la entrada $p_{ij}$, y qué suma 1?", "La probabilidad de pasar de i hoy a j mañana. Suma 1 cada fila (con esta convención)."],
+    ["¿Cómo se calcula la distribución dentro de n días?", "$v_n = v_0 P^n$. La entrada (i, j) de $P^n$ suma todos los caminos de n pasos de i a j."],
+    ["¿Qué es la distribución estacionaria?", "La π que un paso más no cambia: $\\pi P = \\pi$, con π sumando 1. Es un eigenvector de $P^{\\top}$ con eigenvalor 1."],
+    ["¿Qué hace falta para llegar a la misma π desde cualquier inicio?", "Que la cadena sea ergódica: irreducible (de todo estado se llega a todo estado) y aperiódica (sin un ritmo fijo de vueltas)."],
+    ["¿Qué decide la velocidad de convergencia?", "El segundo eigenvalor en valor absoluto: la distancia a π se multiplica por $|\\lambda_2|$ cada paso."],
+    ["Estacionaria, ¿quiere decir que la ficha se queda quieta?", "No. La ficha sigue saltando. Lo que no cambia es la proporción de tiempo en cada estado."],
+    ["¿Qué tiene que ver todo esto con MCMC?", "MCMC fabrica una cadena cuya estacionaria es la posterior, la deja correr, tira el burn-in y usa el histograma de lo que visitó como muestra."]
+  ]);
+
+  /* ---------------- conexiones ---------------- */
+  B.conexiones("cadenas-markov");
+})();
+</script>
+</body>
+</html>

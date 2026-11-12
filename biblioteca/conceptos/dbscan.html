@@ -1,0 +1,1831 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DBSCAN</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+/* ---------- colores de los grupos y del ruido (solo esta pagina) ---------- */
+:root { --g0: #c96f14; --g1: #2f68c4; --g2: #2c8a47; --g3: #1f8a8a; --g4: #8a7a12; --g5: #b0477f; --ruido: #8d6e63; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --g0: #f0a35a; --g1: #7aa9f2; --g2: #6cc584; --g3: #5ccfcf; --g4: #d6c55a; --g5: #e58fbf; --ruido: #c9a99d; }
+}
+:root[data-theme="dark"] { --g0: #f0a35a; --g1: #7aa9f2; --g2: #6cc584; --g3: #5ccfcf; --g4: #d6c55a; --g5: #e58fbf; --ruido: #c9a99d; }
+
+/* ---------- plano ---------- */
+.plano-svg { width: 100%; height: auto; display: block; user-select: none; -webkit-user-select: none; }
+.plano-svg.arrastrable { touch-action: none; cursor: move; }
+.plano-svg.clic { cursor: pointer; }
+.plano-svg .grid { stroke: var(--line-soft); stroke-width: 1; }
+.plano-svg .tick { font: 10px var(--f-mono); fill: var(--ink-3); }
+.plano-svg .eje-tit { font: 11.5px var(--f-body); fill: var(--ink-2); }
+.plano-svg .marco { fill: none; stroke: var(--line); }
+.plano-svg .pt { transition: fill .2s, stroke .2s; }
+.plano-svg .pt.sin { fill: var(--ink-3); }
+.plano-svg .pt.nuc { fill: var(--ink); }
+.plano-svg .pt.bor { fill: var(--surface); stroke: var(--ink); stroke-width: 2.2; }
+.plano-svg .pt.nuc.g0 { fill: var(--g0); } .plano-svg .pt.bor.g0 { stroke: var(--g0); }
+.plano-svg .pt.nuc.g1 { fill: var(--g1); } .plano-svg .pt.bor.g1 { stroke: var(--g1); }
+.plano-svg .pt.nuc.g2 { fill: var(--g2); } .plano-svg .pt.bor.g2 { stroke: var(--g2); }
+.plano-svg .pt.nuc.g3 { fill: var(--g3); } .plano-svg .pt.bor.g3 { stroke: var(--g3); }
+.plano-svg .pt.nuc.g4 { fill: var(--g4); } .plano-svg .pt.bor.g4 { stroke: var(--g4); }
+.plano-svg .pt.nuc.g5 { fill: var(--g5); } .plano-svg .pt.bor.g5 { stroke: var(--g5); }
+.plano-svg .pt.tenue { opacity: .35; }
+.plano-svg .pt.oculto { fill: var(--surface); stroke: var(--accent); stroke-width: 2.6; }
+.plano-svg .rx { stroke: var(--ruido); stroke-width: 2.4; stroke-linecap: round; }
+.plano-svg .eps { fill: var(--accent); fill-opacity: .07; stroke: var(--accent); stroke-width: 1.6; stroke-dasharray: 5 3; }
+.plano-svg .eps.suave { fill-opacity: .03; stroke-opacity: .55; }
+.plano-svg .dentro { fill: none; stroke: var(--accent); stroke-width: 1.8; }
+.plano-svg .encola { fill: none; stroke: var(--ink-2); stroke-width: 1.3; stroke-dasharray: 2 2; }
+.plano-svg .act { fill: none; stroke: var(--accent); stroke-width: 2.6; }
+.plano-svg .ar { stroke: var(--ink-3); stroke-width: 1.6; opacity: .75; }
+.plano-svg .ar.g0 { stroke: var(--g0); } .plano-svg .ar.g1 { stroke: var(--g1); } .plano-svg .ar.g2 { stroke: var(--g2); }
+.plano-svg .ar.cad { stroke: var(--accent); stroke-width: 3.2; opacity: 1; }
+.plano-svg .km-linea { stroke: var(--ink); stroke-width: 1.6; stroke-dasharray: 7 4; }
+.plano-svg .mlab { font: 600 12.5px var(--f-mono); fill: var(--accent); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+.plano-svg .nlab { font: 500 11px var(--f-mono); fill: var(--ink-2); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.esc-head .hint { font-size: 12.5px; color: var(--ink-2); }
+.leyenda { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 8px; font-size: 12.5px; color: var(--ink-2); align-items: center; }
+.leyenda i { display: inline-block; width: 11px; height: 11px; margin-right: 6px; vertical-align: -1px; border-radius: 50%; }
+.leyenda i.l-nuc { background: var(--ink); }
+.leyenda i.l-bor { border: 2px solid var(--ink); width: 9px; height: 9px; }
+.leyenda i.l-ruido { border-radius: 0; background: none; color: var(--ruido); font-style: normal; font-weight: 700; width: auto; height: auto; }
+.leyenda i.l-eps { border: 1.6px dashed var(--accent); background: color-mix(in oklab, var(--accent) 10%, transparent); }
+.deslizador { display: grid; grid-template-columns: 7.5em minmax(0, 1fr); align-items: center; gap: 10px; margin: 8px 0 2px; font-size: 13px; color: var(--ink-2); }
+.deslizador input[type="range"] { width: 100%; accent-color: var(--accent); }
+.deslizador b { font-family: var(--f-mono); font-weight: 500; color: var(--ink); font-variant-numeric: tabular-nums; }
+.deslizador[hidden] { display: none; }
+.kd-wrap { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line); }
+.kd-wrap[hidden] { display: none; }
+.kd-svg { width: 100%; height: auto; display: block; touch-action: none; user-select: none; -webkit-user-select: none; }
+.kd-svg .grid { stroke: var(--line-soft); }
+.kd-svg .tick { font: 10px var(--f-mono); fill: var(--ink-3); }
+.kd-svg .eje-tit { font: 11px var(--f-body); fill: var(--ink-2); }
+.kd-svg .curva { fill: none; stroke: var(--ink-3); stroke-width: 1.2; }
+.kd-svg .kp { fill: var(--ink); }
+.kd-svg .kp.no { fill: var(--ruido); }
+.kd-svg .kd-linea { stroke: var(--accent); stroke-width: 2.2; }
+.kd-svg .kd-hit { stroke: transparent; stroke-width: 18; cursor: ns-resize; }
+.kd-svg .kd-lab { font: 500 11px var(--f-mono); fill: var(--accent); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+
+/* ---------- informacion del escenario ---------- */
+.info { margin-top: 10px; font-size: 13px; color: var(--ink-2); line-height: 1.55; }
+.info b { color: var(--ink); font-weight: 600; }
+.grande { font-family: var(--f-mono); font-size: 14px; color: var(--ink-2); margin: 6px 0 12px; font-variant-numeric: tabular-nums; line-height: 1.6; overflow-wrap: anywhere; }
+.grande b { font-size: 15px; color: var(--ink); font-weight: 500; }
+.grande:empty { display: none; }
+.btn-row.pasos-btn { margin: 10px 0 6px; }
+.chipg { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: 0; }
+.chipg.g0 { background: var(--g0); } .chipg.g1 { background: var(--g1); } .chipg.g2 { background: var(--g2); }
+
+/* ---------- vida real ---------- */
+.vr-salida { margin: 10px 0 0; padding: 8px 12px; background: var(--surface-2); border-radius: 8px; font-family: var(--f-mono); font-size: 12px; line-height: 1.5; min-height: 3em; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); }
+.vr-cuenta { overflow-wrap: anywhere; }
+.mini-code { margin: 8px 0; padding: 8px 12px; background: var(--surface-2); border-radius: 8px; font-family: var(--f-mono); font-size: 12px; line-height: 1.55; white-space: pre; overflow-x: auto; }
+
+/* ---------- retos propios ---------- */
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.ojo-opts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
+.ojo-opts .opt { text-align: center; }
+.objetivos { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.objetivos li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.objetivos .m { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.objetivos li.hecho { color: var(--ink); }
+.objetivos li.hecho .m { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 3px var(--surface); }
+.datos-mano { border-collapse: collapse; font-family: var(--f-mono); font-size: 13.5px; margin: 4px 0 12px; }
+.datos-mano th, .datos-mano td { padding: 4px 9px; border: 1px solid var(--line); text-align: center; }
+.datos-mano th { color: var(--ink-3); font-weight: 500; font-size: 12px; }
+.datos-wrap { overflow-x: auto; }
+.mano-svg { max-width: 260px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ DBSCAN</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Aprendizaje automático · SM142003 UD6 y Raschka cap. 10</p>
+    <h1>DBSCAN: grupos que crecen por densidad</h1>
+    <p class="lede">
+      k-means busca centros y corta con rectas. DBSCAN hace otra pregunta: <b>¿cuántos vecinos tiene cada punto cerca?</b>
+      Donde los puntos están apretados hay un grupo, tenga la forma que tenga; donde están sueltos hay ruido.
+      Lo vas a ver con un círculo que arrastras sobre dos medias lunas, y con una mancha que crece de vecino en vecino.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> Imagina un grupo con forma de media luna, o de anillo. No tiene un centro que lo represente bien. ¿Cómo le explicarías a una computadora qué puntos van juntos? Escríbelo como te salga, aunque esté incompleto.</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: le diría que dos puntos van juntos si..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>Construir DBSCAN desde cero</h2>
+      <p>Ocho pasos. Cada uno termina con un chequeo: hasta que no lo resuelves, el siguiente queda cerrado. Equivocarte aquí no resta nada, es parte del método.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="Dos lunas">
+          <span class="etapa">Paso 1</span>
+          <h3>Dos lunas y cuatro puntos sueltos</h3>
+          <p>Mira el plano: 30 puntos inventados. Tu ojo ve enseguida dos medias lunas encajadas una en la otra, y cuatro puntos sueltos que no parecen ser de nadie. Nadie te dijo qué punto va con cuál.</p>
+          <p>En la página de <a href="kmeans.html">k-means</a> los grupos eran nubes redondas. Aquí la forma es otra, y las diapositivas de la UD6 empiezan justo por ahí: los métodos de centros buscan grupos redondos y sufren con formas raras y con atípicos
+          <cite class="cita" data-fuente="db6" data-pag="3" data-ancla="concepts-of-density-based-clustering" data-seccion="1 Concepts of density-based clustering" data-que="Por qué k-means, PAM y el jerárquico buscan grupos esféricos o convexos, y cómo los datos reales traen óvalos, líneas, formas de S y atípicos (Figure 1)." data-cuando="Al terminar este paso"></cite>.
+          Con un ejemplo de cinco formas, k-means con k = 5 no recupera ninguna
+          <cite class="cita" data-fuente="db6" data-pag="4" data-ancla="2/1" data-seccion="k-means en multishapes" data-que="El código de R con factoextra::multishapes y kmeans(df, 5, nstart = 25), y la Figure 2: los grupos de k-means cortan las formas por la mitad." data-cuando="Después de tocar los dos botones"></cite>.</p>
+          <div class="check" id="chk1"><p class="check-tit">Predice antes de ver</p><div class="cuerpo"></div></div>
+          <div class="btn-row pasos-btn">
+            <button type="button" id="btnKm1" disabled>Lo que hace k-means</button>
+            <button type="button" id="btnDb1" disabled>Lo que hace DBSCAN</button>
+          </div>
+          <p>k-means mide la distancia a unos centros. DBSCAN mira otra cosa: <b>cuántos puntos tiene cada punto a su alrededor</b>. Un grupo es una zona donde los puntos están apretados, separada de las otras por zonas vacías. Eso es lo que vas a construir en los pasos que siguen.</p>
+        </section>
+
+        <section class="paso card" data-titulo="El círculo">
+          <span class="etapa">Paso 2</span>
+          <h3>Un círculo alrededor de cada punto</h3>
+          <p>Todo DBSCAN empieza con un círculo. Pones un círculo de un radio fijo alrededor de un punto y cuentas cuántos puntos caen adentro. Si hay muchos, el punto está en una zona apretada. Si hay pocos, está en una zona vacía.</p>
+          <p>Ese radio se llama <b>ε</b> (épsilon) y es el primer número que le das a DBSCAN. Decide qué significa "cerca". En el escenario, el círculo está sobre el punto P, la punta derecha de la luna de arriba, con radio 1.</p>
+          <div class="check" id="chk2"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+          <p><b>Arrastra el círculo</b> por el plano: se pega a un punto cuando pasas cerca. Mueve ε y mira el contador de abajo del escenario. Con ε muy chico, cada punto queda solo en su círculo; con ε muy grande, el círculo se traga media nube.</p>
+        </section>
+
+        <section class="paso card" data-titulo="Núcleo">
+          <span class="etapa">Paso 3</span>
+          <h3>Núcleo: un punto con suficientes vecinos</h3>
+          <p>El segundo número es <b>minPts</b>: cuántos puntos tiene que haber dentro del círculo para decir que la zona es densa. Con ε = 1 y minPts = 3, un punto es <b>núcleo</b> si en su círculo hay al menos 3 puntos, <b>contándolo a él</b>.</p>
+          <p>Con símbolos: el vecindario de un punto p es el conjunto de los puntos que están a distancia ε o menos, y p es núcleo si ese conjunto tiene al menos minPts elementos.</p>
+          <div class="fbloque">
+            <div data-tex="N_\varepsilon(p) = \{\, q \in D : d(p,q) \le \varepsilon \,\}" data-display></div>
+            <div data-tex="\lvert N_\varepsilon(p) \rvert \ge \text{minPts} \;\Longrightarrow\; p \text{ es núcleo}" data-display></div>
+            <div class="vivo" id="vivo3"></div>
+          </div>
+          <p>Aquí D son todos los datos, d(p, q) es la distancia euclídea de la página de <a href="normas-distancias.html">normas y distancias</a>, y las barras verticales quieren decir "cuántos elementos tiene". Las diapositivas lo dicen igual, y aclaran que el punto se cuenta a sí mismo
+          <cite class="cita" data-fuente="db6" data-pag="7" data-ancla="the-dbscan-algorithm" data-seccion="2 The DBSCAN algorithm" data-que="ε como radio de la vecindad y MinPts como mínimo de vecinos para que la zona sea densa. Un punto es núcleo si su ε-vecindad tiene al menos MinPts puntos, incluido él mismo." data-cuando="Al terminar este paso"></cite>.</p>
+          <div class="check" id="chk3"><p class="check-tit">Decide con los datos de ahora</p><div class="cuerpo"></div></div>
+
+          <div class="destacado" id="destacado">
+            <p class="dest-tit">Una confusión muy común</p>
+            <h4>¿minPts cuenta al propio punto?</h4>
+            <p>Depende de quién lo escriba, y por eso confunde. Raschka define el núcleo como un punto con "al menos MinPts puntos vecinos" dentro de ε
+            <cite class="cita" data-fuente="raschka10" data-pag="24" data-pimp="328" data-seccion="Locating regions of high density via DBSCAN" data-que="Las definiciones de núcleo, borde y ruido en tres líneas. Léelo sabiendo que dice 'al menos MinPts vecinos' sin aclarar si el punto se cuenta; scikit-learn sí lo cuenta." data-cuando="Al terminar el recuadro"></cite>.
+            Leído al pie de la letra, serían MinPts además de él. Las diapositivas de la UD6 dicen lo contrario: el punto se cuenta. Y scikit-learn, que es lo que vas a usar, hace lo mismo que la UD6: <code>min_samples</code> incluye al propio punto. En esta página, minPts siempre lo cuenta.</p>
+            <div class="check" id="chk3b"><p class="check-tit">Predice antes de seguir</p><div class="cuerpo"></div></div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Borde y ruido">
+          <span class="etapa">Paso 4</span>
+          <h3>Borde y ruido: los que no son núcleo</h3>
+          <p>Un punto que no es núcleo tiene dos destinos. Si cae dentro del círculo de algún núcleo, es <b>borde</b>: pertenece a esa zona apretada aunque él tenga pocos vecinos, como la orilla de una mancha. Si no tiene ningún núcleo a distancia ε o menos, es <b>ruido</b>: DBSCAN no lo pone en ningún grupo.</p>
+          <p>Esa es la gran diferencia con k-means, que reparte a todos. DBSCAN puede decir "este punto no es de nadie"
+          <cite class="cita" data-fuente="db6" data-pag="8" data-ancla="point-classification" data-seccion="2.1 Point classification" data-que="Núcleo, borde y ruido con la Figure 4 (MinPts = 6): x es núcleo con 6 puntos en su vecindad, y es borde y z es ruido." data-cuando="Al terminar este paso"></cite>.
+          La teoría de la UD3 de Matemáticas lo resume en un párrafo, con los mismos tres tipos de punto y la ventaja de no tener que fijar el número de grupos
+          <cite class="cita" data-fuente="ud3" data-pag="34" data-seccion="3.6 Clasificación no supervisada" data-que="DBSCAN en pocas líneas: ε y MinPts, puntos núcleo, borde y ruido, conectividad de densidad y que no pide el número de clústeres. Sin ejemplos ni figuras." data-cuando="Después de mover ε y minPts"></cite>.</p>
+          <div class="check" id="chk4"><p class="check-tit">Predice antes de ver los colores</p><div class="cuerpo"></div></div>
+          <p>En el plano: el círculo relleno es núcleo, el anillo es borde y la cruz es ruido. <b>Toca un punto</b> para ver su círculo, y mueve ε y minPts. Mira qué tipo cambia primero cuando achicas ε.</p>
+        </section>
+
+        <section class="paso card" data-titulo="La mancha">
+          <span class="etapa">Paso 5</span>
+          <h3>El grupo crece como una mancha</h3>
+          <p>Ahora, los grupos. Empiezas en un núcleo. Todo lo que está en su círculo entra al grupo. Si alguno de los que entraron también es núcleo, su círculo trae más puntos, y así sigue. Los bordes entran, pero no traen a nadie: en ellos la mancha se detiene.</p>
+          <p>Las diapositivas le ponen nombre a cada pieza
+          <cite class="cita" data-fuente="db6" data-pag="9" data-ancla="defining-connectivity" data-seccion="2.2 Defining connectivity" data-que="Directamente alcanzable, alcanzable por densidad (una cadena de núcleos, que permite formas que no son esféricas) y conectado por densidad (dos puntos con un núcleo 'ancestro' común). Un grupo es un conjunto de puntos conectados por densidad." data-cuando="Al terminar este paso"></cite>:</p>
+          <ul>
+            <li><b>Directamente alcanzable.</b> q está en el círculo de p y p es núcleo: <span data-tex="q \in N_\varepsilon(p)"></span> y <span data-tex="\lvert N_\varepsilon(p)\rvert \ge \text{minPts}"></span>.</li>
+            <li><b>Alcanzable por densidad.</b> Hay una cadena <span data-tex="p = p_1, p_2, \dots, p_m = q"></span> en la que cada eslabón es directamente alcanzable desde el anterior. Todos los eslabones, salvo quizá el último, son núcleos.</li>
+            <li><b>Conectados por densidad.</b> p y q son alcanzables los dos desde un mismo núcleo o.</li>
+          </ul>
+          <div class="fbloque">
+            <div class="vivo" id="vivo5"></div>
+          </div>
+          <p>El algoritmo de la diapositiva siguiente hace exactamente esto: por cada núcleo que todavía no tiene grupo, crea uno y le suma, una y otra vez, todo lo que es alcanzable por densidad
+          <cite class="cita" data-fuente="db6" data-pag="10" data-ancla="how-the-dbscan-algorithm-works" data-seccion="2.3 How the DBSCAN algorithm works" data-que="El algoritmo en cuatro pasos y la Figure 5. Ojo: dice 'is marked as core point or visited', que mezcla dos marcas distintas; se marca como núcleo, y 'visitado' es otra marca del recorrido." data-cuando="Después de hacer crecer la mancha"></cite>.
+          Ahí aparece una frase confusa: "se marca como núcleo o visitado". Son dos marcas distintas. Ser núcleo depende solo de contar vecinos; "visitado" solo dice que el algoritmo ya pasó por ese punto.</p>
+          <div class="check" id="chk5"><p class="check-tit">Predice antes de hacerla crecer</p><div class="cuerpo"></div></div>
+          <div class="btn-row pasos-btn">
+            <button type="button" class="primary" id="btnPaso5" disabled>Crecer un paso</button>
+            <button type="button" id="btnFin5" disabled>Hasta que no crezca más</button>
+            <button type="button" id="btnTodos5" disabled>Todos los grupos</button>
+            <button type="button" class="ghost" id="btnReset5" disabled>Volver a empezar en A</button>
+          </div>
+          <div class="grande" id="estado5"></div>
+          <p>Cuando la mancha deje de crecer, <b>toca cualquier punto de adentro</b>: se marca la cadena de núcleos que lleva de A hasta él. Si tocas un núcleo de afuera, la mancha empieza de nuevo desde ahí.</p>
+          <details class="profundizar">
+            <summary>¿Por qué "alcanzable" no alcanza para definir un grupo?</summary>
+            <div>
+              <p>Porque no es simétrico. Si p es núcleo y q es borde, q es alcanzable desde p, pero p no es alcanzable desde q: desde un borde no se sale. Y dos bordes de la misma luna, uno en cada punta, no se alcanzan entre sí.</p>
+              <p>Por eso el grupo se define con <b>conectados</b>: los dos se alcanzan desde un mismo núcleo. Eso sí es simétrico, y junta en un grupo a las dos puntas de la luna. La definición completa pide dos cosas de un grupo C: que todo lo alcanzable desde un punto de C esté en C, y que dos puntos cualesquiera de C estén conectados.</p>
+              <div data-tex="p \in C,\ q \text{ alcanzable desde } p \;\Rightarrow\; q \in C \qquad\quad p, q \in C \;\Rightarrow\; p, q \text{ conectados}" data-display></div>
+            </div>
+          </details>
+          <div class="cita" id="citaHipo" hidden></div>
+        </section>
+
+        <section class="paso card" data-titulo="Bordes en disputa">
+          <span class="etapa">Paso 6</span>
+          <h3>Un borde entre dos grupos: decide el orden</h3>
+          <p>Otros nueve puntos inventados: cuatro a la izquierda, cuatro a la derecha y uno en el medio. Con ε = 1 y minPts = 4, los ocho de los costados son núcleo. El del medio tiene solo dos vecinos, uno de cada lado: con él son 3, no llega a 4. Es borde, y está a la misma distancia, 0.92, de un núcleo de cada grupo.</p>
+          <p>Los números del plano son el orden en que DBSCAN recorre los puntos: el orden de las filas de tus datos. Raschka lo resume en dos pasos: un grupo por cada núcleo o conjunto de núcleos conectados, y después cada borde al grupo de "su" núcleo
+          <cite class="cita" data-fuente="raschka10" data-pag="25" data-pimp="329" data-seccion="Locating regions of high density via DBSCAN" data-que="DBSCAN en dos pasos con la Figure 10.13 (núcleo, borde y ruido). No dice qué pasa cuando un borde tiene núcleos de dos grupos distintos: eso es lo que muestra este paso." data-cuando="Al terminar este paso"></cite>.
+          Pero este borde tiene dos.</p>
+          <div class="check" id="chk6"><p class="check-tit">Predice antes de recorrer</p><div class="cuerpo"></div></div>
+          <div class="btn-row pasos-btn">
+            <button type="button" id="btnIzq6" disabled>Filas de izquierda a derecha</button>
+            <button type="button" id="btnDer6" disabled>Filas de derecha a izquierda</button>
+          </div>
+          <div class="grande" id="estado6"></div>
+          <p>Los núcleos y el ruido no dependen del orden: son una cuenta sobre cada punto. Lo único que puede cambiar son los bordes en disputa. Con scikit-learn 1.6.1, estos nueve puntos dan las etiquetas <code>[0 0 0 0 0 1 1 1 1]</code>, y con las filas al revés el del medio se va con el otro grupo. En datos reales pasa poco, pero pasa: si mezclas las filas y corres de nuevo, algún borde puede cambiar de grupo.</p>
+        </section>
+
+        <section class="paso card" data-titulo="Elegir ε">
+          <span class="etapa">Paso 7</span>
+          <h3>Elegir ε con el gráfico de k-distancias</h3>
+          <p>¿Cómo eliges ε sin probar a ciegas? Para cada punto, mide la distancia hasta su vecino número <span data-tex="k = \text{minPts} - 1"></span>, sin contarlo a él. Ordena esas 30 distancias de menor a mayor y dibújalas: es el gráfico de abajo del escenario.</p>
+          <p>Los puntos de las lunas tienen a sus vecinos cerca, así que su distancia es chica. Las puntas y los sueltos la tienen grande. Entre unos y otros la curva dobla hacia arriba: esa <b>rodilla</b> es un buen ε. La regla es exacta: un punto es núcleo justo cuando su k-distancia no pasa de ε.</p>
+          <div class="fbloque">
+            <div data-tex="p \text{ es núcleo} \iff d_k(p) \le \varepsilon, \qquad k = \text{minPts} - 1" data-display></div>
+            <div class="vivo" id="vivo7"></div>
+          </div>
+          <p>Es el método de las diapositivas
+          <cite class="cita" data-fuente="db6" data-pag="12" data-ancla="method-for-determining-the-optimal-epsilon-value" data-seccion="2.5 Method for determining the optimal epsilon value" data-que="El gráfico de k-distancias ordenadas, la rodilla, dbscan::kNNdistplot() y la Figure 6, con ε cerca de 0.15 en multishapes. Ojo: dice que se promedian las distancias a los k vecinos, pero la diapositiva anterior y kNNdistplot usan la distancia al k-ésimo." data-cuando="Al terminar este paso"></cite>,
+          con una inconsistencia: esa diapositiva habla de <b>promediar</b> las distancias a los k vecinos más cercanos, pero la anterior y la función <code>kNNdistplot()</code> usan la distancia al <b>k-ésimo</b>. Es la segunda, la que dibuja el escenario. En el caso práctico de la unidad, el codo de multishapes queda en 0.15 y DBSCAN con ese ε encuentra las cinco formas y 31 puntos de ruido
+          <cite class="cita" data-fuente="db6caso" data-pag="2" data-ancla="ejemplo-1-dataset-ficticio" data-seccion="Ejemplo 1: dataset ficticio" data-que="fpc::dbscan con eps = 0.15 y MinPts = 5 sobre multishapes: 5 grupos y 31 puntos de ruido, la tabla de border y seed (seed = núcleo), kNNdistplot con k = 5 y el codo en 0.15, y la advertencia de que un solo ε falla con densidades distintas." data-cuando="Después de mover la línea del gráfico"></cite>.</p>
+          <div class="check" id="chk7"><p class="check-tit">Lee la curva</p><div class="cuerpo"></div></div>
+          <p><b>Arrastra la línea violeta del gráfico</b> o el deslizador de ε. Los puntos del gráfico que quedan debajo de la línea son los núcleos.</p>
+          <details class="profundizar">
+            <summary>¿k = minPts o k = minPts − 1?</summary>
+            <div>
+              <p>Depende de si cuentas al propio punto. Si minPts lo incluye, como aquí y en scikit-learn, hacen falta minPts − 1 vecinos más, y la distancia que decide es la del vecino número minPts − 1. El caso de la UD6 usa <code>kNNdistplot(..., k = 5)</code> con MinPts = 5. Las dos convenciones aparecen en la práctica: la diferencia es un vecino y la rodilla se mueve poco.</p>
+              <p>El mismo caso tiene una frase confusa en la sección 3: dice que con <code>all = FALSE</code> se grafican "las distancias al punto más cercano de entre los 5". Es la distancia al <b>quinto</b> vecino, no al más cercano.</p>
+            </div>
+          </details>
+        </section>
+
+        <section class="paso card" data-titulo="Límites">
+          <span class="etapa">Paso 8</span>
+          <h3>Cuando un solo ε no alcanza</h3>
+          <p>DBSCAN usa el mismo ε y el mismo minPts en todo el plano. Si los grupos tienen densidades muy distintas, puede no haber un ε que sirva para todos. En el escenario hay otros datos inventados: dos grupos apretados arriba, a 1.2 uno del otro, y uno disperso abajo, con sus puntos a 1.5 o más entre sí.</p>
+          <div class="check" id="chk8"><p class="check-tit">Predice antes de mover ε</p><div class="cuerpo"></div></div>
+          <div class="btn-row pasos-btn">
+            <button type="button" id="btnDens8" disabled>Densidades distintas</button>
+            <button type="button" id="btnUnid8" disabled>Una variable en otra unidad</button>
+          </div>
+          <div class="grande" id="estado8"></div>
+          <p>Lo mismo pasa con las unidades. Si la variable 2 se anota en otra unidad y todos sus números se multiplican por 3, el círculo de radio ε se vuelve una elipse aplastada: en vertical, "cerca" pasa a ser un tercio de lo que era. Con ε = 1, las dos lunas quedan hechas ruido. Por eso se <b>escala antes</b>, como en k-means (la página de <a href="estandarizacion.html">estandarización</a>), y el gráfico de k-distancias se hace <b>después</b> de escalar
+          <cite class="cita" data-fuente="db6caso" data-pag="3" data-ancla="ejemplo-2-dataset-real" data-seccion="Ejemplo 2: dataset real" data-que="Los billetes suizos escalados con scale(), kNNdistplot con k = 5, una rejilla de 81 combinaciones de eps y minPts evaluadas con índices de validación y bootstrap, y la elección final eps = 1.2, minPts = 9." data-cuando="Al terminar este paso"></cite>.
+          Raschka cierra con las dos desventajas: la maldición de la dimensión, que le pega a todo método basado en distancias, y dos hiperparámetros difíciles de fijar cuando las densidades varían mucho
+          <cite class="cita" data-fuente="raschka10" data-pag="29" data-pimp="333" data-seccion="Locating regions of high density via DBSCAN" data-que="Las desventajas de DBSCAN: la maldición de la dimensionalidad y que MinPts y ε son difíciles de elegir si la densidad cambia mucho entre grupos. Incluye el recuadro sobre clustering espectral." data-cuando="Al terminar este paso"></cite>.</p>
+          <p><b>La versión del libro.</b> DBSCAN es de Ester, Kriegel, Sander y Xu (1996). Con las piezas de los pasos 3 a 5, un grupo C es un conjunto no vacío que cumple dos condiciones: es <b>máximo</b> (si p está en C, todo lo alcanzable por densidad desde p también) y es <b>conexo</b> (dos puntos cualesquiera de C están conectados por densidad). El ruido es lo que no cae en ningún grupo:</p>
+          <div class="fbloque"><div data-tex="\text{ruido} = \{\, p \in D : p \notin C_i \ \text{para todo grupo } C_i \,\}" data-display></div></div>
+          <details class="profundizar">
+            <summary>Más allá de DBSCAN: OPTICS y HDBSCAN</summary>
+            <div>
+              <p>Esto no viene en el material de la unidad. OPTICS ordena los puntos de forma que se pueden leer los grupos para muchos ε a la vez. HDBSCAN arma una jerarquía de densidades, como un dendrograma, y se queda con los grupos que sobreviven más tiempo; por eso aguanta grupos con densidades distintas, justo donde DBSCAN falla. Los dos están en scikit-learn 1.6 (<code>OPTICS</code> y <code>HDBSCAN</code>).</p>
+            </div>
+          </details>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+        </div>
+        <svg id="plano" tabindex="0" role="img" aria-label="Plano con los puntos, el círculo de radio épsilon y la clasificación de DBSCAN. El círculo se arrastra con el puntero o con las flechas."></svg>
+        <div class="leyenda" id="leyenda">
+          <span><i class="l-nuc"></i>núcleo</span><span><i class="l-bor"></i>borde</span><span><i class="l-ruido">×</i>ruido</span><span><i class="l-eps"></i>círculo de radio ε</span>
+        </div>
+        <div class="deslizador" id="ctlEps" hidden><label for="eps">ε = <b id="epsVal">1.00</b></label><input type="range" id="eps" min="30" max="250" step="5" value="100"></div>
+        <div class="deslizador" id="ctlMin" hidden><label for="minPts">minPts = <b id="minVal">3</b></label><input type="range" id="minPts" min="2" max="6" step="1" value="3"></div>
+        <div class="info" id="escInfo"></div>
+        <div class="kd-wrap" id="kdWrap" hidden>
+          <svg id="kdist" class="kd-svg" role="img" aria-label="Gráfico de k-distancias ordenadas con una línea horizontal en épsilon que se arrastra."></svg>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>DBSCAN escrito con bucles y una cola, con los mismos 30 puntos, ε = 1 y min_pts = 3. Elige Python o R, dale a reproducir y mira cómo el programa recorre los puntos y hace crecer cada grupo. Para no tener cientos de pasos, la animación salta los puntos que ya tienen etiqueta y los avisa en la narración. Al final se compara con la librería.
+      Raschka hace lo mismo con las lunas de <code>make_moons</code>: k-means y el jerárquico fallan y DBSCAN las separa
+      <cite class="cita" data-fuente="raschka10" data-pag="28" data-pimp="332" data-seccion="Locating regions of high density via DBSCAN" data-que="DBSCAN(eps=0.2, min_samples=5) sobre 200 puntos de make_moons y la Figure 10.16, al lado de la Figure 10.15 con k-means y el enlace completo fallando. Con scikit-learn 1.6.1 da dos grupos de 100 y ningún ruido." data-cuando="Después de reproducir el programa"></cite>.</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir</p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="true">Python</button>
+            <button type="button" data-lang="r" aria-pressed="false">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">1 · recorrer los puntos</span><span data-f="2">2 · hacer crecer la mancha</span><span data-f="3">3 · comparar</span>
+        </div>
+        <svg id="vrPlano" role="img" aria-label="Los 30 puntos con sus etiquetas en el momento de la ejecución"></svg>
+        <div class="vr-cuenta" id="vrCuenta"></div>
+        <h3 class="mini-tit vr-tit">Lo que imprime el programa</h3>
+        <div class="vr-salida" id="vrSalida"></div>
+      </div>
+    </div>
+
+    <p class="vr-nota">En la práctica es una línea. En Python, <code>DBSCAN(eps=1.0, min_samples=3).fit(X).labels_</code>. En R, con el paquete instalado, <code>dbscan::dbscan(X, eps = 1, minPts = 3)$cluster</code> o <code>fpc::dbscan(X, eps = 1, MinPts = 3)$cluster</code>, como en el caso de la UD6; los dos paquetes tienen una función <code>dbscan()</code>, por eso el caso pide escribir el prefijo. En esta máquina no están instalados ni <code>dbscan</code> ni <code>fpc</code>: esas dos líneas no se corrieron aquí, y el programa de R se comprueba con <code>hclust</code>, que viene con R. Lo que muestra esta parte se corrió con Python 3, NumPy 2.1.3, scikit-learn 1.6.1 y R 4.6.1.</p>
+
+    <details class="profundizar">
+      <summary>¿Por qué hclust con enlace simple da los mismos grupos? Y la versión sin bucle de puntos</summary>
+      <div>
+        <p>Dos núcleos quedan en el mismo grupo de DBSCAN si hay una cadena de núcleos entre ellos con cada salto a distancia ε o menos. El enlace simple une dos grupos por su par de puntos más cercano, así que, cortado a la altura ε, junta exactamente los núcleos que tienen una cadena así. Por eso la tabla de R es diagonal: 11 núcleos en cada luna. Los bordes y el ruido no entran en esa comparación. Esto es la página de agrupamiento jerárquico vista desde DBSCAN.</p>
+        <p>Los núcleos se pueden marcar sin bucle, con la matriz de las 30 × 30 distancias:</p>
+        <pre class="mini-code">D = np.sqrt(((X[:, None, :] - X[None, :, :]) ** 2).sum(axis=2))   # 30 x 30
+nucleo = (D &lt;= eps).sum(axis=1) &gt;= min_pts
+print(nucleo.sum())                                               # 22</pre>
+        <pre class="mini-code">D &lt;- as.matrix(dist(X))
+nucleo &lt;- rowSums(D &lt;= eps) &gt;= min_pts
+sum(nucleo)                                                       # [1] 22</pre>
+        <p>Lo que no se puede escribir sin algún tipo de recorrido es el crecimiento de la mancha: es una búsqueda en un grafo. La cola del programa es una búsqueda en anchura.</p>
+      </div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>¿Cuántos grupos encontró?</h3><span class="estado" data-reto="codigo2"></span></div>
+        <div id="codigo2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Escalar y dejar el mismo ε</h3><span class="estado" data-reto="codigo3"></span></div>
+        <div id="codigo3"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: la biblioteca te avisa en el índice cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>¿Núcleo, borde o ruido?</h3><span class="estado" data-reto="ojo"></span></div>
+        <p class="desc">Los puntos rellenos ya son núcleo. Decide qué es el punto del anillo violeta mirando su círculo, sin calcular. Apruebas con 4 de 5.</p>
+        <div id="ojo"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Construir</span><h3>Mueve ε y minPts</h3><span class="estado" data-reto="construir"></span></div>
+        <p class="desc">Las dos lunas del recorrido. Mueve los deslizadores hasta cumplir cada objetivo. Se marcan solos.</p>
+        <svg id="planoConstr" role="img" aria-label="Las dos lunas clasificadas por DBSCAN con los parámetros elegidos"></svg>
+        <div class="deslizador"><label for="cEps">ε = <b id="cEpsVal">0.60</b></label><input type="range" id="cEps" min="30" max="250" step="5" value="60"></div>
+        <div class="deslizador"><label for="cMin">minPts = <b id="cMinVal">3</b></label><input type="range" id="cMin" min="2" max="6" step="1" value="3"></div>
+        <div class="grande" id="constrVivo"></div>
+        <ul class="objetivos" id="objetivos"></ul>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>Cuenta el ruido con lápiz</h3><span class="estado" data-reto="mano"></span></div>
+        <p class="desc">Siete puntos en una cuadrícula, ε = 1.5 y minPts = 3 (contando al propio punto). Clasifica cada punto antes de pedir pistas.</p>
+        <div id="manoDatos" class="datos-wrap"></div>
+        <div id="mano"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Alguien se equivocó</h3><span class="estado" data-reto="error"></span></div>
+        <p class="desc">Una de las líneas tiene un error. Tócala.</p>
+        <div id="error"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Qué le das a DBSCAN</h3><span class="estado" data-reto="prop1"></span></div>
+        <div id="prop1"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Otro orden de filas</h3><span class="estado" data-reto="prop2"></span></div>
+        <div id="prop2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Subir ε</h3><span class="estado" data-reto="prop3"></span></div>
+        <div id="prop3"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Subir minPts</h3><span class="estado" data-reto="prop4"></span></div>
+        <div id="prop4"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>DBSCAN contra k-means</h3><span class="estado" data-reto="prop5"></span></div>
+        <div id="prop5"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Recordar a la fuerza es lo que fija. Arma la definición de memoria y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Fórmula de memoria</span><h3>Arma el vecindario ε pieza por pieza</h3><span class="estado" data-reto="formula"></span></div>
+        <p class="desc">Hay piezas de más que no pertenecen. No mires arriba.</p>
+        <div id="formula"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el libro</h2>
+      <p class="lecturas-intro">Ya construiste la idea con las manos. Ahora ve a la versión técnica y comprueba que la reconoces. Cada entrada dice qué vas a encontrar y en qué momento conviene leerla. Si abres la biblioteca con doble clic, el enlace abre el PDF o la diapositiva en ese lugar.</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> Todos los puntos son inventados. Las dos lunas son dos medios círculos de radio 3, con 13 puntos cada uno a unos 0.8 de distancia entre vecinos,
+    más 4 puntos sueltos; la distancia más corta entre las lunas es 1.43, así que cualquier ε entre 0.9 y 1.4 (con minPts = 3) las separa. Los datos del paso 6 y del paso 8 se armaron
+    para mostrar un borde en disputa y unas densidades que ningún ε resuelve. Tu progreso se guarda solo en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+/*
+  DATOS DE ESTA PAGINA (inventados). Indices de Python, desde 0.
+  LUNAS, 30 puntos [x1, x2]:
+    0-12  luna de arriba, centro (3.5, 4.5), radio 3 (+-0.15): [0.5, 4.5] ... [6.6, 4.5]
+    13-25 luna de abajo, centro (6.5, 6.0), radio 3:          [3.5, 6.0] ... [9.6, 6.0]
+    26-29 sueltos: [1, 1.5], [9.5, 8.5], [5, 9], [9, 1]
+  Con eps = 1 y minPts = 3 (contando al punto): 22 nucleos, 4 bordes (las puntas 0, 12, 13 y 25), 4 ruido.
+  Etiquetas (Python): 13 ceros, 13 unos, cuatro -1. Igual con scikit-learn 1.6.1 para cualquier eps entre 0.9 y 1.4.
+  Con eps 1.5 las lunas se unen (el punto 12 alcanza al 20 a 1.43); con eps <= 0.75 todo es ruido.
+  KMeans(2, n_init=10, random_state=0): mezcla 7 puntos de las lunas (10, 11, 12 y 13 a 16), inercia 169.33.
+  Para la pagina de validacion: silueta sin el ruido 0.245 (DBSCAN) contra 0.415 (k-means, k = 2, los 30);
+    Davies-Bouldin 1.285 contra 0.879; Rand ajustado contra las lunas reales (26 puntos) 1.0 contra 0.180.
+*/
+(function () {
+  "use strict";
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var RETOS = ["ojo", "construir", "mano", "error", "prop1", "prop2", "prop3", "prop4", "prop5", "formula", "codigo1", "codigo2", "codigo3"];
+  var C = B.concepto({ id: "dbscan", retos: RETOS, pasos: 8 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  /* ================= datos y logica (sin DOM) ================= */
+  var LUNAS = [[0.5, 4.5], [0.5, 5.3], [1.0, 5.9], [1.3, 6.7], [2.1, 7.0],
+    [2.7, 7.4], [3.5, 7.6], [4.3, 7.3], [4.9, 7.0], [5.7, 6.7],
+    [6.1, 6.0], [6.3, 5.3], [6.6, 4.5],
+    [3.5, 6.0], [3.7, 5.2], [3.8, 4.4], [4.4, 3.9], [4.9, 3.3],
+    [5.7, 3.2], [6.5, 2.9], [7.2, 3.2], [8.0, 3.4], [8.7, 3.8],
+    [9.1, 4.5], [9.3, 5.3], [9.6, 6.0],
+    [1.0, 1.5], [9.5, 8.5], [5.0, 9.0], [9.0, 1.0]];
+  var N = LUNAS.length;
+  var LUNA = LUNAS.map(function (_, i) { return i < 13 ? 0 : i < 26 ? 1 : -1; });
+  var KM = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1];
+  var DENS = [[1.5, 7.0], [2.0, 7.0], [2.5, 7.0], [1.8, 7.5], [2.3, 7.5], [2.0, 6.5],
+    [3.7, 7.0], [4.2, 7.0], [4.7, 7.0], [4.0, 7.5], [4.5, 7.5], [4.2, 6.5],
+    [4.5, 2.0], [6.0, 2.0], [7.5, 2.0], [5.2, 3.3], [6.8, 3.3], [6.0, 4.6],
+    [8.5, 8.0], [1.5, 3.0]];
+  var TOY = [[2, 5], [2.6, 5], [2, 5.6], [2.6, 5.6], [3.5, 4.8], [4.4, 5], [5, 5], [4.4, 5.6], [5, 5.6]];
+  var PA = 6, PB = 12, PC = 27;
+  var UNO = [1, 1];
+  var VISTA = { x0: 0, y0: 0, s: 10 };
+  var VISTA_TOY = { x0: 0.7, y0: 2.4, s: 5.6 };
+
+  function dist(a, b, w) { w = w || UNO; var dx = a[0] - b[0], dy = a[1] - b[1]; return Math.sqrt(w[0] * dx * dx + w[1] * dy * dy); }
+  function vecinos(P, i, eps, w) { var r = []; for (var q = 0; q < P.length; q++) if (dist(P[i], P[q], w) <= eps + 1e-9) r.push(q); return r; }
+  // DBSCAN como el programa de la vida real; orden = orden de las filas
+  function dbscan(P, eps, minPts, w, orden) {
+    var lab = P.map(function () { return -2; }), padre = P.map(function () { return null; }), g = -1;
+    var vec = P.map(function (_, i) { return vecinos(P, i, eps, w); });
+    var nuc = vec.map(function (v) { return v.length >= minPts; });
+    (orden || P.map(function (_, i) { return i; })).forEach(function (i) {
+      if (lab[i] !== -2) return;
+      if (!nuc[i]) { lab[i] = -1; return; }
+      g++; lab[i] = g;
+      var cola = [];
+      vec[i].forEach(function (q) { cola.push(q); if (padre[q] === null && q !== i && lab[q] < 0) padre[q] = i; });
+      while (cola.length) {
+        var j = cola.shift();
+        if (lab[j] === -1) lab[j] = g;
+        if (lab[j] !== -2) continue;
+        lab[j] = g;
+        if (nuc[j]) vec[j].forEach(function (q) { cola.push(q); if (padre[q] === null && lab[q] < 0) padre[q] = j; });
+      }
+    });
+    var tipo = lab.map(function (l, i) { return nuc[i] ? "nuc" : l >= 0 ? "bor" : "ruido"; });
+    var cnt = { nuc: 0, bor: 0, ruido: 0 };
+    tipo.forEach(function (t) { cnt[t]++; });
+    var aristas = [];
+    padre.forEach(function (p, q) { if (p !== null && lab[q] >= 0 && lab[p] === lab[q]) aristas.push([p, q]); });
+    return { lab: lab, tipo: tipo, vec: vec, nuc: nuc, k: g + 1, cnt: cnt, padre: padre, aristas: aristas };
+  }
+  function kdist(P, minPts, w) {
+    return P.map(function (p) {
+      var ds = P.map(function (q) { return dist(p, q, w); }).sort(function (a, b) { return a - b; });
+      return ds[Math.min(minPts - 1, ds.length - 1)];
+    });
+  }
+  var R13 = dbscan(LUNAS, 1, 3);
+  /* ================= fin de la logica ================= */
+
+  var f = B.fmt;
+  function fn(v) { return Math.abs(v - Math.round(v)) < 1e-9 ? f(v, 0) : Math.abs(v * 10 - Math.round(v * 10)) < 1e-9 ? f(v, 1) : f(v, 2); }
+  function par(p) { return "(" + fn(p[0]) + ", " + fn(p[1]) + ")"; }
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+  function gcls(l) { return l >= 0 ? " g" + (l % 6) : ""; }
+
+  /* ================= plano interactivo ================= */
+  var NS = "http://www.w3.org/2000/svg", nClip = 0;
+  function nodo(tag, at, padre) {
+    var e = document.createElementNS(NS, tag);
+    for (var k in at) e.setAttribute(k, at[k]);
+    if (padre) padre.appendChild(e);
+    return e;
+  }
+  function texto(padre, at, t) { var e = nodo("text", at, padre); e.textContent = t; return e; }
+
+  function crearPlano(svg, o) {
+    o = o || {};
+    var W = 400, H = 400, M = { l: 34, r: 10, t: 10, b: 34 }, A = W - M.l - M.r;
+    var st = { P: LUNAS, vista: VISTA, w: UNO, tipo: null, lab: null, circ: [], aristas: [], cadena: null, marcas: {}, nums: null,
+      cola: null, act: null, dentro: null, linea: null, arrastrar: false, clic: false, oculto: null, ejes: ["variable 1", "variable 2"] };
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    svg.classList.add("plano-svg");
+    var idClip = "clipPlano" + (++nClip);
+    var defs = nodo("defs", {}, svg), cp = nodo("clipPath", { id: idClip }, defs);
+    nodo("rect", { x: M.l, y: M.t, width: A, height: A }, cp);
+    function sx(v) { return M.l + (v - st.vista.x0) / st.vista.s * A; }
+    function sy(v) { return H - M.b - (v - st.vista.y0) / st.vista.s * A; }
+    function ix(px) { return st.vista.x0 + (px - M.l) / A * st.vista.s; }
+    function iy(py) { return st.vista.y0 + (H - M.b - py) / A * st.vista.s; }
+    function esc(r) { return r / st.vista.s * A; }
+    var gE = nodo("g", {}, svg), gIn = nodo("g", { "clip-path": "url(#" + idClip + ")" }, svg);
+    var gL = nodo("g", {}, gIn), gC = nodo("g", {}, gIn), gA = nodo("g", {}, gIn), gR = nodo("g", {}, gIn), gP = nodo("g", {}, gIn), gM = nodo("g", {}, svg);
+
+    function ejes() {
+      gE.innerHTML = "";
+      var v = st.vista, paso = v.s > 6 ? 2 : 1;
+      nodo("rect", { x: M.l, y: M.t, width: A, height: A, "class": "marco" }, gE);
+      for (var t = Math.ceil(v.x0); t <= v.x0 + v.s + 1e-9; t++) {
+        nodo("line", { x1: sx(t), x2: sx(t), y1: M.t, y2: H - M.b, "class": "grid" }, gE);
+        if (t % paso === 0) texto(gE, { x: sx(t), y: H - M.b + 15, "class": "tick", "text-anchor": "middle" }, t);
+      }
+      for (t = Math.ceil(v.y0); t <= v.y0 + v.s + 1e-9; t++) {
+        nodo("line", { x1: M.l, x2: W - M.r, y1: sy(t), y2: sy(t), "class": "grid" }, gE);
+        if (t % paso === 0) texto(gE, { x: M.l - 6, y: sy(t) + 3.5, "class": "tick", "text-anchor": "end" }, st.w[1] !== 1 ? t * Math.round(Math.sqrt(st.w[1])) : t);
+      }
+      texto(gE, { x: W - M.r, y: H - 5, "class": "eje-tit", "text-anchor": "end" }, st.ejes[0]);
+      texto(gE, { x: 11, y: M.t, "class": "eje-tit", "text-anchor": "end", transform: "rotate(-90 11 " + M.t + ")" }, st.ejes[1]);
+    }
+    function render() {
+      [gL, gC, gA, gR, gP, gM].forEach(function (g) { g.innerHTML = ""; });
+      var P = st.P, v = st.vista;
+      if (st.linea) {
+        var L = st.linea, x1, y1, x2, y2;
+        if (Math.abs(L.b) > 1e-9) { x1 = v.x0; x2 = v.x0 + v.s; y1 = (L.c - L.a * x1) / L.b; y2 = (L.c - L.a * x2) / L.b; }
+        else { y1 = v.y0; y2 = v.y0 + v.s; x1 = x2 = L.c / L.a; }
+        nodo("line", { x1: sx(x1), y1: sy(y1), x2: sx(x2), y2: sy(y2), "class": "km-linea" }, gL);
+      }
+      st.circ.forEach(function (c) {
+        nodo("ellipse", { cx: sx(c.c[0]), cy: sy(c.c[1]), rx: esc(c.r / Math.sqrt(st.w[0])), ry: esc(c.r / Math.sqrt(st.w[1])), "class": "eps" + (c.suave ? " suave" : "") }, gC);
+      });
+      var enCad = {};
+      if (st.cadena) for (var k = 0; k + 1 < st.cadena.length; k++) enCad[st.cadena[k] + "-" + st.cadena[k + 1]] = true;
+      st.aristas.forEach(function (a) {
+        var p = P[a[0]], q = P[a[1]], l = st.lab ? st.lab[a[1]] : -1;
+        nodo("line", { x1: sx(p[0]), y1: sy(p[1]), x2: sx(q[0]), y2: sy(q[1]), "class": "ar" + gcls(l) + (enCad[a[0] + "-" + a[1]] ? " cad" : "") }, gA);
+      });
+      if (st.dentro) st.dentro.forEach(function (i) { nodo("circle", { cx: sx(P[i][0]), cy: sy(P[i][1]), r: 9.5, "class": "dentro" }, gR); });
+      if (st.cola) st.cola.forEach(function (i) { nodo("circle", { cx: sx(P[i][0]), cy: sy(P[i][1]), r: 10, "class": "encola" }, gR); });
+      if (st.act !== null && st.act !== undefined) [].concat(st.act).forEach(function (i) { nodo("circle", { cx: sx(P[i][0]), cy: sy(P[i][1]), r: 12, "class": "act" }, gR); });
+      P.forEach(function (p, i) {
+        var x = sx(p[0]), y = sy(p[1]);
+        if (i === st.oculto) { nodo("circle", { cx: x, cy: y, r: 6.5, "class": "pt oculto" }, gP); return; }
+        var t = st.tipo ? st.tipo[i] : null, l = st.lab ? st.lab[i] : null;
+        if (t === "ruido" || (!t && l === -1)) {
+          nodo("path", { d: "M" + (x - 4.5) + " " + (y - 4.5) + " L" + (x + 4.5) + " " + (y + 4.5) + " M" + (x - 4.5) + " " + (y + 4.5) + " L" + (x + 4.5) + " " + (y - 4.5), "class": "rx" }, gP);
+          return;
+        }
+        var cls = t === "nuc" ? "nuc" : t === "bor" ? "bor" : (l !== null && l >= 0 ? "nuc" : "sin");
+        nodo("circle", { cx: x, cy: y, r: cls === "nuc" ? 5.6 : cls === "bor" ? 4.6 : 4.4, "class": "pt " + cls + (l !== null ? gcls(l) : "") }, gP);
+      });
+      Object.keys(st.marcas).forEach(function (i) { var p = P[i]; texto(gM, { x: sx(p[0]) + 9, y: sy(p[1]) - 9, "class": "mlab" }, st.marcas[i]); });
+      if (st.nums) st.nums.forEach(function (t, i) { var p = P[i]; texto(gM, { x: sx(p[0]), y: sy(p[1]) + 20, "class": "nlab", "text-anchor": "middle" }, t); });
+    }
+    function coords(e) { var r = svg.getBoundingClientRect(); return [(e.clientX - r.left) / r.width * W, (e.clientY - r.top) / r.height * H]; }
+    function masCerca(x, y, tope) {
+      var m = null, md = tope;
+      st.P.forEach(function (p, i) { var d = Math.sqrt((p[0] - x) * (p[0] - x) + (p[1] - y) * (p[1] - y)); if (d < md) { md = d; m = i; } });
+      return m;
+    }
+    var arrastrando = false;
+    svg.addEventListener("pointerdown", function (e) {
+      var q = coords(e), x = ix(q[0]), y = iy(q[1]);
+      if (st.arrastrar && o.alArrastrar) {
+        arrastrando = true;
+        try { svg.setPointerCapture(e.pointerId); } catch (err) { /* nada */ }
+        e.preventDefault();
+        o.alArrastrar(x, y, masCerca(x, y, 0.35 * st.vista.s / 10));
+        return;
+      }
+      if (st.clic && o.alClic) { var i = masCerca(x, y, 0.5 * st.vista.s / 10); if (i !== null) o.alClic(i); }
+    });
+    svg.addEventListener("pointermove", function (e) {
+      if (!arrastrando) return;
+      var q = coords(e), x = ix(q[0]), y = iy(q[1]);
+      o.alArrastrar(x, y, masCerca(x, y, 0.35 * st.vista.s / 10));
+    });
+    function soltar() { arrastrando = false; }
+    svg.addEventListener("pointerup", soltar);
+    svg.addEventListener("pointercancel", soltar);
+    svg.addEventListener("keydown", function (e) {
+      if (!st.arrastrar || !o.alTecla) return;
+      var d = { ArrowLeft: [-0.1, 0], ArrowRight: [0.1, 0], ArrowUp: [0, 0.1], ArrowDown: [0, -0.1] }[e.key];
+      if (!d) return;
+      e.preventDefault();
+      o.alTecla(d[0], d[1]);
+    });
+    ejes();
+    render();
+    return {
+      st: st,
+      set: function (c) {
+        var rehacer = ("vista" in c) || ("w" in c) || ("ejes" in c);
+        for (var k in c) st[k] = c[k];
+        if (rehacer) ejes();
+        svg.classList.toggle("arrastrable", !!st.arrastrar);
+        svg.classList.toggle("clic", !!st.clic && !st.arrastrar);
+        render();
+      }
+    };
+  }
+
+  /* ================= grafico de k-distancias ================= */
+  function crearKdist(svg, o) {
+    var W = 400, H = 190, M = { l: 38, r: 12, t: 12, b: 32 };
+    var st = { vals: [], eps: 1, linea: false, tope: 4 };
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    function sx(i) { return M.l + (i + 0.5) / st.vals.length * (W - M.l - M.r); }
+    function sy(v) { return H - M.b - Math.min(v, st.tope) / st.tope * (H - M.t - M.b); }
+    function iv(py) { return (H - M.b - py) / (H - M.t - M.b) * st.tope; }
+    var arr = false;
+    function render() {
+      svg.innerHTML = "";
+      var ord = st.vals.slice().sort(function (a, b) { return a - b; });
+      for (var t = 0; t <= st.tope; t++) {
+        nodo("line", { x1: M.l, x2: W - M.r, y1: sy(t), y2: sy(t), "class": "grid" }, svg);
+        texto(svg, { x: M.l - 6, y: sy(t) + 3.5, "class": "tick", "text-anchor": "end" }, t);
+      }
+      texto(svg, { x: W - M.r, y: H - 8, "class": "eje-tit", "text-anchor": "end" }, "puntos ordenados por su k-distancia");
+      texto(svg, { x: M.l, y: H - 8, "class": "eje-tit" }, "k = " + o.k());
+      nodo("polyline", { points: ord.map(function (v, i) { return sx(i) + "," + sy(v); }).join(" "), "class": "curva" }, svg);
+      ord.forEach(function (v, i) { nodo("circle", { cx: sx(i), cy: sy(v), r: 3.2, "class": "kp" + (st.linea && v > st.eps + 1e-9 ? " no" : "") }, svg); });
+      if (st.linea) {
+        nodo("line", { x1: M.l, x2: W - M.r, y1: sy(st.eps), y2: sy(st.eps), "class": "kd-linea" }, svg);
+        texto(svg, { x: M.l + 6, y: sy(st.eps) - 6, "class": "kd-lab" }, "ε = " + f(st.eps, 2));
+        nodo("line", { x1: M.l, x2: W - M.r, y1: sy(st.eps), y2: sy(st.eps), "class": "kd-hit" }, svg);
+      }
+    }
+    function mover(e) {
+      var r = svg.getBoundingClientRect(), py = (e.clientY - r.top) / r.height * H;
+      var v = Math.max(0.3, Math.min(2.5, Math.round(iv(py) * 20) / 20));
+      if (o.alEps) o.alEps(v);
+    }
+    svg.addEventListener("pointerdown", function (e) {
+      if (!st.linea) return;
+      arr = true;
+      try { svg.setPointerCapture(e.pointerId); } catch (err) { /* nada */ }
+      e.preventDefault();
+      mover(e);
+    });
+    svg.addEventListener("pointermove", function (e) { if (arr) mover(e); });
+    svg.addEventListener("pointerup", function () { arr = false; });
+    svg.addEventListener("pointercancel", function () { arr = false; });
+    return { set: function (c) { for (var k in c) st[k] = c[k]; render(); } };
+  }
+
+  /* ================= estado del recorrido ================= */
+  var est = { paso: 0, eps: 1, minPts: 3, chk: {}, vista1: "km", circ: { c: LUNAS[PB].slice(), i: PB }, sel: PA, exp: null, orden: "izq", modo8: "dens" };
+  var pasos;
+  var HINTS = [
+    "Dos lunas encajadas y cuatro puntos sueltos",
+    "Arrastra el círculo y mueve ε",
+    "Toca un punto para ver su círculo",
+    "Núcleo, borde y ruido",
+    "Haz crecer la mancha desde A",
+    "Cambia el orden de las filas",
+    "Arrastra la línea del gráfico",
+    "Mueve ε y mira qué grupos sobreviven"
+  ];
+
+  var plano = crearPlano($("plano"), {
+    alArrastrar: function (x, y, i) {
+      if (est.paso !== 1 || !est.chk.c2) return;
+      est.circ = i !== null ? { c: LUNAS[i].slice(), i: i } : { c: [Math.max(0, Math.min(10, x)), Math.max(0, Math.min(10, y))], i: null };
+      entrar(1);
+    },
+    alTecla: function (dx, dy) {
+      if (est.paso !== 1 || !est.chk.c2) return;
+      var c = est.circ.c;
+      est.circ = { c: [Math.max(0, Math.min(10, Math.round((c[0] + dx) * 10) / 10)), Math.max(0, Math.min(10, Math.round((c[1] + dy) * 10) / 10))], i: null };
+      LUNAS.forEach(function (p, k) { if (Math.abs(p[0] - est.circ.c[0]) < 1e-9 && Math.abs(p[1] - est.circ.c[1]) < 1e-9) est.circ.i = k; });
+      entrar(1);
+    },
+    alClic: clicPunto
+  });
+  var kd = crearKdist($("kdist"), {
+    k: function () { return est.minPts - 1; },
+    alEps: function (v) { ponerEps(v); entrar(est.paso); }
+  });
+
+  function ponerEps(v) { est.eps = v; $("eps").value = Math.round(v * 100); $("epsVal").textContent = f(v, 2); }
+  function ponerMin(m) { est.minPts = m; $("minPts").value = m; $("minVal").textContent = m; }
+  $("eps").addEventListener("input", function () { ponerEps(+this.value / 100); entrar(est.paso); });
+  $("minPts").addEventListener("input", function () { ponerMin(+this.value); entrar(est.paso); });
+  function controles(eps, min) {
+    $("ctlEps").hidden = eps === "no"; $("eps").disabled = eps !== "si";
+    $("ctlMin").hidden = min === "no"; $("minPts").disabled = min !== "si";
+  }
+  function bloquear(chk) { if (!chk) { ponerEps(1); ponerMin(3); } }
+
+  function resumenTipos(r) {
+    return "Núcleos <b>" + r.cnt.nuc + "</b> · bordes <b>" + r.cnt.bor + "</b> · ruido <b>" + r.cnt.ruido + "</b>";
+  }
+  function resumenGrupos(r) {
+    var tam = [];
+    for (var g = 0; g < r.k; g++) tam.push(r.lab.filter(function (l) { return l === g; }).length);
+    return (r.k === 0 ? "Ningún grupo" : r.k === 1 ? "<b>1</b> grupo" : "<b>" + r.k + "</b> grupos") + (r.k ? " (" + tam.join(", ") + " puntos)" : "") + " · ruido <b>" + r.cnt.ruido + "</b>";
+  }
+
+  function entrar(i) {
+    est.paso = i;
+    $("escHint").textContent = HINTS[i];
+    var c = { P: LUNAS, vista: VISTA, w: UNO, tipo: null, lab: null, circ: [], aristas: [], cadena: null, marcas: {}, nums: null, cola: null, act: null,
+      dentro: null, linea: null, arrastrar: false, clic: false, oculto: null, ejes: ["variable 1", "variable 2"] };
+    var info = "", ch = est.chk;
+    $("kdWrap").hidden = i !== 6;
+    if (i === 0) {
+      controles("no", "no");
+      if (ch.c1 && est.vista1 === "km") {
+        c.lab = KM;
+        var cen = [0, 1].map(function (g) {
+          var sx = 0, sy = 0, n = 0;
+          LUNAS.forEach(function (p, k) { if (KM[k] === g) { sx += p[0]; sy += p[1]; n++; } });
+          return [sx / n, sy / n];
+        });
+        c.linea = { a: 2 * (cen[1][0] - cen[0][0]), b: 2 * (cen[1][1] - cen[0][1]), c: cen[1][0] * cen[1][0] + cen[1][1] * cen[1][1] - cen[0][0] * cen[0][0] - cen[0][1] * cen[0][1] };
+        info = "k-means con k = 2 (el mejor de 10 arranques). La frontera es la recta punteada. Mezcla <b>7</b> puntos de las lunas y además mete a los <b>4</b> sueltos en algún grupo.";
+      } else if (ch.c1) {
+        c.lab = R13.lab; c.tipo = R13.tipo;
+        info = "DBSCAN con ε = 1 y minPts = 3: una luna en cada grupo, y los 4 sueltos marcados como ruido (×). Nadie le dijo que había dos grupos.";
+      } else info = "30 puntos inventados, sin etiquetas.";
+    } else if (i === 1) {
+      bloquear(ch.c2);
+      controles(ch.c2 ? "si" : "fijo", "no");
+      if (!ch.c2) est.circ = { c: LUNAS[PB].slice(), i: PB };
+      c.circ = [{ c: est.circ.c, r: est.eps }];
+      var den = [];
+      LUNAS.forEach(function (p, k) { if (dist(p, est.circ.c) <= est.eps + 1e-9) den.push(k); });
+      c.dentro = den;
+      c.arrastrar = !!ch.c2;
+      if (!ch.c2) c.marcas[PB] = "P";
+      info = "Dentro del círculo: <b>" + den.length + "</b> " + (den.length === 1 ? "punto" : "puntos") + (est.circ.i !== null ? ", contando al del centro, " + par(LUNAS[est.circ.i]) : "") + ".";
+    } else if (i === 2) {
+      bloquear(ch.c3);
+      controles(ch.c3 ? "si" : "no", ch.c3 ? "si" : "no");
+      if (!ch.c3) {
+        c.circ = [PA, PB, PC].map(function (k) { return { c: LUNAS[k], r: 1, suave: true }; });
+        c.marcas[PA] = "A"; c.marcas[PB] = "B"; c.marcas[PC] = "C";
+        info = "Los círculos de A, B y C, con radio ε = 1.";
+      } else {
+        var r = dbscan(LUNAS, est.eps, est.minPts);
+        c.tipo = r.nuc.map(function (v) { return v ? "nuc" : null; });
+        c.circ = [{ c: LUNAS[est.sel], r: est.eps }];
+        c.dentro = r.vec[est.sel];
+        c.clic = true;
+        info = "Núcleos (rellenos): <b>" + r.cnt.nuc + "</b> de 30. Toca un punto para ver su círculo.";
+      }
+      pintarVivo3();
+    } else if (i === 3) {
+      bloquear(ch.c4);
+      controles(ch.c4 ? "si" : "no", ch.c4 ? "si" : "no");
+      var r4 = dbscan(LUNAS, est.eps, est.minPts);
+      if (!ch.c4) {
+        c.tipo = r4.nuc.map(function (v) { return v ? "nuc" : null; });
+        c.circ = [PB, PC].map(function (k) { return { c: LUNAS[k], r: 1, suave: true }; });
+        c.marcas[PB] = "B"; c.marcas[PC] = "C";
+        info = "Rellenos: los núcleos. B y C no lo son.";
+      } else {
+        c.tipo = r4.tipo;
+        c.circ = [{ c: LUNAS[est.sel], r: est.eps }];
+        c.dentro = r4.vec[est.sel];
+        c.clic = true;
+        info = resumenTipos(r4) + ". El punto tocado " + par(LUNAS[est.sel]) + " es <b>" + { nuc: "núcleo", bor: "borde", ruido: "ruido" }[r4.tipo[est.sel]] + "</b>.";
+      }
+    } else if (i === 4) {
+      controles("no", "no");
+      if (!est.exp) nuevaMancha(PA);
+      var e = est.exp;
+      c.tipo = R13.tipo;
+      if (!ch.c5) {
+        c.marcas[PA] = "A"; c.circ = [{ c: LUNAS[PA], r: 1, suave: true }];
+        info = "La mancha arranca en A. Ningún punto tiene grupo todavía.";
+      } else if (e.todos) {
+        c.lab = R13.lab; c.aristas = R13.aristas; c.clic = true;
+        info = "Todos los grupos de DBSCAN con ε = 1 y minPts = 3. Cada raya va del núcleo que alcanzó a un punto hasta ese punto.";
+      } else {
+        c.lab = LUNAS.map(function (_, k) { return e.en[k] ? 0 : null; });
+        c.tipo = R13.tipo.map(function (t, k) { return e.en[k] ? t : (t === "ruido" ? "ruido" : null); });
+        c.aristas = e.aristas; c.cadena = e.cadena; c.clic = true;
+        c.act = e.capas[e.capas.length - 1];
+        c.marcas[e.seed] = e.seed === PA ? "A" : "inicio";
+        if (e.cadena) c.marcas[e.cadena[e.cadena.length - 1]] = "p";
+        info = "Capa " + (e.capas.length - 1) + ". En la mancha: <b>" + Object.keys(e.en).length + "</b> puntos." + (e.fin ? " Ya no crece." : "");
+      }
+      pintarVivo5();
+    } else if (i === 5) {
+      controles("no", "no");
+      c.P = TOY; c.vista = VISTA_TOY;
+      var orden = est.orden === "izq" ? [0, 1, 2, 3, 4, 5, 6, 7, 8] : [8, 7, 6, 5, 4, 3, 2, 1, 0];
+      var rt = dbscan(TOY, 1, 4, UNO, orden);
+      c.tipo = rt.tipo;
+      c.nums = TOY.map(function (_, k) { return String(orden.indexOf(k) + 1); });
+      c.circ = [{ c: TOY[4], r: 1, suave: true }];
+      if (ch.c6) { c.lab = rt.lab; c.aristas = rt.aristas; }
+      info = ch.c6 ? "Orden de las filas: " + (est.orden === "izq" ? "de izquierda a derecha" : "de derecha a izquierda") + ". El del medio quedó con el grupo " +
+        (rt.lab[4] === rt.lab[0] ? "de la izquierda" : "de la derecha") + "." : "ε = 1 y minPts = 4. El círculo es el del punto del medio.";
+    } else if (i === 6) {
+      bloquear(ch.c7);
+      controles(ch.c7 ? "si" : "no", ch.c7 ? "si" : "no");
+      var r7 = dbscan(LUNAS, est.eps, est.minPts);
+      if (ch.c7) { c.tipo = r7.tipo; c.lab = r7.lab; info = resumenGrupos(r7) + "."; }
+      else info = "Primero lee la curva del gráfico de abajo.";
+      kd.set({ vals: kdist(LUNAS, est.minPts), eps: est.eps, linea: !!ch.c7, tope: 4 });
+      pintarVivo7();
+    } else if (i === 7) {
+      controles(ch.c8 ? "si" : "no", ch.c8 ? "si" : "no");
+      if (!ch.c8 || est.modo8 === "dens") {
+        c.P = DENS;
+        if (ch.c8) {
+          var r8 = dbscan(DENS, est.eps, est.minPts);
+          c.tipo = r8.tipo; c.lab = r8.lab;
+          info = resumenGrupos(r8) + ". " + (tresOk(r8) ? "" : "Los tres grupos inventados no aparecen a la vez.");
+        } else info = "Dos grupos apretados arriba y uno disperso abajo, más dos puntos sueltos.";
+      } else {
+        c.w = [1, 9]; c.ejes = ["variable 1", "variable 2 (× 3)"];
+        var ru = dbscan(LUNAS, est.eps, est.minPts, [1, 9]);
+        c.tipo = ru.tipo; c.lab = ru.lab;
+        c.circ = [{ c: LUNAS[est.sel], r: est.eps }];
+        c.clic = true;
+        info = "Variable 2 multiplicada por 3 (el eje dice los valores nuevos). " + resumenGrupos(ru) + ". El círculo de radio ε ahora es una elipse.";
+      }
+    }
+    plano.set(c);
+    $("escInfo").innerHTML = info;
+  }
+  function tresOk(r) {
+    var g = [0, 6, 12].map(function (k) { return r.lab[k]; });
+    if (g.some(function (v) { return v < 0; }) || g[0] === g[1] || g[1] === g[2] || g[0] === g[2]) return false;
+    for (var k = 0; k < 18; k++) if (r.lab[k] !== g[Math.floor(k / 6)]) return false;
+    return true;
+  }
+  function clicPunto(i) {
+    if (est.paso === 2 && est.chk.c3) { est.sel = i; entrar(2); }
+    else if (est.paso === 3 && est.chk.c4) { est.sel = i; entrar(3); }
+    else if (est.paso === 4 && est.chk.c5) {
+      var e = est.exp;
+      if (!e.todos && e.en[i]) { e.cadena = cadenaHasta(i); entrar(4); }
+      else if (R13.nuc[i]) { nuevaMancha(i); estado5("Nueva semilla en " + par(LUNAS[i]) + "."); entrar(4); }
+    } else if (est.paso === 7 && est.chk.c8 && est.modo8 === "unid") { est.sel = i; entrar(7); }
+  }
+
+  /* ---------- paso 1: lo que hace k-means ---------- */
+  B.opcionMultiple(cuerpo("chk1"), {
+    pregunta: "Le pides a k-means que separe estos 30 puntos en 2 grupos, con muchos arranques para que no se atasque. ¿Qué hace?",
+    opciones: [
+      "Corta con una recta: cada grupo se queda con un pedazo de cada luna",
+      "Encuentra las dos lunas, una en cada grupo",
+      "Encuentra las dos lunas y deja fuera los 4 puntos sueltos",
+      "Da error: k-means solo acepta grupos redondos"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "Recuerda las regiones de k-means: todo lo que queda más cerca de un centro que del otro. ¿Qué forma tiene la frontera entre dos centros?",
+      "k-means reparte a todos los puntos: no tiene manera de dejar a nadie afuera.",
+      "No da error: siempre devuelve k grupos, tengan sentido o no."],
+    explicacion: "La frontera entre dos centros es una recta, así que ninguna luna puede quedar entera de un lado si la otra se mete en su curva. k-means mezcla 7 puntos de las lunas y mete a los 4 sueltos en algún grupo. <b>Ahora toca los dos botones</b> y compara.",
+    alResolver: function () {
+      est.chk.c1 = true;
+      $("btnKm1").disabled = false; $("btnDb1").disabled = false;
+      $("btnKm1").classList.add("on");
+      entrar(0);
+      pasos.completar(0);
+    }
+  });
+  $("btnKm1").addEventListener("click", function () { est.vista1 = "km"; this.classList.add("on"); $("btnDb1").classList.remove("on"); entrar(0); });
+  $("btnDb1").addEventListener("click", function () { est.vista1 = "db"; this.classList.add("on"); $("btnKm1").classList.remove("on"); entrar(0); });
+
+  /* ---------- paso 2: el circulo ---------- */
+  B.opcionMultiple(cuerpo("chk2"), {
+    pregunta: "El círculo tiene radio 1 y está sobre P, la punta derecha de la luna de arriba. Si agrandas el radio a 1.5, ¿qué entra?",
+    opciones: ["Un punto de la luna de abajo", "Nada nuevo: P no tiene más vecinos", "Dos puntos más de su propia luna", "Toda la luna de abajo"],
+    correcta: 0,
+    pistas: [null,
+      "Mira debajo de P, un poco a la derecha: la luna de abajo pasa a menos de 1.5.",
+      "En la luna, los vecinos están a unos 0.8 uno del otro. El segundo de su luna queda a 1.58, fuera del círculo de 1.5.",
+      "El radio crece solo media unidad, y la luna de abajo mide casi 7 de punta a punta."],
+    explicacion: "Entra (7.2, 3.2), de la luna de abajo, que está a 1.43 de P. Con radio 1.5 las dos lunas empiezan a tocarse: ε decide qué es \"cerca\". <b>Ahora arrastra el círculo</b> y mueve ε.",
+    alResolver: function () { est.chk.c2 = true; entrar(1); pasos.completar(1); }
+  });
+
+  /* ---------- paso 3: nucleo ---------- */
+  function pintarVivo3() {
+    if (!est.chk.c3) { $("vivo3").innerHTML = "Para A, con ε = 1 y minPts = 3: |N<sub>ε</sub>(A)| = ?"; return; }
+    var n = vecinos(LUNAS, est.sel, est.eps).length, ok = n >= est.minPts;
+    $("vivo3").innerHTML = "p = " + par(LUNAS[est.sel]) + ": |N<sub>ε</sub>(p)| = <b>" + n + "</b> " + (ok ? "≥" : "&lt;") + " minPts = " + est.minPts + " → " + (ok ? "<b>núcleo</b>" : "no es núcleo");
+  }
+  B.opcionMultiple(cuerpo("chk3"), {
+    pregunta: "Con ε = 1 y minPts = 3, contando al propio punto, ¿cuáles de A, B y C son núcleo?",
+    opciones: ["Solo A", "A y B", "A, B y C", "Ninguno"],
+    correcta: 0,
+    pistas: [null,
+      "Cuenta los puntos dentro del círculo de B, contándolo a él. ¿Llega a 3?",
+      "C está solo en su círculo: 1 punto.",
+      "Mira el círculo de A: ¿cuántos puntos tiene adentro, contándolo a él?"],
+    explicacion: "A tiene 3 puntos en su círculo, contándose: $\\lvert N_\\varepsilon(A)\\rvert = 3 \\ge 3$, núcleo. B tiene 2 y C tiene 1. <b>Ahora toca cualquier punto</b> y mueve ε y minPts.",
+    alResolver: function () { est.chk.c3 = true; entrar(2); cerrar3(); }
+  });
+  B.opcionMultiple(cuerpo("chk3b"), {
+    pregunta: "En scikit-learn escribes <code>DBSCAN(eps=1, min_samples=3)</code>. Un punto tiene exactamente 2 vecinos a distancia 1 o menos, sin contarse a sí mismo. ¿Es núcleo?",
+    opciones: [
+      "Sí: min_samples cuenta al propio punto, y 2 + 1 = 3",
+      "No: necesita 3 vecinos además de él",
+      "Depende del orden en que se recorren los puntos",
+      "Solo si sus 2 vecinos también son núcleo"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "Esa es la lectura literal de Raschka, pero scikit-learn cuenta al punto. Con tus lunas: los núcleos tienen 2 vecinos más y scikit-learn los marca como núcleo.",
+      "Ser núcleo es solo contar dentro del círculo: no depende de ningún recorrido.",
+      "Ser núcleo no mira a los vecinos de los vecinos: solo cuenta cuántos hay en el círculo."],
+    explicacion: "Es núcleo: $2 + 1 = 3 \\ge 3$. En tus lunas, los 22 núcleos tienen justo 2 vecinos además de sí mismos, y <code>DBSCAN(eps=1, min_samples=3)</code> los marca a todos como núcleo. Si te guías por la frase de Raschka y pides <code>min_samples=4</code>, no queda ningún núcleo y todo es ruido.",
+    alResolver: function () { est.chk.c3b = true; cerrar3(); }
+  });
+  function cerrar3() { if (est.chk.c3 && est.chk.c3b) pasos.completar(2); }
+
+  /* ---------- paso 4: borde y ruido ---------- */
+  B.opcionMultiple(cuerpo("chk4"), {
+    pregunta: "Con ε = 1 y minPts = 3, B (la punta) y C (el suelto) no son núcleo. ¿Qué es cada uno?",
+    opciones: ["B es borde y C es ruido", "Los dos son ruido: ninguno es núcleo", "Los dos son borde", "B es ruido y C es borde"],
+    correcta: 0,
+    pistas: [null,
+      "Un punto que no es núcleo igual puede pertenecer a un grupo, si cae en el círculo de un núcleo. ¿B tiene un núcleo cerca?",
+      "C no tiene a nadie en su círculo: ¿de qué núcleo podría colgarse?",
+      "Míralo al revés: ¿cuál de los dos tiene un núcleo relleno a menos de ε?"],
+    explicacion: "B está a 0.85 de (6.3, 5.3), que sí es núcleo: es <b>borde</b>, pertenece al grupo pero no lo hace crecer. C no tiene ningún núcleo cerca: es <b>ruido</b>. <b>Ahora mueve ε y minPts</b> y mira cómo cambian los tres tipos.",
+    alResolver: function () { est.chk.c4 = true; est.sel = PB; entrar(3); pasos.completar(3); }
+  });
+
+  /* ---------- paso 5: la mancha ---------- */
+  function nuevaMancha(seed) {
+    var en = {}; en[seed] = true;
+    est.exp = { seed: seed, en: en, capas: [[seed]], aristas: [], abiertos: [seed], fin: false, todos: false, cadena: null, padre: {} };
+  }
+  function crecer() {
+    var e = est.exp;
+    if (e.fin) return 0;
+    var nuevos = [];
+    e.abiertos.forEach(function (cc) {
+      if (!R13.nuc[cc]) return;
+      R13.vec[cc].forEach(function (q) { if (!e.en[q]) { e.en[q] = true; nuevos.push(q); e.aristas.push([cc, q]); e.padre[q] = cc; } });
+    });
+    if (!nuevos.length) { e.fin = true; return 0; }
+    e.capas.push(nuevos); e.abiertos = nuevos;
+    return nuevos.length;
+  }
+  function cadenaHasta(i) {
+    var e = est.exp, cad = [i];
+    while (cad[0] !== e.seed && e.padre[cad[0]] !== undefined) cad.unshift(e.padre[cad[0]]);
+    return cad;
+  }
+  function estado5(t) { $("estado5").innerHTML = t || ""; }
+  function pintarVivo5() {
+    var e = est.exp;
+    if (!est.chk.c5 || !e) { $("vivo5").innerHTML = "A = (3.5, 7.6): todavía no hay mancha."; return; }
+    if (e.todos) { $("vivo5").innerHTML = "Dos grupos conectados por densidad, una luna cada uno. Los 4 sueltos no son alcanzables desde ningún núcleo."; return; }
+    if (!e.cadena) { $("vivo5").innerHTML = "Toca un punto de la mancha para ver su cadena desde " + (e.seed === PA ? "A" : par(LUNAS[e.seed])) + "."; return; }
+    var cad = e.cadena, ds = [];
+    for (var k = 0; k + 1 < cad.length; k++) ds.push(dist(LUNAS[cad[k]], LUNAS[cad[k + 1]]));
+    var fin = cad[cad.length - 1];
+    $("vivo5").innerHTML = "Cadena de " + (cad.length - 1) + " saltos hasta p = " + par(LUNAS[fin]) + ": d = " + ds.map(function (d) { return f(d, 2); }).join(", ") +
+      ", todas ≤ ε = 1. Todos los eslabones menos el último son núcleo: p es <b>alcanzable por densidad</b>" + (R13.nuc[fin] ? " y también es núcleo." : ", y es borde.");
+  }
+  B.opcionMultiple(cuerpo("chk5"), {
+    pregunta: "La mancha arranca en A, un núcleo de la luna de arriba (ε = 1, minPts = 3). Cada núcleo que entra suma a todo su círculo. Cuando ya no crece, ¿qué contiene?",
+    opciones: [
+      "Toda la luna de arriba: sus 11 núcleos y las 2 puntas",
+      "Solo los 3 puntos del círculo de A",
+      "Las dos lunas",
+      "Solo los 11 núcleos: las puntas no entran"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "La mancha no para en el primer círculo: cada núcleo nuevo trae su propio círculo.",
+      "Para pasar a la otra luna haría falta un núcleo a 1 o menos de ella. La distancia más corta entre las lunas es 1.43.",
+      "Las puntas son borde: están dentro del círculo de un núcleo. Entran al grupo; lo que no hacen es traer a nadie."],
+    explicacion: "Toda la luna de arriba: 13 puntos. Las puntas entran como borde y ahí la mancha se detiene. <b>Ahora hazla crecer</b> capa por capa.",
+    alResolver: function () {
+      est.chk.c5 = true;
+      ["btnPaso5", "btnFin5", "btnTodos5", "btnReset5"].forEach(function (id) { $(id).disabled = false; });
+      entrar(4);
+      pasos.completar(4);
+    }
+  });
+  $("btnPaso5").addEventListener("click", function () {
+    var e = est.exp;
+    if (e.todos) { nuevaMancha(e.seed); e = est.exp; }
+    e.cadena = null;
+    var n = crecer();
+    estado5(n ? "Capa " + (e.capas.length - 1) + ": entraron <b>" + n + "</b> puntos nuevos." : "La mancha dejó de crecer: <b>" + Object.keys(e.en).length + "</b> puntos. Ningún núcleo de adentro tiene vecinos afuera.");
+    entrar(4);
+  });
+  $("btnFin5").addEventListener("click", function () {
+    var e = est.exp;
+    if (e.todos) { nuevaMancha(e.seed); e = est.exp; }
+    e.cadena = null;
+    while (crecer()) { /* sigue */ }
+    estado5("La mancha dejó de crecer en " + (e.capas.length - 1) + " capas: <b>" + Object.keys(e.en).length + "</b> puntos.");
+    entrar(4);
+  });
+  $("btnTodos5").addEventListener("click", function () { est.exp.todos = true; est.exp.cadena = null; estado5(resumenGrupos(R13) + "."); entrar(4); });
+  $("btnReset5").addEventListener("click", function () { nuevaMancha(PA); estado5(""); entrar(4); });
+
+  /* ---------- paso 6: el borde en disputa ---------- */
+  B.opcionMultiple(cuerpo("chk6"), {
+    pregunta: "El punto del medio está a 0.92 de un núcleo de cada lado y no es núcleo. DBSCAN recorre las filas en el orden de los números. ¿A qué grupo va?",
+    opciones: [
+      "Al grupo que lo alcanza primero: depende del orden de las filas",
+      "Al grupo del núcleo más cercano",
+      "A los dos grupos a la vez",
+      "Queda como ruido, porque está en disputa"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "Las dos distancias son iguales: 0.92 y 0.92. No hay un más cercano.",
+      "DBSCAN le da una sola etiqueta a cada punto.",
+      "No es ruido: tiene un núcleo a menos de ε."],
+    explicacion: "Va al primer grupo que lo alcanza. Si las filas empiezan por la izquierda, ese grupo se forma primero y se lo queda. <b>Ahora cambia el orden</b> con los botones.",
+    alResolver: function () {
+      est.chk.c6 = true;
+      $("btnIzq6").disabled = false; $("btnDer6").disabled = false; $("btnIzq6").classList.add("on");
+      entrar(5);
+      pasos.completar(5);
+    }
+  });
+  function orden6(o) {
+    est.orden = o;
+    $("btnIzq6").classList.toggle("on", o === "izq"); $("btnDer6").classList.toggle("on", o === "der");
+    $("estado6").innerHTML = o === "izq" ? "Primero se forma el grupo de la izquierda y se queda con el del medio." : "Ahora el grupo de la derecha se forma primero y se queda con el del medio. Los núcleos no cambiaron.";
+    entrar(5);
+  }
+  $("btnIzq6").addEventListener("click", function () { orden6("izq"); });
+  $("btnDer6").addEventListener("click", function () { orden6("der"); });
+
+  /* ---------- paso 7: k-distancias ---------- */
+  function pintarVivo7() {
+    var k = est.minPts - 1, kd7 = kdist(LUNAS, est.minPts);
+    if (!est.chk.c7) { $("vivo7").innerHTML = "Con minPts = 3: k = 2, la distancia al segundo vecino sin contarse."; return; }
+    var nn = kd7.filter(function (v) { return v <= est.eps + 1e-9; }).length;
+    $("vivo7").innerHTML = "minPts = " + est.minPts + " → k = " + k + ". Con ε = " + f(est.eps, 2) + ": <b>" + nn + "</b> puntos con d<sub>" + k + "</sub>(p) ≤ ε, los núcleos.";
+  }
+  B.opcionMultiple(cuerpo("chk7"), {
+    pregunta: "En el gráfico, cada punto es la distancia de un dato a su segundo vecino más cercano (minPts = 3, sin contarse), ordenadas de menor a mayor. ¿Qué ε elegirías?",
+    opciones: ["Alrededor de 1, donde la curva dobla hacia arriba", "Alrededor de 0.5, al principio de la curva", "Alrededor de 2.5", "3.83, el valor más alto, para que nadie quede afuera"],
+    correcta: 0,
+    pistas: [null,
+      "Con ε = 0.5 ningún punto tiene a su segundo vecino tan cerca: todo sería ruido.",
+      "Después de la rodilla hay pocos puntos y muy separados: las puntas y los sueltos. Con ε tan grande, las lunas se tocan.",
+      "Con ε tan grande todo queda conectado: un solo grupo y nada de ruido, ni siquiera los sueltos."],
+    explicacion: "La mayoría de los puntos tiene a su segundo vecino entre 0.78 y 0.85, y después la curva salta a 1.43 y más. Cualquier ε entre 0.9 y 1.4 separa las dos lunas y deja los 4 sueltos como ruido. <b>Ahora arrastra la línea</b> y mira el plano.",
+    alResolver: function () { est.chk.c7 = true; entrar(6); pasos.completar(6); }
+  });
+
+  /* ---------- paso 8: limites ---------- */
+  B.opcionMultiple(cuerpo("chk8"), {
+    pregunta: "Los dos grupos de arriba están a 1.2 uno del otro. Los puntos del grupo de abajo están a 1.5 o más entre sí. Con minPts = 3, ¿hay algún ε que encuentre los tres grupos?",
+    opciones: [
+      "No: para que el de abajo exista, ε tiene que llegar a 1.5, y con eso los dos de arriba se unen",
+      "Sí, cualquier ε entre 1.2 y 1.5",
+      "Sí, con ε = 1.5 justo",
+      "Sí, si además subes minPts"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "Con ε entre 1.2 y 1.5, ¿qué pasa con los dos grupos de arriba, separados por 1.2? ¿Y alcanza para los puntos de abajo, a 1.5?",
+      "Con 1.5, la distancia entre los dos grupos de arriba, 1.2, también queda por debajo de ε.",
+      "Subir minPts hace más difícil ser núcleo: el grupo disperso sufre todavía más."],
+    explicacion: "No hay ninguno: se comprobó con scikit-learn para ε de 0.30 a 2.99 y minPts de 2 a 7. Con ε menor que 1.2, arriba hay dos grupos pero abajo todo es ruido; con ε de 1.5 o más, abajo aparece el grupo pero arriba se unen. <b>Ahora mueve ε</b> y compruébalo.",
+    alResolver: function () {
+      est.chk.c8 = true;
+      $("btnDens8").disabled = false; $("btnUnid8").disabled = false; $("btnDens8").classList.add("on");
+      ponerEps(1); ponerMin(3);
+      entrar(7);
+      pasos.completar(7);
+    }
+  });
+  function modo8(m) {
+    est.modo8 = m;
+    $("btnDens8").classList.toggle("on", m === "dens"); $("btnUnid8").classList.toggle("on", m === "unid");
+    ponerEps(1); ponerMin(3);
+    if (m === "unid") est.sel = PA;
+    $("estado8").innerHTML = m === "dens" ? "Densidades distintas. Prueba ε = 1 y después ε = 1.6." :
+      "Las lunas con la variable 2 multiplicada por 3. Con ε = 1 todo es ruido; sube ε hasta 3: las lunas vuelven, pero ya las une lo vertical.";
+    entrar(7);
+  }
+  $("btnDens8").addEventListener("click", function () { modo8("dens"); });
+  $("btnUnid8").addEventListener("click", function () { modo8("unid"); });
+
+  pasos = B.pasos($("recorrido"), {
+    concepto: C,
+    alEntrar: entrar,
+    alTerminar: function () { location.hash = "vidareal"; }
+  });
+  // al volver a la pagina con pasos hechos, se habilita lo que corresponde
+  if (pasos.hecho(0)) { est.chk.c1 = true; $("btnKm1").disabled = false; $("btnDb1").disabled = false; $("btnKm1").classList.add("on"); }
+  if (pasos.hecho(1)) est.chk.c2 = true;
+  if (pasos.hecho(2)) { est.chk.c3 = true; est.chk.c3b = true; }
+  if (pasos.hecho(3)) est.chk.c4 = true;
+  if (pasos.hecho(4)) { est.chk.c5 = true; ["btnPaso5", "btnFin5", "btnTodos5", "btnReset5"].forEach(function (id) { $(id).disabled = false; }); }
+  if (pasos.hecho(5)) { est.chk.c6 = true; $("btnIzq6").disabled = false; $("btnDer6").disabled = false; $("btnIzq6").classList.add("on"); }
+  if (pasos.hecho(6)) est.chk.c7 = true;
+  if (pasos.hecho(7)) { est.chk.c8 = true; $("btnDens8").disabled = false; $("btnUnid8").disabled = false; $("btnDens8").classList.add("on"); }
+  entrar(0);
+
+  /* ---------------- hipotesis inicial ---------------- */
+  (function () {
+    var ta = $("hipotesis"), t = null;
+    ta.value = B.nota("dbscan", "hipotesis");
+    function cita() {
+      var v = ta.value.trim(), el = $("citaHipo");
+      el.hidden = !v;
+      if (v) { el.textContent = ""; el.appendChild(document.createTextNode("Al principio escribiste: «" + v + "». ¿Se parece a juntar puntos que tienen muchos vecinos cerca y dejar que el grupo crezca de vecino en vecino? ¿Qué te faltaba?")); }
+    }
+    cita();
+    ta.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { B.nota("dbscan", "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; cita(); }, 500);
+    });
+  })();
+
+  /* ---------------- marcadores de estado de retos ---------------- */
+  function pintarEstados() {
+    [].forEach.call(document.querySelectorAll("[data-reto]"), function (el) {
+      var ok = C.retoOk(el.getAttribute("data-reto"));
+      el.textContent = ok ? "resuelto" : "pendiente";
+      el.classList.toggle("ok", ok);
+    });
+  }
+  C.alCambiar(pintarEstados);
+
+  /* ---------------- reto: ojo clinico ---------------- */
+  (function () {
+    var cont = $("ojo");
+    cont.innerHTML = '<div class="ronda"></div><svg role="img" aria-label="Puntos con un círculo de radio épsilon alrededor del punto marcado"></svg><p class="info ojo-dato"></p>' +
+      '<div class="ojo-opts"><button type="button" class="opt" data-a="nuc">Núcleo</button><button type="button" class="opt" data-a="bor">Borde</button><button type="button" class="opt" data-a="ruido">Ruido</button></div>' +
+      '<div class="fb" aria-live="polite"></div><div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    var p = crearPlano(cont.querySelector("svg"), {});
+    var ronda, aciertos, respondida, caso;
+    function r1(v) { return Math.round(v * 10) / 10; }
+    function generar() {
+      var objetivo = ["nuc", "bor", "ruido"][Math.floor(Math.random() * 3)];
+      for (var t = 0; t < 3000; t++) {
+        var eps = [1, 1.2, 1.5][Math.floor(Math.random() * 3)], mp = 3 + Math.floor(Math.random() * 3), P = [];
+        for (var b = 0; b < 3; b++) {
+          var cx = 2 + Math.random() * 6, cy = 2 + Math.random() * 6, n = 4 + Math.floor(Math.random() * 3);
+          for (var k = 0; k < n; k++) { var a = Math.random() * 2 * Math.PI, rr = Math.random() * 1.4; P.push([r1(cx + rr * Math.cos(a)), r1(cy + rr * Math.sin(a))]); }
+        }
+        for (k = 0; k < 3; k++) P.push([r1(0.6 + Math.random() * 8.8), r1(0.6 + Math.random() * 8.8)]);
+        P = P.filter(function (q) { return q[0] > 0.3 && q[0] < 9.7 && q[1] > 0.3 && q[1] < 9.7; });
+        var res = dbscan(P, eps, mp);
+        var cand = P.map(function (_, i) { return i; }).filter(function (i) {
+          if (res.tipo[i] !== objetivo) return false;
+          return P.every(function (q, j) { return j === i || Math.abs(dist(P[i], q) - eps) > 0.1; });
+        });
+        if (cand.length) { var i = cand[Math.floor(Math.random() * cand.length)]; return { P: P, eps: eps, mp: mp, i: i, res: res, ok: objetivo }; }
+      }
+      var r = dbscan(LUNAS, 1, 3);
+      return { P: LUNAS, eps: 1, mp: 3, i: PB, res: r, ok: "bor" };
+    }
+    function nueva() { ronda = 0; aciertos = 0; mostrar(); }
+    function mostrar() {
+      respondida = false;
+      caso = generar();
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 5 · aciertos " + aciertos;
+      p.set({ P: caso.P, tipo: caso.res.tipo.map(function (t) { return t === "nuc" ? "nuc" : null; }), lab: null, oculto: caso.i, circ: [{ c: caso.P[caso.i], r: caso.eps }], dentro: null });
+      cont.querySelector(".ojo-dato").innerHTML = "ε = <b>" + fn(caso.eps) + "</b> · minPts = <b>" + caso.mp + "</b>, contando al propio punto. Rellenos: los núcleos (sin contar al del anillo).";
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (b) { b.disabled = false; b.className = "opt"; });
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+    }
+    cont.querySelector(".ojo-opts").addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || respondida) return;
+      respondida = true;
+      var ok = b.getAttribute("data-a") === caso.ok;
+      if (ok) aciertos++;
+      b.classList.add(ok ? "ok" : "mal");
+      if (!ok) cont.querySelector('[data-a="' + caso.ok + '"]').classList.add("ok");
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (x) { x.disabled = true; });
+      var v = caso.res.vec[caso.i], nucCerca = v.filter(function (j) { return j !== caso.i && caso.res.nuc[j]; }).length;
+      p.set({ oculto: null, tipo: caso.res.tipo, dentro: v });
+      cont.querySelector(".fb").innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No.</span> ') +
+        "En su círculo hay " + v.length + " " + (v.length === 1 ? "punto" : "puntos") + " contándolo a él, " + (v.length >= caso.mp ? "y eso llega" : "y no llega") + " a minPts = " + caso.mp + ". " +
+        (caso.ok === "nuc" ? "Es núcleo." : nucCerca ? "No es núcleo, pero tiene " + nucCerca + " " + (nucCerca === 1 ? "núcleo" : "núcleos") + " en su círculo: es borde." : "No es núcleo y no tiene ningún núcleo en su círculo: es ruido.");
+      var sig = cont.querySelector(".sig");
+      sig.hidden = false;
+      if (ronda === 4) {
+        var aprobo = aciertos >= 4;
+        C.reto("ojo", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertos + " de 5" + (aprobo ? ". Aprobado." : ". Necesitas 4 para aprobar.");
+        sig.textContent = "Otra tanda";
+      } else sig.textContent = "Siguiente ronda";
+    });
+    cont.querySelector(".sig").addEventListener("click", function () { if (ronda === 4) nueva(); else { ronda++; mostrar(); } });
+    nueva();
+  })();
+
+  /* ---------------- reto: construir ---------------- */
+  (function () {
+    var OBJ = [
+      { t: "Las dos lunas, cada una en su grupo, y solo los 4 sueltos como ruido.", ok: function (r) {
+        if (r.k !== 2 || r.cnt.ruido !== 4) return false;
+        for (var i = 0; i < 26; i++) if (r.lab[i] !== r.lab[i < 13 ? 0 : 13]) return false;
+        return r.lab[0] !== r.lab[13];
+      } },
+      { t: "Que todo sea ruido: ningún grupo.", ok: function (r) { return r.k === 0; } },
+      { t: "Las dos lunas juntas en un solo grupo.", ok: function (r) { for (var i = 0; i < 26; i++) if (r.lab[i] < 0 || r.lab[i] !== r.lab[0]) return false; return true; } },
+      { t: "Tres grupos o más: rompe las lunas en pedazos.", ok: function (r) { return r.k >= 3; } }
+    ];
+    var logrados = OBJ.map(function () { return false; }), avisado = false;
+    var ul = $("objetivos");
+    OBJ.forEach(function (o) { var li = document.createElement("li"); li.innerHTML = '<span class="m"></span><span>' + o.t + '</span>'; ul.appendChild(li); });
+    var p = crearPlano($("planoConstr"), {});
+    function actualizar() {
+      var eps = +$("cEps").value / 100, mp = +$("cMin").value;
+      $("cEpsVal").textContent = f(eps, 2); $("cMinVal").textContent = mp;
+      var r = dbscan(LUNAS, eps, mp);
+      p.set({ tipo: r.tipo, lab: r.lab });
+      $("constrVivo").innerHTML = resumenGrupos(r);
+      OBJ.forEach(function (o, i) { if (!logrados[i] && o.ok(r)) logrados[i] = true; ul.children[i].classList.toggle("hecho", logrados[i]); });
+      if (!avisado && logrados.every(Boolean)) { avisado = true; C.reto("construir", true); }
+    }
+    $("cEps").addEventListener("input", actualizar);
+    $("cMin").addEventListener("input", actualizar);
+    actualizar();
+  })();
+
+  /* ---------------- reto: a mano ---------------- */
+  (function () {
+    var D, pm = null;
+    function generar() {
+      for (;;) {
+        var P = [], vistos = {};
+        while (P.length < 7) {
+          var q = [Math.floor(Math.random() * 6), Math.floor(Math.random() * 6)];
+          if (vistos[q.join(",")]) continue;
+          vistos[q.join(",")] = true; P.push(q);
+        }
+        var r = dbscan(P, 1.5, 3);
+        if (r.cnt.nuc < 1 || r.cnt.bor < 1 || r.cnt.ruido < 1) continue;
+        D = { P: P, r: r };
+        break;
+      }
+      $("manoDatos").innerHTML = '<table class="datos-mano"><tr><th></th>' + D.P.map(function (_, i) { return "<th>P" + (i + 1) + "</th>"; }).join("") + '</tr>' +
+        '<tr><th>x</th>' + D.P.map(function (p) { return "<td>" + p[0] + "</td>"; }).join("") + '</tr><tr><th>y</th>' + D.P.map(function (p) { return "<td>" + p[1] + "</td>"; }).join("") + '</tr></table>' +
+        '<svg class="mano-svg" role="img" aria-label="Los siete puntos en la cuadrícula"></svg>';
+      pm = crearPlano($("manoDatos").querySelector("svg"), {});
+      pm.set({ P: D.P, vista: { x0: -0.5, y0: -0.5, s: 6 }, nums: D.P.map(function (_, i) { return "P" + (i + 1); }), ejes: ["x", "y"] });
+    }
+    generar();
+    function lista(f2) { return D.P.map(function (_, i) { return i; }).filter(f2).map(function (i) { return "P" + (i + 1); }).join(", ") || "ninguno"; }
+    B.numerico($("mano"), {
+      pregunta: "¿Cuántos de los siete puntos son ruido?",
+      respuesta: function () { return D.r.cnt.ruido; },
+      tolerancia: 0,
+      pistas: [
+        "Con ε = 1.5 en una cuadrícula de enteros, son vecinos los puntos a un paso en horizontal, en vertical o en diagonal (distancias 1 y 1.41). A dos pasos (distancia 2) ya no.",
+        function () { return "Puntos en el círculo de cada uno, contándose: " + D.P.map(function (_, i) { return "P" + (i + 1) + " " + D.r.vec[i].length; }).join(", ") + "."; },
+        function () { return "Núcleos (3 o más): " + lista(function (i) { return D.r.nuc[i]; }) + ". Ahora, de los que no son núcleo, ¿cuáles tienen un núcleo en su círculo?"; }
+      ],
+      diagnostico: function (v) {
+        if (v === D.r.cnt.ruido + D.r.cnt.bor) return "Contaste como ruido a todos los que no son núcleo. Revisa si alguno tiene un núcleo en su círculo: ese es borde.";
+        if (v === D.r.cnt.nuc) return "Esos son los núcleos. La pregunta es por el ruido.";
+        return null;
+      },
+      explicacion: function () {
+        return "Núcleos: " + lista(function (i) { return D.r.tipo[i] === "nuc"; }) + ". Bordes: " + lista(function (i) { return D.r.tipo[i] === "bor"; }) +
+          ". Ruido: " + lista(function (i) { return D.r.tipo[i] === "ruido"; }) + ", en total " + D.r.cnt.ruido + ".";
+      },
+      reintentable: true,
+      textoReintentar: "Otro ejercicio",
+      antesDeReintentar: generar,
+      alResolver: function (ok) { C.reto("mano", ok); }
+    });
+  })();
+
+  /* ---------------- reto: cazar el error ---------------- */
+  B.cazarError($("error"), {
+    variantes: [
+      {
+        intro: "Con ε = 1 y minPts = 4, contando al propio punto, alguien clasificó dos puntos p y q:",
+        lineas: ["\\lvert N_\\varepsilon(p) \\rvert = 4 \\ge 4 \\;\\Rightarrow\\; p \\text{ es núcleo}",
+          "\\lvert N_\\varepsilon(q) \\rvert = 2 < 4 \\;\\Rightarrow\\; q \\text{ no es núcleo}",
+          "d(p, q) = 0.8 \\le \\varepsilon",
+          "\\Rightarrow\\; q \\text{ es ruido}"],
+        erronea: 3,
+        explicacion: "q no es núcleo, pero está a 0.8 de p, que sí lo es: es <b>borde</b>. Ruido es solo el que no tiene ningún núcleo a distancia ε o menos."
+      },
+      {
+        intro: "Con ε = 2, alguien revisó si q = (4, 4) está en el vecindario de p = (2, 3):",
+        lineas: ["d(p, q) = \\sqrt{(4-2)^2 + (4-3)^2}",
+          "= \\sqrt{4 + 1} = \\sqrt{5} \\approx 2.24",
+          "2.24 \\le 2",
+          "\\Rightarrow\\; q \\in N_\\varepsilon(p)"],
+        erronea: 2,
+        explicacion: "$2.24 > 2$: q queda <b>fuera</b> del vecindario. La cuenta de la distancia está bien; la comparación está al revés, y la última línea arrastra el error."
+      },
+      {
+        intro: "a es núcleo y b es borde, con d(a, b) = 0.7 y ε = 1. Alguien razonó así:",
+        lineas: ["b \\in N_\\varepsilon(a) \\text{ y } a \\text{ es núcleo}",
+          "\\Rightarrow\\; b \\text{ es directamente alcanzable desde } a",
+          "\\Rightarrow\\; a \\text{ es directamente alcanzable desde } b",
+          "\\Rightarrow\\; \\text{la mancha sigue creciendo desde } b"],
+        erronea: 2,
+        explicacion: "Directamente alcanzable pide que el punto de partida sea <b>núcleo</b>. b es borde, así que desde b no se alcanza a nadie: la relación no es simétrica. Por eso los bordes no hacen crecer el grupo."
+      }
+    ],
+    alResolver: function (ok) { C.reto("error", ok); }
+  });
+
+  /* ---------------- retos: propiedades ---------------- */
+  function prop(id, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple($(id), cfg);
+  }
+  prop("prop1", {
+    pregunta: "Para correr DBSCAN, ¿qué números tienes que darle?",
+    opciones: ["ε y minPts", "k, el número de grupos", "k y ε", "Ninguno: los elige solo"],
+    correcta: 0,
+    pistas: [null, "Esa es la pregunta de k-means. DBSCAN encuentra cuántos grupos hay a partir de la densidad.",
+      "k no aparece en DBSCAN. Lo que sí hace falta, además del radio, es cuántos puntos cuentan como zona densa.",
+      "No hay un valor que sirva siempre: el gráfico de k-distancias ayuda, pero lo eliges tú."],
+    explicacion: "ε, el radio, y minPts, cuántos puntos hacen falta en el círculo. El número de grupos sale solo. Lo difícil es elegir esos dos números: el paso 7."
+  });
+  prop("prop2", {
+    pregunta: "Corres DBSCAN con los mismos datos y los mismos ε y minPts, pero con las filas en otro orden. ¿Qué puede cambiar?",
+    opciones: ["El grupo de algunos puntos borde que tienen núcleos de dos grupos", "Qué puntos son núcleo", "Qué puntos son ruido", "Nada, nunca"],
+    correcta: 0,
+    pistas: [null, "Ser núcleo es contar puntos en un círculo. ¿Eso depende del orden de las filas?",
+      "Ser ruido es no ser núcleo y no tener núcleos cerca. Eso tampoco mira el orden.",
+      "Recuerda el paso 6: el punto del medio cambió de grupo."],
+    explicacion: "Núcleos y ruido son cuentas sobre cada punto. Solo un borde con núcleos de dos grupos distintos depende del orden: se lo queda el grupo que lo alcanza primero. Además, los números de los grupos pueden salir en otro orden."
+  });
+  prop("prop3", {
+    pregunta: "Subes ε y dejas minPts igual. La cantidad de puntos de ruido...",
+    opciones: ["Baja o se queda igual: nunca sube", "Sube, porque hay más puntos en disputa", "Puede subir o bajar", "Siempre llega a 0"],
+    correcta: 0,
+    pistas: [null, "Con un círculo más grande, ¿un núcleo puede dejar de ser núcleo?",
+      "Si un punto era núcleo o borde, ¿puede dejar de serlo con un círculo más grande?",
+      "Un punto muy aislado sigue solo aunque el círculo crezca un poco: mira los sueltos del paso 7."],
+    explicacion: "Con un círculo más grande nadie pierde vecinos: los núcleos siguen siendo núcleo y los bordes siguen teniendo su núcleo cerca. El ruido solo puede bajar. El número de grupos, en cambio, puede subir o bajar."
+  });
+  prop("prop4", {
+    pregunta: "Subes minPts y dejas ε igual. Los puntos núcleo...",
+    opciones: ["Son los mismos o menos", "Son más, porque el grupo es más exigente", "No cambian: dependen solo de ε", "Pasan a ser todos borde"],
+    correcta: 0,
+    pistas: [null, "Más exigente quiere decir que cuesta más ser núcleo. ¿Eso suma núcleos o los resta?",
+      "La regla de núcleo es contar contra minPts: si minPts sube, la cuenta tiene que llegar más alto.",
+      "Puede que algunos dejen de ser núcleo, pero los que tienen muchos vecinos siguen siéndolo."],
+    explicacion: "Para ser núcleo hace falta $\\lvert N_\\varepsilon(p)\\rvert \\ge \\text{minPts}$: si minPts sube, solo pueden salir núcleos. Por eso un minPts alto deja más ruido y grupos más chicos."
+  });
+  prop("prop5", {
+    pregunta: "¿Cuál de estas es una diferencia real entre DBSCAN y k-means?",
+    opciones: [
+      "DBSCAN puede dejar puntos sin grupo; k-means reparte a todos",
+      "DBSCAN siempre encuentra grupos redondos",
+      "k-means no necesita escalar las variables y DBSCAN sí",
+      "DBSCAN da el mismo resultado con cualquier ε"
+    ],
+    correcta: 0,
+    pistas: [null, "Las lunas no son redondas, y DBSCAN las encontró.",
+      "Los dos miden distancias: si una variable tiene números mucho más grandes, manda en los dos.",
+      "En el reto de construir, el mismo dato dio desde todo ruido hasta un solo grupo."],
+    explicacion: "DBSCAN marca ruido; k-means mete a todo el mundo en algún grupo. Los dos dependen de la escala, y DBSCAN depende mucho de ε."
+  });
+
+  /* ---------------- formula de memoria ---------------- */
+  B.ordenar($("formula"), {
+    piezas: ["N_\\varepsilon(p)", "=", "\\{\\, q \\in D", ":", "d(p,q) \\le \\varepsilon \\,\\}"],
+    distractores: ["d(p,q) \\ge \\varepsilon", "\\lVert p - \\mu \\rVert^2", "\\text{minPts}"],
+    soluciones: [[0, 1, 2, 3, 4]],
+    explicacion: "El vecindario de p son todos los puntos de los datos a distancia ε o menos, incluido p. Después, p es núcleo si $\\lvert N_\\varepsilon(p)\\rvert \\ge \\text{minPts}$.",
+    alResolver: function (ok) { C.reto("formula", ok); }
+  });
+
+  /* ---------------- vida real: DBSCAN con bucles ---------------- */
+  (function () {
+    var CODIGO = {
+      py: [
+        ["import", "import numpy as np"],
+        ["import", "from sklearn.cluster import DBSCAN"],
+        [null, ""],
+        [null, "# 30 puntos inventados: dos medias lunas y 4 puntos sueltos"],
+        ["datos", "X = np.array([[0.5, 4.5], [0.5, 5.3], [1.0, 5.9], [1.3, 6.7], [2.1, 7.0],"],
+        ["datos", "              [2.7, 7.4], [3.5, 7.6], [4.3, 7.3], [4.9, 7.0], [5.7, 6.7],"],
+        ["datos", "              [6.1, 6.0], [6.3, 5.3], [6.6, 4.5],"],
+        ["datos", "              [3.5, 6.0], [3.7, 5.2], [3.8, 4.4], [4.4, 3.9], [4.9, 3.3],"],
+        ["datos", "              [5.7, 3.2], [6.5, 2.9], [7.2, 3.2], [8.0, 3.4], [8.7, 3.8],"],
+        ["datos", "              [9.1, 4.5], [9.3, 5.3], [9.6, 6.0],"],
+        ["datos", "              [1.0, 1.5], [9.5, 8.5], [5.0, 9.0], [9.0, 1.0]])"],
+        ["params", "eps, min_pts = 1.0, 3"],
+        ["params", "n = len(X)"],
+        ["init", "SIN_VISITAR, RUIDO = -2, -1"],
+        ["init", "etiqueta = np.full(n, SIN_VISITAR)"],
+        ["grupo0", "grupo = -1"],
+        [null, ""],
+        ["def", "def vecinos(i):                                # incluye al propio i"],
+        [null, "    d = np.sqrt(((X - X[i]) ** 2).sum(axis=1))"],
+        [null, "    return list(np.flatnonzero(d <= eps))"],
+        [null, ""],
+        ["fori", "for i in range(n):"],
+        ["salta", "    if etiqueta[i] != SIN_VISITAR:             # ya tiene etiqueta"],
+        ["salta", "        continue"],
+        ["vec", "    vec = vecinos(i)"],
+        ["ruido", "    if len(vec) < min_pts:                     # no es núcleo"],
+        ["ruido", "        etiqueta[i] = RUIDO                    # ruido, por ahora"],
+        ["ruido", "        continue"],
+        ["grupo", "    grupo += 1                                 # núcleo libre: grupo nuevo"],
+        ["grupo", "    etiqueta[i] = grupo"],
+        ["cola0", "    cola = vec"],
+        ["while", "    while cola:                                # la mancha crece"],
+        ["pop", "        j = cola.pop(0)"],
+        ["borde", "        if etiqueta[j] == RUIDO:"],
+        ["borde", "            etiqueta[j] = grupo                # era ruido: pasa a borde"],
+        ["desc", "        if etiqueta[j] != SIN_VISITAR:"],
+        ["desc", "            continue"],
+        ["vecj", "        etiqueta[j] = grupo"],
+        ["vecj", "        vec_j = vecinos(j)"],
+        ["extend", "        if len(vec_j) >= min_pts:              # j es núcleo: sus vecinos entran"],
+        ["extend", "            cola += vec_j"],
+        [null, ""],
+        ["print", "print(etiqueta.tolist())"],
+        ["lib", "db = DBSCAN(eps=eps, min_samples=min_pts).fit(X)"],
+        ["printlib", "print(db.labels_.tolist())"],
+        ["verif", "print((db.labels_ == etiqueta).all())"]
+      ],
+      r: [
+        [null, "# 30 puntos inventados: dos medias lunas y 4 puntos sueltos"],
+        ["datos", "X <- matrix(c(0.5, 4.5, 0.5, 5.3, 1.0, 5.9, 1.3, 6.7, 2.1, 7.0,"],
+        ["datos", "              2.7, 7.4, 3.5, 7.6, 4.3, 7.3, 4.9, 7.0, 5.7, 6.7,"],
+        ["datos", "              6.1, 6.0, 6.3, 5.3, 6.6, 4.5,"],
+        ["datos", "              3.5, 6.0, 3.7, 5.2, 3.8, 4.4, 4.4, 3.9, 4.9, 3.3,"],
+        ["datos", "              5.7, 3.2, 6.5, 2.9, 7.2, 3.2, 8.0, 3.4, 8.7, 3.8,"],
+        ["datos", "              9.1, 4.5, 9.3, 5.3, 9.6, 6.0,"],
+        ["datos", "              1.0, 1.5, 9.5, 8.5, 5.0, 9.0, 9.0, 1.0), ncol = 2, byrow = TRUE)"],
+        ["params", "eps <- 1; min_pts <- 3"],
+        ["params", "n <- nrow(X)"],
+        ["init", "etiqueta <- rep(NA, n)                         # NA: sin visitar, 0: ruido"],
+        ["grupo0", "grupo <- 0"],
+        [null, ""],
+        ["def", "vecinos <- function(i) {                       # incluye al propio i"],
+        [null, "  d <- sqrt(colSums((t(X) - X[i, ])^2))"],
+        [null, "  which(d <= eps)"],
+        [null, "}"],
+        [null, ""],
+        ["fori", "for (i in 1:n) {"],
+        ["salta", "  if (!is.na(etiqueta[i])) next                # ya tiene etiqueta"],
+        ["vec", "  vec <- vecinos(i)"],
+        ["ruido", "  if (length(vec) < min_pts) {                 # no es núcleo"],
+        ["ruido", "    etiqueta[i] <- 0                           # ruido, por ahora"],
+        ["ruido", "    next"],
+        [null, "  }"],
+        ["grupo", "  grupo <- grupo + 1                           # núcleo libre: grupo nuevo"],
+        ["grupo", "  etiqueta[i] <- grupo"],
+        ["cola0", "  cola <- vec"],
+        ["while", "  while (length(cola) > 0) {                   # la mancha crece"],
+        ["pop", "    j <- cola[1]; cola <- cola[-1]"],
+        ["borde", "    if (etiqueta[j] %in% 0) {"],
+        ["borde", "      etiqueta[j] <- grupo                     # era ruido: pasa a borde"],
+        [null, "    }"],
+        ["desc", "    if (!is.na(etiqueta[j])) next"],
+        ["vecj", "    etiqueta[j] <- grupo"],
+        ["vecj", "    vec_j <- vecinos(j)"],
+        ["extend", "    if (length(vec_j) >= min_pts) {            # j es núcleo: sus vecinos entran"],
+        ["extend", "      cola <- c(cola, vec_j)"],
+        [null, "    }"],
+        [null, "  }"],
+        [null, "}"],
+        [null, ""],
+        ["print", "print(etiqueta)"],
+        ["lib", "nucleo <- rowSums(as.matrix(dist(X)) <= eps) >= min_pts"],
+        ["printlib", "h <- hclust(dist(X[nucleo, ]), method = \"single\")"],
+        ["verif", "table(etiqueta[nucleo], cutree(h, h = eps))"]
+      ]
+    };
+    // lo que imprimio cada lenguaje (Python 3 + NumPy 2.1.3 + scikit-learn 1.6.1, y R 4.6.1)
+    var SAL = {
+      py: {
+        P: "[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, -1, -1, -1, -1]",
+        L: "[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, -1, -1, -1, -1]",
+        V: "True"
+      },
+      r: {
+        P: " [1] 1 1 1 1 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 2 2 2 2 2 0 0 0 0",
+        L: null,
+        V: "   \n     1  2\n  1 11  0\n  2  0 11"
+      }
+    };
+    var EPS = 1, MINP = 3;
+
+    var EV = [];
+    (function () {
+      var lab = LUNAS.map(function () { return -2; }), cnt = LUNAS.map(function () { return null; }), g = -1, cola = [], llamadas = 0, salidas = [], desc = 0, saltados = [], fase = 0;
+      function foto(id, extra) {
+        EV.push(Object.assign({ id: id, fase: fase, lab: lab.slice(), cnt: cnt.slice(), g: g, cola: cola.slice(), llamadas: llamadas, salidas: salidas.slice(),
+          i: null, j: null, vec: null, fin: false }, extra || {}));
+      }
+      foto("import"); foto("datos"); foto("params"); foto("init"); foto("grupo0"); foto("def");
+      fase = 1;
+      function soltarSaltos() { if (saltados.length) { foto("salta", { saltados: saltados.slice(), i: saltados[saltados.length - 1] }); saltados = []; } }
+      for (var i = 0; i < N; i++) {
+        if (lab[i] !== -2) { saltados.push(i); continue; }
+        soltarSaltos();
+        fase = 1;
+        var vec = vecinos(LUNAS, i, EPS); llamadas++; cnt[i] = vec.length;
+        foto("vec", { i: i, vec: vec });
+        if (vec.length < MINP) { lab[i] = -1; foto("ruido", { i: i, vec: vec }); continue; }
+        g++; lab[i] = g;
+        foto("grupo", { i: i, vec: vec });
+        cola = vec.slice();
+        foto("cola0", { i: i, vec: vec });
+        fase = 2;
+        while (cola.length) {
+          var j = cola.shift();
+          if (lab[j] === -1) { lab[j] = g; foto("borde", { i: i, j: j, desc: desc }); desc = 0; continue; }
+          if (lab[j] !== -2) { desc++; continue; }
+          lab[j] = g;
+          var vj = vecinos(LUNAS, j, EPS); llamadas++; cnt[j] = vj.length;
+          foto("vecj", { i: i, j: j, vec: vj, desc: desc, esNuc: vj.length >= MINP }); desc = 0;
+          if (vj.length >= MINP) { cola = cola.concat(vj); foto("extend", { i: i, j: j, vec: vj }); }
+        }
+        foto("while", { i: i, desc: desc, tam: lab.filter(function (l) { return l === g; }).length }); desc = 0;
+      }
+      soltarSaltos();
+      fase = 3;
+      salidas.push("P"); foto("print", { fin: true });
+      foto("lib", { fin: true });
+      salidas.push("L"); foto("printlib", { fin: true });
+      salidas.push("V"); foto("verif", { fin: true });
+    })();
+    var LLAMADAS = EV[EV.length - 1].llamadas;
+
+    function etq(v, lang) { return lang === "py" ? String(v).replace("-", "−") : v === -2 ? "NA" : String(v + 1); }
+    function lst(a, ctx) { return "[" + a.map(function (k) { return ctx.ix(k); }).join(", ") + "]"; }
+    function colaTxt(a, ctx) {
+      var m = a.slice(0, 14).map(function (k) { return ctx.ix(k); }).join(", ");
+      return "[" + m + (a.length > 14 ? ", …" : "") + "]" + (a.length > 14 ? " (" + a.length + " en total)" : "");
+    }
+    function grupoTxt(g, lang) { return '<span style="color:var(--g' + (g % 6) + ')">grupo ' + (lang === "py" ? g : g + 1) + "</span>"; }
+    function descTxt(d) { return d ? "Antes salieron de la cola " + d + (d === 1 ? " punto que ya tenía" : " puntos que ya tenían") + " grupo: se descartan. " : ""; }
+    function narrar(e, ctx) {
+      var py = ctx.lang() === "py", ix = ctx.ix, L = ctx.lang();
+      switch (e.id) {
+        case "import": return py ? "Carga NumPy y la clase <b>DBSCAN</b> de scikit-learn, que se usa solo al final para comparar." : "R no tiene que cargar nada: todo lo que usa este programa viene con R.";
+        case "datos": return "Los 30 puntos del recorrido: 13 de la luna de arriba, 13 de la de abajo y 4 sueltos.";
+        case "params": return "<b>ε = 1</b> y <b>min_pts = 3</b>, como en el recorrido. min_pts cuenta al propio punto, igual que en scikit-learn. n = 30.";
+        case "init": return py ? "Todas las etiquetas empiezan en <b>−2</b>, sin visitar. El ruido va a ser <b>−1</b>, como en scikit-learn." : "Todas las etiquetas empiezan en <b>NA</b>, sin visitar. El ruido va a ser <b>0</b>, como en los paquetes dbscan y fpc.";
+        case "grupo0": return py ? "El contador de grupos empieza en −1: el primer grupo va a ser el 0." : "El contador empieza en 0: el primer grupo va a ser el 1.";
+        case "def": return "Define <b>vecinos(i)</b>: la distancia de i a los 30 puntos y los índices de los que están a ε o menos. Incluye al propio i, que está a distancia 0.";
+        case "salta": return "i = " + e.saltados.map(function (k) { return ix(k); }).join(", ") + ": " + (e.saltados.length === 1 ? "ya tiene" : "ya tienen") + " etiqueta, " + (e.saltados.length === 1 ? "se salta" : "se saltan") + ". Cada punto se procesa una sola vez.";
+        case "vec": return "Punto <b>i = " + ix(e.i) + "</b>, en " + par(LUNAS[e.i]) + ", sin visitar. vecinos(i) = " + lst(e.vec, ctx) + ": <b>" + e.vec.length + "</b> " + (e.vec.length === 1 ? "punto" : "puntos") + " contándolo a él.";
+        case "ruido": return e.vec.length + " &lt; min_pts: no es núcleo. Queda como ruido (" + etq(-1, L) + ") <b>por ahora</b>: si después un núcleo lo alcanza, pasa a borde.";
+        case "grupo": return e.vec.length + " ≥ min_pts: es un núcleo que nadie alcanzó todavía. Nace el " + grupoTxt(e.g, L) + " e i recibe esa etiqueta.";
+        case "cola0": return "La cola arranca con sus vecinos, " + lst(e.vec, ctx) + ". Todo lo que entra a la cola es alcanzable desde un núcleo.";
+        case "borde": return descTxt(e.desc) + "Sale <b>j = " + ix(e.j) + "</b>. Estaba como ruido: pasa al " + grupoTxt(e.g, L) + " como <b>borde</b>. Su vecindario ya se calculó y no llega a min_pts, así que no trae a nadie.";
+        case "vecj": return descTxt(e.desc) + "Sale <b>j = " + ix(e.j) + "</b>, sin visitar: entra al " + grupoTxt(e.g, L) + ". vecinos(j) tiene <b>" + e.vec.length + "</b> puntos" +
+          (e.esNuc ? ": es núcleo." : ": no es núcleo, es <b>borde</b>. Se queda en el grupo pero no suma a nadie.");
+        case "extend": return "Como j es núcleo, sus vecinos " + lst(e.vec, ctx) + " entran a la cola: la mancha sigue. La cola tiene ahora " + e.cola.length + " puntos, con repetidos.";
+        case "while": return descTxt(e.desc) + "La cola quedó vacía: el " + grupoTxt(e.g, L) + " está completo, con <b>" + e.tam + "</b> puntos.";
+        case "print": return py ? "Imprime las etiquetas: 13 ceros, 13 unos y −1 para los 4 sueltos." : "Imprime las etiquetas: 13 unos, 13 doses y 0 para los 4 sueltos.";
+        case "lib": return py ? "La librería: <b>DBSCAN(eps=1.0, min_samples=3)</b>. min_samples cuenta al propio punto, igual que min_pts." :
+          "Aquí no están los paquetes dbscan ni fpc. Para comparar con algo de R: marca los núcleos con la matriz de distancias completa.";
+        case "printlib": return py ? "Imprime las etiquetas de la librería." : "Agrupa solo los núcleos con hclust y enlace simple.";
+        case "verif": return py ? "Compara una por una: <b>True</b>, las 30 coinciden." : "Corta el árbol a la altura eps y cruza con tus etiquetas: tabla diagonal, 11 y 11. Los núcleos quedan en los mismos grupos (el porqué, en el desplegable de abajo).";
+      }
+      return "";
+    }
+    var vrPlano = crearPlano($("vrPlano"), {});
+    function salidaTexto(e, lang) {
+      return e.salidas.map(function (s) { return SAL[lang][s]; }).filter(function (s) { return s !== null; }).join("\n");
+    }
+    function visual(e, anterior, ctx) {
+      var lang = ctx.lang();
+      if (!e) { vrPlano.set({ lab: null, tipo: null, circ: [], dentro: null, cola: null, act: null }); $("vrSalida").textContent = ""; $("vrCuenta").innerHTML = ""; return; }
+      $("vrSalida").textContent = salidaTexto(e, lang);
+      var tipo = e.lab.map(function (l, k) {
+        if (l === -1) return "ruido";
+        if (l >= 0) return e.cnt[k] !== null && e.cnt[k] < MINP ? "bor" : "nuc";
+        return null;
+      });
+      var foco = e.j !== null ? e.j : e.i;
+      var unicos = [];
+      e.cola.forEach(function (k) { if (unicos.indexOf(k) < 0) unicos.push(k); });
+      vrPlano.set({ lab: e.lab.map(function (l) { return l >= 0 ? l : l === -1 ? -1 : null; }), tipo: tipo,
+        circ: foco !== null && e.id !== "salta" ? [{ c: LUNAS[foco], r: EPS }] : [], dentro: e.vec, cola: e.fase === 2 ? unicos : null, act: foco });
+      var cu = "";
+      if (e.id === "vec" || e.id === "vecj") cu = "vecinos(" + ctx.ix(foco) + ") = " + lst(e.vec, ctx) + " → " + e.vec.length + (e.vec.length >= MINP ? " ≥ " : " &lt; ") + "3";
+      else if (e.fase === 2 || e.id === "cola0") cu = "cola = " + colaTxt(e.cola, ctx);
+      else if (e.id === "salta") cu = "se saltan: " + e.saltados.map(function (k) { return ctx.ix(k); }).join(", ");
+      else if (e.fin) cu = "bucle y librería: los mismos dos grupos y los mismos 4 de ruido";
+      $("vrCuenta").innerHTML = cu;
+    }
+    B.vidaReal($("vidareal"), {
+      codigo: CODIGO,
+      eventos: EV,
+      narrar: narrar,
+      vars: function (e, ctx) {
+        var v = [];
+        if (e && e.i !== null && !e.fin) v.push('<span>i = <b>' + ctx.ix(e.i) + '</b></span>');
+        if (e && e.j !== null) v.push('<span>j = <b>' + ctx.ix(e.j) + '</b></span>');
+        if (e && e.fase > 0) v.push('<span>grupo = <b>' + (ctx.lang() === "py" ? e.g : e.g + 1) + '</b></span>');
+        if (e && e.fase === 2) v.push('<span>largo de la cola = <b>' + e.cola.length + '</b></span>');
+        v.push('<span>vecinos() se llamó <b>' + (e ? e.llamadas : 0) + '</b> veces</span>');
+        return v;
+      },
+      visual: visual,
+      demora: function (e) {
+        if (!e) return 600;
+        return { vec: 1000, vecj: 850, extend: 650, salta: 1000, ruido: 1100, grupo: 1100, "while": 1300, borde: 1100 }[e.id] || 800;
+      }
+    });
+
+    /* prediccion y trampas reales */
+    B.numerico(cuerpo("vrPred"), {
+      pregunta: "En la cola hay puntos repetidos: un mismo punto puede entrar varias veces, una por cada núcleo que lo tiene en su círculo. Contando todo el programa, ¿cuántas veces se va a llamar a la función <code>vecinos()</code>?",
+      respuesta: LLAMADAS,
+      tolerancia: 0,
+      pistas: [
+        "vecinos() se llama en dos lugares: en el bucle de afuera, para un punto sin visitar, y dentro de la cola, para un punto sin visitar. ¿Qué pasa con los que ya tienen etiqueta?",
+        "Un punto se marca la primera vez que se visita, y nunca vuelve a estar sin visitar. Así que cada punto llama a vecinos() una sola vez."
+      ],
+      diagnostico: function (v) {
+        if (v === 22) return "Esos son los núcleos. Pero los bordes y el ruido también necesitan vecinos() para saber que no son núcleo.";
+        if (v === 26) return "Esos son los puntos de las lunas. Los 4 sueltos también se miran, en el bucle de afuera, para descubrir que son ruido.";
+        if (v > 30) return "Los repetidos de la cola salen y se descartan sin llamar a vecinos(): solo los que están sin visitar la llaman.";
+        return null;
+      },
+      explicacion: "<b>" + LLAMADAS + "</b>: una vez por punto. Los repetidos de la cola se descartan con la línea del <code>continue</code>, sin calcular nada. Ahora dale a reproducir y mira el contador.",
+      alResolver: function (ok) { C.reto("codigo1", ok); }
+    });
+    prop("codigo2", {
+      pregunta: "Con las dos lunas, corres:" +
+        '<pre class="mini-code">db = DBSCAN(eps=1.0, min_samples=3).fit(X)\nprint(len(set(db.labels_)))</pre>' +
+        "e imprime <b>3</b>. Pero en el plano hay dos grupos. ¿Por qué?",
+      opciones: [
+        "El ruido tiene la etiqueta −1, y set la cuenta como un grupo más",
+        "DBSCAN partió una de las lunas en dos",
+        "Los 4 sueltos forman un tercer grupo de verdad",
+        "labels_ empieza en 1 y hay un grupo vacío"
+      ],
+      correcta: 0,
+      pistas: [null,
+        "Con ε = 1 cada luna quedó entera: lo viste en el paso 7.",
+        "Los sueltos no tienen ningún núcleo cerca: son ruido, no un grupo.",
+        "En scikit-learn los grupos empiezan en 0. Mira la salida de la vida real: aparecen 0, 1 y −1."],
+      explicacion: "set(db.labels_) es {−1, 0, 1}: tres valores, pero −1 es ruido. Lo correcto es restar uno si aparece −1. En R, con los paquetes dbscan o fpc, el ruido es el grupo <b>0</b>, y <code>table()</code> lo muestra como una columna más: el caso de la UD6 lo imprime así con 31 puntos de ruido."
+    });
+    prop("codigo3", {
+      pregunta: "Aprendiste que hay que escalar. Escalas las lunas y dejas el mismo ε:" +
+        '<pre class="mini-code">from sklearn.preprocessing import StandardScaler\nZ = StandardScaler().fit_transform(X)\nprint(DBSCAN(eps=1.0, min_samples=3).fit(Z).labels_.tolist())</pre>' +
+        "¿Qué imprime?",
+      opciones: [
+        "Casi todo en un grupo: 27 puntos con etiqueta 0 y solo 3 de ruido",
+        "Lo mismo que sin escalar: dos lunas y 4 de ruido",
+        "Todo ruido: −1 en los 30",
+        "Da error: con datos escalados eps tiene que ser menor que 1"
+      ],
+      correcta: 0,
+      pistas: [null,
+        "Escalar cambia las distancias. Los desvíos de las dos variables son 2.81 y 1.92: al dividir por ellos, ¿los puntos quedan más cerca o más lejos?",
+        "Al dividir por desvíos mayores que 1, las distancias se achican. ¿Un ε = 1 queda grande o chico?",
+        "eps puede ser cualquier número positivo: scikit-learn no sabe si escalaste."],
+      explicacion: "Imprime <code>[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -1, -1, 0, -1]</code>: las lunas se unen y hasta el suelto (5, 9) entra. Al dividir por desvíos de 2.81 y 1.92, las distancias se achican, y un ε = 1 en las unidades nuevas equivale a 2 o 3 de antes. ε vive en las unidades de los datos: si escalas, vuelve a hacer el gráfico de k-distancias. Con los datos escalados, ε entre 0.5 y 0.7 recupera las dos lunas."
+    });
+  })();
+
+  /* ---------------- tarjetas ---------------- */
+  B.tarjetas($("tarjetas"), [
+    ["¿Qué dos números pide DBSCAN?", "ε, el radio del círculo, y minPts, cuántos puntos tiene que haber en el círculo (contando al propio punto) para que la zona sea densa."],
+    ["¿Cuándo un punto es núcleo?", "Cuando su vecindario tiene al menos minPts puntos: $\\lvert N_\\varepsilon(p)\\rvert \\ge \\text{minPts}$."],
+    ["¿Qué diferencia hay entre borde y ruido?", "Ninguno de los dos es núcleo. El borde tiene un núcleo a distancia ε o menos y entra a su grupo; el ruido no tiene ninguno y no entra a ningún grupo."],
+    ["¿Cómo crece un grupo?", "Desde un núcleo, se suma todo su círculo; cada núcleo que entra suma su propio círculo. Los bordes entran pero no hacen crecer el grupo."],
+    ["¿Qué puede cambiar si cambias el orden de las filas?", "Solo el grupo de un borde que tiene núcleos de dos grupos distintos. Núcleos y ruido no cambian."],
+    ["¿Cómo se elige ε?", "Con el gráfico de k-distancias: la distancia de cada punto a su vecino número minPts − 1, ordenadas. ε va en la rodilla."],
+    ["¿Dónde falla DBSCAN?", "Con grupos de densidades muy distintas (un solo ε no sirve para todos), en dimensión alta, y si no escalas las variables."],
+    ["¿Qué etiqueta tiene el ruido?", "−1 en scikit-learn; 0 en los paquetes dbscan y fpc de R. Cuidado al contar grupos."]
+  ]);
+
+  /* ---------------- conexiones ---------------- */
+  B.conexiones("dbscan");
+})();
+</script>
+</body>
+</html>

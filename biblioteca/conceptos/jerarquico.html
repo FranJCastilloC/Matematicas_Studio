@@ -1,0 +1,1760 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Agrupamiento jerárquico y dendrograma</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+/* colores extra para grupos (los cuatro primeros son los semanticos del nucleo) */
+:root { --g5: #a8711a; --g6: #8a4f8f; --g7: #5b6b2e; --g8: #3d7d9c; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --g5: #e0b25a; --g6: #d49ad8; --g7: #b5c776; --g8: #7fc0de; } }
+:root[data-theme="dark"] { --g5: #e0b25a; --g6: #d49ad8; --g7: #b5c776; --g8: #7fc0de; }
+
+/* ---------- plano ---------- */
+.plano-svg, .dendro-svg { width: 100%; height: auto; display: block; user-select: none; -webkit-user-select: none; }
+.plano-svg.arrastrable { touch-action: none; }
+.plano-svg .grid { stroke: var(--line-soft); stroke-width: 1; }
+.plano-svg .grid.eje { stroke: var(--ink-3); }
+.plano-svg .tick, .dendro-svg .tick { font: 10px var(--f-mono); fill: var(--ink-3); }
+.plano-svg .eje-tit { font: 11px var(--f-body); fill: var(--ink-2); }
+.plano-svg .pt .hit { fill: transparent; }
+.plano-svg .pt .dot { stroke: var(--surface); stroke-width: 2; }
+.plano-svg .pt.tocable { cursor: pointer; }
+.plano-svg .pt.drag { cursor: grab; }
+.plano-svg .pt .anillo { fill: none; stroke: var(--accent); stroke-width: 2.5; }
+.plano-svg .plab { font: 500 11px var(--f-mono); fill: var(--ink-2); pointer-events: none; paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+.plano-svg .seg { stroke: var(--ink-2); stroke-width: 1.4; }
+.plano-svg .seg.fuerte { stroke: var(--accent); stroke-width: 2.6; }
+.plano-svg .seg.tenue { stroke: var(--ink-3); stroke-width: 1; stroke-dasharray: 3 3; }
+.plano-svg .seg.mejor { stroke: var(--ok); stroke-width: 2.4; stroke-dasharray: 6 4; }
+.plano-svg .slab { font: 500 11px var(--f-mono); fill: var(--accent); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+.plano-svg .centro { fill: var(--surface); stroke: var(--ink); stroke-width: 2; }
+
+/* ---------- dendrograma ---------- */
+.dendro-svg .grid { stroke: var(--line-soft); stroke-width: 1; }
+.dendro-svg .link { fill: none; stroke: var(--ink-2); stroke-width: 1.8; }
+.dendro-svg .link.ultimo { stroke: var(--accent); stroke-width: 2.8; }
+.dendro-svg .link.foco { stroke: var(--accent); stroke-width: 3.2; }
+.dendro-svg .hlab { font: 500 10px var(--f-mono); fill: var(--ink-2); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+.dendro-svg .hoja { font: 500 11px var(--f-mono); fill: var(--ink-2); }
+.dendro-svg .hit-m { fill: transparent; cursor: pointer; }
+.dendro-svg .corte { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 7 4; }
+.dendro-svg .asa { fill: var(--accent); stroke: var(--surface); stroke-width: 2; }
+.dendro-svg .clab { font: 600 11px var(--f-mono); fill: var(--accent); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+.dendro-svg.cortable { touch-action: none; cursor: ns-resize; }
+
+@media (min-width: 981px) { .escenario { max-height: calc(100vh - 80px); overflow-y: auto; } }
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.esc-head .hint { font-size: 12.5px; color: var(--ink-2); }
+.esc-ctrl { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 8px; }
+.esc-ctrl .seg button { padding: 6px 9px; }
+.esc-info { font-family: var(--f-mono); font-size: 12.5px; color: var(--ink-2); margin: 6px 0 8px; min-height: 1.4em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.esc-info b { color: var(--ink); font-weight: 500; }
+.esc-info .oculto { color: var(--accent); font-weight: 600; }
+.mini-sub { font-family: var(--f-mono); font-size: 11px; color: var(--ink-3); margin: 10px 0 2px; letter-spacing: .04em; }
+
+/* ---------- tablas ---------- */
+.tabla { width: 100%; border-collapse: collapse; font-family: var(--f-mono); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.tabla th { font-weight: 500; color: var(--ink-3); font-size: 11px; text-align: right; padding: 3px 5px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.tabla td { text-align: right; padding: 2px 5px; border-bottom: 1px solid var(--line-soft); color: var(--ink-2); white-space: nowrap; }
+.tabla td.pl, .tabla th:first-child { text-align: left; color: var(--ink-3); }
+.tabla tr.sel td { background: var(--accent-soft); color: var(--ink); }
+.tabla tr.min td { color: var(--ok); font-weight: 600; }
+.tabla td.oculto { color: var(--accent); font-weight: 600; }
+.tabla tr.tocable { cursor: pointer; }
+.matriz td button { font: inherit; padding: 2px 4px; border: 0; border-radius: 4px; background: transparent; color: var(--ink-2); min-width: 34px; text-align: right; }
+.matriz td button:hover { background: var(--surface-2); }
+.matriz td button.sel { background: var(--accent-soft); color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.matriz td button.oculto { color: var(--accent); font-weight: 600; }
+.matriz td.vacia { color: var(--line); }
+
+/* ---------- retos ---------- */
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.ojo-opts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
+.ojo-opts .opt { text-align: center; }
+.objetivos { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.objetivos li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.objetivos .m { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.objetivos li.hecho { color: var(--ink); }
+.objetivos li.hecho .m { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 3px var(--surface); }
+.datos-mano { border-collapse: collapse; font-family: var(--f-mono); font-size: 14px; margin: 4px 0 12px; }
+.datos-mano th, .datos-mano td { padding: 4px 12px; border: 1px solid var(--line); text-align: center; }
+.datos-mano th { color: var(--ink-3); font-weight: 500; font-size: 12px; }
+.grande { font-family: var(--f-mono); font-size: 13.5px; color: var(--ink-2); margin: 6px 0 4px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.grande b { color: var(--ink); font-weight: 500; }
+
+/* ---------- vida real ---------- */
+.salida { margin: 0; padding: 8px 12px; background: var(--surface-2); border-radius: 8px; font-family: var(--f-mono); font-size: 12.5px; line-height: 1.55; min-height: 3.2em; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; color: var(--ink); }
+.salida .nueva { color: var(--accent); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ Agrupamiento jerárquico</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Agrupamiento · UD3 de SM142001 y Raschka cap. 10</p>
+    <h1>Agrupamiento jerárquico: unir de a dos hasta tener un árbol</h1>
+    <p class="lede">
+      En vez de decidir de antemano cuántos grupos quieres, juntas a los dos clientes más parecidos, después a los dos grupos más parecidos, y así hasta que queda uno solo.
+      Cada unión queda dibujada a la altura en que ocurrió: ese dibujo es el <b>dendrograma</b>, y <b>cortarlo con una línea horizontal</b> te da los grupos que quieras.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> Tienes diez clientes en un plano y nadie te dice cuántos grupos hay. ¿Cómo armarías los grupos sin elegir ese número antes? ¿Y qué harías cuando ya tienes un grupo de tres y quieres saber qué tan lejos está de otro cliente?</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: empezaría juntando..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>Construir el árbol desde cero</h2>
+      <p>Siete pasos. Cada uno termina con un chequeo: hasta que no lo resuelves, el siguiente queda cerrado. Equivocarte aquí no resta nada, es parte del método.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="Predicción">
+          <span class="etapa">Paso 1</span>
+          <h3>Diez clientes, ninguna regla todavía</h3>
+          <p>Cada punto es un cliente: cuántas veces visita la tienda al mes (horizontal) y cuánto gasta (vertical). Son diez de los treinta clientes de la página de k-means, con las letras A a J.</p>
+          <p>El agrupamiento jerárquico empieza de la forma más simple posible: <b>cada cliente es un grupo de uno</b>. Después junta a los dos que más se parecen, y repite. No hace falta decir cuántos grupos quieres: eso se decide al final.</p>
+          <p>Es la familia "jerárquica" de la taxonomía de agrupamiento: grupos anidados que se dibujan como un árbol <cite class="cita" data-fuente="km5" data-pag="5" data-ancla="clustering-taxonomy" data-seccion="Clustering Taxonomy" data-que="La taxonomía del curso: jerárquico (grupos anidados, dendrograma), particional como k-means, y basado en modelos o densidad. La UD5 solo lo nombra aquí; no desarrolla el algoritmo." data-cuando="Ahora, para ubicar el tema"></cite>
+          y su gran ventaja es justamente esa: no fijar k antes <cite class="cita" data-fuente="raschka10" data-pag="15" data-pimp="319" data-seccion="Organizing clusters as a hierarchical tree" data-que="Dos ventajas del jerárquico: el dendrograma se lee como una taxonomía y no hay que decir de antemano cuántos grupos quieres." data-cuando="Antes del paso 3"></cite>.</p>
+          <div class="check" id="chk1">
+            <p class="check-tit">Antes de seguir</p>
+            <p class="q">Sin calcular nada: toca en el plano los <b>dos clientes</b> que crees que se van a unir primero.</p>
+            <div class="fb" aria-live="polite"></div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Distancias">
+          <span class="etapa">Paso 2</span>
+          <h3>Antes de unir, medir todo contra todo</h3>
+          <p>Para saber quién se parece a quién, el algoritmo mide la distancia de cada cliente a cada otro. Con 10 clientes son 10 · 9 / 2 = <b>45 distancias</b>, y se guardan en una tabla: la <b>matriz de distancias</b>.</p>
+          <p>Toca una celda de la tabla del escenario y mira el par en el plano. La distancia es la de siempre, la de la regla: se restan las coordenadas, se elevan al cuadrado, se suman y se saca la raíz.</p>
+          <div class="fbloque"><div class="vivo" id="vivoDist"></div></div>
+          <p>La tabla solo tiene la mitad de abajo. La otra mitad sería un espejo, porque la distancia de C a D es la misma que de D a C, y en la diagonal irían ceros. La celda más chica de toda la tabla es el primer par que se va a unir.</p>
+          <p>Raschka arma exactamente esta tabla para sus 5 ejemplos, primero como lista de 10 números y después como cuadrado simétrico <cite class="cita" data-fuente="raschka10" data-pag="18" data-pimp="322" data-seccion="Performing hierarchical clustering on a distance matrix" data-que="pdist calcula las distancias de todos los pares en forma condensada y squareform las ordena en la matriz cuadrada simétrica (Figure 10.9)." data-cuando="Después de resolver el chequeo"></cite>.
+          Si quieres repasar por qué la euclidiana no es la única forma de medir, está la página de <a href="normas-distancias.html">normas y distancias</a>.</p>
+          <div class="check" id="chk2"><p class="check-tit">Antes de seguir</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Unir de a dos">
+          <span class="etapa">Paso 3</span>
+          <h3>Unir a los dos más cercanos, y repetir</h3>
+          <p>Ya con la matriz, el algoritmo aglomerativo hace siempre lo mismo. Con <span data-tex="d(G, H)"></span> como la distancia entre dos grupos:</p>
+          <ol>
+            <li>Cada cliente empieza como un grupo de uno.</li>
+            <li>Busca el par de grupos con la menor <span data-tex="d(G, H)"></span> y los une.</li>
+            <li>Actualiza las distancias del grupo nuevo a todos los demás.</li>
+            <li>Vuelve al punto 2 hasta que quede un solo grupo.</li>
+          </ol>
+          <p>Cada unión aparece abajo, en el dendrograma, como una <b>U</b> invertida a la altura de la distancia a la que ocurrió. Dale al botón y mira crecer el árbol.</p>
+          <p>Es la versión "de abajo arriba". Existe también la divisiva, que empieza con todos juntos y va partiendo <cite class="cita" data-fuente="ud3" data-pag="33" data-seccion="Clustering jerárquico" data-que="Definición del jerárquico aglomerativo y divisivo, y las fórmulas del enlace simple (mínimo) y completo (máximo)." data-cuando="Al terminar este paso"></cite>
+          <cite class="cita" data-fuente="raschka10" data-pag="16" data-pimp="320" data-seccion="Organizing clusters as a hierarchical tree" data-que="Aglomerativo frente a divisivo: el divisivo parte de un solo grupo y lo va dividiendo; el aglomerativo une pares hasta que queda uno." data-cuando="Al terminar este paso"></cite>.</p>
+          <details class="profundizar">
+            <summary>Una errata del libro: "repetir los pasos 2 a 4"</summary>
+            <div>
+              <p>Raschka escribe el algoritmo en cinco pasos y cierra con "repeat steps 2-4 until one single cluster remains" <cite class="cita" data-fuente="raschka10" data-pag="17" data-pimp="321" data-seccion="Grouping clusters in a bottom-up fashion" data-que="El algoritmo de enlace completo en 5 pasos y los datos del ejemplo (5 filas con semilla 123). Ojo con la frase final: dice repetir los pasos 2 a 4." data-cuando="Después de unir los cinco pares"></cite>.
+              Su paso 2 es "cada punto es un grupo": si lo repitieras, deshacerías todo. Lo que se repite son los pasos 3 y 4, unir y actualizar. Es un descuido del texto, no un detalle tuyo.</p>
+            </div>
+          </details>
+          <div class="check" id="chk3"><p class="check-tit">Predice antes de tocar el botón</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Enlaces">
+          <span class="etapa">Paso 4</span>
+          <h3>¿Qué tan lejos está un grupo de otro?</h3>
+          <p>Las cinco primeras uniones salen iguales con cualquier regla razonable. Pero ahora tienes cinco grupos (ABC, D, EF, GJ, HI) y para comparar un grupo con otro hay que decidir <b>qué distancia usar</b>. Esa decisión se llama <b>enlace</b>, y hay cuatro clásicos:</p>
+          <div class="fbloque">
+            <div data-tex="\text{simple: } \min_{p\in G,\,q\in H} d(p,q) \qquad \text{completo: } \max_{p\in G,\,q\in H} d(p,q)" data-display></div>
+            <div data-tex="\text{promedio: } \frac{1}{|G|\,|H|}\sum_{p\in G}\sum_{q\in H} d(p,q)" data-display></div>
+            <div class="vivo" id="vivoEnlace"></div>
+          </div>
+          <p>Elige un enlace arriba del escenario y toca un cliente de cada grupo para ver qué segmento manda. La tabla del escenario tiene los diez pares de grupos: el más chico, en verde, es <b>la unión número 6</b>. Cambia el enlace y mira: <b>la sexta unión no es la misma</b>. Aquí es donde los enlaces empiezan a dar árboles distintos.</p>
+          <p>El material de la unidad da el simple, el completo, el promedio y un cuarto, el de <b>centroides</b> (la distancia entre los centros de los dos grupos) <cite class="cita" data-fuente="ud3" data-pag="34" data-seccion="Clustering jerárquico" data-que="El enlace promedio con su doble suma y el enlace de centroides, ‖μᵢ − μⱼ‖. No trae Ward ni ningún ejemplo con números." data-cuando="Al terminar este paso"></cite>.
+          No menciona Ward, que es el que más se usa en la práctica y el que ves abajo.</p>
+          <div class="check" id="chk4"><p class="check-tit">Antes de seguir</p><div class="cuerpo"></div></div>
+
+          <div class="destacado" id="destacado">
+            <p class="dest-tit">Una confusión muy común</p>
+            <h4>¿Por qué con Ward el árbol sale tan alto?</h4>
+            <p>Ward no mide una distancia entre clientes. Pregunta otra cosa: <b>si uno estos dos grupos, ¿cuánto crece el desorden total?</b> El desorden es la suma de cuadrados dentro de los grupos, la misma SSE que minimiza k-means. El aumento al unir G y H es</p>
+            <div class="fbloque">
+              <div data-tex="\Delta\text{SSE}(G,H) = \frac{|G|\,|H|}{|G|+|H|}\,\lVert c_G - c_H\rVert^2 \qquad \text{altura} = \sqrt{2\,\Delta\text{SSE}}" data-display></div>
+            </div>
+            <p>donde <span data-tex="c_G"></span> y <span data-tex="c_H"></span> son los centros de los dos grupos. SciPy y la opción <code>ward.D2</code> de R dibujan la raíz de <span data-tex="2\,\Delta\text{SSE}"></span>. El factor <span data-tex="|G|\,|H|/(|G|+|H|)"></span> crece con el tamaño: unir dos grupos grandes cuesta mucho, aunque sus centros estén igual de lejos que dos puntos sueltos. Por eso las últimas uniones de Ward quedan tan arriba (12.72 frente a 8.75 del completo) y por eso Ward tiende a hacer grupos de tamaños parecidos.
+            Raschka lo define en un recuadro, solo con palabras <cite class="cita" data-fuente="raschka10" data-pag="16" data-pimp="320" data-seccion="Alternative types of linkages" data-que="El recuadro con el enlace promedio y Ward: se unen los dos grupos que menos aumentan la suma de cuadrados dentro de los grupos. Sin fórmula ni código." data-cuando="Después de resolver la predicción"></cite>.</p>
+            <div class="check" id="chk4b"><p class="check-tit">Predice antes de elegir Ward</p><div class="cuerpo"></div></div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="El dendrograma">
+          <span class="etapa">Paso 5</span>
+          <h3>Leer el árbol: la altura es lo único que cuenta</h3>
+          <p>Ahora el árbol está completo: 9 uniones para 10 clientes. Toca cualquier <b>U</b> del dendrograma y el escenario te muestra qué dos grupos unió y a qué altura. Esa altura es el valor del enlace en el momento de la unión.</p>
+          <p>Dos reglas para leerlo:</p>
+          <ul>
+            <li><b>Lo que importa es la altura</b> a la que dos hojas se encuentran por primera vez. Cuanto más abajo, más parecidas.</li>
+            <li><b>El orden horizontal de las hojas no significa nada</b>. Cada U se puede girar sobre su eje sin cambiar el árbol: con 9 uniones hay <span data-tex="2^9 = 512"></span> dibujos distintos del mismo árbol.</li>
+          </ul>
+          <p>Debajo del dendrograma está la misma información como tabla: la <b>matriz de enlace</b> de SciPy, una fila por unión con los dos grupos que se unen, la altura y cuántos clientes tiene el grupo nuevo. Los grupos nuevos se numeran desde 10: el 10 es la primera unión, el 11 la segunda, y así. Raschka la muestra con sus 5 ejemplos <cite class="cita" data-fuente="raschka10" data-pag="19" data-pimp="323" data-seccion="Performing hierarchical clustering on a distance matrix" data-que="Las tres formas de llamar a linkage (la incorrecta con la matriz cuadrada) y la matriz de enlace. Errata: dice que las dos primeras columnas son los miembros más distintos de cada grupo; son los índices de los dos grupos que se unen." data-cuando="Después de tocar las U del árbol"></cite>,
+          pero se equivoca al describirla: dice que las dos primeras columnas son "the most dissimilar members in each cluster". No: son los <b>números de los dos grupos</b> que se unen. La tercera sí es la distancia de los miembros más lejanos, porque su ejemplo usa enlace completo.</p>
+          <p>El dibujo del árbol, con <code>dendrogram</code> de SciPy, está en la página siguiente <cite class="cita" data-fuente="raschka10" data-pag="21" data-pimp="325" data-seccion="Performing hierarchical clustering on a distance matrix" data-que="El dendrograma de los 5 ejemplos (Figure 10.11): primero se unen ID_0 e ID_4, después ID_1 e ID_2. Sirve para practicar la lectura por alturas." data-cuando="Al terminar este paso"></cite>.</p>
+          <div class="check" id="chk5"><p class="check-tit">Antes de seguir</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Cortar">
+          <span class="etapa">Paso 6</span>
+          <h3>Cortar el árbol con una línea</h3>
+          <p>El árbol tiene todos los agrupamientos posibles a la vez. Para quedarte con uno, trazas una <b>línea horizontal</b> a cierta altura: cada rama que la línea cruza es un grupo. Todo lo que se unió por debajo de la línea queda junto; lo que se unió por encima queda separado.</p>
+          <p>Un criterio práctico para elegir dónde cortar: buscar el <b>salto más grande</b> entre dos alturas seguidas. Ahí el algoritmo tuvo que juntar cosas que ya no se parecían.</p>
+          <div class="grande" id="vivoCorte"></div>
+          <p>En código se corta de dos formas: diciendo cuántos grupos quieres (<code>fcluster(Z, t=3, criterion="maxclust")</code>, <code>cutree(hc, k = 3)</code>, o <code>AgglomerativeClustering(n_clusters=3)</code> en scikit-learn) o diciendo la altura (<code>criterion="distance"</code>, <code>cutree(hc, h = 5)</code>). Con estos datos y enlace completo, los tres dan los mismos grupos con distintos números: SciPy imprime <code>[2 2 2 3 3 3 1 1 1 1]</code>, R <code>1 1 1 2 2 2 3 3 3 3</code> y scikit-learn <code>[2 2 2 1 1 1 0 0 0 0]</code>. El número de un grupo es solo una etiqueta.</p>
+          <div class="btn-row" style="margin:4px 0 12px"><button type="button" id="btn30" disabled>Ver los 30 clientes de k-means</button><span class="zhint" id="hint30">Se activa al resolver el chequeo.</span></div>
+          <p>Ojo con algo: el árbol siempre se puede cortar. Si le das datos sin ninguna estructura, igual te devuelve grupos. El material de validación lo muestra con <code>hclust</code> sobre datos al azar <cite class="cita" data-fuente="val7" data-pag="9" data-ancla="3/5" data-seccion="Why assessing clustering tendency" data-que="k-means y hclust sobre datos uniformes: los dos imponen 3 grupos donde no hay ninguno. Por eso hay que medir la tendencia de agrupamiento antes." data-cuando="Después de cortar los 30 clientes"></cite>.</p>
+          <div class="cita" id="citaHipo" hidden></div>
+          <div class="check" id="chk6"><p class="check-tit">Predice antes de mover la línea</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Encadenamiento">
+          <span class="etapa">Paso 7</span>
+          <h3>La trampa del enlace simple: el encadenamiento</h3>
+          <p>Cambia de datos. Estos 10 clientes forman una <b>cadena</b>: un extremo a la izquierda, otro a la derecha, clientes intermedios que los conectan de a poco, y uno suelto arriba. Los datos son inventados para mostrar la trampa.</p>
+          <p>El enlace simple mira solo el par <b>más cercano</b> entre dos grupos. Basta con que haya un "puente" de clientes, cada uno cerca del siguiente, para que el enlace simple vaya uniendo todo como cuentas de un collar. Se llama <b>encadenamiento</b>: los grupos crecen alargados y el corte termina separando un punto raro en vez de las dos zonas.</p>
+          <p>El enlace completo y Ward hacen lo contrario: castigan los grupos largos, porque el par más lejano (o el desorden) crece rápido. Prefieren grupos compactos y redondos. Ninguno es "el correcto": depende de la forma de tus datos. Por eso k-means, el completo y Ward fallan con formas alargadas, como las dos medias lunas de Raschka <cite class="cita" data-fuente="raschka10" data-pag="28" data-pimp="332" data-seccion="Locating regions of high density via DBSCAN" data-que="Figure 10.15: k-means y el aglomerativo con enlace completo parten mal las dos medias lunas; justo después DBSCAN las separa bien." data-cuando="Al terminar este paso"></cite>,
+          y por eso existe el agrupamiento por densidad <cite class="cita" data-fuente="db6" data-pag="3" data-ancla="concepts-of-density-based-clustering" data-seccion="Concepts of density-based clustering" data-que="k-means, PAM y el jerárquico buscan grupos esféricos o convexos y sufren con el ruido; los datos reales tienen óvalos, líneas y formas de S." data-cuando="Cuando pases a DBSCAN"></cite>.</p>
+          <details class="profundizar">
+            <summary>El enlace simple es un árbol de expansión mínima</summary>
+            <div>
+              <p>Si unes los clientes con segmentos de forma que todos queden conectados con la menor longitud total, obtienes el <b>árbol de expansión mínima</b>. El enlace simple hace exactamente eso: cada unión agrega el segmento más corto que conecta dos grupos distintos (es el algoritmo de Kruskal). Cortar el dendrograma de enlace simple en k grupos es quitar los k − 1 segmentos más largos de ese árbol. Por eso un solo puente corto basta para pegar dos zonas.</p>
+              <p>Y una nota sobre el enlace de centroides que trae la unidad: puede dar <b>inversiones</b>, uniones que quedan más abajo que la anterior. Con los 10 clientes del recorrido, SciPy da 5.843 en la octava unión y 5.804 en la novena: el árbol "baja". Con simple, completo, promedio y Ward eso nunca pasa.</p>
+            </div>
+          </details>
+          <div class="check" id="chk7"><p class="check-tit">Predice antes de ver el árbol</p><div class="cuerpo"></div></div>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+        </div>
+        <div class="esc-ctrl" id="ctrlEnlace">
+          <span class="seg-lab">Enlace</span>
+          <div class="seg" id="enlaceSel" role="group" aria-label="Enlace"></div>
+        </div>
+        <svg id="plano" role="img" aria-label="Plano con los clientes y sus grupos"></svg>
+        <div class="esc-info" id="escInfo" aria-live="polite"></div>
+        <div class="btn-row" id="ctrlUnir" style="margin-bottom:8px">
+          <button type="button" class="primary" id="btnUnir">Unir el par más cercano</button>
+          <button type="button" id="btnDeshacer">Deshacer</button>
+        </div>
+        <div id="tablaEsc"></div>
+        <div id="dendroCaja">
+          <p class="mini-sub" id="dendroTit">Dendrograma</p>
+          <svg id="dendro" role="img" aria-label="Dendrograma"></svg>
+        </div>
+        <div id="tablaZ"></div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>El algoritmo de los pasos 2 a 5 con enlace completo, escrito con bucles para que se vea todo: primero la matriz de distancias, después un grupo por cliente, y al final la búsqueda del par más cercano en cada vuelta. Cierra comparando con <code>linkage</code> de SciPy y con <code>hclust</code> de R. Son muchas líneas: usa 4x u 8x o "Ir al final" cuando quieras.</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir</p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="true">Python</button>
+            <button type="button" data-lang="r" aria-pressed="false">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">1 · distancias</span><span data-f="2">2 · un grupo por cliente</span><span data-f="3">3 · unir de a dos</span><span data-f="4">4 · comparar</span>
+        </div>
+        <h3 class="mini-tit vr-tit">Los clientes y sus grupos</h3>
+        <svg id="vrPlano" role="img" aria-label="Plano del programa"></svg>
+        <div class="vr-cuenta" id="vrCuenta"></div>
+        <h3 class="mini-tit vr-tit">Lo que imprime</h3>
+        <pre class="salida" id="vrSalida"></pre>
+      </div>
+    </div>
+
+    <p class="vr-nota">En la práctica es una línea: <code>linkage(X, method="complete")</code> en SciPy, <code>hclust(dist(X), method = "complete")</code> en R, o <code>AgglomerativeClustering(n_clusters=3, linkage="complete")</code> en scikit-learn si ya sabes cuántos grupos quieres. Ojo con el libro: Raschka escribe <code>affinity='euclidean'</code> <cite class="cita" data-fuente="raschka10" data-pag="23" data-pimp="327" data-seccion="Applying agglomerative clustering via scikit-learn" data-que="AgglomerativeClustering con n_clusters=3 y luego 2 sobre los 5 ejemplos. El argumento affinity ya no existe: hoy es metric." data-cuando="Después de reproducir el programa hasta el final"></cite>, pero ese argumento se eliminó en scikit-learn 1.4 y hoy da <code>TypeError: AgglomerativeClustering.__init__() got an unexpected keyword argument 'affinity'</code>. Se llama <code>metric='euclidean'</code>.</p>
+
+    <details class="profundizar">
+      <summary>Cómo lo hacen las librerías sin recalcular todo: Lance y Williams</summary>
+      <div>
+        <p>El programa de arriba recalcula el enlace de cada par de grupos en cada vuelta mirando todos sus miembros. Las librerías guardan una matriz de distancias <b>entre grupos</b> y, al unir G y H, solo actualizan la fila del grupo nuevo con la fórmula de Lance y Williams:</p>
+        <div class="fbloque"><div data-tex="d(G\cup H,\,K) = \alpha_G\, d(G,K) + \alpha_H\, d(H,K) + \beta\, d(G,H) + \gamma\,\lvert d(G,K) - d(H,K)\rvert" data-display></div></div>
+        <p>Con <span data-tex="\alpha_G=\alpha_H=\tfrac12,\ \beta=0,\ \gamma=-\tfrac12"></span> sale el mínimo (enlace simple); con <span data-tex="\gamma=+\tfrac12"></span>, el máximo (completo). Promedio y Ward también caben en esa forma con otros coeficientes. Así cada vuelta cuesta una fila, no todos los pares de miembros.</p>
+        <p>Y si llamas a <code>linkage</code> con la matriz cuadrada de distancias, como en la forma "incorrecta" que muestra Raschka, SciPy cree que cada fila es un cliente con 10 coordenadas: hoy avisa con un <code>ClusterWarning</code> y da alturas infladas. Hay que pasarle los datos o la forma condensada de <code>pdist</code>.</p>
+      </div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Dos Ward que no coinciden</h3><span class="estado" data-reto="codigo2"></span></div>
+        <div id="codigo2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Los números de la matriz de enlace</h3><span class="estado" data-reto="codigo3"></span></div>
+        <div id="codigo3"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: la biblioteca te avisa en el índice cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>¿Cuántos grupos corta la línea?</h3><span class="estado" data-reto="ojo"></span></div>
+        <p class="desc">Cinco árboles al azar con una línea de corte. Cuenta sin pensar demasiado. Después te muestro los grupos. Apruebas con 4 de 5.</p>
+        <div id="ojo"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Construir</span><h3>Diseña el árbol</h3><span class="estado" data-reto="constructor"></span></div>
+        <p class="desc">Arrastra los ocho puntos. El dendrograma de enlace completo se actualiza solo. Cumple los tres objetivos; se marcan solos.</p>
+        <svg id="planoConstr" role="img" aria-label="Plano para construir"></svg>
+        <svg id="dendroConstr" role="img" aria-label="Dendrograma del plano"></svg>
+        <div class="grande" id="constrVivo"></div>
+        <ul class="objetivos" id="objetivos"></ul>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>Dos uniones con lápiz</h3><span class="estado" data-reto="mano"></span></div>
+        <p class="desc">Cuatro clientes y su matriz de distancias. Haz las dos primeras uniones en papel antes de pedir pistas.</p>
+        <div id="manoDatos"></div>
+        <div id="mano"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Alguien se equivocó</h3><span class="estado" data-reto="error"></span></div>
+        <p class="desc">Una de las líneas tiene un error. Tócala.</p>
+        <div id="error"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Contar uniones</h3><span class="estado" data-reto="prop1"></span></div>
+        <div id="prop1"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>El orden de los enlaces</h3><span class="estado" data-reto="prop2"></span></div>
+        <div id="prop2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Grupos alargados</h3><span class="estado" data-reto="prop3"></span></div>
+        <div id="prop3"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>¿Y el número de grupos?</h3><span class="estado" data-reto="prop4"></span></div>
+        <div id="prop4"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Cambiar las unidades</h3><span class="estado" data-reto="prop5"></span></div>
+        <div id="prop5"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Recordar a la fuerza es lo que fija. Arma la fórmula de memoria y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Fórmula de memoria</span><h3>El enlace promedio, pieza por pieza</h3><span class="estado" data-reto="formula"></span></div>
+        <p class="desc">Hay piezas de más que no pertenecen. No mires arriba.</p>
+        <div id="formula"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el libro</h2>
+      <p class="lecturas-intro">Ya armaste el árbol con las manos. Ahora ve a la versión técnica y comprueba que la reconoces. Cada entrada dice qué vas a encontrar y en qué momento conviene leerla. La UD3 de SM142001 trae las definiciones y los enlaces en dos páginas, sin ejemplos; la UD5 de SM142003 (k-means) solo nombra el jerárquico en su taxonomía. El desarrollo completo con código está en Raschka.</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> Los 10 clientes del recorrido son 10 de los 30 clientes inventados de la página de k-means (sus filas 9, 6, 7, 10, 17, 19, 22, 23, 25 y 29),
+    elegidos para que no haya empates en ninguna unión con ninguno de los cuatro enlaces. La cadena del paso 7 y los datos de los retos también son inventados.
+    Los números de la vida real se obtuvieron corriendo el código con Python 3 (NumPy, SciPy 1.15, scikit-learn 1.6.1) y R 4.6.1. Tu progreso se guarda solo en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+/*
+  Datos del recorrido: 10 de los 30 clientes de kmeans.html (filas 9, 6, 7, 10, 17, 19, 22, 23, 25, 29), letras A a J.
+  Alturas verificadas con SciPy 1.15 y R 4.6.1 (hclust):
+    simple   0.5 0.707 1.118 1.414 2 2.236 2.55 3.536 4.031
+    completo 0.5 0.707 1.118 1.5 2 2.693 2.915 7.517 8.746
+    promedio 0.5 0.707 1.118 1.457 2 2.484 2.621 5.885 6.6
+    Ward     0.5 0.707 1.118 1.555 2 3.014 3.202 10.12 12.715 (ward.D de R sin elevar: ... 14.397 19.52)
+  Las cinco primeras uniones dan los mismos grupos con los cuatro enlaces: ABC, D, EF, GJ, HI.
+*/
+(function () {
+  "use strict";
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var RETOS = ["ojo", "constructor", "mano", "error", "prop1", "prop2", "prop3", "prop4", "prop5", "formula", "codigo1", "codigo2", "codigo3"];
+  var C = B.concepto({ id: "jerarquico", retos: RETOS, pasos: 7 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  var f = B.fmt;
+
+  /* ================= datos ================= */
+  var PTS = [[1.5, 2.5], [2.5, 1.5], [3, 2.5], [6.5, 3], [9, 2], [9, 2.5], [4, 7], [4.5, 9.5], [5, 9], [6, 7]];
+  var LET = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
+  var X30 = [[0.5, 2.5], [1, 1], [1.5, 3], [2, 0.5], [2, 2], [2.5, 3.5], [2.5, 1.5], [3, 2.5], [3.5, 1], [1.5, 2.5],
+    [6.5, 3], [7, 4.5], [7.5, 2], [7.5, 3.5], [8, 1.5], [8, 4], [8.5, 3], [9, 2], [9, 4], [9, 2.5],
+    [3.5, 7.5], [4, 8.5], [4, 7], [4.5, 9.5], [5, 6.5], [5, 9], [5.5, 9], [6, 7.5], [6.5, 8.5], [6, 7]];
+  var CADENA = [[1, 3], [1.5, 5], [2.5, 3.5], [3.8, 4.3], [5, 4], [6.2, 4.4], [7.5, 3.6], [8.5, 5], [9, 3], [5, 8.5]];
+  var NUM10 = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"];
+  var ENL = ["simple", "completo", "promedio", "ward"];
+  var NOMENL = { simple: "simple", completo: "completo", promedio: "promedio", ward: "Ward" };
+  var PALETA = ["var(--j)", "var(--neg)", "var(--k)", "var(--g5)", "var(--pos)", "var(--g6)", "var(--g7)", "var(--g8)"];
+  function col(i) { return PALETA[i % PALETA.length]; }
+
+  /* ================= logica del agrupamiento (sin DOM) ================= */
+  function dist(p, q) { var dx = p[0] - q[0], dy = p[1] - q[1]; return Math.sqrt(dx * dx + dy * dy); }
+  function centro(pts, g) {
+    var x = 0, y = 0;
+    g.forEach(function (i) { x += pts[i][0]; y += pts[i][1]; });
+    return [x / g.length, y / g.length];
+  }
+  // enlace entre dos grupos de indices; devuelve el valor y el par que lo define (para simple y completo)
+  function enlace(pts, g, h, m) {
+    if (m === "ward") {
+      var cg = centro(pts, g), ch = centro(pts, h);
+      return { v: Math.sqrt(2 * g.length * h.length / (g.length + h.length)) * dist(cg, ch), cg: cg, ch: ch };
+    }
+    var mn = Infinity, mx = -Infinity, s = 0, pmn = null, pmx = null, todos = [];
+    g.forEach(function (i) {
+      h.forEach(function (j) {
+        var d = dist(pts[i], pts[j]);
+        todos.push([i, j, d]);
+        s += d;
+        if (d < mn) { mn = d; pmn = [i, j]; }
+        if (d > mx) { mx = d; pmx = [i, j]; }
+      });
+    });
+    var v = m === "simple" ? mn : m === "completo" ? mx : s / (g.length * h.length);
+    return { v: v, par: m === "simple" ? pmn : m === "completo" ? pmx : null, todos: todos };
+  }
+  // el mismo algoritmo del codigo de la vida real: el primer minimo estricto gana
+  function aglomerar(pts, m, nombres) {
+    var n = pts.length, grupos = [], ids = [], noms = [], M = [], sig = n;
+    for (var i = 0; i < n; i++) { grupos.push([i]); ids.push(i); noms.push(nombres ? nombres[i] : String(i)); }
+    while (grupos.length > 1) {
+      var mejor = Infinity, ga = -1, gb = -1;
+      for (var a = 0; a < grupos.length - 1; a++) {
+        for (var b = a + 1; b < grupos.length; b++) {
+          var d = enlace(pts, grupos[a], grupos[b], m).v;
+          if (d < mejor) { mejor = d; ga = a; gb = b; }
+        }
+      }
+      M.push({ g: grupos[ga].slice(), h: grupos[gb].slice(), idA: ids[ga], idB: ids[gb], alt: mejor, nA: noms[ga], nB: noms[gb], id: sig });
+      grupos[ga] = grupos[ga].concat(grupos[gb]);
+      noms[ga] = noms[ga] + noms[gb];
+      ids[ga] = sig++;
+      grupos.splice(gb, 1); noms.splice(gb, 1); ids.splice(gb, 1);
+    }
+    return M;
+  }
+  function hijos(M, n) { var c = {}; M.forEach(function (m) { c[m.id] = [m.idA, m.idB]; }); return c; }
+  function ordenHojas(M, n) {
+    if (!M.length) return [0];
+    var c = hijos(M, n), out = [];
+    (function rec(id) { if (id < n) { out.push(id); return; } rec(c[id][0]); rec(c[id][1]); })(M[M.length - 1].id);
+    return out;
+  }
+  // grupos tras aplicar las uniones de indice < s con altura <= h
+  function gruposEn(M, n, s, h) {
+    var par = [];
+    for (var i = 0; i < n; i++) par.push(i);
+    function raiz(x) { while (par[x] !== x) x = par[x] = par[par[x]]; return x; }
+    for (var k = 0; k < Math.min(s, M.length); k++) {
+      if (h != null && M[k].alt > h + 1e-9) continue;
+      var todos = M[k].g.concat(M[k].h);
+      for (var t = 1; t < todos.length; t++) par[raiz(todos[t])] = raiz(todos[0]);
+    }
+    var lab = [];
+    for (i = 0; i < n; i++) lab.push(raiz(i));
+    return lab;
+  }
+  // etiqueta de color 0, 1, 2... en el orden de las hojas del arbol
+  function colorear(lab, orden) {
+    var mapa = {}, c = 0;
+    orden.forEach(function (i) { if (!(lab[i] in mapa)) mapa[lab[i]] = c++; });
+    return { c: lab.map(function (l) { return mapa[l]; }), k: c };
+  }
+  function listaGrupos(lab) {
+    var mapa = {}, out = [];
+    lab.forEach(function (l, i) { if (!(l in mapa)) { mapa[l] = out.length; out.push([]); } out[mapa[l]].push(i); });
+    return out;
+  }
+  function nombreGrupo(g, noms) { return g.slice().sort(function (a, b) { return a - b; }).map(function (i) { return noms[i]; }).join(""); }
+
+  var CACHE = {};
+  function arbolDe(clave, m) {
+    var k = clave + ":" + m;
+    if (!CACHE[k]) {
+      var pts = clave === "10" ? PTS : clave === "30" ? X30 : CADENA;
+      CACHE[k] = aglomerar(pts, m, clave === "10" ? LET : null);
+    }
+    return CACHE[k];
+  }
+
+  /* ================= SVG ================= */
+  var NS = "http://www.w3.org/2000/svg";
+  function nodo(tag, at, padre) {
+    var e = document.createElementNS(NS, tag);
+    for (var k in at) e.setAttribute(k, at[k]);
+    if (padre) padre.appendChild(e);
+    return e;
+  }
+  function texto(padre, at, t) { var e = nodo("text", at, padre); e.textContent = t; return e; }
+  function cascara(P) {
+    var p = P.slice().sort(function (a, b) { return a[0] - b[0] || a[1] - b[1]; });
+    if (p.length < 3) return p;
+    function cruz(o, a, b) { return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]); }
+    var lo = [], up = [], i;
+    for (i = 0; i < p.length; i++) { while (lo.length >= 2 && cruz(lo[lo.length - 2], lo[lo.length - 1], p[i]) <= 0) lo.pop(); lo.push(p[i]); }
+    for (i = p.length - 1; i >= 0; i--) { while (up.length >= 2 && cruz(up[up.length - 2], up[up.length - 1], p[i]) <= 0) up.pop(); up.push(p[i]); }
+    up.pop(); lo.pop();
+    return lo.concat(up);
+  }
+
+  // plano de 0 a 10 en los dos ejes
+  function crearPlano(svg, cfg) {
+    var W = 400, H = cfg.alto || 270, Mg = { l: 30, r: 10, t: 10, b: 30 };
+    var st = { pts: [] }, drag = null;
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    svg.classList.add("plano-svg");
+    function sx(v) { return Mg.l + v / 10 * (W - Mg.l - Mg.r); }
+    function sy(v) { return H - Mg.b - v / 10 * (H - Mg.t - Mg.b); }
+    function ix(px) { return (px - Mg.l) / (W - Mg.l - Mg.r) * 10; }
+    function iy(py) { return (H - Mg.b - py) / (H - Mg.t - Mg.b) * 10; }
+    function pintar(nuevo) {
+      if (nuevo) st = nuevo;
+      svg.innerHTML = "";
+      var gE = nodo("g", {}, svg);
+      for (var t = 0; t <= 10; t++) {
+        nodo("line", { x1: sx(t), x2: sx(t), y1: sy(0), y2: sy(10), "class": "grid" + (t === 0 ? " eje" : "") }, gE);
+        nodo("line", { x1: sx(0), x2: sx(10), y1: sy(t), y2: sy(t), "class": "grid" + (t === 0 ? " eje" : "") }, gE);
+        if (t % 2 === 0) {
+          texto(gE, { x: sx(t), y: sy(0) + 14, "class": "tick", "text-anchor": "middle" }, t);
+          texto(gE, { x: sx(0) - 6, y: sy(t) + 3.5, "class": "tick", "text-anchor": "end" }, t);
+        }
+      }
+      texto(gE, { x: sx(10), y: H - 3, "class": "eje-tit", "text-anchor": "end" }, cfg.ejeX || "visitas al mes");
+      texto(gE, { x: 10, y: sy(10), "class": "eje-tit", "text-anchor": "end", transform: "rotate(-90 10 " + sy(10) + ")" }, cfg.ejeY || "gasto");
+      var P = st.pts;
+      (st.grupos || []).forEach(function (gr) {
+        if (gr.m.length < 2) return;
+        var h = cascara(gr.m.map(function (i) { return [sx(P[i][0]), sy(P[i][1])]; }));
+        var g = nodo("g", { opacity: gr.op || 0.17 }, svg);
+        nodo("polygon", { points: h.map(function (q) { return q[0].toFixed(1) + "," + q[1].toFixed(1); }).join(" "), fill: gr.c, stroke: gr.c, "stroke-width": 26, "stroke-linejoin": "round" }, g);
+      });
+      (st.segs || []).forEach(function (s) {
+        nodo("line", { x1: sx(s.a[0]), y1: sy(s.a[1]), x2: sx(s.b[0]), y2: sy(s.b[1]), "class": "seg " + (s.cls || "") }, svg);
+        if (s.lab != null) {
+          var mx = (sx(s.a[0]) + sx(s.b[0])) / 2, my = (sy(s.a[1]) + sy(s.b[1])) / 2;
+          texto(svg, { x: mx + 4, y: my - 6, "class": "slab" }, s.lab);
+        }
+      });
+      (st.centros || []).forEach(function (c) { nodo("circle", { cx: sx(c[0]), cy: sy(c[1]), r: 4.5, "class": "centro" }, svg); });
+      var r = P.length > 15 ? 4.5 : 6.5;
+      P.forEach(function (p, i) {
+        var cl = "pt" + (st.alTocar ? " tocable" : "") + (st.arrastrable ? " drag" : "");
+        var g = nodo("g", { "class": cl, "data-i": i }, svg);
+        nodo("circle", { cx: sx(p[0]), cy: sy(p[1]), r: P.length > 15 ? 8 : 15, "class": "hit" }, g);
+        if (st.anillo && st.anillo.indexOf(i) >= 0) nodo("circle", { cx: sx(p[0]), cy: sy(p[1]), r: r + 4.5, "class": "anillo" }, g);
+        var c = st.color && st.color[i] != null ? col(st.color[i]) : "var(--ink)";
+        nodo("circle", { cx: sx(p[0]), cy: sy(p[1]), r: r, "class": "dot", fill: c }, g);
+        if (st.nombres) texto(g, { x: sx(p[0]) + 8, y: sy(p[1]) - 8, "class": "plab" }, st.nombres[i]);
+      });
+    }
+    function coords(e) {
+      var rc = svg.getBoundingClientRect();
+      return [(e.clientX - rc.left) / rc.width * W, (e.clientY - rc.top) / rc.height * H];
+    }
+    svg.addEventListener("pointerdown", function (e) {
+      var g = e.target.closest ? e.target.closest(".pt") : null;
+      if (!g) return;
+      var i = +g.getAttribute("data-i");
+      if (st.arrastrable) { drag = i; try { svg.setPointerCapture(e.pointerId); } catch (err) { /* nada */ } e.preventDefault(); }
+      if (st.alTocar) st.alTocar(i);
+    });
+    svg.addEventListener("pointermove", function (e) {
+      if (drag === null || !st.alMover) return;
+      var q = coords(e);
+      var x = Math.max(0, Math.min(10, Math.round(ix(q[0]) * 2) / 2)), y = Math.max(0, Math.min(10, Math.round(iy(q[1]) * 2) / 2));
+      st.alMover(drag, x, y);
+    });
+    function soltar() { drag = null; }
+    svg.addEventListener("pointerup", soltar);
+    svg.addEventListener("pointercancel", soltar);
+    pintar();
+    return { pintar: pintar };
+  }
+
+  function pasoBonito(v) {
+    var e = Math.pow(10, Math.floor(Math.log10(v))), r = v / e;
+    return (r < 1.5 ? 1 : r < 3.5 ? 2 : r < 7.5 ? 5 : 10) * e;
+  }
+  // dendrograma: o = {n, M, hasta, hmax, nombres, corte, color (por punto), foco, alturas, alTocar(k), alCortar(h), ocultarK}
+  function crearDendro(svg, alto) {
+    var W = 400, H = alto || 210, st = null, arrastrando = false;
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    svg.classList.add("dendro-svg");
+    function geo() { return { l: 34, r: 30, t: 14, b: st && st.nombres ? 22 : 10 }; }
+    function sy(h) { var g = geo(); return H - g.b - h / st.hmax * (H - g.t - g.b); }
+    function hy(py) { var g = geo(); return (H - g.b - py) / (H - g.t - g.b) * st.hmax; }
+    function pintar(o) {
+      st = o;
+      svg.innerHTML = "";
+      svg.classList.toggle("cortable", !!o.alCortar);
+      var n = o.n, M = o.M, hasta = o.hasta == null ? M.length : o.hasta, g = geo();
+      var ord = ordenHojas(M, n), paso = (W - g.l - g.r) / n, X = {}, Y = {};
+      ord.forEach(function (id, k) { X[id] = g.l + (k + 0.5) * paso; Y[id] = sy(0); });
+      M.forEach(function (m) { X[m.id] = (X[m.idA] + X[m.idB]) / 2; Y[m.id] = sy(m.alt); });
+      var t = pasoBonito(o.hmax / 4);
+      for (var v = 0; v <= o.hmax + 1e-9; v += t) {
+        nodo("line", { x1: g.l, x2: W - g.r, y1: sy(v), y2: sy(v), "class": "grid" }, svg);
+        texto(svg, { x: g.l - 5, y: sy(v) + 3.5, "class": "tick", "text-anchor": "end" }, t < 1 ? v.toFixed(1) : String(Math.round(v)));
+      }
+      for (var k = 0; k < Math.min(hasta, M.length); k++) {
+        var m = M[k];
+        var cls = "link" + (o.foco === k ? " foco" : o.ultimo && k === hasta - 1 ? " ultimo" : "");
+        var p = nodo("path", { d: "M" + X[m.idA].toFixed(1) + "," + Y[m.idA].toFixed(1) + " V" + Y[m.id].toFixed(1) + " H" + X[m.idB].toFixed(1) + " V" + Y[m.idB].toFixed(1), "class": cls }, svg);
+        if (o.color && o.corte != null && m.alt <= o.corte + 1e-9) p.setAttribute("style", "stroke:" + col(o.color[m.g[0]]));
+        if (o.alturas && o.foco !== -2) texto(svg, { x: X[m.id], y: Y[m.id] - 4, "class": "hlab", "text-anchor": "middle" }, f(m.alt));
+        if (o.alTocar) nodo("rect", { x: Math.min(X[m.idA], X[m.idB]) - 4, y: Y[m.id] - 9, width: Math.abs(X[m.idB] - X[m.idA]) + 8, height: 18, "class": "hit-m", "data-k": k }, svg);
+      }
+      ord.forEach(function (id) {
+        var c = o.color && o.corte != null ? col(o.color[id]) : null;
+        if (o.nombres) {
+          var tx = texto(svg, { x: X[id], y: H - 7, "class": "hoja", "text-anchor": "middle" }, o.nombres[id]);
+          if (c) tx.setAttribute("style", "fill:" + c);
+        } else {
+          var ln = nodo("line", { x1: X[id], x2: X[id], y1: sy(0), y2: sy(0) + 5, "class": "link" }, svg);
+          if (c) ln.setAttribute("style", "stroke:" + c);
+        }
+      });
+      if (o.corte != null) {
+        var yc = sy(o.corte);
+        nodo("line", { x1: g.l, x2: W - g.r + 6, y1: yc, y2: yc, "class": "corte" }, svg);
+        if (o.alCortar) nodo("circle", { cx: W - g.r + 12, cy: yc, r: 7, "class": "asa" }, svg);
+        var kk = colorear(gruposEn(M, n, M.length, o.corte), ord).k;
+        texto(svg, { x: g.l + 4, y: yc - 5, "class": "clab" }, "h = " + f(o.corte) + " · " + (o.ocultarK ? "?" : kk) + " grupos");
+      }
+    }
+    function ponerCorte(e) {
+      var rc = svg.getBoundingClientRect(), py = (e.clientY - rc.top) / rc.height * H;
+      var h = Math.max(0, Math.min(st.hmax, hy(py)));
+      st.alCortar(h);
+    }
+    svg.addEventListener("pointerdown", function (e) {
+      if (!st) return;
+      var r = e.target.closest ? e.target.closest(".hit-m") : null;
+      if (r && st.alTocar) { st.alTocar(+r.getAttribute("data-k")); return; }
+      if (st.alCortar) { arrastrando = true; try { svg.setPointerCapture(e.pointerId); } catch (err) { /* nada */ } e.preventDefault(); ponerCorte(e); }
+    });
+    svg.addEventListener("pointermove", function (e) { if (arrastrando && st && st.alCortar) ponerCorte(e); });
+    function soltar() { arrastrando = false; }
+    svg.addEventListener("pointerup", soltar);
+    svg.addEventListener("pointercancel", soltar);
+    return { pintar: pintar };
+  }
+
+  /* ================= estado del recorrido ================= */
+  var est = {
+    paso: 0, enl: "completo", pred: [], s3: 0, celda: [4, 5], par4: [0, 1], foco5: null,
+    corte: null, datos6: "10", chk2: false, chk3: false, chk4: false, chk4b: false, chk6: false, chk7: false, corte7: null
+  };
+  var plano = crearPlano($("plano"), {});
+  var dendro = crearDendro($("dendro"));
+  var pasos;
+
+  // botones del selector de enlace
+  ENL.forEach(function (m) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.textContent = NOMENL[m];
+    b.setAttribute("data-m", m);
+    b.addEventListener("click", function () {
+      if (est.paso === 3 && m === "ward" && !est.chk4b) { $("escInfo").innerHTML = '<span class="oculto">Primero responde la predicción del recuadro de Ward.</span>'; return; }
+      est.enl = m;
+      if (est.paso === 6) est.corte7 = null;
+      pintarSelector();
+      pintarEscena();
+    });
+    $("enlaceSel").appendChild(b);
+  });
+  function pintarSelector() {
+    [].forEach.call($("enlaceSel").children, function (b) { b.setAttribute("aria-pressed", b.getAttribute("data-m") === est.enl ? "true" : "false"); });
+  }
+
+  // los cinco grupos tras las cinco primeras uniones (iguales con los cuatro enlaces)
+  var G5 = listaGrupos(gruposEn(arbolDe("10", "completo"), 10, 5, null));
+  function nomG(g) { return nombreGrupo(g, LET); }
+  var PARES5 = [];
+  for (var a5 = 0; a5 < G5.length; a5++) for (var b5 = a5 + 1; b5 < G5.length; b5++) PARES5.push([a5, b5]);
+  function ocultoChk4(i, j, m) {
+    if (est.chk4 || m !== "completo") return false;
+    var x = nomG(G5[i]), y = nomG(G5[j]);
+    return (x === "ABC" && y === "D") || (x === "D" && y === "ABC");
+  }
+  function ocultoChk2(i, j) { return !est.chk2 && ((i === 2 && j === 3) || (i === 3 && j === 2)); }
+
+  var HINTS = [
+    "Toca dos clientes",
+    "Toca una celda de la tabla",
+    "Dale al botón para unir",
+    "Elige un enlace y toca dos grupos",
+    "Toca una U del dendrograma",
+    "Arrastra la línea de corte",
+    "Compara los enlaces"
+  ];
+
+  function pintarEscena() {
+    var i = est.paso;
+    $("escHint").textContent = HINTS[i];
+    $("ctrlEnlace").hidden = !(i === 3 || i === 4 || (i === 5 && est.chk6) || (i === 6 && est.chk7));
+    $("ctrlUnir").hidden = i !== 2;
+    $("dendroCaja").hidden = i < 2 || (i === 6 && !est.chk7);
+    $("tablaEsc").innerHTML = "";
+    $("tablaZ").innerHTML = "";
+    $("escInfo").innerHTML = "";
+    pintarSelector();
+    [escena1, escena2, escena3, escena4, escena5, escena6, escena7][i]();
+  }
+
+  /* paso 1: prediccion */
+  function escena1() {
+    var segs = [];
+    if (est.pred.length === 2) {
+      var p = est.pred;
+      segs.push({ a: PTS[p[0]], b: PTS[p[1]], cls: "fuerte", lab: f(dist(PTS[p[0]], PTS[p[1]])) });
+      if (!((p[0] === 4 && p[1] === 5) || (p[0] === 5 && p[1] === 4))) segs.push({ a: PTS[4], b: PTS[5], cls: "mejor" });
+    }
+    plano.pintar({ pts: PTS, nombres: LET, segs: segs, anillo: est.pred, alTocar: est.pred.length < 2 ? tocarPred : null });
+    if (est.pred.length === 2) $("escInfo").innerHTML = "Tu par: <b>" + LET[est.pred[0]] + LET[est.pred[1]] + "</b> a " + f(dist(PTS[est.pred[0]], PTS[est.pred[1]])) + " · el más cercano: <b>EF</b> a 0.50";
+  }
+  function tocarPred(i) {
+    if (est.pred.indexOf(i) >= 0 || est.pred.length >= 2) return;
+    est.pred.push(i);
+    if (est.pred.length === 2) {
+      var p = est.pred, d = dist(PTS[p[0]], PTS[p[1]]), ok = (p[0] === 4 && p[1] === 5) || (p[0] === 5 && p[1] === 4);
+      $("chk1").querySelector(".fb").innerHTML = (ok ? '<span class="si">Exacto.</span> ' : '<span class="no">Casi.</span> ') +
+        "Elegiste " + LET[p[0]] + " y " + LET[p[1]] + ", a " + f(d) + " de distancia. " +
+        (ok ? "E y F están a solo 0.50: son el par más cercano de los diez." :
+          "El par más cercano es E y F, abajo a la derecha, a solo 0.50 (línea verde). A ojo cuesta comparar pares de zonas distintas: por eso el algoritmo mide todos los pares, que es el paso 2.");
+      pasos.completar(0);
+    }
+    escena1();
+  }
+
+  /* paso 2: matriz de distancias */
+  function escena2() {
+    var c = est.celda, oc = ocultoChk2(c[0], c[1]);
+    plano.pintar({
+      pts: PTS, nombres: LET, anillo: c,
+      segs: [{ a: PTS[c[0]], b: PTS[c[1]], cls: "fuerte", lab: oc ? "?" : f(dist(PTS[c[0]], PTS[c[1]])) }]
+    });
+    var h = '<div class="tabla-wrap"><table class="tabla matriz"><thead><tr><th></th>';
+    for (var j = 0; j < 9; j++) h += "<th>" + LET[j] + "</th>";
+    h += "</tr></thead><tbody>";
+    for (var i = 1; i < 10; i++) {
+      h += '<tr><td class="pl">' + LET[i] + "</td>";
+      for (j = 0; j < 9; j++) {
+        if (j >= i) { h += '<td class="vacia"></td>'; continue; }
+        var sel = (c[0] === j && c[1] === i) || (c[0] === i && c[1] === j), o = ocultoChk2(i, j);
+        h += '<td><button type="button" data-i="' + j + '" data-j="' + i + '" class="' + (sel ? "sel " : "") + (o ? "oculto" : "") + '">' + (o ? "?" : f(dist(PTS[i], PTS[j]))) + "</button></td>";
+      }
+      h += "</tr>";
+    }
+    $("tablaEsc").innerHTML = h + "</tbody></table></div>";
+    vivoDist();
+  }
+  $("tablaEsc").addEventListener("click", function (e) {
+    var b = e.target.closest("button[data-i]");
+    if (b && est.paso === 1) { est.celda = [+b.getAttribute("data-i"), +b.getAttribute("data-j")]; escena2(); return; }
+    var tr = e.target.closest("tr[data-par]");
+    if (tr && est.paso === 3) { est.par4 = tr.getAttribute("data-par").split(",").map(Number); escena4(); }
+  });
+  function vivoDist() {
+    var c = est.celda, p = PTS[c[0]], q = PTS[c[1]], oc = ocultoChk2(c[0], c[1]);
+    function n1(v) { return f(v, 1); }
+    $("vivoDist").innerHTML = LET[c[0]] + " = (" + n1(p[0]) + ", " + n1(p[1]) + ") y " + LET[c[1]] + " = (" + n1(q[0]) + ", " + n1(q[1]) + ")<br>" +
+      "distancia = √((" + n1(p[0]) + " − " + n1(q[0]) + ")² + (" + n1(p[1]) + " − " + n1(q[1]) + ")²) = " +
+      (oc ? "?" : "√" + f((p[0] - q[0]) * (p[0] - q[0]) + (p[1] - q[1]) * (p[1] - q[1])) + " = <b>" + f(dist(p, q)) + "</b>");
+  }
+
+  /* paso 3: unir de a dos (las cinco primeras uniones, iguales con los cuatro enlaces) */
+  function escena3() {
+    var M = arbolDe("10", "completo"), s = est.s3;
+    var lab = gruposEn(M, 10, s, null), gr = listaGrupos(lab), ord = ordenHojas(M, 10);
+    var colores = colorear(lab, ord).c;
+    var segs = [];
+    if (s > 0) {
+      var u = M[s - 1], e = enlace(PTS, u.g, u.h, "completo");
+      if (u.g.length + u.h.length === 2) segs.push({ a: PTS[u.g[0]], b: PTS[u.h[0]], cls: "fuerte", lab: f(u.alt) });
+      else segs.push({ a: PTS[e.par[0]], b: PTS[e.par[1]], cls: "fuerte", lab: f(u.alt) });
+    }
+    plano.pintar({
+      pts: PTS, nombres: LET, segs: segs,
+      grupos: gr.filter(function (g) { return g.length > 1; }).map(function (g) { return { m: g, c: col(colores[g[0]]) }; }),
+      color: lab.map(function (l, i) { return gr[0] && listaGrupos(lab).some(function (g) { return g.length > 1 && g.indexOf(i) >= 0; }) ? colores[i] : null; })
+    });
+    dendro.pintar({ n: 10, M: M, hasta: s, hmax: 3, nombres: LET, alturas: true, ultimo: true });
+    $("dendroTit").textContent = "Dendrograma (enlace completo, eje recortado en 3)";
+    var info;
+    if (s === 0) info = est.chk3 ? "Diez grupos de un cliente. Dale a unir." : '<span class="oculto">Responde la predicción para activar el botón.</span>';
+    else {
+      var u2 = M[s - 1];
+      info = "Unión " + s + ": <b>" + nombreGrupo(u2.g, LET) + " + " + nombreGrupo(u2.h, LET) + "</b> a altura " + f(u2.alt) + " · quedan " + (10 - s) + " grupos";
+      if (s === 4) info += "<br>A se une con BC, pero ya no es un par de puntos: aquí se usó el par más lejano, A con C. Con el más cercano, A con B, la altura sería 1.41.";
+      if (s === 5) info += "<br>Hasta aquí todos los enlaces coinciden. La unión 6 depende de cómo midas la distancia entre grupos: paso 4.";
+    }
+    $("escInfo").innerHTML = info;
+    $("btnUnir").disabled = !est.chk3 || s >= 5;
+    $("btnDeshacer").disabled = s === 0;
+  }
+  $("btnUnir").addEventListener("click", function () {
+    if (est.s3 < 5) est.s3++;
+    escena3();
+    if (est.s3 === 5 && est.chk3) pasos.completar(2);
+  });
+  $("btnDeshacer").addEventListener("click", function () { if (est.s3 > 0) est.s3--; escena3(); });
+
+  /* paso 4: enlaces */
+  function escena4() {
+    var m = est.enl, i = est.par4[0], j = est.par4[1], g = G5[i], h = G5[j];
+    var e = enlace(PTS, g, h, m), oc = ocultoChk4(i, j, m);
+    var segs = [], centros = [];
+    if (m === "ward") { centros = [e.cg, e.ch]; segs.push({ a: e.cg, b: e.ch, cls: "fuerte", lab: f(dist(e.cg, e.ch)) }); }
+    else if (m === "promedio") e.todos.forEach(function (t) { segs.push({ a: PTS[t[0]], b: PTS[t[1]], cls: "tenue" }); });
+    else {
+      e.todos.forEach(function (t) { segs.push({ a: PTS[t[0]], b: PTS[t[1]], cls: "tenue" }); });
+      segs.push({ a: PTS[e.par[0]], b: PTS[e.par[1]], cls: "fuerte", lab: oc ? "?" : f(e.v) });
+    }
+    plano.pintar({
+      pts: PTS, nombres: LET, segs: segs, centros: centros,
+      grupos: G5.map(function (gg, k) { return { m: gg, c: col(k), op: k === i || k === j ? 0.3 : 0.1 }; }),
+      color: PTS.map(function (_, p) { for (var k = 0; k < G5.length; k++) if (G5[k].indexOf(p) >= 0) return k; return null; }),
+      alTocar: tocarGrupo
+    });
+    // tabla de los diez pares con el enlace elegido
+    var vals = PARES5.map(function (pr) { return enlace(PTS, G5[pr[0]], G5[pr[1]], m).v; });
+    var imin = 0;
+    vals.forEach(function (v, k) { if (v < vals[imin]) imin = k; });
+    var t = '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>par de grupos</th><th>enlace ' + NOMENL[m] + "</th></tr></thead><tbody>";
+    PARES5.forEach(function (pr, k) {
+      var o = ocultoChk4(pr[0], pr[1], m), sel = pr[0] === i && pr[1] === j;
+      t += '<tr class="tocable' + (sel ? " sel" : "") + (k === imin ? " min" : "") + '" data-par="' + pr[0] + "," + pr[1] + '"><td class="pl">' + nomG(G5[pr[0]]) + " y " + nomG(G5[pr[1]]) + "</td>" +
+        (o ? '<td class="oculto">?</td>' : "<td>" + f(vals[k]) + "</td>") + "</tr>";
+    });
+    $("tablaEsc").innerHTML = t + "</tbody></table></div>";
+    var M = arbolDe("10", m);
+    dendro.pintar({ n: 10, M: M, hasta: 6, hmax: 3.5, nombres: LET, alturas: true, ultimo: true });
+    $("dendroTit").textContent = "Dendrograma con la unión 6 (enlace " + NOMENL[m] + ")";
+    var u = M[5];
+    $("escInfo").innerHTML = "Unión 6 con enlace " + NOMENL[m] + ": <b>" + nombreGrupo(u.g, LET) + " + " + nombreGrupo(u.h, LET) + "</b> a " + f(u.alt);
+    vivoEnlace(e, g, h, m, oc);
+  }
+  function tocarGrupo(p) {
+    var k = -1;
+    for (var t = 0; t < G5.length; t++) if (G5[t].indexOf(p) >= 0) k = t;
+    if (k < 0) return;
+    var par = est.par4;
+    if (par.indexOf(k) >= 0) return;
+    est.par4 = [par[1], k].sort(function (a, b) { return a - b; });
+    escena4();
+  }
+  function vivoEnlace(e, g, h, m, oc) {
+    var ng = nomG(g), nh = nomG(h), s;
+    if (oc) s = "d(" + ng + ", " + nh + ") con enlace completo = <b>?</b> (responde el chequeo)";
+    else if (m === "ward") {
+      s = "centros: c<sub>" + ng + "</sub> = (" + f(e.cg[0]) + ", " + f(e.cg[1]) + "), c<sub>" + nh + "</sub> = (" + f(e.ch[0]) + ", " + f(e.ch[1]) + ")<br>" +
+        "ΔSSE = " + g.length + "·" + h.length + "/" + (g.length + h.length) + " · " + f(dist(e.cg, e.ch)) + "² = " + f(e.v * e.v / 2) +
+        " · altura = √(2 · " + f(e.v * e.v / 2) + ") = <b>" + f(e.v) + "</b>";
+    } else {
+      var ds = e.todos.map(function (t) { return f(t[2]); });
+      var tapado = !est.chk4 && ((ng === "ABC" && nh === "D") || (ng === "D" && nh === "ABC"));
+      if (tapado) s = "<b>" + f(e.v) + "</b> (las distancias de cada par se muestran al resolver el chequeo)";
+      else if (m === "promedio") s = "(" + ds.join(" + ") + ") / " + ds.length + " = <b>" + f(e.v) + "</b>";
+      else s = (m === "simple" ? "min" : "max") + "(" + ds.join(", ") + ") = <b>" + f(e.v) + "</b>";
+      s = "d(" + ng + ", " + nh + ") = " + s;
+    }
+    $("vivoEnlace").innerHTML = s;
+  }
+
+  /* paso 5: leer el dendrograma */
+  function matrizZ(M, n) {
+    var t = '<p class="mini-sub">Matriz de enlace (como la imprime SciPy)</p><div class="tabla-wrap"><table class="tabla"><thead><tr><th>fila</th><th>grupo 1</th><th>grupo 2</th><th>altura</th><th>tamaño</th></tr></thead><tbody>';
+    M.forEach(function (m, k) {
+      var a = Math.min(m.idA, m.idB), b = Math.max(m.idA, m.idB);
+      t += "<tr" + (est.foco5 === k ? ' class="sel"' : "") + '><td class="pl">' + k + "</td><td>" + a + "</td><td>" + b + "</td><td>" + f(m.alt, 3) + "</td><td>" + (m.g.length + m.h.length) + "</td></tr>";
+    });
+    return t + "</tbody></table></div>";
+  }
+  function escena5() {
+    var M = arbolDe("10", est.enl), k = est.foco5;
+    var gr = [], segs = [];
+    if (k != null) {
+      var u = M[k];
+      gr = [{ m: u.g, c: "var(--j)", op: 0.25 }, { m: u.h, c: "var(--neg)", op: 0.25 }];
+      $("escInfo").innerHTML = "Unión " + (k + 1) + " (fila " + k + " de SciPy, grupo nuevo " + u.id + "): <b>" + nombreGrupo(u.g, LET) + " + " + nombreGrupo(u.h, LET) + "</b> a altura <b>" + f(u.alt, 3) + "</b>";
+    } else $("escInfo").innerHTML = "Toca una U del dendrograma.";
+    plano.pintar({
+      pts: PTS, nombres: LET, grupos: gr, segs: segs,
+      color: k != null ? PTS.map(function (_, i) { return M[k].g.indexOf(i) >= 0 ? 0 : M[k].h.indexOf(i) >= 0 ? 1 : null; }) : null
+    });
+    dendro.pintar({ n: 10, M: M, hmax: M[M.length - 1].alt * 1.05, nombres: LET, alturas: true, foco: k, alTocar: function (kk) { est.foco5 = kk; escena5(); } });
+    $("dendroTit").textContent = "Dendrograma completo (enlace " + NOMENL[est.enl] + ")";
+    $("tablaZ").innerHTML = matrizZ(M, 10);
+  }
+
+  /* paso 6: cortar */
+  function datos6() { return est.datos6 === "30" ? X30 : PTS; }
+  function escena6() {
+    var clave = est.datos6, P = datos6(), n = P.length, m = est.chk6 ? est.enl : "completo", M = arbolDe(clave, m);
+    var hmax = M[M.length - 1].alt * 1.08;
+    if (est.corte == null || est.corte > hmax) est.corte = clave === "30" ? (M[n - 4].alt + M[n - 3].alt) / 2 : 5;
+    var activo = est.chk6;
+    var ord = ordenHojas(M, n), lab = gruposEn(M, n, M.length, est.corte), cc = colorear(lab, ord);
+    var nom = clave === "10" ? LET : null;
+    plano.pintar({
+      pts: P, nombres: nom,
+      grupos: activo ? listaGrupos(lab).map(function (g) { return { m: g, c: col(cc.c[g[0]]) }; }) : [],
+      color: activo ? cc.c : null
+    });
+    dendro.pintar({
+      n: n, M: M, hmax: hmax, nombres: nom, alturas: clave === "10", corte: activo ? est.corte : hmax * 0.98, color: activo ? cc.c : null, ocultarK: !activo,
+      alCortar: activo ? function (h) { est.corte = h; escena6(); } : null
+    });
+    $("dendroTit").textContent = (clave === "30" ? "Los 30 clientes" : "Dendrograma") + " (enlace " + NOMENL[m] + ")";
+    var alts = M.map(function (u) { return u.alt; }), salto = 0, ks = 0;
+    for (var t = 1; t < alts.length; t++) if (alts[t] - alts[t - 1] > salto) { salto = alts[t] - alts[t - 1]; ks = t; }
+    if (activo) {
+      var info = "Corte en h = <b>" + f(est.corte) + "</b>: <b>" + cc.k + "</b> grupos";
+      if (clave === "10") info += " · " + listaGrupos(lab).map(function (g) { return nombreGrupo(g, LET); }).join(", ");
+      $("escInfo").innerHTML = info;
+      $("vivoCorte").innerHTML = "Salto más grande: de <b>" + f(alts[ks - 1]) + "</b> a <b>" + f(alts[ks]) + "</b>. Cortar en medio deja <b>" + (n - ks) + "</b> grupos." +
+        (clave === "30" ? "<br>Con " + (n - ks) + " grupos salen exactamente los tres grupos de la página de k-means, con cualquiera de los cuatro enlaces." : "");
+    } else {
+      $("escInfo").innerHTML = '<span class="oculto">La línea se activa al responder la predicción.</span>';
+      $("vivoCorte").innerHTML = "";
+    }
+  }
+  $("btn30").addEventListener("click", function () {
+    est.datos6 = est.datos6 === "30" ? "10" : "30";
+    est.corte = null;
+    this.textContent = est.datos6 === "30" ? "Volver a los 10 clientes" : "Ver los 30 clientes de k-means";
+    this.classList.toggle("on", est.datos6 === "30");
+    if (est.paso === 5) escena6();
+  });
+
+  /* paso 7: encadenamiento */
+  function escena7() {
+    var P = CADENA, n = P.length;
+    if (!est.chk7) {
+      plano.pintar({ pts: P, nombres: NUM10 });
+      $("escInfo").innerHTML = '<span class="oculto">El árbol aparece al responder la predicción.</span>';
+      return;
+    }
+    var M = arbolDe("cadena", est.enl), hmax = M[n - 2].alt * 1.08;
+    if (est.corte7 == null) est.corte7 = (M[n - 3].alt + M[n - 2].alt) / 2;
+    var ord = ordenHojas(M, n), lab = gruposEn(M, n, M.length, est.corte7), cc = colorear(lab, ord), gr = listaGrupos(lab);
+    plano.pintar({ pts: P, nombres: NUM10, grupos: gr.map(function (g) { return { m: g, c: col(cc.c[g[0]]) }; }), color: cc.c });
+    dendro.pintar({ n: n, M: M, hmax: hmax, nombres: NUM10, alturas: false, corte: est.corte7, color: cc.c, alCortar: function (h) { est.corte7 = h; escena7(); } });
+    $("dendroTit").textContent = "La cadena (enlace " + NOMENL[est.enl] + ")";
+    $("escInfo").innerHTML = "Enlace " + NOMENL[est.enl] + ", corte en " + f(est.corte7) + ": <b>" + cc.k + "</b> grupos, de tamaños " +
+      gr.map(function (g) { return g.length; }).join(" y ") + ".";
+  }
+
+  function entrar(i) {
+    est.paso = i;
+    if (i === 6 && !est.chk7) est.enl = "simple";
+    if (i === 6) est.corte7 = null;
+    if (i === 3 && est.enl === "ward" && !est.chk4b) est.enl = "completo";
+    pintarEscena();
+  }
+
+  /* ================= chequeos ================= */
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+
+  B.numerico(cuerpo("chk2"), {
+    pregunta: "La celda de C y D está tapada. Con C = (3, 2.5) y D = (6.5, 3), ¿cuánto vale la distancia entre C y D? Dos decimales.",
+    respuesta: Math.sqrt(12.5),
+    tolerancia: 0.011,
+    pistas: ["Resta las coordenadas: 3 − 6.5 y 2.5 − 3.", "Eleva al cuadrado y suma: 12.25 + 0.25 = 12.5. Falta la raíz."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 12.5) < 0.02) return "Ese es el cuadrado de la distancia. Falta sacar la raíz.";
+      if (Math.abs(v - 4) < 0.02) return "Sumaste las diferencias sin elevar al cuadrado: esa es la distancia de Manhattan, 3.5 + 0.5.";
+      return null;
+    },
+    explicacion: "√(3.5² + 0.5²) = √12.5 = 3.54. Ahora la celda está destapada. Busca la celda más chica de la tabla: es E con F, 0.50, la primera unión.",
+    alResolver: function () { est.chk2 = true; if (est.paso === 1) escena2(); pasos.completar(1); }
+  });
+
+  B.numerico(cuerpo("chk3"), {
+    pregunta: "Empiezas con 10 grupos de un cliente. ¿Cuántas uniones hacen falta hasta que quede un solo grupo?",
+    respuesta: 9,
+    tolerancia: 0,
+    pistas: ["Cada unión junta dos grupos en uno: después de cada unión, ¿cuántos grupos menos hay?", "Pasas de 10 grupos a 1 quitando uno por vez."],
+    diagnostico: function (v) {
+      if (v === 10) return "Cuenta otra vez: después de la primera unión quedan 9 grupos, no 10. ¿Cuántas uniones para llegar a 1?";
+      if (v === 45) return "45 son los pares de la matriz de distancias, no las uniones.";
+      if (v === 5) return "Unir de a pares no basta: después hay que unir grupos con grupos.";
+      return null;
+    },
+    explicacion: "Cada unión quita exactamente un grupo, así que de 10 a 1 hacen falta <b>9</b>. Con n clientes, n − 1 uniones, y el dendrograma tiene n − 1 U. <b>Ahora dale al botón</b> cinco veces y mira las primeras cinco.",
+    alResolver: function () { est.chk3 = true; if (est.paso === 2) escena3(); if (est.s3 >= 5) pasos.completar(2); }
+  });
+
+  B.numerico(cuerpo("chk4"), {
+    pregunta: "Con enlace <b>completo</b>, ¿cuál es la distancia entre el grupo ABC y el cliente D? Usa la matriz del paso 2 (en el escenario está tapada).",
+    respuesta: Math.sqrt(25.25),
+    tolerancia: 0.011,
+    pistas: ["Enlace completo: de todos los pares con un cliente en cada grupo, el más lejano.", "Los pares son A con D, B con D y C con D: 5.02, 4.27 y 3.54."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 3.54) < 0.011) return "Ese es el par más cercano: sería el enlace simple. El completo toma el más lejano.";
+      if (Math.abs(v - 4.28) < 0.011) return "Ese es el promedio de los tres: enlace promedio. El completo toma el más lejano.";
+      return null;
+    },
+    explicacion: "max(5.02, 4.27, 3.54) = <b>5.02</b>, la distancia de A a D. Con enlace simple serían 3.54 y con promedio 4.28: el mismo par de grupos, tres distancias distintas. Ahora mira el recuadro de abajo.",
+    alResolver: function () { est.chk4 = true; if (est.paso === 3) escena4(); cerrar4(); }
+  });
+  B.opcionMultiple(cuerpo("chk4b"), {
+    pregunta: "E y F son dos clientes sueltos a distancia 0.50. Con Ward, como lo dibuja SciPy, ¿a qué altura se unen?",
+    opciones: ["0.50, la misma distancia", "0.25, la mitad", "0.125, el aumento de SSE", "1.00, el doble"],
+    correcta: 0,
+    pistas: [null, "Calcula ΔSSE con |G| = |H| = 1: 1·1/2 · 0.5² = 0.125. Después aplica la altura.", "0.125 es ΔSSE. La altura es √(2 · ΔSSE).", "Revisa la raíz: √(2 · 0.125) = √0.25."],
+    explicacion: "ΔSSE = ½ · 0.5² = 0.125 y la altura es √(2 · 0.125) = <b>0.50</b>. Con dos puntos sueltos, Ward coincide con la distancia: por eso las primeras uniones son iguales en todos los enlaces. Las diferencias aparecen cuando los grupos crecen. <b>Ahora elige Ward</b> en el escenario.",
+    alResolver: function () { est.chk4b = true; cerrar4(); }
+  });
+  function cerrar4() { if (est.chk4 && est.chk4b) pasos.completar(3); }
+
+  B.opcionMultiple(cuerpo("chk5"), {
+    pregunta: "Con enlace completo, C y D quedan como hojas vecinas en el dendrograma. ¿Qué te dice eso?",
+    opciones: [
+      "Nada: lo que cuenta es la altura donde se juntan, 7.52, aunque estén a 3.54",
+      "Que C y D son los dos clientes más parecidos entre sí",
+      "Que la distancia entre C y D es la mitad de la altura total",
+      "Que C y D pertenecen al mismo grupo con cualquier corte"
+    ],
+    correcta: 0,
+    pistas: [null, "El par más parecido es el que se une más abajo. ¿Dónde se juntan C y D?", "Las alturas del árbol no se reparten así. Busca la U donde se encuentran.", "Si cortas a altura 5, ¿C y D quedan juntos?"],
+    explicacion: "Las hojas se pueden reordenar girando cualquier U: estar al lado no significa nada. C y D se encuentran por primera vez en la U de altura 7.52 (ABC con DEF), y esa altura es la que el árbol les asigna, aunque su distancia real sea 3.54. El árbol resume las distancias, y al resumir distorsiona.",
+    alResolver: function () { pasos.completar(4); }
+  });
+
+  B.numerico(cuerpo("chk6"), {
+    pregunta: "Con enlace completo, las alturas son 0.50, 0.71, 1.12, 1.50, 2.00, 2.69, 2.92, 7.52 y 8.75. Si cortas a altura 5, ¿cuántos grupos quedan?",
+    respuesta: 3,
+    tolerancia: 0,
+    pistas: ["Cuenta cuántas uniones quedan por debajo de 5.", "Son 7 uniones. Cada una quita un grupo a los 10 iniciales."],
+    diagnostico: function (v) {
+      if (v === 7) return "7 son las uniones por debajo del corte. Cada una quita un grupo: ¿cuántos quedan de 10?";
+      if (v === 2) return "2 son las uniones por encima del corte. Los grupos son una más.";
+      return null;
+    },
+    explicacion: "7 uniones por debajo de 5, así que quedan 10 − 7 = <b>3</b> grupos: ABC, DEF y GHIJ. <b>Ahora arrastra la línea</b>: entre 2.92 y 7.52 siempre quedan 3, porque ahí está el salto más grande. Prueba también otros enlaces y los 30 clientes.",
+    alResolver: function () {
+      est.chk6 = true;
+      $("btn30").disabled = false;
+      $("hint30").textContent = "";
+      if (est.paso === 5) pintarEscena();
+      pasos.completar(5);
+    }
+  });
+
+  B.opcionMultiple(cuerpo("chk7"), {
+    pregunta: "Con enlace <b>simple</b> y cortando en <b>2 grupos</b>, ¿qué esperas que salga con la cadena?",
+    opciones: [
+      "Un grupo con los 9 clientes de la cadena y otro con el cliente 10, el suelto",
+      "La mitad izquierda de la cadena y la mitad derecha",
+      "Dos grupos de 5 clientes",
+      "No se puede: el enlace simple no permite cortar en 2"
+    ],
+    correcta: 0,
+    pistas: [null, "Esa partición la hace el enlace completo. El simple solo mira el par más cercano: ¿hay algún salto grande dentro de la cadena?",
+      "El enlace simple no busca grupos del mismo tamaño. Busca el salto más grande entre vecinos.", "Todo árbol se puede cortar en cualquier número de grupos entre 1 y n."],
+    explicacion: "Dentro de la cadena cada cliente está a menos de 1.85 del siguiente, así que el enlace simple los une a todos antes de llegar al cliente 10, que está a 4.27. Cortar en 2 grupos separa al suelto, no a los dos extremos. <b>Ahora cambia a completo o a Ward</b>: la cadena se parte por la mitad.",
+    alResolver: function () { est.chk7 = true; if (est.paso === 6) pintarEscena(); pasos.completar(6); }
+  });
+
+  pasos = B.pasos($("recorrido"), {
+    concepto: C,
+    alEntrar: entrar,
+    alTerminar: function () { location.hash = "retos"; }
+  });
+  if (pasos.hecho(0)) est.pred = [4, 5];
+  est.chk2 = pasos.hecho(1);
+  if (pasos.hecho(2)) { est.chk3 = true; est.s3 = 5; }
+  if (pasos.hecho(3)) { est.chk4 = true; est.chk4b = true; }
+  if (pasos.hecho(5)) { est.chk6 = true; $("btn30").disabled = false; $("hint30").textContent = ""; }
+  if (pasos.hecho(6)) est.chk7 = true;
+  entrar(pasos.actual());
+
+  /* ================= hipotesis ================= */
+  (function () {
+    var ta = $("hipotesis"), t = null;
+    ta.value = B.nota("jerarquico", "hipotesis");
+    function cita() {
+      var v = ta.value.trim(), el = $("citaHipo");
+      el.hidden = !v;
+      if (v) { el.textContent = ""; el.appendChild(document.createTextNode("Al principio escribiste: «" + v + "». ¿Se parece a unir de a dos y cortar al final? ¿Qué hiciste con la distancia entre un grupo y otro?")); }
+    }
+    cita();
+    ta.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { B.nota("jerarquico", "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; cita(); }, 500);
+    });
+  })();
+
+  /* ================= marcadores de estado de retos ================= */
+  function pintarEstados() {
+    [].forEach.call(document.querySelectorAll("[data-reto]"), function (el) {
+      var ok = C.retoOk(el.getAttribute("data-reto"));
+      el.textContent = ok ? "resuelto" : "pendiente";
+      el.classList.toggle("ok", ok);
+    });
+  }
+  C.alCambiar(pintarEstados);
+
+  /* ================= reto: ojo clinico ================= */
+  function azar(a, b) { return a + Math.floor(Math.random() * (b - a + 1)); }
+  (function () {
+    var cont = $("ojo");
+    cont.innerHTML = '<div class="ronda"></div><svg role="img" aria-label="Dendrograma al azar"></svg>' +
+      '<div class="ojo-opts"></div><div class="fb" aria-live="polite"></div><div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    var dd = crearDendro(cont.querySelector("svg"), 190);
+    var ronda, aciertos, respondida, R;
+    function generar() {
+      for (var intento = 0; intento < 200; intento++) {
+        var n = 7, pts = [], usados = {};
+        while (pts.length < n) {
+          var p = [azar(1, 18) / 2, azar(1, 18) / 2], c = p.join(",");
+          if (!usados[c]) { usados[c] = 1; pts.push(p); }
+        }
+        var m = ENL[azar(0, 3)], M = aglomerar(pts, m, null), k = azar(2, 5);
+        var bajo = M[n - k - 1].alt, alto = M[n - k].alt, top = M[n - 2].alt;
+        if (alto - bajo < 0.07 * top) continue;
+        return { n: n, M: M, m: m, k: k, corte: (bajo + alto) / 2, hmax: top * 1.06 };
+      }
+      return null;
+    }
+    function mostrar() {
+      respondida = false;
+      R = generar();
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 5 · aciertos " + aciertos;
+      dd.pintar({ n: R.n, M: R.M, hmax: R.hmax, nombres: NUM10, corte: R.corte, ocultarK: true });
+      var ops = [R.k - 1, R.k, R.k + 1, R.k + 2];
+      if (R.k - 1 < 1) ops = [R.k, R.k + 1, R.k + 2, R.k + 3];
+      cont.querySelector(".ojo-opts").innerHTML = ops.map(function (v) { return '<button type="button" class="opt" data-v="' + v + '">' + v + "</button>"; }).join("");
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+    }
+    function nueva() { ronda = 0; aciertos = 0; mostrar(); }
+    cont.querySelector(".ojo-opts").addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || respondida) return;
+      respondida = true;
+      var v = +b.getAttribute("data-v"), ok = v === R.k;
+      if (ok) aciertos++;
+      b.classList.add(ok ? "ok" : "mal");
+      if (!ok) cont.querySelector('[data-v="' + R.k + '"]').classList.add("ok");
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (x) { x.disabled = true; });
+      var cc = colorear(gruposEn(R.M, R.n, R.M.length, R.corte), ordenHojas(R.M, R.n));
+      dd.pintar({ n: R.n, M: R.M, hmax: R.hmax, nombres: NUM10, corte: R.corte, color: cc.c });
+      cont.querySelector(".fb").innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No.</span> ') +
+        "La línea cruza " + R.k + " ramas verticales: " + R.k + " grupos. Truco: cuenta las líneas verticales que la línea corta, no las hojas. (Enlace " + NOMENL[R.m] + ".)";
+      var sig = cont.querySelector(".sig");
+      sig.hidden = false;
+      if (ronda === 4) {
+        var aprobo = aciertos >= 4;
+        C.reto("ojo", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertos + " de 5" + (aprobo ? ". Aprobado." : ". Necesitas 4 para aprobar.");
+        sig.textContent = "Otra tanda";
+      } else sig.textContent = "Siguiente ronda";
+    });
+    cont.querySelector(".sig").addEventListener("click", function () { if (ronda === 4) nueva(); else { ronda++; mostrar(); } });
+    nueva();
+  })();
+
+  /* ================= reto: constructor ================= */
+  (function () {
+    var pts = [[2, 3], [3, 5], [4.5, 3], [1.5, 5.5], [3.5, 3.5], [2.5, 1.5], [7, 7], [8, 5.5]];
+    var n = pts.length;
+    function tam2(M) {
+      var lab = gruposEn(M, n, n - 2, null), g = listaGrupos(lab);
+      return g.map(function (x) { return x.length; }).sort();
+    }
+    function particion(M) {
+      var lab = gruposEn(M, n, n - 2, null), base = lab[0];
+      return lab.map(function (l) { return l === base ? 1 : 0; }).join("");
+    }
+    var OBJ = [
+      { t: "Con enlace completo, que al cortar en 2 grupos queden 4 y 4 puntos.", ok: function (Mc) { var s = tam2(Mc); return s[0] === 4 && s[1] === 4; } },
+      { t: "Que la última unión del completo sea al menos 3 veces más alta que la penúltima: un salto clarísimo.", ok: function (Mc) { return Mc[n - 2].alt >= 3 * Mc[n - 3].alt; } },
+      { t: "Que el enlace simple y el completo, cortados en 2 grupos, den grupos distintos.", ok: function (Mc, Ms) { return particion(Mc) !== particion(Ms); } }
+    ];
+    var logrados = [false, false, false], avisado = false, ul = $("objetivos");
+    OBJ.forEach(function (o) { var li = document.createElement("li"); li.innerHTML = '<span class="m"></span><span>' + o.t + "</span>"; ul.appendChild(li); });
+    var pl = crearPlano($("planoConstr"), { alto: 250 }), dd = crearDendro($("dendroConstr"), 170);
+    function rehacer() {
+      var Mc = aglomerar(pts, "completo", null), Ms = aglomerar(pts, "simple", null);
+      var lab = gruposEn(Mc, n, n - 2, null), cc = colorear(lab, ordenHojas(Mc, n));
+      pl.pintar({ pts: pts, nombres: NUM10.slice(0, n), arrastrable: true, alMover: mover, color: cc.c,
+        grupos: listaGrupos(lab).map(function (g) { return { m: g, c: col(cc.c[g[0]]) }; }) });
+      var hcorte = (Mc[n - 3].alt + Mc[n - 2].alt) / 2;
+      dd.pintar({ n: n, M: Mc, hmax: Mc[n - 2].alt * 1.06, nombres: NUM10, corte: hcorte, color: cc.c, alturas: false });
+      $("constrVivo").innerHTML = "Completo: últimas alturas <b>" + f(Mc[n - 3].alt) + "</b> y <b>" + f(Mc[n - 2].alt) + "</b> · tamaños con 2 grupos: " + tam2(Mc).join(" y ") +
+        " · simple con 2 grupos: " + tam2(Ms).join(" y ");
+      OBJ.forEach(function (o, i) { if (!logrados[i] && o.ok(Mc, Ms)) logrados[i] = true; ul.children[i].classList.toggle("hecho", logrados[i]); });
+      if (!avisado && logrados.every(Boolean)) { avisado = true; C.reto("constructor", true); }
+    }
+    function mover(i, x, y) {
+      if (pts[i][0] === x && pts[i][1] === y) return;
+      for (var k = 0; k < n; k++) if (k !== i && pts[k][0] === x && pts[k][1] === y) return;
+      pts[i] = [x, y];
+      rehacer();
+    }
+    rehacer();
+  })();
+
+  /* ================= reto: a mano ================= */
+  (function () {
+    var D, nom = ["P", "Q", "R", "S"], ENLM;
+    var PARES = [[0, 1], [0, 2], [0, 3], [1, 2], [1, 3], [2, 3]];
+    function generar() {
+      var vals = B.mezclar([6, 7, 8, 9, 10, 11]);
+      D = [[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]];
+      PARES.forEach(function (p, k) { D[p[0]][p[1]] = D[p[1]][p[0]] = vals[k]; });
+      ENLM = Math.random() < 0.5 ? "simple" : "completo";
+      var h = '<p class="desc">Usa enlace <b>' + ENLM + '</b>.</p><table class="datos-mano"><tr><th></th>' + nom.map(function (x) { return "<th>" + x + "</th>"; }).join("") + "</tr>";
+      for (var i = 0; i < 4; i++) {
+        h += "<tr><th>" + nom[i] + "</th>";
+        for (var j = 0; j < 4; j++) h += "<td>" + (i === j ? "0" : D[i][j]) + "</td>";
+        h += "</tr>";
+      }
+      $("manoDatos").innerHTML = h + "</table>";
+    }
+    function resolver(m) {
+      var p1 = PARES.filter(function (p) { return D[p[0]][p[1]] === 6; })[0];
+      var resto = [0, 1, 2, 3].filter(function (i) { return p1.indexOf(i) < 0; });
+      var fn = m === "simple" ? Math.min : Math.max;
+      var d1 = fn(D[p1[0]][resto[0]], D[p1[1]][resto[0]]), d2 = fn(D[p1[0]][resto[1]], D[p1[1]][resto[1]]), d3 = D[resto[0]][resto[1]];
+      return { p1: p1, resto: resto, d1: d1, d2: d2, d3: d3, h: Math.min(d1, d2, d3) };
+    }
+    var cfg = {
+      pregunta: "¿A qué altura ocurre la <b>segunda</b> unión?",
+      respuesta: function () { return resolver(ENLM).h; },
+      tolerancia: 0,
+      pistas: [
+        function () { var r = resolver(ENLM); return "La primera unión es el par con la distancia más chica: " + nom[r.p1[0]] + " y " + nom[r.p1[1]] + ", a 6."; },
+        function () {
+          var r = resolver(ENLM), g = nom[r.p1[0]] + nom[r.p1[1]], fn = ENLM === "simple" ? "min" : "max";
+          return "Distancias del grupo " + g + ": a " + nom[r.resto[0]] + " es " + fn + "(" + D[r.p1[0]][r.resto[0]] + ", " + D[r.p1[1]][r.resto[0]] + ") = " + r.d1 +
+            ", a " + nom[r.resto[1]] + " es " + fn + "(" + D[r.p1[0]][r.resto[1]] + ", " + D[r.p1[1]][r.resto[1]] + ") = " + r.d2 + ".";
+        },
+        function () { var r = resolver(ENLM); return "Compara esas dos con la de " + nom[r.resto[0]] + " a " + nom[r.resto[1]] + ", que es " + r.d3 + ". La más chica es la segunda unión."; }
+      ],
+      diagnostico: function (v) {
+        var otro = resolver(ENLM === "simple" ? "completo" : "simple").h, r = resolver(ENLM).h;
+        if (v === 6) return "6 es la primera unión. Te pido la segunda.";
+        if (v === otro && otro !== r) return "Ese resultado sale con el enlace " + (ENLM === "simple" ? "completo" : "simple") + ". Revisa cuál pide el ejercicio.";
+        return null;
+      },
+      explicacion: function () {
+        var r = resolver(ENLM), g = nom[r.p1[0]] + nom[r.p1[1]];
+        return "Primero se unen " + g + " a 6. Con enlace " + ENLM + ", " + g + " queda a " + r.d1 + " de " + nom[r.resto[0]] + " y a " + r.d2 + " de " + nom[r.resto[1]] +
+          "; " + nom[r.resto[0]] + " y " + nom[r.resto[1]] + " están a " + r.d3 + ". La más chica, <b>" + r.h + "</b>, es la segunda unión.";
+      },
+      reintentable: true,
+      textoReintentar: "Otro ejercicio",
+      antesDeReintentar: generar,
+      alResolver: function (ok) { C.reto("mano", ok); }
+    };
+    generar();
+    B.numerico($("mano"), cfg);
+  })();
+
+  /* ================= reto: cazar el error ================= */
+  B.cazarError($("error"), {
+    variantes: [
+      {
+        intro: "Grupos {A, B} y C, con d(A, C) = 3 y d(B, C) = 7. Alguien calculó el enlace completo así:",
+        lineas: ["d(\\{A,B\\},\\,C) = \\max\\big(d(A,C),\\, d(B,C)\\big)", "= \\max(3,\\, 7)", "= 3", "\\text{C se une a } \\{A,B\\} \\text{ a la altura de ese valor}"],
+        erronea: 2,
+        explicacion: "El máximo de 3 y 7 es 7. Tomó el mínimo, que es el enlace simple. Con enlace completo la altura es 7."
+      },
+      {
+        intro: "Alguien contó las uniones para 12 clientes así:",
+        lineas: ["\\text{Al empezar hay } 12 \\text{ grupos de un cliente}", "\\text{Cada unión junta dos grupos en uno}", "\\text{Para llegar a un solo grupo hacen falta } 12 \\text{ uniones}", "\\text{El dendrograma tiene } 12 \\text{ hojas}"],
+        erronea: 2,
+        explicacion: "Cada unión quita un grupo: de 12 a 1 hacen falta 11 uniones. Las hojas sí son 12, una por cliente."
+      },
+      {
+        intro: "Alturas del enlace completo: 0.50, 0.71, 1.12, 1.50, 2.00, 2.69, 2.92, 7.52, 8.75. Alguien cortó a altura 5:",
+        lineas: ["\\text{Uniones por debajo de } 5:\\; 7", "\\text{Uniones por encima de } 5:\\; 2", "\\text{Grupos} = 10 + 7 = 17", "\\text{Al subir el corte, hay menos grupos}"],
+        erronea: 2,
+        explicacion: "Cada unión por debajo del corte quita un grupo: 10 − 7 = 3 grupos. Diecisiete grupos con diez clientes es imposible."
+      }
+    ],
+    alResolver: function (ok) { C.reto("error", ok); }
+  });
+
+  /* ================= retos: propiedades ================= */
+  function prop(id, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple($(id), cfg);
+  }
+  prop("prop1", {
+    pregunta: "Con 50 clientes, ¿cuántas uniones hace el algoritmo aglomerativo hasta terminar, y cuántas U tiene el dendrograma?",
+    opciones: ["49 y 49", "50 y 50", "1225 y 49", "49 y 50"],
+    correcta: 0,
+    pistas: [null, "Empiezas con 50 grupos. Después de la primera unión, ¿cuántos quedan?", "1225 son los pares de la matriz de distancias, 50 · 49 / 2.", "Cada unión es exactamente una U."],
+    explicacion: "Cada unión quita un grupo: de 50 a 1 son 49 uniones, y cada unión es una U del árbol. Las hojas son 50."
+  });
+  prop("prop2", {
+    pregunta: "Para dos grupos cualesquiera G y H, ¿qué se cumple siempre?",
+    opciones: ["simple ≤ promedio ≤ completo", "completo ≤ promedio ≤ simple", "promedio ≤ simple ≤ completo", "Depende de los datos: no hay un orden fijo"],
+    correcta: 0,
+    pistas: [null, "El simple toma el par más cercano. ¿Puede ser mayor que el promedio de todos los pares?", "Un promedio nunca queda por debajo del menor de los valores que promedia.", "Piensa en qué es cada uno: el mínimo, la media y el máximo de la misma lista de distancias."],
+    explicacion: "Los tres miran la misma lista de distancias entre miembros: el simple toma el mínimo, el promedio la media y el completo el máximo. La media siempre queda entre el mínimo y el máximo. Lo viste con ABC y D: 3.54, 4.28 y 5.02."
+  });
+  prop("prop3", {
+    pregunta: "Tus datos tienen grupos alargados conectados por puntos intermedios. ¿Qué enlace tiende a unirlos en una cadena?",
+    opciones: ["El simple", "El completo", "Ward", "Ninguno: todos dan el mismo árbol"],
+    correcta: 0,
+    pistas: [null, "El completo mira el par más lejano: un grupo largo tiene un par muy lejano.", "Ward castiga el aumento de desorden: un grupo largo tiene mucho desorden.", "En el paso 7 los enlaces dieron árboles muy distintos con la cadena."],
+    explicacion: "El simple solo necesita un par cercano para unir dos grupos, así que un puente de puntos basta. Es su defecto con ruido y su virtud con formas alargadas de verdad."
+  });
+  prop("prop4", {
+    pregunta: "¿Cuándo eliges el número de grupos en el agrupamiento jerárquico?",
+    opciones: ["Al final, al cortar el árbol; el mismo árbol sirve para cualquier k", "Antes de empezar, como en k-means", "Nunca: siempre da tantos grupos como enlaces uses", "Lo decide el enlace: Ward siempre da 3"],
+    correcta: 0,
+    pistas: [null, "Recuerda el paso 6: moviste la línea sobre el mismo árbol.", "El número de grupos sale del corte, no del enlace.", "Ward no fija ningún número: el corte sí."],
+    explicacion: "El árbol se construye una sola vez, sin k. Después lo cortas a la altura que quieras. Esa es la ventaja que Raschka destaca frente a k-means."
+  });
+  prop("prop5", {
+    pregunta: "Pasas el gasto de decenas de euros a euros (multiplicas esa columna por 10) y vuelves a agrupar. ¿Qué pasa con el árbol?",
+    opciones: ["Puede cambiar entero: el gasto pasa a dominar todas las distancias", "No cambia: el algoritmo solo mira el orden de las distancias", "Todas las alturas se multiplican por 10 y nada más", "Solo cambia con Ward"],
+    correcta: 0,
+    pistas: [null, "Al estirar solo un eje, ¿se conserva qué par está más cerca?", "Eso pasaría si multiplicaras las dos columnas por 10.", "Todos los enlaces parten de la matriz de distancias, y la matriz cambia."],
+    explicacion: "Estirar un solo eje cambia qué pares están cerca, así que cambia la matriz de distancias y con ella todo el árbol. Por eso se estandarizan las variables antes, igual que en k-means. Multiplicar las dos por 10 sí deja el árbol igual con las alturas por 10."
+  });
+
+  /* ================= formula de memoria ================= */
+  B.ordenar($("formula"), {
+    piezas: ["d(G,H)", "=", "\\dfrac{1}{|G|\\,|H|}", "\\displaystyle\\sum_{p\\in G}", "\\displaystyle\\sum_{q\\in H}", "d(p,q)"],
+    distractores: ["\\dfrac{1}{|G|+|H|}", "\\max_{p,q}", "\\lVert c_G - c_H\\rVert", "^{2}"],
+    soluciones: [[0, 1, 2, 3, 4, 5], [0, 1, 2, 4, 3, 5]],
+    explicacion: "Todas las distancias entre un miembro de G y uno de H, sumadas y divididas entre cuántos pares hay: $|G|\\,|H|$.",
+    alResolver: function (ok) { C.reto("formula", ok); }
+  });
+
+  /* ================= vida real ================= */
+  (function () {
+    var CODIGO = {
+      py: [
+        ["import", "import numpy as np"],
+        ["import", "from scipy.cluster.hierarchy import linkage"],
+        [null, ""],
+        [null, "# 10 clientes inventados, A a J: [visitas al mes, gasto en decenas de euros]"],
+        ["datos", "X = np.array([[1.5, 2.5], [2.5, 1.5], [3.0, 2.5], [6.5, 3.0], [9.0, 2.0],"],
+        ["datos", "              [9.0, 2.5], [4.0, 7.0], [4.5, 9.5], [5.0, 9.0], [6.0, 7.0]])"],
+        ["n", "n = len(X)"],
+        [null, ""],
+        ["D0", "D = np.zeros((n, n))                     # 1. matriz de distancias"],
+        ["fori", "for i in range(n - 1):"],
+        ["forj", "    for j in range(i + 1, n):"],
+        ["dist", "        D[i, j] = D[j, i] = np.sqrt(np.sum((X[i] - X[j]) ** 2))"],
+        [null, ""],
+        ["def", "def enlace(g, h):                        # enlace completo: el par más lejano"],
+        [null, "    return max(D[i, j] for i in g for j in h)"],
+        [null, ""],
+        ["grupos0", "grupos = [[i] for i in range(n)]         # 2. cada punto es un grupo"],
+        ["nombres0", "nombres = list(\"ABCDEFGHIJ\")"],
+        ["alturas0", "alturas = []"],
+        ["while", "while len(grupos) > 1:                   # 3. unir de a dos"],
+        ["mejor0", "    mejor = np.inf"],
+        ["fora", "    for a in range(len(grupos) - 1):"],
+        ["forb", "        for b in range(a + 1, len(grupos)):"],
+        ["d", "            d = enlace(grupos[a], grupos[b])"],
+        ["si", "            if d < mejor: mejor, ga, gb = d, a, b"],
+        ["print", "    print(f\"{nombres[ga]} + {nombres[gb]}: {mejor:.3f}\")"],
+        ["append", "    alturas.append(mejor)"],
+        ["unirg", "    grupos[ga] = grupos[ga] + grupos[gb]"],
+        ["unirn", "    nombres[ga] = nombres[ga] + nombres[gb]"],
+        ["borrar", "    del grupos[gb], nombres[gb]"],
+        [null, ""],
+        ["lib", "Z = linkage(X, method=\"complete\")"],
+        ["verificar", "print(np.allclose(alturas, Z[:, 2]))     # True"]
+      ],
+      r: [
+        [null, "# 10 clientes inventados, A a J: [visitas al mes, gasto en decenas de euros]"],
+        ["datos", "X <- matrix(c(1.5, 2.5,  2.5, 1.5,  3.0, 2.5,  6.5, 3.0,  9.0, 2.0,"],
+        ["datos", "              9.0, 2.5,  4.0, 7.0,  4.5, 9.5,  5.0, 9.0,  6.0, 7.0),"],
+        ["datos", "            ncol = 2, byrow = TRUE)"],
+        ["n", "n <- nrow(X)"],
+        [null, ""],
+        ["D0", "D <- matrix(0, n, n)                     # 1. matriz de distancias"],
+        ["fori", "for (i in 1:(n - 1)) {"],
+        ["forj", "  for (j in (i + 1):n) {"],
+        ["dist", "    D[i, j] <- D[j, i] <- sqrt(sum((X[i, ] - X[j, ])^2))"],
+        [null, "  }"],
+        [null, "}"],
+        [null, ""],
+        ["def", "enlace <- function(g, h) {               # enlace completo: el par más lejano"],
+        [null, "  max(D[g, h])"],
+        [null, "}"],
+        [null, ""],
+        ["grupos0", "grupos <- as.list(1:n)                   # 2. cada punto es un grupo"],
+        ["nombres0", "nombres <- LETTERS[1:n]"],
+        ["alturas0", "alturas <- c()"],
+        ["while", "while (length(grupos) > 1) {             # 3. unir de a dos"],
+        ["mejor0", "  mejor <- Inf"],
+        ["fora", "  for (a in 1:(length(grupos) - 1)) {"],
+        ["forb", "    for (b in (a + 1):length(grupos)) {"],
+        ["d", "      d <- enlace(grupos[[a]], grupos[[b]])"],
+        ["si", "      if (d < mejor) { mejor <- d; ga <- a; gb <- b }"],
+        [null, "    }"],
+        [null, "  }"],
+        ["print", "  cat(sprintf(\"%s + %s: %.3f\\n\", nombres[ga], nombres[gb], mejor))"],
+        ["append", "  alturas <- c(alturas, mejor)"],
+        ["unirg", "  grupos[[ga]] <- c(grupos[[ga]], grupos[[gb]])"],
+        ["unirn", "  nombres[ga] <- paste0(nombres[ga], nombres[gb])"],
+        ["borrar", "  grupos[[gb]] <- NULL; nombres <- nombres[-gb]"],
+        [null, "}"],
+        [null, ""],
+        ["lib", "hc <- hclust(dist(X), method = \"complete\")"],
+        ["verificar", "all.equal(alturas, hc$height)            # TRUE"]
+      ]
+    };
+    var SALIDA = ["E + F: 0.500", "H + I: 0.707", "B + C: 1.118", "A + BC: 1.500", "G + J: 2.000", "D + EF: 2.693", "GJ + HI: 2.915", "ABC + DEF: 7.517", "ABCDEF + GJHI: 8.746"];
+    var FIN = { py: "True", r: "[1] TRUE" };
+    var n = PTS.length;
+    var D = [];
+    for (var i0 = 0; i0 < n; i0++) { D.push([]); for (var j0 = 0; j0 < n; j0++) D[i0].push(0); }
+
+    /* eventos: una foto del estado despues de cada linea ejecutada */
+    var EV = [];
+    (function () {
+      var fase = 0, grupos = null, nombres = null, veces = 0, impresas = 0, llenas = 0;
+      function copiaG() { return grupos ? grupos.map(function (g) { return g.slice(); }) : null; }
+      function foto(id, extra) {
+        EV.push(Object.assign({ id: id, fase: fase, grupos: copiaG(), nombres: nombres ? nombres.slice() : null, veces: veces, impresas: impresas, llenas: llenas,
+          i: null, j: null, a: null, b: null, d: null, mejor: null, ga: null, gb: null, par: null }, extra || {}));
+      }
+      foto("import");
+      foto("datos");
+      foto("n");
+      fase = 1;
+      foto("D0");
+      for (var i = 0; i < n - 1; i++) {
+        foto("fori", { i: i });
+        for (var j = i + 1; j < n; j++) {
+          foto("forj", { i: i, j: j });
+          D[i][j] = D[j][i] = dist(PTS[i], PTS[j]);
+          llenas++;
+          foto("dist", { i: i, j: j, d: D[i][j] });
+        }
+      }
+      foto("def");
+      fase = 2;
+      grupos = PTS.map(function (_, k) { return [k]; });
+      foto("grupos0");
+      nombres = LET.slice();
+      foto("nombres0");
+      foto("alturas0");
+      fase = 3;
+      for (;;) {
+        foto("while", { sale: grupos.length <= 1 });
+        if (grupos.length <= 1) break;
+        var mejor = Infinity, ga = null, gb = null;
+        foto("mejor0", { mejor: mejor });
+        for (var a = 0; a < grupos.length - 1; a++) {
+          foto("fora", { a: a, mejor: mejor, ga: ga, gb: gb });
+          for (var b = a + 1; b < grupos.length; b++) {
+            foto("forb", { a: a, b: b, mejor: mejor, ga: ga, gb: gb });
+            var e = enlace(PTS, grupos[a], grupos[b], "completo");
+            veces++;
+            foto("d", { a: a, b: b, d: e.v, par: e.par, mejor: mejor, ga: ga, gb: gb });
+            var cambia = e.v < mejor;
+            if (cambia) { mejor = e.v; ga = a; gb = b; }
+            foto("si", { a: a, b: b, d: e.v, par: e.par, mejor: mejor, ga: ga, gb: gb, cambia: cambia });
+          }
+        }
+        impresas++;
+        foto("print", { mejor: mejor, ga: ga, gb: gb, nuevaLinea: true });
+        foto("append", { mejor: mejor, ga: ga, gb: gb });
+        grupos[ga] = grupos[ga].concat(grupos[gb]);
+        foto("unirg", { mejor: mejor, ga: ga, gb: gb });
+        nombres[ga] = nombres[ga] + nombres[gb];
+        foto("unirn", { mejor: mejor, ga: ga, gb: gb });
+        grupos.splice(gb, 1); nombres.splice(gb, 1);
+        foto("borrar", { mejor: mejor, ga: ga, gb: gb });
+      }
+      fase = 4;
+      foto("lib", { fin: true });
+      foto("verificar", { fin: true, verif: true });
+    })();
+
+    var vp = crearPlano($("vrPlano"), { alto: 250 });
+    function narrar(e, ctx) {
+      var py = ctx.lang() === "py", ix = ctx.ix;
+      function g(k) { return e.nombres ? e.nombres[k] : ""; }
+      switch (e.id) {
+        case "import": return py ? "Carga NumPy para los arreglos y la función <b>linkage</b> de SciPy, que se usa solo al final para comparar." : "R trae <b>dist</b> y <b>hclust</b> de serie: no hay nada que importar.";
+        case "datos": return "Los 10 clientes del recorrido, uno por fila: visitas y gasto.";
+        case "n": return "Guarda cuántos clientes hay: <b>n = " + n + "</b>.";
+        case "D0": return "Una matriz de " + n + " × " + n + " llena de ceros para las distancias. La diagonal se queda en cero.";
+        case "fori": return "Fila <b>i = " + ix(e.i) + "</b>, el cliente " + LET[e.i] + ". Solo se recorren los j mayores que i: la otra mitad es un espejo.";
+        case "forj": return "Columna <b>j = " + ix(e.j) + "</b>, el cliente " + LET[e.j] + ".";
+        case "dist": return "Distancia de " + LET[e.i] + " a " + LET[e.j] + ": <b>" + f(e.d, 3) + "</b>. Se guarda en las dos celdas, D[" + ix(e.i) + ", " + ix(e.j) + "] y D[" + ix(e.j) + ", " + ix(e.i) + "]. Van " + e.llenas + " de 45.";
+        case "def": return "Define el enlace completo: entre dos grupos, la mayor distancia entre un miembro de cada uno. Cambiando <b>max</b> por <b>min</b> sería el enlace simple.";
+        case "grupos0": return "Cada cliente es un grupo de uno: " + n + " grupos." + (py ? "" : " En R los índices de los clientes van de 1 a 10.");
+        case "nombres0": return "Las letras de cada grupo, para imprimir qué se une.";
+        case "alturas0": return "Una lista vacía para guardar la altura de cada unión.";
+        case "while": return e.sale ? "Queda un solo grupo: el bucle termina." : "Quedan <b>" + e.grupos.length + "</b> grupos: hay que hacer otra unión.";
+        case "mejor0": return "La mejor distancia de esta vuelta empieza en infinito (" + (py ? "np.inf" : "Inf") + "), así que cualquier par la va a mejorar.";
+        case "fora": return "Primer grupo del par: <b>a = " + ix(e.a) + "</b>, " + g(e.a) + ".";
+        case "forb": return "Segundo grupo: <b>b = " + ix(e.b) + "</b>, " + g(e.b) + ".";
+        case "d": return "enlace(" + g(e.a) + ", " + g(e.b) + ") = <b>" + f(e.d, 3) + "</b>" + (e.par ? ", la distancia de " + LET[e.par[0]] + " a " + LET[e.par[1]] + ", el par más lejano." : ".");
+        case "si": return e.cambia ? "Es menor que la mejor hasta ahora: <b>" + g(e.a) + " y " + g(e.b) + "</b> pasan a ser el par a unir, con " + f(e.mejor, 3) + "."
+          : "No mejora a " + f(e.mejor, 3) + ": se sigue buscando.";
+        case "print": return "Imprime la unión ganadora: <b>" + g(e.ga) + " + " + g(e.gb) + "</b> a " + f(e.mejor, 3) + ".";
+        case "append": return "Guarda la altura " + f(e.mejor, 3) + ". Es la altura de la U en el dendrograma.";
+        case "unirg": return "El grupo " + ix(e.ga) + " absorbe a los miembros del grupo " + ix(e.gb) + ".";
+        case "unirn": return "Su nombre pasa a ser <b>" + g(e.ga) + "</b>.";
+        case "borrar": return "Borra el grupo " + ix(e.gb) + (py ? " con <b>del</b>" : " asignándole <b>NULL</b>") + ". Ahora hay " + e.grupos.length + " grupos y los que estaban detrás corren un lugar.";
+        case "lib": return py ? "La función de SciPy hace todo lo anterior en una línea, con el método <b>complete</b>." : "La función de R: <b>hclust</b> sobre la matriz de distancias de <b>dist</b>, con <b>complete</b>.";
+        case "verificar": return py ? "Compara las 9 alturas con la tercera columna de la matriz de enlace: <b>True</b>, son las mismas." : "Compara las 9 alturas con <b>hc$height</b>: <b>TRUE</b>, son las mismas.";
+      }
+      return "";
+    }
+    function visual(e, anterior, ctx) {
+      var segs = [], gr = [], color = null, anillo = [];
+      if (e && e.fase === 1 && e.i !== null && e.j !== null) segs.push({ a: PTS[e.i], b: PTS[e.j], cls: "fuerte", lab: e.id === "dist" ? f(e.d) : null });
+      if (e && e.fase === 1 && e.i !== null && e.j === null) anillo = [e.i];
+      if (e && e.grupos) {
+        var M = arbolDe("10", "completo"), ord = ordenHojas(M, n);
+        var lab = PTS.map(function (_, p) { for (var k = 0; k < e.grupos.length; k++) if (e.grupos[k].indexOf(p) >= 0) return k; return 0; });
+        var cc = colorear(lab, ord);
+        e.grupos.forEach(function (gg, k) { if (gg.length > 1) gr.push({ m: gg, c: col(cc.c[gg[0]]), op: (k === e.a || k === e.b) ? 0.32 : 0.14 }); });
+        color = PTS.map(function (_, p) { return e.grupos[lab[p]].length > 1 ? cc.c[p] : null; });
+        if (e.a !== null && e.b !== null) anillo = e.grupos[e.a].concat(e.grupos[e.b]);
+        if (e.par && (e.id === "d" || e.id === "si")) segs.push({ a: PTS[e.par[0]], b: PTS[e.par[1]], cls: "fuerte", lab: f(e.d) });
+        if (e.ga !== null && e.mejor !== null && isFinite(e.mejor) && e.id !== "unirg" && e.id !== "unirn" && e.id !== "borrar") {
+          var pm = enlace(PTS, e.grupos[e.ga], e.grupos[e.gb], "completo").par;
+          if (!(e.par && pm && pm[0] === e.par[0] && pm[1] === e.par[1])) segs.push({ a: PTS[pm[0]], b: PTS[pm[1]], cls: "mejor" });
+        }
+      }
+      vp.pintar({ pts: PTS, nombres: LET, segs: segs, grupos: gr, color: color, anillo: anillo });
+      var cu = "";
+      if (e && e.id === "dist") cu = "D[" + ctx.ix(e.i) + ", " + ctx.ix(e.j) + "] = <b>" + f(e.d, 3) + "</b> · llenas " + e.llenas + " de 45";
+      else if (e && (e.id === "d" || e.id === "si")) cu = "enlace = <b>" + f(e.d, 3) + "</b> · mejor de la vuelta = <b>" + (isFinite(e.mejor) ? f(e.mejor, 3) : "∞") + "</b> (línea verde)";
+      else if (e && e.fase === 3 && e.grupos) cu = "grupos: " + e.nombres.join(", ");
+      else if (e && e.fin) cu = "9 uniones, 165 enlaces calculados.";
+      $("vrCuenta").innerHTML = cu;
+      var k = e ? e.impresas : 0, lin = SALIDA.slice(0, k);
+      var h = lin.map(function (l, t) { return t === k - 1 && e.nuevaLinea ? '<span class="nueva">' + l + "</span>" : l; });
+      if (e && e.verif) h.push('<span class="nueva">' + FIN[ctx.lang()] + "</span>");
+      $("vrSalida").innerHTML = h.join("\n");
+    }
+    B.vidaReal($("vidareal"), {
+      codigo: CODIGO,
+      eventos: EV,
+      narrar: narrar,
+      vars: function (e, ctx) {
+        var v = [], ix = ctx.ix;
+        if (e && e.fase === 1 && e.i !== null) v.push('<span class="vj">i = <b>' + ix(e.i) + "</b></span>");
+        if (e && e.fase === 1 && e.j !== null) v.push('<span class="vk">j = <b>' + ix(e.j) + "</b></span>");
+        if (e && e.a !== null) v.push('<span class="vj">a = <b>' + ix(e.a) + "</b></span>");
+        if (e && e.b !== null) v.push('<span class="vk">b = <b>' + ix(e.b) + "</b></span>");
+        if (e && e.mejor !== null) v.push("<span>mejor = <b>" + (isFinite(e.mejor) ? f(e.mejor, 3) : "∞") + "</b></span>");
+        if (e && e.grupos) v.push("<span>grupos = <b>" + e.grupos.length + "</b></span>");
+        v.push("<span>enlace calculado <b>" + (e ? e.veces : 0) + "</b> veces</span>");
+        return v;
+      },
+      visual: visual,
+      demora: function (e) {
+        if (!e) return 600;
+        if (e.id === "forj" || e.id === "forb") return 110;
+        if (e.id === "dist" || e.id === "d") return 220;
+        if (e.id === "si") return e.cambia ? 600 : 180;
+        if (e.id === "fori" || e.id === "fora") return 300;
+        if (e.id === "print") return 1400;
+        return 750;
+      }
+    });
+
+    B.numerico(cuerpo("vrPred"), {
+      pregunta: "¿Cuántas veces se va a ejecutar la línea <code>d = enlace(grupos[a], grupos[b])</code> hasta terminar?",
+      respuesta: 165,
+      tolerancia: 0,
+      pistas: [
+        "En la primera vuelta hay 10 grupos y se comparan todos los pares: 10 · 9 / 2 = 45.",
+        "En la segunda hay 9 grupos (36 pares), después 8 (28)... hasta 2 grupos (1 par). Suma 45 + 36 + 28 + 21 + 15 + 10 + 6 + 3 + 1."
+      ],
+      diagnostico: function (v) {
+        if (v === 45) return "45 es solo la primera vuelta. Después hay 9 grupos, luego 8...";
+        if (v === 9) return "9 son las uniones. En cada vuelta se calculan varios enlaces.";
+        if (v === 405) return "Eso sería si cada una de las 9 vueltas tuviera 45 pares. Pero los grupos disminuyen.";
+        return null;
+      },
+      explicacion: "45 + 36 + 28 + 21 + 15 + 10 + 6 + 3 + 1 = <b>165</b>. Crece como n³: con 1000 clientes esta versión hace unos 167 millones de enlaces, cada uno mirando todos los pares de miembros. Por eso las librerías usan atajos (abajo, Lance y Williams). Ahora dale a reproducir y mira el contador.",
+      alResolver: function (ok) { C.reto("codigo1", ok); }
+    });
+    prop("codigo2", {
+      pregunta: "En R escribes <code>hclust(dist(X), method = \"ward.D\")</code> y en Python <code>linkage(X, method=\"ward\")</code>. La última altura da <b>19.520</b> en R y <b>12.715</b> en SciPy. ¿Por qué?",
+      opciones: [
+        "\"ward.D\" espera distancias al cuadrado; con dist(X) hace otra cuenta. \"ward.D2\" sí coincide con SciPy",
+        "R divide entre n − 1 y SciPy entre n",
+        "Uno de los dos tiene un error en su implementación de Ward",
+        "R ordena los clientes de otra forma y cambia el árbol"
+      ],
+      correcta: 0,
+      pistas: [null, "Ward no divide entre n en ningún lado. Mira el nombre de la otra opción de R: ward.D2.",
+        "Los dos están bien documentados. Lo que cambia es qué espera cada uno como entrada.",
+        "El orden de las filas no cambia las alturas de Ward."],
+      explicacion: "<code>ward.D</code> aplica la fórmula de Ward a lo que le des, y la fórmula está pensada para distancias al cuadrado. Con <code>dist(X)</code> sin elevar, las alturas salen 0.5, 0.707, 1.118, 1.57, 2, 3.328, 3.615, 14.397, 19.52. Con <code>ward.D2</code>, o con <code>hclust(dist(X)^2, \"ward.D\")</code> y la raíz de las alturas, salen las de SciPy: ..., 10.12, 12.715. Los grupos de este ejemplo no cambian, pero las alturas sí, y con otros datos pueden cambiar los grupos."
+    });
+    prop("codigo3", {
+      pregunta: "La cuarta fila de <code>hc$merge</code> en R es <code>-1 3</code>, y la cuarta fila de la matriz de enlace de SciPy es <code>0 12</code>. ¿Qué significan el 3 de R y el 12 de SciPy?",
+      opciones: [
+        "Los dos son el grupo BC, el que se formó en la tercera unión; R numera las uniones desde 1 y SciPy las numera desde n = 10",
+        "Son el cliente C, que R cuenta desde 1 y SciPy desde 0",
+        "Son los miembros más distintos de cada grupo, como dice Raschka",
+        "Son la altura de la unión redondeada"
+      ],
+      correcta: 0,
+      pistas: [null, "En R los clientes sueltos van con signo negativo, como el -1. Un número positivo es otra cosa.",
+        "Esa es justamente la errata del libro (p. 323): no son miembros, son grupos.",
+        "La altura está en otra columna: hc$height en R y la tercera columna en SciPy."],
+      explicacion: "En R un número negativo es un cliente suelto (−1 es A) y uno positivo es el grupo creado en esa fila de <code>merge</code> (3 es la tercera unión, B + C). SciPy usa 0 a 9 para los clientes y 10, 11, 12... para los grupos nuevos: 12 = 10 + 2 es la tercera unión. Mismo árbol, dos convenciones."
+    });
+  })();
+
+  /* ================= tarjetas ================= */
+  B.tarjetas($("tarjetas"), [
+    ["¿Cómo empieza y cómo termina el agrupamiento aglomerativo?", "Empieza con cada punto como un grupo de uno y termina con un solo grupo. En medio hace n − 1 uniones."],
+    ["¿Qué une en cada vuelta?", "El par de grupos con el menor enlace, según la regla elegida."],
+    ["Enlace simple, completo y promedio", "Mínimo, máximo y media de las distancias entre un miembro de cada grupo. Siempre simple ≤ promedio ≤ completo."],
+    ["¿Qué mide Ward?", "Cuánto crece la suma de cuadrados dentro de los grupos al unirlos: $\\frac{|G||H|}{|G|+|H|}\\lVert c_G - c_H\\rVert^2$. SciPy dibuja $\\sqrt{2\\,\\Delta\\text{SSE}}$."],
+    ["En el dendrograma, ¿qué significa la altura de una U?", "El valor del enlace en el momento de esa unión. El orden horizontal de las hojas no significa nada."],
+    ["¿Cómo se obtienen k grupos?", "Cortando el árbol con una línea horizontal: cada rama cruzada es un grupo. Un buen lugar es el salto más grande entre alturas."],
+    ["¿Qué es el encadenamiento?", "El defecto del enlace simple: un puente de puntos cercanos une zonas distintas en un grupo largo."],
+    ["En R, ¿ward.D o ward.D2?", "ward.D2 con dist(X): coincide con SciPy. ward.D espera distancias al cuadrado."]
+  ]);
+
+  /* ================= conexiones ================= */
+  B.conexiones("jerarquico");
+})();
+</script>
+</body>
+</html>

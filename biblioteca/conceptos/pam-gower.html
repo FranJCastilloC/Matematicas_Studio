@@ -1,0 +1,1853 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PAM y distancia de Gower</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+/* ---------- colores de los grupos (los mismos de k-means; solo esta pagina) ---------- */
+:root { --g0: #c96f14; --g1: #2f68c4; --g2: #2c8a47; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --g0: #f0a35a; --g1: #7aa9f2; --g2: #6cc584; }
+}
+:root[data-theme="dark"] { --g0: #f0a35a; --g1: #7aa9f2; --g2: #6cc584; }
+
+/* ---------- plano ---------- */
+.plano-svg { width: 100%; height: auto; display: block; user-select: none; -webkit-user-select: none; touch-action: manipulation; }
+.plano-svg.arrastrable { touch-action: none; }
+.plano-svg .grid { stroke: var(--line-soft); stroke-width: 1; }
+.plano-svg .grid.eje { stroke: var(--ink-3); }
+.plano-svg .tick { font: 10px var(--f-mono); fill: var(--ink-3); }
+.plano-svg .eje-tit { font: 11.5px var(--f-body); fill: var(--ink-2); }
+.plano-svg .ln { stroke-width: 1.2; opacity: .5; }
+.plano-svg .ln.g0 { stroke: var(--g0); }
+.plano-svg .ln.g1 { stroke: var(--g1); }
+.plano-svg .ln.g2 { stroke: var(--g2); }
+.plano-svg .taxi { fill: none; stroke: var(--accent); stroke-width: 1.3; opacity: .55; stroke-dasharray: 3 2; }
+.plano-svg .pt { stroke: var(--surface); stroke-width: 1.6; transition: fill .2s; }
+.plano-svg .pt.sin { fill: var(--ink-3); }
+.plano-svg .pt.g0 { fill: var(--g0); }
+.plano-svg .pt.g1 { fill: var(--g1); }
+.plano-svg .pt.g2 { fill: var(--g2); }
+.plano-svg .pt.tenue { fill-opacity: .3; }
+.plano-svg .pt.raro { fill: var(--accent); stroke: var(--ink); stroke-width: 1.4; }
+.plano-svg .mring { fill: none; stroke: var(--ink); stroke-width: 1.3; }
+.plano-svg .hit { fill: transparent; }
+.plano-svg .hit.toca { cursor: pointer; }
+.plano-svg .hit.drag { cursor: grab; }
+.plano-svg .etq { font: 500 10px var(--f-mono); fill: var(--ink); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; pointer-events: none; }
+.plano-svg .etq.min { fill: var(--accent); font-weight: 600; }
+.plano-svg .anillo { fill: none; stroke: var(--accent); stroke-width: 2.4; pointer-events: none; }
+.plano-svg .fan { fill: none; stroke: var(--ink-2); stroke-width: 1.6; stroke-dasharray: 3 2; pointer-events: none; }
+.plano-svg .cen { stroke: var(--surface); stroke-width: 2; pointer-events: none; }
+.plano-svg .cen.g0 { fill: var(--g0); }
+.plano-svg .cen.g1 { fill: var(--g1); }
+.plano-svg .cen.g2 { fill: var(--g2); }
+.plano-svg .cen.media { fill: var(--ink); }
+.plano-svg .cen-borde { fill: none; stroke: var(--ink); stroke-width: 1.2; pointer-events: none; }
+.plano-svg .medo { stroke: var(--ink); stroke-width: 2; pointer-events: none; }
+.plano-svg .medo.g0 { fill: var(--g0); }
+.plano-svg .medo.g1 { fill: var(--g1); }
+.plano-svg .medo.g2 { fill: var(--g2); }
+.plano-svg .medo.solo { fill: var(--surface); }
+.plano-svg .medo.sel { stroke: var(--accent); stroke-width: 3.2; }
+.plano-svg .cruz { stroke: var(--accent); stroke-width: 2.5; stroke-linecap: round; pointer-events: none; }
+.plano-svg .cruz-lab { font: 500 10.5px var(--f-mono); fill: var(--accent); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.esc-head .hint { font-size: 12.5px; color: var(--ink-2); }
+.leyenda { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; font-size: 12.5px; color: var(--ink-2); }
+.leyenda[hidden] { display: none; }
+.leyenda i { display: inline-block; width: 10px; height: 10px; margin-right: 6px; vertical-align: -1px; }
+.leyenda i.cua { background: var(--ink-3); border: 1.5px solid var(--ink); }
+.leyenda i.rom { background: var(--ink); transform: rotate(45deg) scale(.85); }
+.leyenda i.raro { background: var(--accent); border-radius: 50%; }
+
+/* ---------- informacion del escenario ---------- */
+.info { margin-top: 10px; font-size: 13px; color: var(--ink-2); overflow-wrap: anywhere; }
+.tabla-wrap { overflow-x: auto; margin-top: 8px; }
+.tabla { width: 100%; border-collapse: collapse; font-family: var(--f-mono); font-size: 12px; font-variant-numeric: tabular-nums; }
+.tabla th { font-weight: 500; color: var(--ink-3); font-size: 11px; text-align: right; padding: 4px 7px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.tabla td { text-align: right; padding: 3px 7px; border-bottom: 1px solid var(--line-soft); color: var(--ink-2); white-space: nowrap; }
+.tabla td.pl, .tabla th:first-child { text-align: left; }
+.tabla tr.tot td { color: var(--ink); border-top: 1px solid var(--line); border-bottom: 0; }
+.tabla tr.raro td { color: var(--accent); }
+.tabla tr.mejor td { background: var(--accent-soft); color: var(--ink); }
+.chipg { display: inline-block; width: 9px; height: 9px; margin-right: 6px; vertical-align: 0; }
+.chipg.g0 { background: var(--g0); }
+.chipg.g1 { background: var(--g1); }
+.chipg.g2 { background: var(--g2); }
+.medtag { font-size: 10px; color: var(--ink); border: 1px solid var(--ink-3); border-radius: 3px; padding: 0 3px; margin-left: 4px; }
+.grande { font-family: var(--f-mono); font-size: 13.5px; color: var(--ink-2); margin: 6px 0 12px; font-variant-numeric: tabular-nums; line-height: 1.6; overflow-wrap: anywhere; }
+.grande b { font-size: 15px; color: var(--ink); font-weight: 500; }
+.grande:empty { display: none; }
+.btn-row.pasos-btn { margin: 10px 0 6px; }
+
+/* ---------- tabla mixta y matriz de Gower ---------- */
+.mix-tit { font-size: 12.5px; color: var(--ink-2); margin: 10px 0 2px; }
+.matriz { border-collapse: collapse; font-family: var(--f-mono); font-size: 10.5px; font-variant-numeric: tabular-nums; margin-top: 6px; }
+.matriz th { font-weight: 500; color: var(--ink-3); padding: 3px 2px; text-align: center; }
+.matriz td { width: 34px; min-width: 30px; height: 26px; text-align: center; border: 1px solid var(--surface); color: var(--ink); cursor: pointer; padding: 0; }
+.matriz td.diag { cursor: default; color: var(--ink-3); }
+.matriz td.vacio { background: var(--surface-2); color: var(--ink-3); cursor: default; }
+.matriz td.sel { outline: 2.4px solid var(--accent); outline-offset: -2px; font-weight: 600; }
+.matriz td.oculto { color: var(--accent); font-weight: 600; }
+.matriz td.medcol { box-shadow: inset 0 0 0 1.5px var(--ink); }
+.matriz th.z, .tabla tr td.z { color: var(--accent); }
+.desglose { font-family: var(--f-mono); font-size: 12.5px; color: var(--ink-2); line-height: 1.6; overflow-wrap: anywhere; }
+.desglose b { color: var(--ink); font-weight: 500; }
+
+/* ---------- vida real ---------- */
+.vr-salida { margin: 10px 0 0; padding: 8px 12px; background: var(--surface-2); border-radius: 8px; font-family: var(--f-mono); font-size: 12px; line-height: 1.5; min-height: 3em; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; color: var(--ink); }
+.mini-code { margin: 8px 0; padding: 8px 12px; background: var(--surface-2); border-radius: 8px; font-family: var(--f-mono); font-size: 12px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+.clientes-tira { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+.clientes-tira span { font-family: var(--f-mono); font-size: 12px; padding: 2px 7px; border-radius: 5px; border: 1.5px solid var(--line); color: var(--ink-2); }
+.clientes-tira span.g0 { border-color: var(--g0); color: var(--ink); }
+.clientes-tira span.g1 { border-color: var(--g1); color: var(--ink); }
+.clientes-tira span.med { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.clientes-tira span.prueba { outline: 2px dashed var(--accent); outline-offset: 1px; }
+
+/* ---------- retos propios ---------- */
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.ojo-opts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
+.ojo-opts .opt { text-align: center; }
+.objetivos { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.objetivos li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.objetivos .m { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.objetivos li.hecho { color: var(--ink); }
+.objetivos li.hecho .m { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 3px var(--surface); }
+.datos-mano { border-collapse: collapse; font-family: var(--f-mono); font-size: 13px; margin: 4px 0 12px; }
+.datos-mano th, .datos-mano td { padding: 4px 9px; border: 1px solid var(--line); text-align: center; }
+.datos-mano th { color: var(--ink-3); font-weight: 500; font-size: 12px; }
+.datos-wrap { overflow-x: auto; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ PAM y Gower</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Aprendizaje automático · Agrupamiento · SM142003 UD5 y Raschka cap. 10</p>
+    <h1>PAM y distancia de Gower: centros que son clientes de verdad</h1>
+    <p class="lede">
+      k-means pone el centro de cada grupo en la media, y la media se deja arrastrar por un solo cliente raro. <b>PAM exige que el centro sea un cliente real</b>, el medoide,
+      y por eso un atípico casi no lo mueve. Y como PAM solo necesita distancias, puede trabajar con clientes descritos por números y por categorías a la vez,
+      si usas la <b>distancia de Gower</b>: cada variable se mide en su propia escala, de 0 a 1, y después se promedia.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> Tienes dos clientes: uno visitó la tienda 2 veces, gastó 20 euros, compra en la tienda física y es socio; el otro visitó 9 veces, gastó 20 euros, compra por la app y es socio. ¿Cómo dirías qué tan distintos son con un solo número? ¿Cómo mezclarías "2 visitas contra 9" con "tienda contra app"?</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: yo restaría..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>Del centro de gravedad al cliente central</h2>
+      <p>Siete pasos. Los cuatro primeros usan los 30 clientes de la página de k-means; los tres últimos, una tabla con números y categorías. Cada paso termina con un chequeo que abre el siguiente.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="Un cliente raro">
+          <span class="etapa">Paso 1</span>
+          <h3>Un cliente nuevo y lejano</h3>
+          <p>En el escenario están los 10 clientes del grupo de abajo a la izquierda, los mismos de la página de k-means: cuántas veces visitaron la web en el mes y cuánto gastaron, en decenas de euros. Los datos son inventados. Su centro de gravedad, el promedio de los 10, está justo en (2, 2).</p>
+          <p>Ahora entra al grupo un cliente nuevo, el punto violeta: visitó 8 veces y gastó 90 euros. Es raro para este grupo, pero alguien lo puso ahí.</p>
+          <div class="check" id="chk1"><p class="check-tit">Predice antes de ver</p><div class="cuerpo"></div></div>
+          <p>Un solo cliente movió el centro de los otros diez. Es lo que dicen las diapositivas de la UD5: en un agrupamiento completo, como k-means, todos los puntos tienen grupo, y los atípicos arrastran a los centroides
+          <cite class="cita" data-fuente="km5" data-pag="7" data-ancla="3/2" data-seccion="Complete vs partial" data-que="Agrupamiento completo frente a parcial: en el completo cada punto tiene grupo y los atípicos arrastran los centroides (k-means); en el parcial pueden quedar sin grupo. Figure 6." data-cuando="Al terminar este paso"></cite>.
+          Brasil cuenta lo mismo con una calle que tiene 40 cámaras y sube sola la media de todas <cite class="cita" data-fuente="brasil2v3" data-pag="5" data-pimp="12" data-seccion="2.1 Mean and outliers" data-que="La media como resumen y cómo un solo valor atípico (una calle con 40 cámaras) la sube a 7.3. Es la misma idea, en una sola variable." data-cuando="Si quieres la versión en una dimensión"></cite>.
+          <b>Arrastra el punto violeta</b> y mira cómo el rombo negro lo sigue.</p>
+        </section>
+
+        <section class="paso card" data-titulo="El medoide">
+          <span class="etapa">Paso 2</span>
+          <h3>Un centro que tiene que ser un cliente</h3>
+          <p>Otra regla: el centro del grupo tiene que ser <b>uno de sus clientes</b>. ¿Cuál? El que tiene la menor suma de distancias a todos los demás, el más "central". Ese cliente se llama <b>medoide</b>.</p>
+          <p>Para medir usamos la distancia del taxi (Manhattan): lo que hay que caminar en horizontal más lo que hay que caminar en vertical, como en una ciudad con calles en cuadrícula. Las líneas punteadas del escenario son esos caminos desde el cliente del anillo, en (2, 2). La viste en la página de <a href="normas-distancias.html">normas y distancias</a>; las diapositivas la recomiendan justamente porque es más robusta que la euclídea ante los atípicos
+          <cite class="cita" data-fuente="km5" data-pag="11" data-ancla="distance-measures" data-seccion="3.3 Distance measures" data-que="La distancia decide la forma de los grupos; la euclídea es sensible a los atípicos y Manhattan y Minkowski son más robustas (sin fórmulas)." data-cuando="Al terminar este paso"></cite>.</p>
+          <div class="check" id="chk2"><p class="check-tit">Calcula con los datos de ahora</p><div class="cuerpo"></div></div>
+          <p>Raschka presenta las dos opciones lado a lado: un grupo se puede resumir con su <b>centroide</b>, la media, o con su <b>medoide</b>, el punto más representativo, que además sirve cuando las variables son categóricas y no hay media que sacar
+          <cite class="cita" data-fuente="raschka10" data-pag="2" data-pimp="306" data-seccion="k-means clustering using scikit-learn" data-que="El agrupamiento basado en prototipos: el prototipo es un centroide (media, para variables continuas) o un medoide (el punto más representativo, para categóricas)." data-cuando="Después de mover el punto violeta con el medoide a la vista"></cite>.</p>
+        </section>
+
+        <section class="paso card" data-titulo="PAM">
+          <span class="etapa">Paso 3</span>
+          <h3>PAM: probar intercambios hasta que ninguno ayude</h3>
+          <p>Ahora los 30 clientes y tres medoides. Cada cliente se va con el medoide más cercano y paga su distancia hasta él. La suma de todo eso es el <b>costo</b>, lo que PAM quiere hacer chico:</p>
+          <div class="fbloque">
+            <div data-tex="\text{costo}(m_1, \dots, m_k) = \sum_{i=1}^{n} \; \min_{j} \; d(x_i, m_j)" data-display></div>
+            <div class="vivo" id="vivo3"></div>
+          </div>
+          <p>Los <span data-tex="m_j"></span> son clientes reales y <span data-tex="d"></span> es la distancia que elijas, aquí la del taxi. Fíjate en lo que no hay: ningún cuadrado. k-means suma distancias <b>al cuadrado</b>, y un cliente a distancia 10 pesa 100; aquí pesa 10.</p>
+          <div class="check" id="chk3"><p class="check-tit">Calcula con los datos de ahora</p><div class="cuerpo"></div></div>
+          <p>El algoritmo tiene dos fases. <b>BUILD</b> elige medoides iniciales de forma codiciosa: el más central de todos, y después el que más baje el costo. <b>SWAP</b> prueba todos los intercambios posibles, un medoide por un cliente que no lo es, aplica el que más baja el costo, y repite hasta que ningún intercambio mejore. Aquí empezamos con medoides malos a propósito, los mismos tres clientes del inicio de k-means.
+          <b>Toca un medoide (cuadrado) y después cualquier cliente</b> para intercambiarlos tú, o deja que PAM elija.</p>
+          <div class="btn-row pasos-btn">
+            <button type="button" class="primary" id="btnSwap3" disabled>El mejor intercambio</button>
+            <button type="button" id="btnFin3" disabled>Hasta que nada mejore</button>
+            <button type="button" class="ghost" id="btnIni3" disabled>Volver al inicio</button>
+          </div>
+          <div class="grande" id="estado3"></div>
+          <p>Las diapositivas lo presentan en una línea: los mismos pasos de k-means con otro centro, más robusto ante los atípicos y más caro de calcular
+          <cite class="cita" data-fuente="km5" data-pag="24" data-ancla="partitioning-around-medians-pam" data-seccion="4.1 Partitioning around medians (PAM)" data-que="PAM como alternativa a k-means: más robusto a los atípicos y más caro, con cluster::pam(). Ojo: el título dice medians y el texto habla de mediana; PAM es Partitioning Around Medoids." data-cuando="Al terminar este paso, y lee el recuadro del paso 4"></cite>.
+          Y hay un detalle que Raschka menciona de pasada: con medoides no puede quedar un grupo vacío, porque cada medoide está a distancia 0 de sí mismo y siempre se queda al menos con él
+          <cite class="cita" data-fuente="raschka10" data-pag="4" data-pimp="308" data-seccion="k-means clustering using scikit-learn" data-que="La convergencia de k-means y los grupos vacíos: el texto aclara que con k-medoids (y con fuzzy C-means) no pasa, y que scikit-learn reubica un centroide vacío en el punto más lejano." data-cuando="Después de jugar con los intercambios"></cite>.</p>
+          <details class="profundizar">
+            <summary>¿Cuánto cuesta un intercambio?</summary>
+            <div>
+              <p>Cada vuelta de SWAP prueba <span data-tex="k\,(n-k)"></span> intercambios: aquí <span data-tex="3 \times 27 = 81"></span>. Y para cada uno hay que recalcular el costo, que recorre los n clientes. Por vuelta son del orden de <span data-tex="k\,(n-k)\,n"></span> distancias: con 30 clientes, unas 2400; con 10 000 clientes y k = 5, unos 500 millones. Por eso PAM es "más caro" que k-means, que en cada vuelta solo mide <span data-tex="n\,k"></span> distancias.</p>
+              <p>Además PAM necesita la tabla de todas las distancias entre pares de clientes, que crece con <span data-tex="n^2"></span>. Eso es el paso 7.</p>
+            </div>
+          </details>
+        </section>
+
+        <section class="paso card" data-titulo="El atípico">
+          <span class="etapa">Paso 4</span>
+          <h3>Un atípico de verdad: k-means contra PAM</h3>
+          <p>Vuelve el cliente raro, ahora a los 30: visitó 5 veces y gastó <b>220 euros</b>, en (5, 22). El escenario estiró el eje del gasto para que entre. Pides tres grupos a los dos métodos, cada uno con su mejor resultado posible.</p>
+          <div class="check" id="chk4"><p class="check-tit">Predice antes de ver</p><div class="cuerpo"></div></div>
+          <div class="btn-row pasos-btn">
+            <button type="button" id="btnKm4" disabled>k-means</button>
+            <button type="button" id="btnPam4" disabled>PAM</button>
+          </div>
+          <div class="grande" id="estado4"></div>
+          <p>k-means minimiza distancias al cuadrado: el atípico, a unas 13 unidades del grupo de arriba, aportaría más de 160 si se quedara en ese grupo. Le sale más barato regalarle un centro entero y juntar dos grupos que no tienen nada que ver. PAM suma distancias sin elevar: el atípico paga 13 y ya. Esas son las dos debilidades de k-means que, según las diapositivas, atacan los métodos alternativos: los atípicos y los datos grandes
+          <cite class="cita" data-fuente="km5" data-pag="23" data-ancla="alternative-partitioning-methods" data-seccion="4 Alternative partitioning methods" data-que="La portada de los métodos particionales alternativos: atacan las dos debilidades de k-means, la sensibilidad a los atípicos y el costo con datos grandes." data-cuando="Al terminar este paso"></cite>.</p>
+
+          <div class="destacado" id="destacado">
+            <p class="dest-tit">Una confusión muy común</p>
+            <h4>¿PAM usa la mediana?</h4>
+            <p>Las diapositivas titulan "Partitioning around medians" y dicen que PAM usa la mediana en vez de la media. Es una errata: PAM es <b>Partitioning Around Medoids</b>, y su centro es un medoide, un cliente real, como dice la nota de la diapositiva siguiente. La confusión tiene sentido, porque mediana y medoide resisten a los atípicos por la misma razón
+            <cite class="cita" data-fuente="nield3" data-pag="12" data-seccion="Median" data-que="La mediana con código Python y por qué resiste a los atípicos (el ejemplo del sueldo de Michael Jordan), más el recuadro que la presenta como un cuantil." data-cuando="Al leer este recuadro"></cite>,
+            pero no son lo mismo.</p>
+            <div class="check" id="chk4b"><p class="check-tit">Decide antes de seguir</p><div class="cuerpo"></div></div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Gower">
+          <span class="etapa">Paso 5</span>
+          <h3>Gower: números y categorías en la misma distancia</h3>
+          <p>A ocho de esos clientes les agregamos dos columnas que no son números: por dónde compran (tienda, web o app) y si son socios. ¿Cómo se resta "tienda" menos "app"? No se resta. Gower mide cada variable por separado, con una regla que siempre da un número entre 0 y 1:</p>
+          <ul>
+            <li><b>Numérica</b>: la diferencia en valor absoluto dividida entre el <b>rango</b> de esa variable (el máximo menos el mínimo de la tabla). Dos clientes en los extremos dan 1.</li>
+            <li><b>Categórica</b>: 0 si coinciden, 1 si no.</li>
+          </ul>
+          <p>Y la distancia es el <b>promedio</b> de las cuatro partes. Para dos clientes i y j, con p variables:</p>
+          <div class="fbloque">
+            <div data-tex="d(i,j) = \frac{1}{p}\sum_{f=1}^{p} d_{ij}^{(f)}, \qquad d_{ij}^{(f)} = \frac{|x_{if}-x_{jf}|}{R_f}\ \text{o}\ \begin{cases}0 & \text{igual}\\ 1 & \text{distinto}\end{cases}" data-display></div>
+            <div class="vivo" id="vivo5"></div>
+          </div>
+          <p>La parte numérica es la distancia del taxi con cada variable dividida entre su rango, que es como la definen las diapositivas
+          <cite class="cita" data-fuente="km5" data-pag="22" data-ancla="4/14" data-seccion="Gower distance" data-que="Las reglas de Gower por tipo de variable (cuantitativas: Manhattan normalizada por el rango; ordinales; nominales con one-hot y Dice), cluster::daisy(), y qué funciones aceptan una matriz de distancias (pam, diana, agnes) y cuáles no (kmeans, clara)." data-cuando="Al terminar este paso"></cite>.
+          Para las nominales escriben el índice de Dice, <span data-tex="D = \frac{2a}{2a+b+c}"></span>, y ahí hay una errata: eso es una <b>similitud</b> (1 si coinciden), y la distancia es <span data-tex="1 - D"></span>. Con una sola variable nominal pasada a dummies da lo mismo que el 0 o 1 de aquí.
+          <b>Toca cualquier celda de la matriz</b> para ver su cuenta.</p>
+          <div class="check" id="chk5"><p class="check-tit">Calcula antes de mirar la celda</p><div class="cuerpo"></div></div>
+          <p>La diapositiva 21 cuenta la otra salida, la que usa k-means: pasar las ordinales a números, las nominales a dummies, y escalar todo. Funciona, pero con muchas categorías la tabla se llena de ceros
+          <cite class="cita" data-fuente="km5" data-pag="21" data-ancla="clustering-with-mixed-data" data-seccion="3.7 Clustering with mixed data" data-que="Agrupar con datos mixtos: ordinales a números (Low = 1, Med = 2, High = 3), nominales con one-hot, Always scale, y el problema de dispersión con muchas dummies." data-cuando="Antes de la diapositiva de Gower"></cite>.
+          La de kNN dice lo mismo desde la otra punta: la euclídea no está definida para categorías, y las dummies dan distancias de 0 o 1
+          <cite class="cita" data-fuente="knn3" data-pag="16" data-ancla="4/8" data-seccion="3.3.4 Categorical variables" data-que="Por qué la euclídea no sirve con categóricas, cómo pasarlas a dummies (n categorías, n − 1 columnas) y que las distancias entre categorías quedan en 0 o 1." data-cuando="Si quieres ver la versión con dummies"></cite>.
+          En la UD5 Gower aparece también en la lista de distancias especiales, junto a la de correlación y la del coseno <cite class="cita" data-fuente="km5" data-pag="12" data-ancla="4/4" data-seccion="Special distances" data-que="Distancias para casos especiales: correlación (patrón y no magnitud), Gower para datos mixtos y coseno para texto. No hay una distancia que sirva para todo." data-cuando="Para ubicar a Gower entre las otras"></cite>.</p>
+          <details class="profundizar">
+            <summary>¿Y las variables ordinales?</summary>
+            <div>
+              <p>Una ordinal (bajo, medio, alto) se reemplaza por su posición, 1, 2, 3, y se trata como numérica: diferencia dividida entre el rango. Así "bajo" y "alto" quedan a distancia 1 y "bajo" y "medio" a 0.5. Es lo que hace <code>daisy()</code> con un <code>factor</code> ordenado. La diapositiva menciona además un ajuste por empates, que no hace falta para entender la idea.</p>
+              <p>Gower también acepta pesos por variable (una variable puede contar el doble) y sabe saltarse los valores faltantes: si a un cliente le falta el canal, esa parte no se suma y se divide entre 3 en vez de 4.</p>
+            </div>
+          </details>
+        </section>
+
+        <section class="paso card" data-titulo="La trampa del rango">
+          <span class="etapa">Paso 6</span>
+          <h3>Un atípico que le quita la voz a una variable</h3>
+          <p>Vuelve el cliente de 220 euros, ahora como cliente Z de la tabla: 5 visitas, gasto 22, compra en tienda y es socio. Gower divide cada diferencia de gasto entre el rango del gasto, y el rango depende de los extremos.</p>
+          <div class="check" id="chk6"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+          <div class="btn-row pasos-btn">
+            <button type="button" id="btnSin6" disabled>Sin Z</button>
+            <button type="button" id="btnCon6" disabled>Con Z</button>
+            <button type="button" id="btnRec6" disabled>Con Z y el gasto recortado a 10</button>
+          </div>
+          <div class="grande" id="estado6"></div>
+          <p>Es la trampa más silenciosa de Gower: nada da error, las distancias siguen entre 0 y 1, pero el gasto casi dejó de contar, y los grupos de PAM ahora los decide ser socio. Las salidas son las de siempre con atípicos: <b>recortar</b> la variable (winsorizar: todo lo que pase de un tope queda en el tope), pasarla a <b>logaritmo</b> (<code>daisy</code> lo hace con <code>type = list(logratio = "gas")</code>), o revisar si ese cliente es un error de carga.
+          Ojo que la misma distancia se usa en otros lugares del máster: la imputación por kNN de la UD1 usa Gower cuando hay variables mixtas, y ahí un atípico decide quiénes son los vecinos
+          <cite class="cita" data-fuente="fe1" data-pag="22" data-ancla="4/8" data-seccion="3.4.2 KNN imputation" data-que="Imputar con los k vecinos más cercanos: promedio o moda de los vecinos, con distancia euclídea o de Gower si hay variables mixtas, k entre 5 y 10, y el costo con muchos datos." data-cuando="Después de este paso"></cite>.</p>
+        </section>
+
+        <section class="paso card" data-titulo="Datos grandes">
+          <span class="etapa">Paso 7</span>
+          <h3>CLARA: PAM sobre muestras, y la versión del libro</h3>
+          <p>PAM necesita la distancia entre <b>todos</b> los pares de clientes. Con 30 son 435 números. Con muchos clientes, la tabla ya no entra en memoria.</p>
+          <div class="check" id="chk7"><p class="check-tit">Calcula antes de seguir</p><div class="cuerpo"></div></div>
+          <p><b>CLARA</b> (Clustering LARge Applications) esquiva el problema: saca una muestra chica, corre PAM solo en la muestra, asigna a <b>todos</b> los clientes al medoide más cercano, mide el costo con todos, y repite con otras muestras. Se queda con la muestra que dio menor costo. Los medoides siguen siendo clientes reales. Aquí, muestras de 10 de los 30 clientes; <code>clara()</code> usa por defecto 5 muestras de <span data-tex="40 + 2k"></span>.</p>
+          <div class="btn-row pasos-btn">
+            <button type="button" class="primary" id="btnMue7" disabled>Sacar una muestra</button>
+            <button type="button" class="ghost" id="btnRei7" disabled>Empezar de nuevo</button>
+          </div>
+          <div class="grande" id="estado7"></div>
+          <p>Las diapositivas lo describen así <cite class="cita" data-fuente="km5" data-pag="25" data-ancla="clara-clustering" data-seccion="4.2 CLARA clustering" data-que="CLARA para datos grandes: subconjuntos de tamaño fijo, PAM en cada uno, asignar todo al medoide más cercano, medir la disimilitud y quedarse con el mejor. Nota: los medoides son siempre puntos del conjunto. Dice que aplica k-means o PAM; en realidad solo PAM." data-cuando="Al terminar este paso"></cite>,
+          con un detalle: dicen que CLARA aplica "k-means o PAM" a la muestra, pero los pasos que siguen, y <code>cluster::clara()</code>, usan solo PAM. Y hay una limitación que la diapositiva de Gower dice en una línea: <code>clara()</code> no acepta una matriz de distancias, trabaja con la tabla de datos y la euclídea o la del taxi. Con datos mixtos y muchos clientes, Gower más PAM no escala y hay que buscar otra salida (muestrear tú, o métodos que no vienen en el material de la unidad, como k-prototypes).</p>
+          <p><b>La versión del libro.</b> PAM resuelve, de forma aproximada, este problema: entre todos los conjuntos <span data-tex="M"></span> de k clientes, encontrar el de menor costo.</p>
+          <div class="fbloque"><div data-tex="\min_{M \subset \{x_1,\dots,x_n\},\ |M| = k} \ \sum_{i=1}^{n} \min_{m \in M} d(x_i, m)" data-display></div></div>
+          <p>Comparado con k-means, cambian dos cosas: el centro tiene que ser un dato (<span data-tex="m \in M"></span> en vez de cualquier punto del espacio) y la distancia no va al cuadrado, ni tiene que ser euclídea. Por eso acepta cualquier matriz de distancias, la de Gower incluida. Lo propusieron Kaufman y Rousseeuw, y de su libro salen <code>daisy</code>, <code>pam</code> y <code>clara</code>, las funciones del paquete <code>cluster</code> de R.</p>
+          <div class="cita" id="citaHipo" hidden></div>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+        </div>
+        <svg id="plano" tabindex="0" role="img" aria-label="Plano con los clientes, sus centros y sus medoides"></svg>
+        <div class="leyenda" id="leyenda"><span><i class="cua"></i>medoide (un cliente)</span><span><i class="rom"></i>media (centroide)</span><span><i class="raro"></i>el cliente raro</span></div>
+        <div id="mixPanel" hidden></div>
+        <div class="info" id="escInfo"></div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>Los ocho clientes de la tabla del paso 5. El programa calcula Gower par por par, elige dos medoides con BUILD, los mejora con SWAP y al final se compara con la librería: en R con <code>cluster::daisy</code> y <code>cluster::pam</code>; en Python no hay ni el paquete <code>gower</code> ni <code>scikit-learn-extra</code> instalados (scikit-learn no trae PAM), así que se compara con una versión vectorizada de Gower y con una búsqueda por fuerza bruta de los mejores medoides.</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir <span class="estado" data-reto="codigo1"></span></p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="true">Python</button>
+            <button type="button" data-lang="r" aria-pressed="false">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">1 · Gower</span><span data-f="2">2 · BUILD</span><span data-f="3">3 · SWAP</span><span data-f="4">4 · comparar</span>
+        </div>
+        <div id="vrMatriz" class="tabla-wrap"></div>
+        <div class="clientes-tira" id="vrTira"></div>
+        <div class="vr-cuenta" id="vrCuenta"></div>
+        <h3 class="mini-tit vr-tit">Lo que imprime el programa</h3>
+        <div class="vr-salida" id="vrSalida"></div>
+      </div>
+    </div>
+
+    <p class="vr-nota">En la práctica no se escriben estos bucles. En R son dos líneas: <code>G &lt;- daisy(df, metric = "gower")</code> y <code>pam(G, k = 2)</code>, con canal y socio como <code>factor</code> (con columnas de texto, <code>daisy</code> se niega: "invalid type character for column numbers 3, 4"). En Python, el paquete <code>gower</code> calcula la matriz y <code>KMedoids(metric="precomputed")</code> de <code>scikit-learn-extra</code> hace PAM; ninguno de los dos viene con scikit-learn. La salida es la que dieron los programas al correrlos con Python 3.13 y NumPy, y con R 4.6.1 y cluster 2.1.8.</p>
+
+    <details class="profundizar">
+      <summary>La versión sin bucles de Gower</summary>
+      <div>
+        <p>La matriz completa sale de una vez con la resta de cada vector contra sí mismo en forma de tabla. Es lo que hace la comparación del final del programa de Python:</p>
+        <pre class="mini-code">num = abs(vis[:, None] - vis) / rv + abs(gas[:, None] - gas) / rg   # 8 × 8
+cat = (canal[:, None] != canal) * 1.0 + (socio[:, None] != socio)
+D = (num + cat) / 4</pre>
+        <p><code>vis[:, None]</code> es una columna y <code>vis</code> una fila: al restarlas, NumPy arma la tabla de 8 × 8 con todas las diferencias. Con categorías, <code>!=</code> da una tabla de verdadero o falso, que vale 1 o 0 al sumar.</p>
+      </div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>PAM con la tabla cruda</h3><span class="estado" data-reto="codigo2"></span></div>
+        <div id="codigo2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>El costo que no coincide</h3><span class="estado" data-reto="codigo3"></span></div>
+        <div id="codigo3"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: la biblioteca te avisa en el índice cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>¿Cuál es el medoide?</h3><span class="estado" data-reto="ojo"></span></div>
+        <p class="desc">Un grupo de clientes y tres candidatos numerados. Decide sin calcular cuál es el medoide con la distancia del taxi. Apruebas con 4 de 5.</p>
+        <div id="ojo"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Construir</span><h3>Elige tú los medoides</h3><span class="estado" data-reto="constructor"></span></div>
+        <p class="desc">Toca clientes para hacerlos medoides (tres como máximo); toca un medoide para quitarlo. Cumple los tres objetivos. Se marcan solos.</p>
+        <svg id="planoConstr" tabindex="0" role="img" aria-label="Plano para elegir tres medoides"></svg>
+        <div class="grande" id="constrVivo"></div>
+        <ul class="objetivos" id="objetivos"></ul>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>Gower con lápiz</h3><span class="estado" data-reto="mano"></span></div>
+        <p class="desc">Dos clientes y los rangos de la tabla de donde salen. Calcula su distancia de Gower. Haz la cuenta completa antes de pedir pistas.</p>
+        <div id="manoDatos" class="datos-wrap"></div>
+        <div id="mano"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Alguien se equivocó</h3><span class="estado" data-reto="error"></span></div>
+        <p class="desc">Una de las líneas tiene un error. Tócala.</p>
+        <div id="error"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>¿Por qué resiste?</h3><span class="estado" data-reto="prop1"></span></div>
+        <div id="prop1"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Entre qué valores</h3><span class="estado" data-reto="prop2"></span></div>
+        <div id="prop2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>clara y Gower</h3><span class="estado" data-reto="prop3"></span></div>
+        <div id="prop3"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>El centro de "tienda" y "app"</h3><span class="estado" data-reto="prop4"></span></div>
+        <div id="prop4"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>¿Un grupo vacío?</h3><span class="estado" data-reto="prop5"></span></div>
+        <div id="prop5"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>El precio de un intercambio</h3><span class="estado" data-reto="prop6"></span></div>
+        <div id="prop6"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Recordar a la fuerza es lo que fija. Arma la fórmula de memoria y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Fórmula de memoria</span><h3>Arma la distancia de Gower</h3><span class="estado" data-reto="formula"></span></div>
+        <p class="desc">Hay piezas de más que no pertenecen. No mires arriba.</p>
+        <div id="formula"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el libro</h2>
+      <p class="lecturas-intro">Ya construiste la idea con las manos. Ahora ve a la versión técnica y comprueba que la reconoces. Cada entrada dice qué vas a encontrar y en qué momento conviene leerla. Si abres la biblioteca con doble clic, el enlace abre el PDF o la diapositiva en ese lugar.</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> Los 30 clientes son los inventados de la página de k-means (tres grupos con centros (2, 2), (8, 3) y (5, 8)). El cliente raro de 220 euros,
+    los canales y la condición de socio también son inventados, elegidos para que las cuentas den limpias: con la distancia del taxi, el mejor PAM de los 30 cuesta 50 y sus medoides son
+    (2, 2), (8.5, 3) y (5, 9). Tu progreso se guarda solo en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+/*
+  DATOS (inventados)
+  30 clientes de la ruta de agrupamiento: [visitas al mes, gasto en decenas de euros], los mismos de kmeans.html.
+  Distancia del taxi (Manhattan) en los pasos 1 a 4 y 7.
+    Grupo de abajo a la izquierda (filas 0-9): suma de distancias desde (2, 2) a los otros 9 = 15; es su medoide.
+    Cliente nuevo del paso 1 en (8, 9): media de los 11 = (2.545, 2.636); medoide sigue en (2, 2) (suma 28).
+    PAM de los 30, k = 3: optimo unico costo 50, medoides filas 4, 16, 25 = (2, 2), (8.5, 3), (5, 9).
+    SWAP desde las filas 0, 1, 18 (inicio de k-means): 116 -> 62 -> 55 -> 50.
+  Atipico Z = (5, 22): k-means (mejor de las 4495 ternas de inicio) WSS 220.5 con centros (2, 2), (6.5, 5.5) y (5, 22);
+    los tres grupos de siempre darian 228.68. PAM: mismos medoides, costo 63.
+  Mediana coordenada a coordenada del grupo de arriba: (5, 8), que no es un cliente; el medoide es (5, 9).
+  Tabla mixta (8 clientes, A-H, filas 1, 4, 12, 17, 22, 25, 27, 29 de los 30) con canal y socio inventados.
+    Gower con rangos 8 y 8. PAM k = 2: BUILD [C, G] costo 2.09375; SWAP [B, G] costo 1.625; grupos ABCD y EFGH.
+    d(D, H) = 0.5. Con Z (5, 22, tienda, si): rango del gasto 21, d(D, H) = 0.4033, C pasa al grupo de G.
+    Con Z y gasto recortado a 10: vuelven los grupos ABCD y EFGH, Z con B.
+  Comprobado con Python 3.13 (NumPy) y R 4.6.1 (cluster 2.1.8.3: daisy y pam).
+*/
+(function () {
+  "use strict";
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var RETOS = ["ojo", "constructor", "mano", "error", "prop1", "prop2", "prop3", "prop4", "prop5", "prop6", "formula", "codigo1", "codigo2", "codigo3"];
+  var C = B.concepto({ id: "pam-gower", retos: RETOS, pasos: 7 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  /* ================= datos y logica (sin DOM) ================= */
+  var X = [[0.5, 2.5], [1, 1], [1.5, 3], [2, 0.5], [2, 2], [2.5, 3.5], [2.5, 1.5], [3, 2.5], [3.5, 1], [1.5, 2.5],
+    [6.5, 3], [7, 4.5], [7.5, 2], [7.5, 3.5], [8, 1.5], [8, 4], [8.5, 3], [9, 2], [9, 4], [9, 2.5],
+    [3.5, 7.5], [4, 8.5], [4, 7], [4.5, 9.5], [5, 6.5], [5, 9], [5.5, 9], [6, 7.5], [6.5, 8.5], [6, 7]];
+  var N = X.length;
+  var Z = [5, 22];
+  var XZ = X.concat([Z]);
+  var G0 = X.slice(0, 10);
+  var INI3 = [0, 1, 18];
+  var COL = ["naranja", "azul", "verde"];
+  var f = B.fmt;
+
+  function copia(a) { return a.map(function (p) { return p.slice(); }); }
+  function man(a, b) { return Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]); }
+  function d2(a, b) { var dx = a[0] - b[0], dy = a[1] - b[1]; return dx * dx + dy * dy; }
+  function media(P) { var sx = 0, sy = 0; P.forEach(function (p) { sx += p[0]; sy += p[1]; }); return [sx / P.length, sy / P.length]; }
+  function sumas(P) { return P.map(function (p) { var s = 0; P.forEach(function (q) { s += man(p, q); }); return s; }); }
+  function argmin(a) { var m = 0; for (var i = 1; i < a.length; i++) if (a[i] < a[m] - 1e-12) m = i; return m; }
+  // grupo de cada punto: el medoide mas cercano (en empate, el primero)
+  function grupos(P, med, dist) {
+    dist = dist || man;
+    return P.map(function (p) { var m = 0, mejor = Infinity; med.forEach(function (k, j) { var d = dist(p, P[k]); if (d < mejor - 1e-12) { mejor = d; m = j; } }); return m; });
+  }
+  function costo(P, med, dist) {
+    dist = dist || man;
+    var s = 0; P.forEach(function (p) { var m = Infinity; med.forEach(function (k) { m = Math.min(m, dist(p, P[k])); }); s += m; }); return s;
+  }
+  function mejorSwap(P, med) {
+    var actual = costo(P, med), mejor = null;
+    for (var a = 0; a < med.length; a++) for (var o = 0; o < P.length; o++) {
+      if (med.indexOf(o) >= 0) continue;
+      var pr = med.slice(); pr[a] = o;
+      var c = costo(P, pr);
+      if (c < actual - 1e-9) { actual = c; mejor = pr; }
+    }
+    return mejor ? { med: mejor, costo: actual } : null;
+  }
+  function pamExacto(P, k, idx) {
+    idx = idx || P.map(function (_, i) { return i; });
+    var best = null;
+    function rec(ini, el) {
+      if (el.length === k) {
+        var c = costo(P, el);
+        if (!best || c < best.costo - 1e-9) best = { med: el.slice(), costo: c };
+        return;
+      }
+      for (var t = ini; t < idx.length; t++) { el.push(idx[t]); rec(t + 1, el); el.pop(); }
+    }
+    rec(0, []);
+    return best;
+  }
+  // k-means (Lloyd) con distancia euclidea al cuadrado, probando todas las ternas de puntos como inicio
+  function lloyd(P, cent) {
+    var g = null;
+    for (var it = 0; it < 100; it++) {
+      var nu = P.map(function (p) { var m = 0, mejor = Infinity; cent.forEach(function (c, j) { var d = d2(p, c); if (d < mejor) { mejor = d; m = j; } }); return m; });
+      if (g && nu.every(function (v, i) { return v === g[i]; })) break;
+      g = nu;
+      cent = cent.map(function (c, j) { var pts = P.filter(function (_, i) { return g[i] === j; }); return pts.length ? media(pts) : c; });
+    }
+    var w = 0; P.forEach(function (p, i) { w += d2(p, cent[g[i]]); });
+    return { cent: cent, g: g, w: w };
+  }
+  var cacheKm = null;
+  function kmMejor() {
+    if (cacheKm) return cacheKm;
+    var P = XZ, best = null;
+    for (var a = 0; a < P.length; a++) for (var b = a + 1; b < P.length; b++) for (var c = b + 1; c < P.length; c++) {
+      var r = lloyd(P, [P[a].slice(), P[b].slice(), P[c].slice()]);
+      if (!best || r.w < best.w - 1e-9) best = r;
+    }
+    cacheKm = best;
+    return best;
+  }
+
+  /* ---------- tabla mixta y Gower ---------- */
+  var MIX = [
+    { n: "A", v: 1, g: 1, c: "tienda", s: "si" },
+    { n: "B", v: 2, g: 2, c: "tienda", s: "si" },
+    { n: "C", v: 7.5, g: 2, c: "tienda", s: "no" },
+    { n: "D", v: 9, g: 2, c: "app", s: "si" },
+    { n: "E", v: 4, g: 7, c: "web", s: "no" },
+    { n: "F", v: 5, g: 9, c: "tienda", s: "no" },
+    { n: "G", v: 6, g: 7.5, c: "web", s: "no" },
+    { n: "H", v: 6, g: 7, c: "app", s: "no" }
+  ];
+  var MZ = { n: "Z", v: 5, g: 22, c: "tienda", s: "si" };
+  function rango(rows, k) { var mx = -Infinity, mn = Infinity; rows.forEach(function (r) { mx = Math.max(mx, r[k]); mn = Math.min(mn, r[k]); }); return mx - mn; }
+  function gower(rows) {
+    var rv = rango(rows, "v"), rg = rango(rows, "g");
+    var D = rows.map(function (a) { return rows.map(function (b) { return partes(a, b, rv, rg).reduce(function (s, x) { return s + x; }, 0) / 4; }); });
+    return { D: D, rv: rv, rg: rg };
+  }
+  function partes(a, b, rv, rg) { return [Math.abs(a.v - b.v) / rv, Math.abs(a.g - b.g) / rg, a.c === b.c ? 0 : 1, a.s === b.s ? 0 : 1]; }
+  function costoD(D, med) { var s = 0; D.forEach(function (fila) { var m = Infinity; med.forEach(function (k) { m = Math.min(m, fila[k]); }); s += m; }); return s; }
+  function gruposD(D, med) { return D.map(function (fila) { var m = 0, mejor = Infinity; med.forEach(function (k, j) { if (fila[k] < mejor - 1e-12) { mejor = fila[k]; m = j; } }); return m; }); }
+  function pamD(D, k) {
+    var n = D.length;
+    var med = [argmin(D.map(function (fila) { return fila.reduce(function (s, x) { return s + x; }, 0); }))];
+    while (med.length < k) {
+      var mejor = -1, cm = Infinity;
+      for (var c = 0; c < n; c++) if (med.indexOf(c) < 0 && costoD(D, med.concat([c])) < cm) { mejor = c; cm = costoD(D, med.concat([c])); }
+      med.push(mejor);
+    }
+    var build = med.slice();
+    for (;;) {
+      var actual = costoD(D, med), mj = null;
+      for (var a = 0; a < k; a++) for (var o = 0; o < n; o++) {
+        if (med.indexOf(o) >= 0) continue;
+        var pr = med.slice(); pr[a] = o;
+        if (costoD(D, pr) < actual - 1e-9) { actual = costoD(D, pr); mj = pr; }
+      }
+      if (!mj) break;
+      med = mj;
+    }
+    return { build: build, med: med, costo: costoD(D, med), g: gruposD(D, med) };
+  }
+  /* ================= fin de la logica ================= */
+
+  function fn(v) { return Math.abs(v - Math.round(v)) < 1e-9 ? f(v, 0) : Math.abs(v * 10 - Math.round(v * 10)) < 1e-9 ? f(v, 1) : f(v, 2); }
+  function f3(v) { var s = (Math.round(v * 1000) / 1000).toString(); return s.indexOf(".") >= 0 ? s : s; }
+  function par(p) { return "(" + fn(p[0]) + ", " + fn(p[1]) + ")"; }
+  function chip(j) { return '<span class="chipg g' + j + '"></span>'; }
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+  function sociotxt(s) { return s === "si" ? "sí" : "no"; }
+
+  /* ================= plano interactivo ================= */
+  var NS = "http://www.w3.org/2000/svg";
+  function nodo(tag, at, padre) {
+    var e = document.createElementNS(NS, tag);
+    for (var k in at) e.setAttribute(k, at[k]);
+    if (padre) padre.appendChild(e);
+    return e;
+  }
+  function texto(padre, at, t) { var e = nodo("text", at, padre); e.textContent = t; return e; }
+
+  function crearPlano(svg, o) {
+    var W = 440, H = 340, M = { l: 40, r: 12, t: 12, b: 40 };
+    var st = { P: [], ymax: 10, g: null, colorear: false, med: null, medSel: null, solos: null, cent: null, centMedia: false, fantasmas: null,
+      marca: null, tam: null, etiq: null, etiqMin: -1, lineas: false, taxi: null, arrastre: -1, cruz: null, muestra: null, raro: -1, tocable: false, drag: false };
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    svg.classList.add("plano-svg");
+    function sx(v) { return M.l + v / 10 * (W - M.l - M.r); }
+    function sy(v) { return H - M.b - v / st.ymax * (H - M.t - M.b); }
+    function ix(px) { return (px - M.l) / (W - M.l - M.r) * 10; }
+    function iy(py) { return (H - M.b - py) / (H - M.t - M.b) * st.ymax; }
+    var gEjes = nodo("g", {}, svg), gLin = nodo("g", {}, svg), gPts = nodo("g", {}, svg), gSob = nodo("g", {}, svg), gHit = nodo("g", {}, svg);
+    function ejes() {
+      gEjes.innerHTML = "";
+      var paso = st.ymax > 10 ? 2 : 1, etq = st.ymax > 10 ? 4 : 2;
+      for (var t = 0; t <= 10; t++) {
+        nodo("line", { x1: sx(t), x2: sx(t), y1: sy(0), y2: sy(st.ymax), "class": "grid" + (t === 0 ? " eje" : "") }, gEjes);
+        if (t % 2 === 0) texto(gEjes, { x: sx(t), y: sy(0) + 16, "class": "tick", "text-anchor": "middle" }, t);
+      }
+      for (var u = 0; u <= st.ymax; u += paso) {
+        nodo("line", { x1: sx(0), x2: sx(10), y1: sy(u), y2: sy(u), "class": "grid" + (u === 0 ? " eje" : "") }, gEjes);
+        if (u % etq === 0) texto(gEjes, { x: sx(0) - 7, y: sy(u) + 3.5, "class": "tick", "text-anchor": "end" }, u);
+      }
+      texto(gEjes, { x: sx(10), y: H - 6, "class": "eje-tit", "text-anchor": "end" }, "Visitas al mes");
+      texto(gEjes, { x: 11, y: sy(st.ymax), "class": "eje-tit", "text-anchor": "end", transform: "rotate(-90 11 " + sy(st.ymax) + ")" }, "Gasto (decenas de euros)");
+    }
+    function diamante(padre, x, y, r, cls) {
+      return nodo("path", { d: "M" + x + " " + (y - r) + " L" + (x + r) + " " + y + " L" + x + " " + (y + r) + " L" + (x - r) + " " + y + " Z", "class": cls }, padre);
+    }
+    function render() {
+      gLin.innerHTML = ""; gPts.innerHTML = ""; gSob.innerHTML = ""; gHit.innerHTML = "";
+      var P = st.P;
+      if (st.lineas && st.g) P.forEach(function (p, i) {
+        var dest = st.med ? P[st.med[st.g[i]]] : st.cent ? st.cent[st.g[i]] : null;
+        if (dest) nodo("line", { x1: sx(p[0]), y1: sy(p[1]), x2: sx(dest[0]), y2: sy(dest[1]), "class": "ln g" + st.g[i] }, gLin);
+      });
+      if (st.taxi) st.taxi.forEach(function (t) {
+        var a = P[t[0]], b = P[t[1]];
+        nodo("path", { d: "M" + sx(a[0]) + " " + sy(a[1]) + " H" + sx(b[0]) + " V" + sy(b[1]), "class": "taxi" }, gLin);
+      });
+      P.forEach(function (p, i) {
+        var gi = st.g ? st.g[i] : -1;
+        var cls = "pt " + (i === st.raro ? "raro" : (st.colorear && gi >= 0 ? "g" + gi : "sin")) + (st.muestra && !st.muestra[i] ? " tenue" : "");
+        nodo("circle", { cx: sx(p[0]), cy: sy(p[1]), r: st.tam ? st.tam[i] : 5, "class": cls }, gPts);
+        if (st.muestra && st.muestra[i]) nodo("circle", { cx: sx(p[0]), cy: sy(p[1]), r: 8, "class": "mring" }, gPts);
+      });
+      if (st.marca !== null) { var q = P[st.marca]; nodo("circle", { cx: sx(q[0]), cy: sy(q[1]), r: 11, "class": "anillo" }, gSob); }
+      if (st.fantasmas) st.fantasmas.forEach(function (c) { diamante(gSob, sx(c[0]), sy(c[1]), 10, "fan"); });
+      if (st.cent) st.cent.forEach(function (c, j) {
+        diamante(gSob, sx(c[0]), sy(c[1]), 8.5, "cen " + (st.centMedia ? "media" : "g" + j));
+        diamante(gSob, sx(c[0]), sy(c[1]), 11, "cen-borde");
+      });
+      if (st.med) st.med.forEach(function (k, j) {
+        var p = P[k], solo = st.solos && st.solos[j];
+        nodo("rect", { x: sx(p[0]) - 7.5, y: sy(p[1]) - 7.5, width: 15, height: 15, "class": "medo " + (st.colorear ? "g" + j : "g1") + (st.medSel === j ? " sel" : "") + (solo ? " solo" : "") }, gSob);
+      });
+      if (st.cruz) {
+        var cx = sx(st.cruz[0]), cy = sy(st.cruz[1]);
+        nodo("line", { x1: cx - 7, y1: cy - 7, x2: cx + 7, y2: cy + 7, "class": "cruz" }, gSob);
+        nodo("line", { x1: cx - 7, y1: cy + 7, x2: cx + 7, y2: cy - 7, "class": "cruz" }, gSob);
+        texto(gSob, { x: cx + 10, y: cy + 4, "class": "cruz-lab" }, st.cruzLab || "");
+      }
+      if (st.etiq) P.forEach(function (p, i) {
+        if (st.etiq[i] === "" || st.etiq[i] == null) return;
+        texto(gSob, { x: sx(p[0]) + 7, y: sy(p[1]) - 7, "class": "etq" + (i === st.etiqMin ? " min" : "") }, st.etiq[i]);
+      });
+      P.forEach(function (p, i) {
+        var cl = "hit" + (i === st.arrastre ? " drag" : st.tocable ? " toca" : "");
+        nodo("circle", { cx: sx(p[0]), cy: sy(p[1]), r: 11, "class": cl, "data-i": i }, gHit);
+      });
+    }
+    function coords(e) {
+      var r = svg.getBoundingClientRect();
+      return [(e.clientX - r.left) / r.width * W, (e.clientY - r.top) / r.height * H];
+    }
+    function moverRaro(x, y) {
+      x = Math.max(0, Math.min(10, Math.round(x * 2) / 2));
+      y = Math.max(0, Math.min(st.ymax, Math.round(y * 2) / 2));
+      var p = st.P[st.arrastre];
+      if (p[0] === x && p[1] === y) return;
+      if (o.alArrastrar) o.alArrastrar(x, y);
+    }
+    svg.addEventListener("pointerdown", function (e) {
+      var t = e.target;
+      if (!t || !t.getAttribute || t.getAttribute("data-i") === null) return;
+      var i = +t.getAttribute("data-i");
+      if (i === st.arrastre) {
+        st.drag = true;
+        try { svg.setPointerCapture(e.pointerId); } catch (err) { /* nada */ }
+        e.preventDefault();
+        return;
+      }
+      if (st.tocable && o.alTocar) o.alTocar(i);
+    });
+    svg.addEventListener("pointermove", function (e) {
+      if (!st.drag) return;
+      var q = coords(e);
+      moverRaro(ix(q[0]), iy(q[1]));
+    });
+    function soltar() { st.drag = false; }
+    svg.addEventListener("pointerup", soltar);
+    svg.addEventListener("pointercancel", soltar);
+    svg.addEventListener("keydown", function (e) {
+      if (st.arrastre < 0) return;
+      var d = { ArrowLeft: [-0.5, 0], ArrowRight: [0.5, 0], ArrowUp: [0, 0.5], ArrowDown: [0, -0.5] }[e.key];
+      if (!d) return;
+      e.preventDefault();
+      var p = st.P[st.arrastre];
+      moverRaro(p[0] + d[0], p[1] + d[1]);
+    });
+    ejes();
+    render();
+    return {
+      st: st,
+      set: function (c) {
+        var rehacer = ("ymax" in c) && c.ymax !== st.ymax;
+        for (var k in c) st[k] = c[k];
+        if (rehacer) ejes();
+        svg.classList.toggle("arrastrable", st.arrastre >= 0);
+        render();
+      }
+    };
+  }
+
+  /* ================= estado del recorrido ================= */
+  var est = {
+    paso: 0, chk1: false, chk2: false, chk3: false, chk4: false, chk4b: false, chk5: false, chk6: false, chk7: false,
+    nuevo: [8, 9],
+    sw: { med: INI3.slice(), sel: null, hist: [], msg: "" },
+    m4: null, modo6: "sin", par5: [0, 4],
+    clara: { muestras: [], actual: -1 }
+  };
+  var pasos;
+  var plano = crearPlano($("plano"), {
+    alArrastrar: function (x, y) { est.nuevo = [x, y]; entrar(est.paso); },
+    alTocar: function (i) { if (est.paso === 2) tocar3(i); }
+  });
+  var HINTS = [
+    "Arrastra el punto violeta cuando respondas",
+    "El rombo es la media; el cuadrado, el medoide",
+    "Toca un cuadrado y después un cliente",
+    "El eje del gasto llega a 24",
+    "Toca una celda de la matriz",
+    "Cambia entre sin Z y con Z",
+    "Saca muestras y compara costos"
+  ];
+  function grupoNuevo() { return G0.concat([est.nuevo]); }
+
+  function entrar(i) {
+    est.paso = i;
+    $("escHint").textContent = HINTS[i];
+    var plain = { P: X, ymax: 10, g: null, colorear: false, med: null, medSel: null, solos: null, cent: null, centMedia: false, fantasmas: null, marca: null,
+      tam: null, etiq: null, etiqMin: -1, lineas: false, taxi: null, arrastre: -1, cruz: null, cruzLab: "", muestra: null, raro: -1, tocable: false };
+    var c = Object.assign({}, plain), info = "";
+    var mix = i === 4 || i === 5;
+    $("plano").style.display = mix ? "none" : "";
+    $("leyenda").hidden = mix;
+    $("mixPanel").hidden = !mix;
+    if (i === 0 || i === 1) {
+      var P = grupoNuevo(), mu = media(P);
+      c.P = P; c.raro = 10;
+      if (i === 0) {
+        if (est.chk1) { c.cent = [mu]; c.centMedia = true; c.fantasmas = [[2, 2]]; c.arrastre = 10; }
+        info = est.chk1 ? "Media de los 11 clientes: <b>" + par([Math.round(mu[0] * 1000) / 1000, Math.round(mu[1] * 1000) / 1000]) + "</b>. Sin el cliente nuevo era (2, 2) (el rombo punteado). " +
+          "Se movió " + f(mu[0] - 2, 3) + " en horizontal y " + f(mu[1] - 2, 3) + " en vertical: la onceava parte de la distancia al nuevo en cada eje."
+          : "Diez clientes del grupo de abajo a la izquierda y el cliente nuevo, en " + par(est.nuevo) + ".";
+      } else {
+        var s = sumas(P), m = argmin(s);
+        c.taxi = P.map(function (_, k) { return [4, k]; }).filter(function (t) { return t[1] !== 4; });
+        c.marca = 4;
+        if (est.chk2) {
+          c.taxi = null; c.marca = null;
+          c.etiq = s.map(function (v) { return fn(v); }); c.etiqMin = m;
+          c.med = [m]; c.cent = [mu]; c.centMedia = true; c.arrastre = 10;
+          info = "Número junto a cada cliente: su suma de distancias del taxi a los otros 10. El menor, en violeta, es el medoide: <b>" + par(P[m]) + "</b>, con suma " + fn(s[m]) + ". " +
+            "La media está en " + par([Math.round(mu[0] * 100) / 100, Math.round(mu[1] * 100) / 100]) + ". <b>Arrastra el punto violeta</b>: la media lo sigue; el medoide no se mueve, salvo que pongas al cliente nuevo dentro del grupo.";
+        } else {
+          info = "Coordenadas de los 11 clientes: " + P.map(function (p) { return par(p); }).join(", ") + ". El del anillo es (2, 2).";
+        }
+      }
+    } else if (i === 2) {
+      var med = est.sw.med, g = grupos(X, med);
+      c.g = g; c.colorear = true; c.med = med; c.lineas = true; c.medSel = est.sw.sel; c.tocable = est.chk3;
+      if (!est.chk3) c.marca = 20;
+      info = tablaMed(X, med, g) + (est.sw.hist.length ? '<p class="info">Costo después de cada intercambio: ' + est.sw.hist.map(function (h) { return fn(h); }).join(" → ") + "</p>" : "");
+      pintarVivo3();
+    } else if (i === 3) {
+      c.P = XZ; c.ymax = 24; c.raro = 30;
+      if (est.chk4 && est.m4 === "km") {
+        var km = kmMejor();
+        c.g = km.g; c.colorear = true; c.cent = km.cent; c.lineas = true;
+        info = tablaKm(km);
+      } else if (est.chk4 && est.m4 === "pam") {
+        var pz = pamExacto(XZ, 3), gz = grupos(XZ, pz.med);
+        c.g = gz; c.colorear = true; c.med = pz.med; c.lineas = true;
+        info = tablaMed(XZ, pz.med, gz);
+      } else info = est.chk4 ? "Elige un método con los botones del paso." : "Los 30 clientes y el cliente raro en (5, 22).";
+      if (est.chk4b) { c.cruz = [5, 8]; c.cruzLab = "mediana (5, 8)"; if (!c.med && !c.g) c.med = [25]; }
+    } else if (i === 4 || i === 5) {
+      pintarMix();
+    } else if (i === 6) {
+      var cl = est.clara, mu7 = cl.actual >= 0 ? cl.muestras[cl.actual] : null;
+      if (mu7) {
+        c.g = mu7.g; c.colorear = true; c.med = mu7.med; c.lineas = true;
+        c.muestra = X.map(function (_, k) { return mu7.idx.indexOf(k) >= 0; });
+      }
+      info = infoClara();
+    }
+    if (!mix) plano.set(c);
+    $("escInfo").innerHTML = mix ? "" : info;
+  }
+
+  function tablaMed(P, med, g) {
+    var h = '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>grupo</th><th>medoide</th><th>clientes</th><th>costo del grupo</th></tr></thead><tbody>';
+    med.forEach(function (k, j) {
+      var n = 0, s = 0;
+      P.forEach(function (p, i) { if (g[i] === j) { n++; s += man(p, P[k]); } });
+      h += '<tr><td class="pl">' + chip(j) + COL[j] + '</td><td>' + par(P[k]) + '</td><td>' + n + '</td><td>' + fn(s) + '</td></tr>';
+    });
+    return h + '<tr class="tot"><td class="pl">costo</td><td></td><td>' + P.length + '</td><td>' + fn(costo(P, med)) + '</td></tr></tbody></table></div>';
+  }
+  function tablaKm(km) {
+    var h = '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>grupo</th><th>centro (media)</th><th>clientes</th></tr></thead><tbody>';
+    km.cent.forEach(function (c, j) {
+      var n = km.g.filter(function (v) { return v === j; }).length;
+      h += '<tr><td class="pl">' + chip(j) + COL[j] + '</td><td>' + par([Math.round(c[0] * 100) / 100, Math.round(c[1] * 100) / 100]) + '</td><td>' + n + '</td></tr>';
+    });
+    return h + '<tr class="tot"><td class="pl">WSS</td><td></td><td>' + f(km.w, 2) + '</td></tr></tbody></table></div>';
+  }
+
+  /* ---------- paso 1 ---------- */
+  B.opcionMultiple(cuerpo("chk1"), {
+    pregunta: "Con el cliente nuevo en (8, 9), el grupo tiene 11 clientes. ¿Dónde queda ahora su media, el centro de gravedad?",
+    opciones: ["Se queda en (2, 2): un solo cliente no cambia nada", "Se acerca un poco al nuevo, hasta cerca de (2.5, 2.6)", "Se va a mitad de camino, cerca de (5, 5.5)", "Se va encima del cliente nuevo"],
+    correcta: 1,
+    pistas: ["La media suma a todos y divide entre 11. El nuevo entra en la suma con su 8 y su 9, que son mucho más grandes que los demás.", null,
+      "A mitad de camino estaría si el nuevo pesara lo mismo que los otros diez juntos. Pesa como uno de once.",
+      "Eso pasaría si fuera el único cliente del grupo. Hay otros diez tirando hacia (2, 2)."],
+    explicacion: "En visitas: $(20 + 8)/11 = 2.545$; en gasto: $(20 + 9)/11 = 2.636$. Se mueve la onceava parte del camino hacia el nuevo, y cuanto más lejos lo pongas, más lo arrastra. <b>Ahora arrastra el punto violeta</b> y mira el rombo negro.",
+    alResolver: function () { est.chk1 = true; if (est.paso === 0) entrar(0); pasos.completar(0); }
+  });
+
+  /* ---------- paso 2 ---------- */
+  function suma22() { var P = grupoNuevo(), s = 0; P.forEach(function (p) { s += man(p, [2, 2]); }); return s; }
+  B.numerico(cuerpo("chk2"), {
+    pregunta: function () { return "Con el cliente nuevo donde está ahora, en " + par(est.nuevo) + ", ¿cuánto suman las distancias del taxi desde (2, 2) a los otros 10 clientes? Las coordenadas están debajo del plano."; },
+    respuesta: suma22,
+    tolerancia: 0.01,
+    pistas: [
+      "Para cada cliente: la diferencia de visitas en valor absoluto más la diferencia de gasto en valor absoluto. Por ejemplo, de (2, 2) a (0.5, 2.5) son 1.5 + 0.5 = 2.",
+      "Los nueve clientes originales suman 15 entre todos. Falta el nuevo.",
+      function () { return "Del (2, 2) al nuevo: |" + fn(est.nuevo[0]) + " − 2| + |" + fn(est.nuevo[1]) + " − 2| = " + fn(man(est.nuevo, [2, 2])) + "."; }
+    ],
+    diagnostico: function (v) {
+      if (Math.abs(v - 15) < 0.01) return "Esos son los nueve del grupo original. Falta sumar el cliente nuevo.";
+      if (Math.abs(v - man(est.nuevo, [2, 2])) < 0.01) return "Esa es solo la distancia al cliente nuevo. Faltan los otros nueve.";
+      return null;
+    },
+    explicacion: function () { return "15 de los nueve originales más " + fn(man(est.nuevo, [2, 2])) + " del nuevo: <b>" + fn(suma22()) + "</b>. Ahora el escenario muestra la suma de cada cliente: la de (2, 2) es la más chica, así que es el medoide. <b>Arrastra el punto violeta</b>: todas las sumas suben a la vez y (2, 2) sigue ganando."; },
+    alResolver: function () { est.chk2 = true; if (est.paso === 1) entrar(1); pasos.completar(1); }
+  });
+
+  /* ---------- paso 3: PAM ---------- */
+  function pintarVivo3() {
+    var med = est.sw.med, cs = costo(X, med);
+    $("vivo3").innerHTML = "medoides " + med.map(function (k, j) { return '<span style="color:var(--g' + j + ')">' + par(X[k]) + '</span>'; }).join(", ") + " → costo = <b>" + fn(cs) + "</b>";
+    $("estado3").innerHTML = est.sw.msg;
+    $("btnSwap3").disabled = !est.chk3; $("btnFin3").disabled = !est.chk3; $("btnIni3").disabled = !est.chk3;
+  }
+  function aporte20() { return Math.min.apply(null, INI3.map(function (k) { return man(X[20], X[k]); })); }
+  B.numerico(cuerpo("chk3"), {
+    pregunta: "El cliente del anillo está en (3.5, 7.5). Los medoides de ahora son (0.5, 2.5), (1, 1) y (9, 4). ¿Cuánto aporta ese cliente al costo?",
+    respuesta: aporte20,
+    tolerancia: 0.01,
+    pistas: ["Calcula su distancia del taxi a cada uno de los tres medoides.", "Son 8, 9 y 9. Paga solo una de ellas: la de su medoide, el más cercano."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 26) < 0.01) return "Sumaste las tres distancias. Cada cliente paga solo la distancia a su medoide, el más cercano.";
+      if (Math.abs(v - Math.sqrt(34)) < 0.01) return "Esa es la distancia en línea recta. Aquí usamos la del taxi: horizontal más vertical.";
+      if (Math.abs(v - 64) < 0.01) return "La elevaste al cuadrado. PAM suma distancias sin elevar.";
+      return null;
+    },
+    explicacion: "Hasta (0.5, 2.5): 3 + 5 = 8; hasta (1, 1): 2.5 + 6.5 = 9; hasta (9, 4): 5.5 + 3.5 = 9. Se queda con el naranja y aporta <b>8</b>. El costo total es la suma de esos 30 aportes: 116 con estos medoides. <b>Ahora prueba intercambios.</b>",
+    alResolver: function () { est.chk3 = true; est.sw.msg = "Costo inicial: <b>116</b>."; if (est.paso === 2) entrar(2); pintarVivo3(); pasos.completar(2); }
+  });
+  function aplicarSwap(nuevo, manual) {
+    var antes = costo(X, est.sw.med), desp = costo(X, nuevo);
+    est.sw.med = nuevo; est.sw.hist.push(desp); est.sw.sel = null;
+    var dif = desp - antes;
+    est.sw.msg = (manual ? "Tu intercambio: " : "PAM eligió el mejor intercambio: ") + "costo " + fn(antes) + " → <b>" + fn(desp) + "</b> " +
+      (dif < 0 ? "(baja " + fn(-dif) + ")." : dif > 0 ? "(sube " + fn(dif) + ": PAM nunca haría este)." : "(igual).");
+    if (desp < 50.001) est.sw.msg += " Es el mínimo: 50, con medoides (2, 2), (8.5, 3) y (5, 9).";
+    entrar(2);
+  }
+  function tocar3(i) {
+    if (!est.chk3) return;
+    var a = est.sw.med.indexOf(i);
+    if (a >= 0) { est.sw.sel = est.sw.sel === a ? null : a; est.sw.msg = est.sw.sel === null ? "" : "Elegiste el medoide " + COL[a] + " " + par(X[i]) + ". Ahora toca el cliente que lo reemplaza."; entrar(2); return; }
+    if (est.sw.sel === null) { est.sw.msg = "Primero toca un medoide, uno de los cuadrados."; entrar(2); return; }
+    var nu = est.sw.med.slice(); nu[est.sw.sel] = i;
+    aplicarSwap(nu, true);
+  }
+  $("btnSwap3").addEventListener("click", function () {
+    var r = mejorSwap(X, est.sw.med);
+    if (!r) { est.sw.msg = "Ningún intercambio baja el costo de " + fn(costo(X, est.sw.med)) + ": SWAP terminó."; entrar(2); return; }
+    aplicarSwap(r.med, false);
+  });
+  $("btnFin3").addEventListener("click", function () {
+    var r, k = 0;
+    while ((r = mejorSwap(X, est.sw.med)) && k++ < 50) { est.sw.med = r.med; est.sw.hist.push(r.costo); }
+    est.sw.sel = null;
+    est.sw.msg = "Ningún intercambio mejora: costo <b>" + fn(costo(X, est.sw.med)) + "</b>" + (costo(X, est.sw.med) < 50.001 ? ", el mejor posible para estos 30 clientes." : ".");
+    entrar(2);
+  });
+  $("btnIni3").addEventListener("click", function () { est.sw = { med: INI3.slice(), sel: null, hist: [], msg: "Costo inicial: <b>116</b>." }; entrar(2); });
+
+  /* ---------- paso 4: el atipico ---------- */
+  B.opcionMultiple(cuerpo("chk4"), {
+    pregunta: "Con el cliente de (5, 22) entre los datos, ¿qué hace k-means con su mejor resultado posible para k = 3?",
+    opciones: [
+      "Los tres grupos de siempre, con el centro de arriba un poco más alto",
+      "Le da un grupo propio al atípico y junta los otros dos grupos de la derecha y de arriba en uno",
+      "Lo deja sin grupo",
+      "Pone los tres centros cerca del atípico"
+    ],
+    correcta: 1,
+    pistas: [
+      "Eso da una WSS de 228.68. ¿Hay algo más barato? Piensa cuánto cuesta el atípico al cuadrado si se queda en un grupo con los de arriba.",
+      null,
+      "k-means es completo: todo cliente tiene grupo. No sabe dejar a nadie afuera.",
+      "Los otros 30 clientes quedarían lejísimos de su centro, y al cuadrado eso cuesta una fortuna."],
+    explicacion: "Su mejor WSS es 220.5: el atípico solo, y un centro en (6.5, 5.5) para 20 clientes que no se parecen entre sí. Mantener los tres grupos de siempre daría 228.68, un poco peor. <b>Ahora toca los botones</b> y compara con PAM.",
+    alResolver: function () {
+      est.chk4 = true;
+      $("btnKm4").disabled = false; $("btnPam4").disabled = false;
+      modo4("km");
+      cerrar4();
+    }
+  });
+  function modo4(m) {
+    est.m4 = m;
+    $("btnKm4").classList.toggle("on", m === "km"); $("btnPam4").classList.toggle("on", m === "pam");
+    $("estado4").innerHTML = m === "km" ? "k-means: grupo propio para el atípico (centro en (5, 22)) y un grupo de 20 con centro en (6.5, 5.5), donde no hay ningún cliente. WSS <b>220.5</b>."
+      : "PAM: los tres grupos de siempre, con los mismos medoides que sin el atípico, (2, 2), (8.5, 3) y (5, 9). El atípico se queda con el de arriba y paga 13. Costo <b>63</b> = 50 + 13.";
+    if (est.paso === 3) entrar(3);
+  }
+  $("btnKm4").addEventListener("click", function () { modo4("km"); });
+  $("btnPam4").addEventListener("click", function () { modo4("pam"); });
+  B.opcionMultiple(cuerpo("chk4b"), {
+    pregunta: "En el grupo de arriba, la mediana de las visitas es 5 y la del gasto es 8. ¿El punto (5, 8) es el medoide de ese grupo?",
+    opciones: [
+      "No: no hay ningún cliente en (5, 8), y el medoide tiene que ser un cliente",
+      "Sí: el medoide es la mediana de cada coordenada",
+      "Sí: PAM significa partición alrededor de medianas",
+      "Depende de la semilla con que se corra PAM"],
+    correcta: 0,
+    pistas: [null,
+      "Mira el plano del paso 3: ¿hay un punto en (5, 8)? El medoide se elige entre los clientes.",
+      "Eso dice la diapositiva, y es justamente la errata: la M es de medoides.",
+      "Para un grupo fijo, el medoide es el cliente de menor suma de distancias. No hay azar en eso."],
+    explicacion: "La mediana coordenada a coordenada cae en (5, 8), donde no hay nadie: es la cruz del escenario. El medoide es el cliente (5, 9). Las dos resisten a los atípicos porque ninguna usa cuadrados, pero solo el medoide es un dato real, y por eso PAM puede trabajar con cualquier distancia, incluso con categorías.",
+    alResolver: function () { est.chk4b = true; if (est.paso === 3) entrar(3); cerrar4(); }
+  });
+  function cerrar4() { if (est.chk4 && est.chk4b) pasos.completar(3); }
+
+  /* ---------- pasos 5 y 6: tabla mixta y Gower ---------- */
+  function filasMix() {
+    if (est.paso === 5 && est.modo6 !== "sin") {
+      var z = Object.assign({}, MZ);
+      if (est.modo6 === "rec") z.g = 10;
+      return MIX.concat([z]);
+    }
+    return MIX;
+  }
+  function pintarMix() {
+    var rows = filasMix(), gw = gower(rows), D = gw.D, n = rows.length;
+    var en6 = est.paso === 5;
+    var pm = en6 && est.chk6 ? pamD(D, 2) : null;
+    var h = '<p class="mix-tit">Ocho clientes con números y categorías' + (rows.length > 8 ? ", más Z" : "") + '. Rango de visitas: <b>' + fn(gw.rv) + '</b>; rango de gasto: <b>' + fn(gw.rg) + '</b>.</p>';
+    h += '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>cliente</th><th>visitas</th><th>gasto</th><th>canal</th><th>socio</th>' + (pm ? '<th>grupo PAM</th>' : '') + '</tr></thead><tbody>';
+    rows.forEach(function (r, i) {
+      var esZ = r.n === "Z";
+      h += '<tr' + (esZ ? ' class="raro"' : '') + '><td class="pl">' + r.n + '</td><td>' + fn(r.v) + '</td><td>' + fn(r.g) + (esZ && est.modo6 === "rec" ? " (era 22)" : "") + '</td><td>' + r.c + '</td><td>' + sociotxt(r.s) + '</td>' +
+        (pm ? '<td>' + chip(pm.g[i]) + rows[pm.med[pm.g[i]]].n + (pm.med.indexOf(i) >= 0 ? '<span class="medtag">medoide</span>' : '') + '</td>' : '') + '</tr>';
+    });
+    h += '</tbody></table></div>';
+    h += '<p class="mix-tit">Matriz de distancias de Gower (toca una celda):</p><div class="tabla-wrap"><table class="matriz"><thead><tr><th></th>' +
+      rows.map(function (r) { return '<th' + (r.n === "Z" ? ' class="z"' : '') + '>' + r.n + '</th>'; }).join("") + '</tr></thead><tbody>';
+    var oc = !est.chk5 ? [3, 7] : null;
+    for (var i = 0; i < n; i++) {
+      h += '<tr><th' + (rows[i].n === "Z" ? ' class="z"' : '') + '>' + rows[i].n + '</th>';
+      for (var j = 0; j < n; j++) {
+        if (i === j) { h += '<td class="diag">0</td>'; continue; }
+        var esOc = oc && ((i === oc[0] && j === oc[1]) || (i === oc[1] && j === oc[0]));
+        var sel = (est.par5[0] === i && est.par5[1] === j) || (est.par5[0] === j && est.par5[1] === i);
+        var v = D[i][j], fondo = "color-mix(in oklab, var(--accent) " + Math.round(v * 70) + "%, var(--surface))";
+        h += '<td data-i="' + i + '" data-j="' + j + '" class="' + (esOc ? "oculto" : "") + (sel ? " sel" : "") + (pm && pm.med.indexOf(j) >= 0 ? " medcol" : "") + '" style="background:' + (esOc ? "var(--surface-2)" : fondo) + '">' + (esOc ? "?" : f(v, 2)) + '</td>';
+      }
+      h += '</tr>';
+    }
+    h += '</tbody></table></div><div class="desglose" id="desglose"></div>';
+    if (pm) h += '<p class="info">PAM con k = 2 sobre esta matriz: medoides <b>' + pm.med.map(function (k) { return rows[k].n; }).join(" y ") + '</b>, costo ' + f(pm.costo, 4) + '. Los medoides tienen la columna marcada.</p>';
+    $("mixPanel").innerHTML = h;
+    pintarDesglose(rows, gw);
+    pintarVivo5(rows, gw);
+  }
+  function pintarDesglose(rows, gw) {
+    var i = est.par5[0], j = est.par5[1];
+    if (i >= rows.length || j >= rows.length) { est.par5 = [0, 4]; i = 0; j = 4; }
+    var a = rows[i], b = rows[j], p = partes(a, b, gw.rv, gw.rg), tot = (p[0] + p[1] + p[2] + p[3]) / 4;
+    var oculto = !est.chk5 && ((i === 3 && j === 7) || (i === 7 && j === 3));
+    $("desglose").innerHTML = "<b>d(" + a.n + ", " + b.n + ")</b> = ( |" + fn(a.v) + " − " + fn(b.v) + "| / " + fn(gw.rv) + " + |" + fn(a.g) + " − " + fn(b.g) + "| / " + fn(gw.rg) +
+      " + [" + a.c + " ≠ " + b.c + "] + [" + sociotxt(a.s) + " ≠ " + sociotxt(b.s) + "] ) / 4<br>" +
+      (oculto ? "= ? (es la cuenta del chequeo)" : "= ( " + f3(p[0]) + " + " + f3(p[1]) + " + " + p[2] + " + " + p[3] + " ) / 4 = <b>" + f3(tot) + "</b>");
+  }
+  function pintarVivo5(rows, gw) {
+    var i = est.par5[0], j = est.par5[1], a = rows[i], b = rows[j];
+    if (!a || !b) return;
+    var p = partes(a, b, gw.rv, gw.rg);
+    var oculto = !est.chk5 && ((i === 3 && j === 7) || (i === 7 && j === 3));
+    $("vivo5").innerHTML = "celda elegida: d(" + a.n + ", " + b.n + ") = (" + f3(p[0]) + " + " + f3(p[1]) + " + " + p[2] + " + " + p[3] + ") / 4 = " + (oculto ? "?" : "<b>" + f3((p[0] + p[1] + p[2] + p[3]) / 4) + "</b>");
+  }
+  $("mixPanel").addEventListener("click", function (e) {
+    var td = e.target.closest ? e.target.closest("td[data-i]") : null;
+    if (!td) return;
+    est.par5 = [+td.getAttribute("data-i"), +td.getAttribute("data-j")];
+    pintarMix();
+  });
+  B.numerico(cuerpo("chk5"), {
+    pregunta: "D visitó 9 veces, gastó 2, compra por app y es socio. H visitó 6 veces, gastó 7, compra por app y no es socio. Los dos rangos valen 8. ¿Cuánto vale la distancia de Gower entre D y H? Es la celda con el signo de pregunta.",
+    respuesta: 0.5,
+    tolerancia: 0.005,
+    pistas: ["Visitas: |9 − 6| / 8. Gasto: |2 − 7| / 8.", "Canal: los dos por app, 0. Socio: uno sí y otro no, 1.", "Suma las cuatro partes y divide entre 4: (0.375 + 0.625 + 0 + 1) / 4."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 2) < 0.005) return "Esa es la suma de las cuatro partes. Gower es el promedio: falta dividir entre 4.";
+      if (Math.abs(v - 2.25) < 0.005) return "No dividiste las diferencias numéricas entre el rango: 3 visitas y 5 de gasto no están en escala de 0 a 1.";
+      if (Math.abs(v - 0.25) < 0.005) return "Revisa las categorías: coinciden en canal (0), pero no en socio (1).";
+      if (Math.abs(v - 0.75) < 0.005) return "Contaste el canal como distinto. Los dos compran por app: esa parte es 0.";
+      return null;
+    },
+    explicacion: "$(3/8 + 5/8 + 0 + 1)/4 = 2/4 = 0.5$. Mitad de camino entre idénticos y opuestos en todo. <b>Ahora toca otras celdas</b>: E y G, que compran por web y no son socios, están a 0.08.",
+    alResolver: function () { est.chk5 = true; est.par5 = [3, 7]; if (est.paso === 4) entrar(4); pasos.completar(4); }
+  });
+
+  B.opcionMultiple(cuerpo("chk6"), {
+    pregunta: "Agregas a Z, con gasto 22, a la tabla. Sin tocar a D ni a H, ¿qué le pasa a la parte del gasto en la distancia entre ellos?",
+    opciones: [
+      "Se achica: pasa de 5/8 a 5/21, porque el rango del gasto ahora es 21",
+      "Nada: D y H no cambiaron",
+      "Crece, porque ahora hay un gasto más grande",
+      "Desaparece: con un atípico Gower ignora la variable"],
+    correcta: 0,
+    pistas: [null,
+      "D y H no cambiaron, pero la parte del gasto se divide entre el rango de toda la tabla. ¿Cambió el rango?",
+      "La diferencia entre D y H sigue siendo 5. Lo que cambia es el divisor.",
+      "No la ignora: la sigue sumando, pero dividida entre algo mucho más grande."],
+    explicacion: "El rango del gasto pasa de 9 − 1 = 8 a 22 − 1 = 21, y la parte del gasto de D y H baja de 0.625 a 0.238. Todas las diferencias de gasto entre clientes normales quedan casi en cero. <b>Ahora toca los botones</b> y mira la matriz y los grupos.",
+    alResolver: function () {
+      est.chk6 = true;
+      ["btnSin6", "btnCon6", "btnRec6"].forEach(function (id) { $(id).disabled = false; });
+      modo6("con");
+      pasos.completar(5);
+    }
+  });
+  function modo6(m) {
+    est.modo6 = m;
+    ["btnSin6", "btnCon6", "btnRec6"].forEach(function (id, k) { $(id).classList.toggle("on", ["sin", "con", "rec"][k] === m); });
+    est.par5 = [3, 7];
+    $("estado6").innerHTML = m === "sin" ? "Sin Z: PAM separa a los que gastan poco (A, B, C, D) de los que gastan mucho (E, F, G, H). d(D, H) = <b>0.5</b>."
+      : m === "con" ? "Con Z: el rango del gasto es 21 y d(D, H) baja a <b>0.403</b>. C, que gasta poco, se pasa al grupo de los que gastan mucho: lo que ahora decide es ser socio o no."
+      : "Con Z y el gasto recortado a 10: el rango es 9, d(D, H) = <b>0.483</b>, y vuelven los grupos de siempre. Z queda con los que gastan poco y son socios.";
+    if (est.paso === 5) entrar(5);
+  }
+  $("btnSin6").addEventListener("click", function () { modo6("sin"); });
+  $("btnCon6").addEventListener("click", function () { modo6("con"); });
+  $("btnRec6").addEventListener("click", function () { modo6("rec"); });
+
+  /* ---------- paso 7: CLARA ---------- */
+  B.numerico(cuerpo("chk7"), {
+    pregunta: "Con 20 000 clientes, ¿cuántas distancias distintas tiene que guardar PAM? Cada par cuenta una vez y la distancia de un cliente consigo mismo no se guarda. Responde en millones.",
+    respuesta: 20000 * 19999 / 2 / 1e6,
+    tolerancia: 0.6,
+    pistas: ["Con 30 clientes son 435 = 30 × 29 / 2. Haz la misma cuenta con 20 000.", "20 000 × 19 999 / 2 = 199 990 000."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 400) < 1) return "Esa es la tabla entera de 20 000 × 20 000. Cada par está dos veces (i con j y j con i) y la diagonal es 0.";
+      if (Math.abs(v - 399.98) < 1) return "Contaste cada par dos veces. d(i, j) = d(j, i): basta con la mitad.";
+      if (Math.abs(v - 199990000) < 1000) return "Bien la cuenta, pero responde en millones.";
+      return null;
+    },
+    explicacion: "$20\\,000 \\times 19\\,999 / 2 \\approx 200$ millones de distancias. A 8 bytes cada una son unos 1.6 GB solo para guardarlas, y SWAP las recorre una y otra vez. <b>Ahora saca muestras</b> y mira cómo lo resuelve CLARA.",
+    alResolver: function () { est.chk7 = true; $("btnMue7").disabled = false; $("btnRei7").disabled = false; pasos.completar(6); }
+  });
+  function infoClara() {
+    var cl = est.clara;
+    if (!cl.muestras.length) return "PAM con los 30 clientes cuesta 50. CLARA va a buscar algo parecido mirando solo 10 a la vez.";
+    var mejor = 0;
+    cl.muestras.forEach(function (m, k) { if (m.costo < cl.muestras[mejor].costo - 1e-9) mejor = k; });
+    var h = '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>muestra</th><th>medoides</th><th>costo con los 30</th></tr></thead><tbody>';
+    cl.muestras.forEach(function (m, k) {
+      h += '<tr' + (k === mejor ? ' class="mejor"' : '') + '><td class="pl">' + (k + 1) + (k === cl.actual ? " (en el plano)" : "") + '</td><td>' + m.med.map(function (i) { return par(X[i]); }).join(" ") + '</td><td>' + fn(m.costo) + '</td></tr>';
+    });
+    return h + '</tbody></table></div><p class="info">Los clientes con anillo son la muestra; los demás se asignan después. La fila marcada es la que CLARA se queda. PAM con los 30: 50.</p>';
+  }
+  $("btnMue7").addEventListener("click", function () {
+    var cl = est.clara;
+    if (cl.muestras.length >= 5) { $("estado7").innerHTML = "Ya van 5 muestras, como <code>clara()</code> por defecto. Toca «Empezar de nuevo» para otra tanda."; return; }
+    var idx = [];
+    while (idx.length < 10) { var r = Math.floor(Math.random() * N); if (idx.indexOf(r) < 0) idx.push(r); }
+    idx.sort(function (a, b) { return a - b; });
+    var pm = pamExacto(X, 3, idx), g = grupos(X, pm.med);
+    cl.muestras.push({ idx: idx, med: pm.med, g: g, costo: costo(X, pm.med) });
+    cl.actual = cl.muestras.length - 1;
+    var c = cl.muestras[cl.actual].costo;
+    $("estado7").innerHTML = "Muestra " + cl.muestras.length + ": PAM en esos 10, y los 30 asignados a sus medoides. Costo con todos: <b>" + fn(c) + "</b>" +
+      (c < 50.001 ? ", igual que PAM con los 30." : c < 56 ? ", muy cerca del 50 de PAM con los 30." : ". Si a la muestra le falta un grupo entero, el costo se dispara.");
+    entrar(6);
+  });
+  $("btnRei7").addEventListener("click", function () { est.clara = { muestras: [], actual: -1 }; $("estado7").innerHTML = ""; entrar(6); });
+
+  pasos = B.pasos($("recorrido"), {
+    concepto: C,
+    alEntrar: entrar,
+    alTerminar: function () { location.hash = "vidareal"; }
+  });
+  // al volver a la pagina con pasos hechos, se habilita lo que corresponde
+  if (pasos.hecho(0)) est.chk1 = true;
+  if (pasos.hecho(1)) est.chk2 = true;
+  if (pasos.hecho(2)) { est.chk3 = true; est.sw.msg = "Costo inicial: <b>116</b>."; }
+  if (pasos.hecho(3)) { est.chk4 = true; est.chk4b = true; $("btnKm4").disabled = false; $("btnPam4").disabled = false; est.m4 = "pam"; }
+  if (pasos.hecho(4)) { est.chk5 = true; est.par5 = [3, 7]; }
+  if (pasos.hecho(5)) { est.chk6 = true; ["btnSin6", "btnCon6", "btnRec6"].forEach(function (id) { $(id).disabled = false; }); }
+  if (pasos.hecho(6)) { est.chk7 = true; $("btnMue7").disabled = false; $("btnRei7").disabled = false; }
+  pintarVivo3();
+  entrar(0);
+
+  /* ---------------- hipotesis inicial ---------------- */
+  (function () {
+    var ta = $("hipotesis"), t = null;
+    ta.value = B.nota("pam-gower", "hipotesis");
+    function cita() {
+      var v = ta.value.trim(), el = $("citaHipo");
+      el.hidden = !v;
+      if (v) { el.textContent = ""; el.appendChild(document.createTextNode("Al principio escribiste: «" + v + "». Gower diría: (7/8 + 0 + 1 + 0) / 4 = 0.47 si los rangos de la tabla son 8. ¿Tu idea ponía las visitas y el canal en la misma escala?")); }
+    }
+    cita();
+    ta.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { B.nota("pam-gower", "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; cita(); }, 500);
+    });
+  })();
+
+  /* ---------------- marcadores de estado de retos ---------------- */
+  function pintarEstados() {
+    [].forEach.call(document.querySelectorAll("[data-reto]"), function (el) {
+      var ok = C.retoOk(el.getAttribute("data-reto"));
+      el.textContent = ok ? "resuelto" : "pendiente";
+      el.classList.toggle("ok", ok);
+    });
+  }
+  C.alCambiar(pintarEstados);
+
+  /* ---------------- reto: ojo clinico ---------------- */
+  (function () {
+    var cont = $("ojo");
+    cont.innerHTML = '<div class="ronda"></div><svg tabindex="-1" role="img" aria-label="Plano con un grupo de clientes y tres candidatos numerados"></svg>' +
+      '<div class="ojo-opts"><button type="button" class="opt" data-a="0">1</button><button type="button" class="opt" data-a="1">2</button><button type="button" class="opt" data-a="2">3</button></div>' +
+      '<div class="fb" aria-live="polite"></div><div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    var p = crearPlano(cont.querySelector("svg"), {});
+    var ronda, aciertos, respondida, caso;
+    function generar() {
+      for (var t = 0; t < 2000; t++) {
+        var cx = 2.5 + Math.random() * 5, cy = 2.5 + Math.random() * 5, P = [];
+        while (P.length < 8) {
+          var q = [Math.round((cx + (Math.random() - 0.5) * 4) * 2) / 2, Math.round((cy + (Math.random() - 0.5) * 4) * 2) / 2];
+          if (q[0] < 0 || q[0] > 10 || q[1] < 0 || q[1] > 10) continue;
+          if (P.some(function (r) { return r[0] === q[0] && r[1] === q[1]; })) continue;
+          P.push(q);
+        }
+        // un atipico lejos
+        var ang = Math.random() * Math.PI * 2, at = [Math.round((cx + Math.cos(ang) * 5) * 2) / 2, Math.round((cy + Math.sin(ang) * 5) * 2) / 2];
+        if (at[0] < 0 || at[0] > 10 || at[1] < 0 || at[1] > 10) continue;
+        P.push(at);
+        var s = sumas(P), m = argmin(s), orden = s.map(function (v, i) { return i; }).sort(function (a, b) { return s[a] - s[b]; });
+        if (s[orden[1]] - s[m] < 1.5) continue;
+        var mu = media(P), cerca = argmin(P.map(function (q2) { return d2(q2, mu); }));
+        var otros = [m];
+        if (cerca !== m) otros.push(cerca);
+        var resto = P.map(function (_, i) { return i; }).filter(function (i) { return otros.indexOf(i) < 0 && i !== P.length - 1; });
+        while (otros.length < 3) otros.push(resto.splice(Math.floor(Math.random() * resto.length), 1)[0]);
+        // mezclar los candidatos
+        for (var k = otros.length - 1; k > 0; k--) { var r2 = Math.floor(Math.random() * (k + 1)), tmp = otros[k]; otros[k] = otros[r2]; otros[r2] = tmp; }
+        return { P: P, s: s, cand: otros, ok: otros.indexOf(m), mu: mu };
+      }
+      var Pf = G0.concat([[8, 9]]);
+      return { P: Pf, s: sumas(Pf), cand: [4, 9, 7], ok: 0, mu: media(Pf) };
+    }
+    function nueva() { ronda = 0; aciertos = 0; mostrar(); }
+    function mostrar() {
+      respondida = false;
+      caso = generar();
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 5 · aciertos " + aciertos;
+      var et = caso.P.map(function () { return ""; });
+      caso.cand.forEach(function (k, j) { et[k] = String(j + 1); });
+      p.set({ P: caso.P, etiq: et, etiqMin: -1, med: null, cent: null, raro: caso.P.length - 1, g: null, colorear: false });
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (b) { b.disabled = false; b.className = "opt"; });
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+    }
+    cont.querySelector(".ojo-opts").addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || respondida) return;
+      respondida = true;
+      var ok = +b.getAttribute("data-a") === caso.ok;
+      if (ok) aciertos++;
+      b.classList.add(ok ? "ok" : "mal");
+      if (!ok) cont.querySelector('[data-a="' + caso.ok + '"]').classList.add("ok");
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (x) { x.disabled = true; });
+      var m = caso.cand[caso.ok];
+      p.set({ med: [m], cent: [caso.mu], centMedia: true, etiq: caso.P.map(function (_, i) { return caso.cand.indexOf(i) >= 0 ? (caso.cand.indexOf(i) + 1) + ": " + fn(caso.s[i]) : ""; }), etiqMin: m });
+      cont.querySelector(".fb").innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No.</span> ') +
+        "Sumas de distancias: " + caso.cand.map(function (k, j) { return (j + 1) + " → " + fn(caso.s[k]); }).join(", ") + ". " +
+        (ok ? "" : "El rombo es la media: el atípico la tira hacia su lado, y el cliente más cercano a ella no siempre es el medoide.");
+      var sig = cont.querySelector(".sig");
+      sig.hidden = false;
+      if (ronda === 4) {
+        var aprobo = aciertos >= 4;
+        C.reto("ojo", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertos + " de 5" + (aprobo ? ". Aprobado." : ". Necesitas 4 para aprobar.");
+        sig.textContent = "Otra tanda";
+      } else sig.textContent = "Siguiente ronda";
+    });
+    cont.querySelector(".sig").addEventListener("click", function () { if (ronda === 4) nueva(); else { ronda++; mostrar(); } });
+    nueva();
+  })();
+
+  /* ---------------- reto: constructor ---------------- */
+  (function () {
+    var OBJ = [
+      { t: "Tres medoides con costo menor que 70.", ok: function (s) { return s.k === 3 && s.c < 70; } },
+      { t: "El mejor costo posible: 50.", ok: function (s) { return s.k === 3 && s.c < 50.001; } },
+      { t: "Un medoide que se queda solo, sin ningún otro cliente en su grupo (el cuadrado vacío).", ok: function (s) { return s.k === 3 && s.solo; } }
+    ];
+    var logrados = [false, false, false], avisado = false, med = [];
+    var ul = $("objetivos");
+    OBJ.forEach(function (o) { var li = document.createElement("li"); li.innerHTML = '<span class="m"></span><span>' + o.t + '</span>'; ul.appendChild(li); });
+    var p = crearPlano($("planoConstr"), {
+      alTocar: function (i) {
+        var k = med.indexOf(i);
+        if (k >= 0) med.splice(k, 1); else if (med.length < 3) med.push(i);
+        actualizar();
+      }
+    });
+    function actualizar() {
+      var g = med.length ? grupos(X, med) : null, c = med.length ? costo(X, med) : null;
+      var cnt = med.map(function (_, j) { return g.filter(function (v) { return v === j; }).length; });
+      var solos = cnt.map(function (n) { return n === 1; });
+      var s = { k: med.length, c: c, solo: solos.some(Boolean) };
+      p.set({ P: X, med: med.length ? med : null, g: g, colorear: !!g, lineas: !!g, tocable: true, solos: solos });
+      $("constrVivo").innerHTML = med.length < 3 ? "Medoides elegidos: " + med.length + " de 3. Toca clientes." :
+        "costo = <b>" + fn(c) + "</b> · clientes por grupo: " + cnt.join(", ");
+      OBJ.forEach(function (o, i) { if (!logrados[i] && o.ok(s)) logrados[i] = true; ul.children[i].classList.toggle("hecho", logrados[i]); });
+      if (!avisado && logrados.every(Boolean)) { avisado = true; C.reto("constructor", true); }
+    }
+    actualizar();
+  })();
+
+  /* ---------------- reto: a mano ---------------- */
+  (function () {
+    var D;
+    var CANALES = ["tienda", "web", "app"];
+    function generar() {
+      var rv = [4, 5, 8, 10][Math.floor(Math.random() * 4)], rg = [4, 5, 8, 10][Math.floor(Math.random() * 4)];
+      var a = { v: Math.floor(Math.random() * (rv + 1)), g: Math.floor(Math.random() * (rg + 1)), c: CANALES[Math.floor(Math.random() * 3)], s: Math.random() < 0.5 ? "si" : "no" };
+      var b = { v: Math.floor(Math.random() * (rv + 1)), g: Math.floor(Math.random() * (rg + 1)), c: Math.random() < 0.5 ? a.c : CANALES[Math.floor(Math.random() * 3)], s: Math.random() < 0.5 ? a.s : (a.s === "si" ? "no" : "si") };
+      if (a.v === b.v && a.g === b.g) b.v = (a.v + 2) % (rv + 1);
+      var p = partes(a, b, rv, rg);
+      D = { a: a, b: b, rv: rv, rg: rg, p: p, d: (p[0] + p[1] + p[2] + p[3]) / 4 };
+      $("manoDatos").innerHTML = '<table class="datos-mano"><tr><th></th><th>visitas</th><th>gasto</th><th>canal</th><th>socio</th></tr>' +
+        '<tr><th>P</th><td>' + a.v + '</td><td>' + a.g + '</td><td>' + a.c + '</td><td>' + sociotxt(a.s) + '</td></tr>' +
+        '<tr><th>Q</th><td>' + b.v + '</td><td>' + b.g + '</td><td>' + b.c + '</td><td>' + sociotxt(b.s) + '</td></tr>' +
+        '<tr><th>rango</th><td>' + rv + '</td><td>' + rg + '</td><td>−</td><td>−</td></tr></table>';
+    }
+    generar();
+    B.numerico($("mano"), {
+      pregunta: "¿Cuánto vale la distancia de Gower entre P y Q? Usa los rangos de la última fila (son los de la tabla completa de donde salen P y Q). Da tres decimales.",
+      respuesta: function () { return D.d; },
+      tolerancia: 0.003,
+      pistas: [
+        function () { return "Las dos numéricas: |" + D.a.v + " − " + D.b.v + "| / " + D.rv + " = " + f3(D.p[0]) + " y |" + D.a.g + " − " + D.b.g + "| / " + D.rg + " = " + f3(D.p[1]) + "."; },
+        function () { return "Las dos categóricas: canal " + D.p[2] + " y socio " + D.p[3] + " (0 si coinciden, 1 si no)."; },
+        function () { return "Suma " + f3(D.p[0] + D.p[1] + D.p[2] + D.p[3]) + " y divide entre 4."; }
+      ],
+      diagnostico: function (v) {
+        var s = D.p[0] + D.p[1] + D.p[2] + D.p[3];
+        if (Math.abs(v - s) < 0.003) return "Esa es la suma de las partes. Gower promedia: divide entre 4.";
+        if (Math.abs(v - (Math.abs(D.a.v - D.b.v) + Math.abs(D.a.g - D.b.g) + D.p[2] + D.p[3]) / 4) < 0.003) return "Te faltó dividir las diferencias numéricas entre su rango.";
+        if (Math.abs(v - (1 - D.d)) < 0.003) return "Eso es la similitud, 1 menos la distancia.";
+        return null;
+      },
+      explicacion: function () { return "(" + f3(D.p[0]) + " + " + f3(D.p[1]) + " + " + D.p[2] + " + " + D.p[3] + ") / 4 = <b>" + f3(D.d) + "</b>."; },
+      reintentable: true,
+      textoReintentar: "Otro ejercicio",
+      antesDeReintentar: generar,
+      alResolver: function (ok) { C.reto("mano", ok); }
+    });
+  })();
+
+  /* ---------------- reto: cazar el error ---------------- */
+  B.cazarError($("error"), {
+    variantes: [
+      {
+        intro: "Distancia de Gower entre D (9 visitas, gasto 2, app, socio) y H (6 visitas, gasto 7, app, no socio). Los dos rangos valen 8.",
+        lineas: ["\\text{visitas: } |9 - 6| = 3", "\\text{gasto: } |2 - 7| / 8 = 0.625", "\\text{canal: app = app} \\Rightarrow 0", "\\text{socio: sí} \\neq \\text{no} \\Rightarrow 1", "d = (3 + 0.625 + 0 + 1)/4 = 1.156"],
+        erronea: 0,
+        explicacion: "Faltó dividir entre el rango: $3/8 = 0.375$. Por eso la cuenta final se pasa de 1, que en Gower es imposible. Bien hecha da $(0.375 + 0.625 + 0 + 1)/4 = 0.5$."
+      },
+      {
+        intro: "Alguien usó la fórmula de Dice de la diapositiva 22 para la parte nominal, entre dos clientes que compran los dos en tienda:",
+        lineas: ["\\text{one-hot: tienda} = (1, 0, 0) \\text{ para los dos}", "a = 1,\\ b = 0,\\ c = 0", "D = \\tfrac{2a}{2a + b + c} = \\tfrac{2}{2} = 1", "\\text{parte del canal en Gower} = D = 1"],
+        erronea: 3,
+        explicacion: "D es una similitud: vale 1 cuando coinciden. La parte de la distancia es $1 - D = 0$. Es la errata de la diapositiva 22."
+      },
+      {
+        intro: "Alguien buscó el medoide del grupo de arriba de los 30 clientes:",
+        lineas: ["\\text{visitas ordenadas: } 3.5, 4, 4, 4.5, 5, 5, 5.5, 6, 6, 6.5", "\\text{mediana de visitas} = 5", "\\text{mediana del gasto} = 8", "\\text{medoide} = (5,\\, 8)"],
+        erronea: 3,
+        explicacion: "Las medianas están bien, pero (5, 8) no es ningún cliente. El medoide se elige entre los clientes del grupo, el de menor suma de distancias: (5, 9)."
+      }
+    ],
+    alResolver: function (ok) { C.reto("error", ok); }
+  });
+
+  /* ---------------- retos: propiedades ---------------- */
+  function prop(id, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple($(id), cfg);
+  }
+  prop("prop1", {
+    pregunta: "¿Por qué PAM resiste mejor a un atípico que k-means?",
+    opciones: [
+      "Suma distancias sin elevarlas al cuadrado, y su centro tiene que ser un cliente real",
+      "Porque elimina los atípicos antes de agrupar",
+      "Porque usa la mediana de cada coordenada",
+      "Porque prueba más arranques al azar"],
+    correcta: 0,
+    pistas: [null, "PAM no borra a nadie: en el paso 4 el atípico quedó en el grupo de arriba.", "Esa es la errata de la diapositiva 24. El medoide no es la mediana.", "Los arranques ayudan con los mínimos locales, no con los atípicos."],
+    explicacion: "Un atípico a distancia 13 pesa 13 en PAM y 169 en k-means. Y como el centro es un cliente, el atípico no puede arrastrarlo a un lugar vacío."
+  });
+  prop("prop2", {
+    pregunta: "Con Gower, la distancia entre dos clientes cualesquiera de la tabla está siempre...",
+    opciones: ["Entre 0 y 1", "Entre 0 y el número de variables", "Entre −1 y 1", "Sin límite: depende de las unidades"],
+    correcta: 0,
+    pistas: [null, "Eso sería la suma de las partes. Gower las promedia.", "Ninguna parte es negativa: son valores absolutos o 0 y 1.", "Dividir entre el rango borra las unidades."],
+    explicacion: "Cada parte está entre 0 y 1 (una diferencia nunca supera al rango; una categoría es 0 o 1) y el promedio de números entre 0 y 1 también lo está. Vale 1 solo si los dos clientes son opuestos en todo."
+  });
+  prop("prop3", {
+    pregunta: "Tienes 100 000 clientes con variables mixtas. ¿Puedes pasarle a <code>cluster::clara()</code> la matriz de Gower?",
+    opciones: [
+      "No: clara() trabaja con la tabla de datos y su propia distancia; no acepta una matriz de distancias",
+      "Sí, es justo para lo que está hecha",
+      "Sí, pero solo si k es menor que 10",
+      "No, porque clara() solo funciona con k = 2"],
+    correcta: 0,
+    pistas: [null, "La diapositiva 22 lista qué funciones aceptan una matriz de distancias. clara() está en la otra lista.", "k no tiene nada que ver: el problema es el tipo de entrada.", "clara() acepta cualquier k."],
+    explicacion: "clara() existe para no armar la matriz de n × n, así que no la acepta: usa la euclídea o la del taxi sobre los datos. Para datos mixtos grandes hay que buscar otra salida."
+  });
+  prop("prop4", {
+    pregunta: "Raschka dice que con variables categóricas conviene un medoide y no un centroide. ¿Por qué?",
+    opciones: [
+      "Porque la media de \"tienda\" y \"app\" no existe; un medoide siempre es un cliente con categorías reales",
+      "Porque el centroide es más lento de calcular",
+      "Porque con categorías la media siempre da 0",
+      "Porque el medoide usa la distancia euclídea"],
+    correcta: 0,
+    pistas: [null, "No es un tema de velocidad: el problema es qué significa el resultado.", "No da 0: directamente no se puede calcular.", "El medoide acepta cualquier distancia; con categorías se usa una como Gower."],
+    explicacion: "Para promediar hay que sumar, y las categorías no se suman. El medoide solo necesita comparar, y siempre devuelve un cliente que existe."
+  });
+  prop("prop5", {
+    pregunta: "En PAM, ¿puede quedar un grupo vacío?",
+    opciones: [
+      "No: cada medoide está a distancia 0 de sí mismo, así que su grupo tiene al menos un cliente",
+      "Sí, igual que en k-means",
+      "Sí, si el medoide es un atípico",
+      "Solo con la distancia de Gower"],
+    correcta: 0,
+    pistas: [null, "En k-means pasa porque el centro puede quedar donde no hay nadie. ¿Dónde está siempre un medoide?", "Un atípico como medoide se queda solo, pero se queda: su grupo tiene un cliente.", "Pasa con cualquier distancia: d(m, m) = 0 siempre."],
+    explicacion: "El peor caso es un grupo de un solo cliente, el medoide mismo: el cuadrado vacío del reto de construir. Es lo que dice Raschka de los k-medoides."
+  });
+  prop("prop6", {
+    pregunta: "En una vuelta de SWAP con n clientes y k medoides, ¿cuántos intercambios se prueban?",
+    opciones: ["$k\\,(n-k)$", "$n$", "$k$", "$n^2$"],
+    correcta: 0,
+    pistas: [null, "Un intercambio cambia un medoide por un cliente que no lo es. ¿Cuántas parejas así hay?", "Por cada medoide hay muchos candidatos para reemplazarlo.", "Los medoides no se intercambian entre sí ni con ellos mismos."],
+    explicacion: "Cada uno de los k medoides se puede cambiar por cualquiera de los $n-k$ clientes restantes: con 30 clientes y k = 3, 81 intercambios, y cada uno pide recalcular el costo con los 30."
+  });
+
+  /* ---------------- formula de memoria ---------------- */
+  B.ordenar($("formula"), {
+    piezas: ["d(i,j)", "=", "\\dfrac{1}{p}", "\\displaystyle\\sum_{f=1}^{p}", "d_{ij}^{(f)}"],
+    distractores: ["\\dfrac{1}{n}", "\\lVert x_i - x_j \\rVert^2", "\\displaystyle\\max_{f}", "\\sqrt{\\;}"],
+    soluciones: [[0, 1, 2, 3, 4]],
+    explicacion: "El promedio de las p partes. Para una numérica, $d_{ij}^{(f)} = |x_{if} - x_{jf}| / R_f$; para una categórica, 0 si coinciden y 1 si no.",
+    alResolver: function (ok) { C.reto("formula", ok); }
+  });
+
+  B.tarjetas($("tarjetas"), [
+    ["¿Qué es un medoide?", "El cliente del grupo con la menor suma de distancias a los demás. Es un dato real, no un promedio."],
+    ["¿Por qué PAM resiste a los atípicos?", "Suma distancias sin elevar al cuadrado y su centro tiene que ser un cliente: el atípico no lo arrastra al vacío."],
+    ["¿Qué hace BUILD?", "Elige medoides iniciales: primero el más central de todos, después el que más baja el costo, hasta tener k."],
+    ["¿Qué hace SWAP?", "Prueba cambiar cada medoide por cada cliente que no lo es, aplica el cambio que más baja el costo y repite hasta que ninguno mejore."],
+    ["Gower con una variable numérica", "$|x_i - x_j|$ dividido entre el rango de esa variable: queda entre 0 y 1."],
+    ["Gower con una variable categórica", "0 si coinciden, 1 si no. La fórmula de Dice de la diapositiva es la similitud: la distancia es 1 − D."],
+    ["La trampa del rango", "Un atípico agranda el rango y achica todas las diferencias de esa variable: deja de contar. Recortar o pasar a logaritmo."],
+    ["¿Qué hace CLARA?", "PAM sobre muestras chicas, asigna a todos al medoide más cercano y se queda con la muestra de menor costo. No acepta una matriz de Gower."]
+  ]);
+
+  /* ---------------- vida real: Gower y PAM con bucles ---------------- */
+  (function () {
+    var CODIGO = {
+      py: [
+        ["import", "import numpy as np"],
+        ["import", "from itertools import combinations"],
+        [null, ""],
+        [null, "# 8 clientes inventados: visitas, gasto (decenas de euros), canal, socio"],
+        ["datos", "vis = np.array([1, 2, 7.5, 9, 4, 5, 6, 6])"],
+        ["datos", "gas = np.array([1, 2, 2, 2, 7, 9, 7.5, 7])"],
+        ["datos", "canal = np.array([\"tienda\", \"tienda\", \"tienda\", \"app\", \"web\", \"tienda\", \"web\", \"app\"])"],
+        ["datos", "socio = np.array([\"si\", \"si\", \"no\", \"si\", \"no\", \"no\", \"no\", \"no\"])"],
+        ["dims", "n, k = len(vis), 2"],
+        ["rangos", "rv = vis.max() - vis.min()                     # rango de visitas"],
+        ["rangos", "rg = gas.max() - gas.min()                     # rango de gasto"],
+        [null, ""],
+        ["D0", "D = np.zeros((n, n))"],
+        ["fori", "for i in range(n - 1):                         # 1. Gower, par por par"],
+        [null, "    for j in range(i + 1, n):"],
+        ["gower", "        D[i, j] = (abs(vis[i] - vis[j]) / rv + abs(gas[i] - gas[j]) / rg"],
+        ["gower", "                   + (canal[i] != canal[j]) + (socio[i] != socio[j])) / 4"],
+        [null, "        D[j, i] = D[i, j]"],
+        ["print1", "print(np.round(D[0], 3))"],
+        [null, ""],
+        ["defcosto", "def costo(med):                                # suma de distancias al medoide más cercano"],
+        [null, "    return D[:, med].min(axis=1).sum()"],
+        [null, ""],
+        ["build1", "med = [int(np.argmin(D.sum(axis=1)))]          # 2. BUILD: el más central"],
+        ["while", "while len(med) < k:"],
+        ["init", "    mejor, cmejor = -1, np.inf"],
+        [null, "    for cand in range(n):"],
+        ["ifc", "        if cand not in med and costo(med + [cand]) < cmejor:"],
+        ["upd", "            mejor, cmejor = cand, costo(med + [cand])"],
+        ["append", "    med.append(mejor)"],
+        ["printB", "print(\"BUILD\", med, round(costo(med), 4))"],
+        [null, ""],
+        ["swap", "while True:                                    # 3. SWAP"],
+        ["actual", "    actual, mejor = costo(med), None"],
+        [null, "    for a in range(k):"],
+        [null, "        for o in range(n):"],
+        [null, "            if o in med:"],
+        [null, "                continue"],
+        [null, "            prueba = med.copy()"],
+        [null, "            prueba[a] = o"],
+        ["ifp", "            if costo(prueba) < actual - 1e-9:"],
+        ["updp", "                actual, mejor = costo(prueba), prueba"],
+        ["ifnone", "    if mejor is None:"],
+        ["break", "        break"],
+        ["medm", "    med = mejor"],
+        ["printS", "print(\"SWAP\", med, round(costo(med), 4))"],
+        ["grupos", "print(D[:, med].argmin(axis=1))"],
+        [null, ""],
+        [null, "# sin paquete de Gower ni de PAM: versión vectorizada y fuerza bruta"],
+        ["vec", "num = abs(vis[:, None] - vis) / rv + abs(gas[:, None] - gas) / rg"],
+        ["vec", "cat = (canal[:, None] != canal) * 1.0 + (socio[:, None] != socio)"],
+        ["allclose", "print(np.allclose(D, (num + cat) / 4))"],
+        ["lib", "print(min(combinations(range(n), k), key=lambda m: costo(list(m))))"]
+      ],
+      r: [
+        ["import", "library(cluster)"],
+        [null, ""],
+        [null, "# 8 clientes inventados: visitas, gasto (decenas de euros), canal, socio"],
+        ["datos", "vis <- c(1, 2, 7.5, 9, 4, 5, 6, 6)"],
+        ["datos", "gas <- c(1, 2, 2, 2, 7, 9, 7.5, 7)"],
+        ["datos", "canal <- c(\"tienda\", \"tienda\", \"tienda\", \"app\", \"web\", \"tienda\", \"web\", \"app\")"],
+        ["datos", "socio <- c(\"si\", \"si\", \"no\", \"si\", \"no\", \"no\", \"no\", \"no\")"],
+        ["dims", "n <- length(vis); k <- 2"],
+        ["rangos", "rv <- max(vis) - min(vis)                      # rango de visitas"],
+        ["rangos", "rg <- max(gas) - min(gas)                      # rango de gasto"],
+        [null, ""],
+        ["D0", "D <- matrix(0, n, n)"],
+        ["fori", "for (i in 1:(n - 1)) {                         # 1. Gower, par por par"],
+        [null, "  for (j in (i + 1):n) {"],
+        ["gower", "    D[i, j] <- (abs(vis[i] - vis[j]) / rv + abs(gas[i] - gas[j]) / rg +"],
+        ["gower", "                (canal[i] != canal[j]) + (socio[i] != socio[j])) / 4"],
+        [null, "    D[j, i] <- D[i, j]"],
+        [null, "  }"],
+        [null, "}"],
+        ["print1", "print(round(D[1, ], 3))"],
+        [null, ""],
+        ["defcosto", "costo <- function(med) {                       # suma de distancias al medoide más cercano"],
+        [null, "  sum(apply(D[, med, drop = FALSE], 1, min))"],
+        [null, "}"],
+        [null, ""],
+        ["build1", "med <- which.min(rowSums(D))                   # 2. BUILD: el más central"],
+        ["while", "while (length(med) < k) {"],
+        ["init", "  mejor <- -1; cmejor <- Inf"],
+        [null, "  for (cand in 1:n) {"],
+        ["ifc", "    if (!(cand %in% med) && costo(c(med, cand)) < cmejor) {"],
+        ["upd", "      mejor <- cand; cmejor <- costo(c(med, cand))"],
+        [null, "    }"],
+        [null, "  }"],
+        ["append", "  med <- c(med, mejor)"],
+        [null, "}"],
+        ["printB", "cat(\"BUILD\", med, round(costo(med), 4), \"\\n\")"],
+        [null, ""],
+        ["swap", "repeat {                                       # 3. SWAP"],
+        ["actual", "  actual <- costo(med); mejor <- NULL"],
+        [null, "  for (a in 1:k) {"],
+        [null, "    for (o in 1:n) {"],
+        [null, "      if (o %in% med) next"],
+        [null, "      prueba <- med"],
+        [null, "      prueba[a] <- o"],
+        ["ifp", "      if (costo(prueba) < actual - 1e-9) {"],
+        ["updp", "        actual <- costo(prueba); mejor <- prueba"],
+        [null, "      }"],
+        [null, "    }"],
+        [null, "  }"],
+        ["ifnone", "  if (is.null(mejor)) {"],
+        ["break", "    break"],
+        [null, "  }"],
+        ["medm", "  med <- mejor"],
+        [null, "}"],
+        ["printS", "cat(\"SWAP\", med, round(costo(med), 4), \"\\n\")"],
+        ["grupos", "print(apply(D[, med], 1, which.min))"],
+        [null, ""],
+        [null, "# la librería: daisy con factores y pam sobre esas distancias"],
+        ["vec", "df <- data.frame(vis, gas, canal = factor(canal), socio = factor(socio))"],
+        ["vec", "G <- daisy(df, metric = \"gower\")"],
+        ["allclose", "print(all.equal(D, as.matrix(G), check.attributes = FALSE))"],
+        ["lib", "print(pam(G, k = 2)$id.med)"]
+      ]
+    };
+    // lo que imprimio cada programa (Python 3.13 + NumPy; R 4.6.1 + cluster 2.1.8.3)
+    var SAL = {
+      print1: ["[0.    0.062 0.484 0.531 0.781 0.625 0.859 0.844]", "[1] 0.000 0.062 0.484 0.531 0.781 0.625 0.859 0.844"],
+      printB: ["BUILD [2, 6] 2.0938", "BUILD 3 7 2.0938 "],
+      printS: ["SWAP [1, 6] 1.625", "SWAP 2 7 1.625 "],
+      grupos: ["[0 0 0 0 1 1 1 1]", "[1] 1 1 1 1 2 2 2 2"],
+      allclose: ["True", "[1] TRUE"],
+      lib: ["(1, 6)", "[1] 2 7"]
+    };
+    var GW = gower(MIX), DM = GW.D, n = MIX.length;
+    var EV = [];
+    (function () {
+      var fase = 0, hecho = 0, salidas = [], med = [], ultimo = null;
+      function foto(id, extra) {
+        EV.push(Object.assign({ id: id, fase: fase, hecho: hecho, salidas: salidas.slice(), med: med.slice(), i: null, j: null, cand: null, prueba: null, costo: null, mejor: null, fin: false }, extra || {}));
+      }
+      foto("import"); foto("datos"); foto("dims"); foto("rangos"); foto("D0");
+      fase = 1;
+      for (var i = 0; i < n - 1; i++) {
+        foto("fori", { i: i });
+        for (var j = i + 1; j < n; j++) {
+          hecho++;
+          foto("gower", { i: i, j: j, partes: partes(MIX[i], MIX[j], GW.rv, GW.rg) });
+        }
+      }
+      salidas.push("print1"); foto("print1");
+      fase = 2;
+      foto("defcosto");
+      var sumasD = DM.map(function (fila) { return fila.reduce(function (s, x) { return s + x; }, 0); });
+      med = [argmin(sumasD)];
+      foto("build1", { sumas: sumasD });
+      while (med.length < 2) {
+        foto("while");
+        var mejor = -1, cm = Infinity;
+        foto("init");
+        for (var c = 0; c < n; c++) {
+          var cc = med.indexOf(c) >= 0 ? null : costoD(DM, med.concat([c]));
+          foto("ifc", { cand: c, costo: cc, mejor: mejor, cmejor: cm });
+          if (cc !== null && cc < cm) { mejor = c; cm = cc; foto("upd", { cand: c, costo: cc, mejor: mejor, cmejor: cm }); }
+        }
+        med.push(mejor);
+        foto("append");
+      }
+      salidas.push("printB"); foto("printB", { costo: costoD(DM, med) });
+      fase = 3;
+      for (var ronda = 1; ronda < 10; ronda++) {
+        foto("swap", { ronda: ronda });
+        var actual = costoD(DM, med), mj = null;
+        foto("actual", { costo: actual, ronda: ronda });
+        for (var a = 0; a < 2; a++) for (var o = 0; o < n; o++) {
+          if (med.indexOf(o) >= 0) continue;
+          var pr = med.slice(); pr[a] = o;
+          var cp = costoD(DM, pr);
+          foto("ifp", { a: a, prueba: pr, costo: cp, actual: actual, mejor: mj, ronda: ronda });
+          if (cp < actual - 1e-9) { actual = cp; mj = pr; foto("updp", { a: a, prueba: pr, costo: cp, actual: actual, mejor: mj, ronda: ronda }); }
+        }
+        foto("ifnone", { mejor: mj, actual: actual, ronda: ronda });
+        if (!mj) { foto("break", { ronda: ronda }); break; }
+        med = mj;
+        foto("medm", { costo: actual, ronda: ronda });
+      }
+      salidas.push("printS"); foto("printS", { costo: costoD(DM, med) });
+      salidas.push("grupos"); foto("grupos", { g: gruposD(DM, med) });
+      fase = 4;
+      foto("vec", { g: gruposD(DM, med) });
+      salidas.push("allclose"); foto("allclose", { g: gruposD(DM, med) });
+      salidas.push("lib"); foto("lib", { g: gruposD(DM, med), fin: true });
+      ultimo = med;
+    })();
+
+    function lista(med, ctx) {
+      return ctx.lang() === "py" ? "[" + med.join(", ") + "]" : med.map(function (k) { return k + 1; }).join(" ");
+    }
+    function nom(k) { return MIX[k].n; }
+    function narrar(e, ctx) {
+      var py = ctx.lang() === "py", ix = ctx.ix;
+      switch (e.id) {
+        case "import": return py ? "NumPy para las tablas y <b>combinations</b> para la búsqueda por fuerza bruta del final. No hay ningún paquete de Gower ni de PAM." : "Carga <b>cluster</b>, el paquete que nació del libro de Kaufman y Rousseeuw: trae <code>daisy</code> y <code>pam</code>, que se usan solo al final para comparar.";
+        case "datos": return "Los ocho clientes de la tabla del paso 5, de A a H. Canal y socio son texto.";
+        case "dims": return "<b>n = 8</b> clientes y <b>k = 2</b> medoides.";
+        case "rangos": return "Los rangos: <b>rv = 8</b> (de 1 a 9 visitas) y <b>rg = 8</b> (de 1 a 9 de gasto). Toda diferencia numérica se va a dividir entre ellos.";
+        case "D0": return "Una tabla de 8 × 8 llena de ceros para las distancias.";
+        case "fori": return "Fila <b>i = " + ix(e.i) + "</b>, el cliente " + nom(e.i) + ". Compara con los que vienen después, para no calcular cada par dos veces.";
+        case "gower": var p = e.partes; return "d(" + nom(e.i) + ", " + nom(e.j) + ") = (" + f3(p[0]) + " + " + f3(p[1]) + " + " + p[2] + " + " + p[3] + ") / 4 = <b>" + f3(DM[e.i][e.j]) + "</b>. " + (py ? "<code>canal[i] != canal[j]</code> es <code>True</code> o <code>False</code>, y al sumar vale 1 o 0." : "<code>canal[i] != canal[j]</code> es <code>TRUE</code> o <code>FALSE</code>, y al sumar vale 1 o 0.") + " La línea siguiente copia el valor en la celda simétrica.";
+        case "print1": return "Imprime la fila de A redondeada a 3 decimales: A está a 0.062 de B y a 0.859 de G.";
+        case "defcosto": return "El costo de un conjunto de medoides: para cada cliente, la distancia a su medoide más cercano (el mínimo de esas columnas), y se suma todo.";
+        case "build1": return "BUILD, primer medoide: el de menor suma de distancias a todos. Es <b>" + nom(e.med[0]) + "</b>, " + (py ? "índice " : "fila ") + ix(e.med[0]) + ", con suma " + f(e.sumas[e.med[0]], 4) + ".";
+        case "while": return "Falta un medoide: hay 1 y hacen falta k = 2.";
+        case "init": return "Empieza la búsqueda del segundo medoide con un costo infinito como referencia.";
+        case "ifc": return e.costo === null ? "El cliente " + nom(e.cand) + " ya es medoide: se salta." : "Si " + nom(e.cand) + " fuera el segundo medoide, el costo sería <b>" + f(e.costo, 4) + "</b>" + (e.costo < e.cmejor ? ": mejor que lo que había." : ": no mejora " + f(e.cmejor, 4) + ".");
+        case "upd": return "Nuevo mejor candidato: <b>" + nom(e.cand) + "</b>, con costo " + f(e.costo, 4) + ".";
+        case "append": return "El segundo medoide es <b>" + nom(e.med[1]) + "</b>. BUILD terminó con " + nom(e.med[0]) + " y " + nom(e.med[1]) + ".";
+        case "printB": return "Imprime <b>BUILD " + lista(e.med, ctx) + " 2.0938</b>: los medoides C y G, con costo " + f(e.costo, 5) + ".";
+        case "swap": return e.ronda === 1 ? "Empieza SWAP: probar todos los intercambios." : "Otra vuelta de SWAP, ahora desde los medoides " + nom(e.med[0]) + " y " + nom(e.med[1]) + ".";
+        case "actual": return "El costo de ahora es <b>" + f(e.costo, 5) + "</b>. Ningún intercambio elegido todavía.";
+        case "ifp": return "Cambiar " + nom(e.med[e.a]) + " por " + nom(e.prueba[e.a]) + ": medoides " + nom(e.prueba[0]) + " y " + nom(e.prueba[1]) + ", costo <b>" + f(e.costo, 5) + "</b>" + (e.costo < e.actual - 1e-9 ? ", mejor que " + f(e.actual, 5) + "." : e.mejor ? ", no mejora el " + f(e.actual, 5) + " del mejor intercambio hasta ahora." : ", no mejora " + f(e.actual, 5) + ".");
+        case "updp": return "Mejor intercambio hasta ahora: medoides <b>" + nom(e.prueba[0]) + " y " + nom(e.prueba[1]) + "</b>, costo " + f(e.costo, 5) + ". Sigue probando los demás: SWAP aplica el mejor de todos, no el primero que mejora.";
+        case "ifnone": return e.mejor ? "Hubo un intercambio que mejora: se aplica." : "Ningún intercambio de esta vuelta mejora el costo.";
+        case "break": return "SWAP terminó en " + (e.ronda === 1 ? "una vuelta" : e.ronda + " vueltas") + ": la última solo confirmó que nada mejora.";
+        case "medm": return "Ahora los medoides son <b>" + nom(e.med[0]) + " y " + nom(e.med[1]) + "</b>, con costo " + f(e.costo, 5) + ".";
+        case "printS": return "Imprime <b>SWAP " + lista(e.med, ctx) + " 1.625</b>: los medoides B y G.";
+        case "grupos": return "El grupo de cada cliente: el medoide más cercano. A, B, C y D con B; E, F, G y H con G. " + (py ? "Python numera los grupos desde 0." : "R numera los grupos desde 1.");
+        case "vec": return py ? "La misma matriz sin bucles: cada vector menos sí mismo en forma de tabla. Ver el desplegable de abajo." : "Canal y socio pasan a <b>factor</b>: <code>daisy</code> no acepta columnas de texto y da error. Después, <code>daisy(metric = \"gower\")</code> arma las 28 distancias.";
+        case "allclose": return py ? "Compara las dos matrices: <b>True</b>, son iguales." : "Compara la matriz del bucle con la de <code>daisy</code>: <b>TRUE</b>, son iguales.";
+        case "lib": return py ? "Fuerza bruta: prueba las 28 parejas de medoides y se queda con la de menor costo. Da <b>(1, 6)</b>, B y G: lo mismo que BUILD más SWAP." : "<code>pam</code> sobre las distancias de Gower: medoides <b>2 y 7</b>, B y G, los mismos del bucle.";
+      }
+      return "";
+    }
+    function visual(e, anterior, ctx) {
+      var lang = ctx.lang(), L = lang === "py" ? 0 : 1;
+      $("vrSalida").textContent = e ? e.salidas.map(function (k) { return SAL[k][L]; }).join("\n") : "";
+      // matriz: celdas ya calculadas
+      var hechas = {}, k = 0;
+      if (e) for (var i = 0; i < n - 1 && k < e.hecho; i++) for (var j = i + 1; j < n && k < e.hecho; j++) { hechas[i + "," + j] = true; k++; }
+      var medv = e && e.fase >= 2 ? (e.prueba && (e.id === "ifp" || e.id === "updp") ? e.prueba : e.med) : [];
+      var h = '<table class="matriz"><thead><tr><th></th>' + MIX.map(function (r) { return "<th>" + r.n + "</th>"; }).join("") + '</tr></thead><tbody>';
+      for (var a = 0; a < n; a++) {
+        h += "<tr><th>" + MIX[a].n + "</th>";
+        for (var b = 0; b < n; b++) {
+          if (a === b) { h += '<td class="diag">0</td>'; continue; }
+          var key = Math.min(a, b) + "," + Math.max(a, b), ok = !!hechas[key];
+          var act = e && e.id === "gower" && ((e.i === a && e.j === b) || (e.i === b && e.j === a));
+          var v = DM[a][b];
+          h += '<td class="' + (ok ? "" : "vacio") + (act ? " sel" : "") + (ok && medv.indexOf(b) >= 0 ? " medcol" : "") + '"' +
+            (ok ? ' style="background:color-mix(in oklab, var(--accent) ' + Math.round(v * 70) + '%, var(--surface))"' : "") + ">" + (ok ? f(v, 2) : "") + "</td>";
+        }
+        h += "</tr>";
+      }
+      $("vrMatriz").innerHTML = h + "</tbody></table>";
+      // tira de clientes
+      var g = e && e.g ? e.g : (e && e.fase >= 2 && medv.length === 2 ? gruposD(DM, medv) : null);
+      $("vrTira").innerHTML = MIX.map(function (r, i) {
+        var cls = medv.indexOf(i) >= 0 ? "med" : g ? "g" + g[i] : "";
+        if (e && (e.id === "ifc" || e.id === "upd") && e.cand === i) cls += " prueba";
+        return '<span class="' + cls + '">' + r.n + "</span>";
+      }).join("");
+      var cu = "";
+      if (!e) cu = "";
+      else if (e.id === "gower") { var p = e.partes; cu = "d(" + nom(e.i) + ", " + nom(e.j) + ") = (" + f3(p[0]) + " + " + f3(p[1]) + " + " + p[2] + " + " + p[3] + ") / 4 = <b>" + f3(DM[e.i][e.j]) + "</b>"; }
+      else if (e.id === "build1") cu = "sumas por fila: " + e.sumas.map(function (s, i) { return nom(i) + " " + f(s, 3); }).join(", ");
+      else if (e.id === "ifc" || e.id === "upd") cu = e.costo === null ? nom(e.cand) + " ya es medoide" : "medoides " + nom(e.med[0]) + " + " + nom(e.cand) + " → costo <b>" + f(e.costo, 4) + "</b>";
+      else if (e.id === "ifp" || e.id === "updp") cu = "prueba " + nom(e.prueba[0]) + " y " + nom(e.prueba[1]) + " → <b>" + f(e.costo, 4) + "</b> · mejor hasta ahora " + f(e.actual, 4);
+      else if (e.costo !== null) cu = "costo = <b>" + f(e.costo, 4) + "</b>";
+      else if (e.fin) cu = "bucle: B y G · librería: B y G";
+      $("vrCuenta").innerHTML = cu;
+    }
+    B.vidaReal($("vidareal"), {
+      codigo: CODIGO,
+      eventos: EV,
+      narrar: narrar,
+      vars: function (e, ctx) {
+        var v = [];
+        if (e && e.i !== null) v.push('<span>i = <b>' + ctx.ix(e.i) + '</b></span>');
+        if (e && e.j !== null) v.push('<span>j = <b>' + ctx.ix(e.j) + '</b></span>');
+        if (e && e.med && e.med.length) v.push('<span>med = <b>' + lista(e.med, ctx) + '</b></span>');
+        if (e && e.ronda) v.push('<span>vuelta de SWAP <b>' + e.ronda + '</b></span>');
+        var veces = e ? EV.slice(0, EV.indexOf(e) + 1).filter(function (x) { return x.id === "gower"; }).length : 0;
+        v.push('<span>la línea de Gower corrió <b>' + veces + '</b> veces</span>');
+        return v;
+      },
+      visual: visual,
+      demora: function (e) {
+        if (!e) return 600;
+        return { gower: 350, fori: 500, ifc: 650, ifp: 500, updp: 1000, upd: 900, swap: 900, "break": 1200, printB: 1100, printS: 1100 }[e.id] || 800;
+      }
+    });
+
+    /* prediccion y trampas reales */
+    var VECES = EV.filter(function (x) { return x.id === "gower"; }).length;
+    B.numerico(cuerpo("vrPred"), {
+      pregunta: "Con 8 clientes, ¿cuántas veces se va a ejecutar la línea que calcula Gower, <code>D[i, j] = ...</code>, hasta llenar la tabla?",
+      respuesta: VECES,
+      tolerancia: 0,
+      pistas: ["La fila i solo compara con los clientes que vienen después de ella: j va de i + 1 en adelante.", "Es la cantidad de pares distintos: 7 + 6 + 5 + 4 + 3 + 2 + 1."],
+      diagnostico: function (v) {
+        if (v === 64) return "Eso sería recorrer la tabla entera, diagonal incluida. La diagonal es 0 y cada par se calcula una sola vez.";
+        if (v === 56) return "Contaste cada par dos veces. La línea de abajo copia D[i, j] en D[j, i] sin recalcular.";
+        if (v === 8 || v === 7) return "Eso son filas. Dentro de cada fila la línea corre una vez por cada j.";
+        return null;
+      },
+      explicacion: "$8 \\times 7 / 2 = 28$ pares, la misma cuenta del paso 7. <b>Ahora dale a reproducir</b> y mira cómo se llena la matriz.",
+      alResolver: function (ok) { C.reto("codigo1", ok); }
+    });
+    prop("codigo2", {
+      pregunta: "Alguien se salta <code>daisy</code> y le pasa a <code>pam</code> la tabla directamente, con canal y socio como factores:" +
+        '<pre class="mini-code">pam(df, k = 2)$medoids\n     vis gas canal socio\n[1,]   2 2.0     2     2\n[2,]   6 7.5     3     1</pre>' +
+        "No hay error ni advertencia. ¿Qué hizo <code>pam</code> con canal y socio?",
+      opciones: [
+        "Los convirtió en sus códigos numéricos (app = 1, tienda = 2, web = 3; no = 1, si = 2) y midió con la euclídea, como si fueran cantidades",
+        "Los ignoró y agrupó solo con visitas y gasto",
+        "Calculó Gower por su cuenta, porque detecta los factores",
+        "Usó la distancia de 0 o 1 para las categorías"],
+      correcta: 0,
+      pistas: [null,
+        "Mira la salida: los medoides traen canal y socio como números. Si los ignorara, no aparecerían así.",
+        "pam solo calcula Gower si le das la matriz de daisy. Con una tabla usa metric = \"euclidean\" por defecto.",
+        "Con 0 o 1, web estaría tan lejos de app como de tienda. Aquí web (3) queda el doble de lejos de app (1) que de tienda (2)."],
+      explicacion: "<code>pam</code> pasa la tabla a una matriz numérica y cada factor se vuelve el número de su nivel, en orden alfabético. Así web queda el doble de lejos de app que de tienda, y nadie lo pidió. Aquí los medoides salieron los mismos por suerte. La forma correcta es la del programa: <code>pam(daisy(df, metric = \"gower\"), k = 2)</code>."
+    });
+    prop("codigo3", {
+      pregunta: "Tu bucle dice que el costo de BUILD es 2.0938 y el de SWAP 1.625. Le pides a R el suyo:" +
+        '<pre class="mini-code">pam(G, k = 2)$objective\n    build      swap \n0.2617188 0.2031250 </pre>' +
+        "¿Por qué no coinciden?",
+      opciones: [
+        "pam informa el costo promedio, dividido entre los 8 clientes: 2.09375 / 8 y 1.625 / 8",
+        "pam usa otra distancia por dentro",
+        "pam encontró medoides distintos, mejores",
+        "Tu bucle tiene un error en la función costo"],
+      correcta: 0,
+      pistas: [null,
+        "Le pasaste la matriz de daisy, que es idéntica a la tuya (TRUE en la comparación).",
+        "Los medoides de pam son 2 y 7, B y G, los mismos de tu SWAP.",
+        "Divide 1.625 entre 8 y compara."],
+      explicacion: "<code>objective</code> es la disimilitud <b>media</b> de cada cliente a su medoide: $2.09375/8 = 0.2617$ y $1.625/8 = 0.2031$. Son el mismo resultado en otra escala. Y fíjate que R también te dice que BUILD no era el óptimo y SWAP lo mejoró, igual que tu bucle."
+    });
+  })();
+
+  B.conexiones("pam-gower");
+})();
+</script>
+</body>
+</html>
