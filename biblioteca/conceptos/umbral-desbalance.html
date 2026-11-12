@@ -1,0 +1,1642 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Umbral, precisión contra recall y desbalance</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+/* ---------- la regla de fichas ---------- */
+.regla-svg, .cur-svg { width: 100%; height: auto; display: block; user-select: none; -webkit-user-select: none; }
+.regla-svg.mover { touch-action: none; cursor: ew-resize; }
+.regla-svg .grid, .cur-svg .grid { stroke: var(--line-soft); stroke-width: 1; }
+.regla-svg .eje, .cur-svg .eje { stroke: var(--ink-3); stroke-width: 1; }
+.regla-svg .tick, .cur-svg .tick { font: 10px var(--f-mono); fill: var(--ink-3); }
+.cur-svg .eje-tit, .regla-svg .eje-tit { font: 11.5px var(--f-body); fill: var(--ink-2); }
+.regla-svg .carril { font: 500 11.5px var(--f-body); }
+.regla-svg .carril.j { fill: var(--j); }
+.regla-svg .carril.k { fill: var(--k); }
+.regla-svg .zona { fill: var(--accent); fill-opacity: .07; }
+.regla-svg .zona-lab { font: 500 10.5px var(--f-mono); fill: var(--accent); }
+.regla-svg .umbral { stroke: var(--accent); stroke-width: 2.5; }
+.regla-svg .asa { fill: var(--accent); stroke: var(--surface); stroke-width: 2; }
+.regla-svg .umbral-lab { font: 500 11px var(--f-mono); fill: var(--accent); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+.regla-svg .dot { stroke-width: 2; }
+.regla-svg .dot.j { fill: var(--j); stroke: var(--j); }
+.regla-svg .dot.k { fill: var(--k); stroke: var(--k); }
+.regla-svg .dot.hueco { fill: var(--surface); }
+.regla-svg .dot.arrastre { cursor: grab; }
+.regla-svg .x19 { font: 600 10.5px var(--f-mono); fill: var(--neg); }
+.regla-svg .marca { stroke: var(--ink-2); stroke-width: 1.6; stroke-dasharray: 5 3; }
+.regla-svg .marca-lab { font: 600 12px var(--f-mono); fill: var(--ink); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+
+/* ---------- curvas ---------- */
+.cur-svg .base { stroke: var(--ink-3); stroke-dasharray: 5 4; stroke-width: 1.2; }
+.cur-svg .base-lab { font: 10.5px var(--f-mono); fill: var(--ink-3); }
+.cur-svg .curva { fill: none; stroke: var(--ink); stroke-width: 2.2; stroke-linejoin: round; }
+.cur-svg .fantasma { fill: none; stroke: var(--ink-3); stroke-width: 1.6; stroke-dasharray: 3 3; stroke-linejoin: round; }
+.cur-svg .pt { fill: var(--ink); }
+.cur-svg .rastro { fill: var(--ink-3); }
+.cur-svg .punto { fill: var(--accent); stroke: var(--surface); stroke-width: 2; }
+.cur-svg .punto.mejor { fill: var(--ok); }
+.cur-svg .punto-lab { font: 500 11px var(--f-mono); fill: var(--accent); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+.cur-svg .costo { fill: none; stroke: var(--neg); stroke-width: 2.2; }
+.cur-svg .tstar { stroke: var(--ok); stroke-width: 2; stroke-dasharray: 6 3; }
+.cur-svg .tstar-lab { font: 600 11px var(--f-mono); fill: var(--ok); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+.cur-svg .tact { stroke: var(--accent); stroke-width: 1.5; }
+
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.esc-head .hint { font-size: 12.5px; color: var(--ink-2); }
+.umbral-row, .costo-row { display: flex; align-items: center; gap: 10px; margin: 4px 0 8px; font-size: 13px; color: var(--ink-2); }
+.umbral-row input[type=range], .costo-row input[type=range] { flex: 1; min-width: 0; accent-color: var(--accent); }
+.umbral-row b, .costo-row b { font-family: var(--f-mono); font-weight: 500; color: var(--accent); min-width: 3.2em; text-align: right; }
+.costo-row label { min-width: 4.5em; }
+.esc-sub { font-family: var(--f-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); margin: 14px 0 4px; }
+.cur-info { font-family: var(--f-mono); font-size: 13px; color: var(--ink-2); min-height: 1.6em; font-variant-numeric: tabular-nums; line-height: 1.6; }
+.cur-info b { color: var(--ink); font-weight: 500; }
+.cur-info b.oculto { color: var(--accent); font-weight: 600; }
+.dos-svg { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; align-items: start; }
+.dos-svg .esc-sub { margin-top: 4px; }
+@media (max-width: 560px) { .dos-svg { grid-template-columns: minmax(0, 1fr); } }
+.btn-desb { margin-top: 10px; }
+
+/* ---------- matriz de confusion ---------- */
+.conf-wrap { overflow-x: auto; max-width: 100%; }
+.conf { border-collapse: collapse; font-family: var(--f-mono); font-size: 12.5px; font-variant-numeric: tabular-nums; width: 100%; }
+.conf th { font-weight: 500; color: var(--ink-3); font-size: 11px; padding: 4px 6px; border-bottom: 1px solid var(--line); text-align: center; }
+.conf th.fila { text-align: left; white-space: nowrap; }
+.conf th.fila.j { color: var(--j); }
+.conf th.fila.k { color: var(--k); }
+.conf td { text-align: center; padding: 5px 6px; border-bottom: 1px solid var(--line-soft); color: var(--ink-2); white-space: nowrap; }
+.conf td.bien { color: var(--ok); }
+.conf td.malo { color: var(--bad); }
+.conf td small { color: var(--ink-3); font-size: 10px; margin-right: 3px; }
+.metr { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-top: 8px; }
+@media (max-width: 420px) { .metr { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.metr div { background: var(--surface-2); border-radius: 8px; padding: 6px 8px; font-size: 11.5px; color: var(--ink-3); }
+.metr b { display: block; font-family: var(--f-mono); font-size: 16px; font-weight: 500; color: var(--ink); font-variant-numeric: tabular-nums; }
+.metr b.oculto { color: var(--accent); }
+.conteo-simple { font-size: 14px; color: var(--ink-2); display: grid; gap: 4px; }
+.conteo-simple b { font-family: var(--f-mono); font-weight: 500; color: var(--ink); }
+
+.rem-opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin-top: 6px; }
+.rem-opts button { font-size: 12.5px; padding: 7px 8px; text-align: center; }
+.rem-txt { font-size: 13px; color: var(--ink-2); margin: 8px 0 0; line-height: 1.5; }
+
+.grande { font-family: var(--f-mono); font-size: 14px; color: var(--ink-2); margin: 8px 0 12px; font-variant-numeric: tabular-nums; line-height: 1.7; }
+.grande b { font-size: 17px; color: var(--ink); font-weight: 500; }
+
+/* ---------- retos propios ---------- */
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.ojo-preg { font-size: 14.5px; color: var(--ink); margin: 6px 0 4px; }
+.ojo-opts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
+.ojo-opts .opt { text-align: center; }
+.objetivos { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.objetivos li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.objetivos .m { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.objetivos li.hecho { color: var(--ink); }
+.objetivos li.hecho .m { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 3px var(--surface); }
+.constr-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 10px; align-items: center; }
+@media (max-width: 560px) { .constr-grid { grid-template-columns: minmax(0, 1fr); } }
+.mano-txt { font-size: 14.5px; color: var(--ink); line-height: 1.6; }
+
+/* ---------- vida real ---------- */
+.vr-salida { margin: 10px 0 0; padding: 8px 12px; background: var(--surface-2); border-radius: 8px; font-family: var(--f-mono); font-size: 12.5px; line-height: 1.6; min-height: 2.2em; white-space: pre; overflow-x: auto; color: var(--ink); }
+.vr-salida:empty::before { content: "(todavía no imprimió nada)"; color: var(--ink-3); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ Umbral y desbalance</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Regresión logística · UD2 de SM142004 (Regresiones, deep learning y otros)</p>
+    <h1>Umbral, precisión contra recall y desbalance</h1>
+    <p class="lede">
+      La regresión logística te da una probabilidad. Para convertirla en un "sí" o un "no" hace falta un <b>corte</b>, y casi siempre
+      se usa 0.5 sin pensarlo. Aquí vas a mover ese corte con la mano y ver que cada posición <b>cambia qué errores cometes</b>.
+      Después vas a ver cómo elegirlo con costos, y por qué cuando una clase es rara la exactitud te miente.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> Un modelo te dice que un estudiante tiene 0.60 de probabilidad de aprobar. ¿Lo das por aprobado? ¿Siempre cortarías en 0.5? ¿Y si en el curso casi nadie aprueba? Escríbelo como te salga, aunque esté mal.</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: cortaría en..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>Del corte en 0.5 a elegir el corte</h2>
+      <p>Siete pasos. Cada uno termina con un chequeo: hasta que no lo resuelves, el siguiente queda cerrado. Equivocarte aquí no resta nada, es parte del método.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="¿Siempre 0.5?">
+          <span class="etapa">Paso 1</span>
+          <h3>Doce fichas y una línea</h3>
+          <p>Son los 12 estudiantes de la página de regresión logística. La curva S le dio a cada uno una probabilidad de aprobar según sus horas de estudio. Aquí cada estudiante es una <b>ficha</b> puesta en su probabilidad: arriba los que <b style="color:var(--j)">aprobaron</b> de verdad, abajo los que <b style="color:var(--k)">reprobaron</b>.</p>
+          <p>La línea es el <b>corte</b>. Toda ficha con probabilidad mayor o igual que el corte se da por aprobada: queda rellena. Las huecas se dan por reprobadas.</p>
+          <p>Ahora imagina para qué se usa. La escuela da tutoría a quien el modelo <b>no</b> da por aprobado. Si das por aprobado a alguien que después reprueba, se quedó sin ayuda: es el error grave. Si le das tutoría a alguien que iba a aprobar igual, perdiste una hora de un tutor: molesta, pero poco.</p>
+          <p>El material de la unidad usa 0.5 casi siempre, y cuando habla de un umbral cualquiera no dice cómo elegirlo
+          <cite class="cita" data-fuente="rl2" data-pag="12" data-seccion="Frontera de decisión" data-que="La frontera para un umbral x0 cualquiera y el caso 1/2, donde la expresión lineal vale 0. No hay ningún criterio para elegir el umbral: esta página es ese criterio. Ojo: llama x0 al umbral, la misma letra que los predictores." data-cuando="Al terminar este paso"></cite>.
+          Las diapositivas escriben la regla "si p &gt; 0.5 predice 1, si p &lt; 0.5 predice 0", que deja sin decidir el caso p = 0.5 justo
+          <cite class="cita" data-fuente="rl2diapo" data-pag="5" data-seccion="Expresión lineal y sigmoide" data-que="La sigmoide, sus límites y la regla del umbral 0.5. Dos detalles: la regla deja sin asignar p = 0.5 (la p. 8 usa p ≥ 0.5), y la gráfica dibujada es la del logit, no la de la sigmoide; la correcta está en la p. 7." data-cuando="Al terminar este paso"></cite>;
+          aquí usamos "mayor o igual", como la p. 8.</p>
+          <div class="check" id="chk1">
+            <p class="check-tit">Predice antes de tocar</p>
+            <div class="cuerpo"></div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Dos tipos de error">
+          <span class="etapa">Paso 2</span>
+          <h3>Mover el corte cambia qué errores cometes</h3>
+          <p>Hay dos formas de equivocarse, y el corte las reparte:</p>
+          <ul>
+            <li><b>Falso positivo</b>: lo das por aprobado y reprueba. Ficha de abajo, rellena.</li>
+            <li><b>Falso negativo</b>: lo das por reprobado y aprueba. Ficha de arriba, hueca.</li>
+          </ul>
+          <p>Subir el corte quita falsos positivos y agrega falsos negativos. Bajarlo hace lo contrario. Ningún corte elimina los dos a la vez, porque las fichas de las dos filas se mezclan entre 0.25 y 0.75.</p>
+          <p>Para resumir cada corte se usan dos preguntas, las de la página de matriz de confusión:</p>
+          <ul>
+            <li><b>Precisión</b>: de los que diste por aprobados, ¿qué fracción aprobó?</li>
+            <li><b>Recall</b>: de los que aprobaron, ¿a qué fracción diste por aprobados?</li>
+          </ul>
+          <div class="fbloque"><div class="vivo" id="vivoPalabras"></div></div>
+          <p>El material de la unidad define las dos y el F1, su promedio armónico
+          <cite class="cita" data-fuente="rl2" data-pag="14" data-seccion="Métricas: exactitud, precisión, recall, especificidad, F1" data-que="Las cajas con exactitud, precisión, recall, especificidad y F1. Dice en una frase que F1 es útil con clases desbalanceadas, sin explicar por qué: el paso 5 de esta página lo muestra." data-cuando="Al terminar este paso"></cite>,
+          y Raschka lo dice en una línea: recall alto es no perder casos; precisión alta es no dar falsas alarmas
+          <cite class="cita" data-fuente="raschka6" data-pag="26" data-pimp="196" data-seccion="Optimizing the precision and recall of a classification model" data-que="REC = TP/(FN + TP) y PRE = TP/(TP + FP), con el ejemplo de tumores: subir el recall cuesta falsos positivos, subir la precisión cuesta falsos negativos. Después viene el F1 como media armónica." data-cuando="Al terminar este paso"></cite>.</p>
+          <div class="check" id="chk2"><p class="check-tit">Calcula con lo que ves</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Curva precisión-recall">
+          <span class="etapa">Paso 3</span>
+          <h3>Todos los cortes en un dibujo: la curva precisión-recall</h3>
+          <p>Ahora con la notación. TP son los aprobados que diste por aprobados, FP los reprobados que diste por aprobados y FN los aprobados que diste por reprobados.</p>
+          <div class="fbloque">
+            <div data-tex="\text{precisión} = \frac{TP}{TP + FP} \qquad \text{recall} = \frac{TP}{TP + FN} \qquad F_1 = \frac{2\cdot\text{precisión}\cdot\text{recall}}{\text{precisión} + \text{recall}}" data-display></div>
+            <div class="vivo" id="vivoFormulas"></div>
+          </div>
+          <p>Cada corte da un par (recall, precisión): un <b>punto</b>. Con el recall en el eje horizontal y la precisión en el vertical, el escenario dibuja ese punto. Mueve el corte y mira el rastro que deja. Unir los puntos de todos los cortes da la <b>curva precisión-recall</b>.</p>
+          <p>La línea punteada es un modelo <b>sin habilidad</b>, que da por aprobados a estudiantes al azar: su precisión es siempre la fracción de aprobados, aquí 6 de 12 = 0.5. Es la línea "No Skill" de la diapositiva de la unidad
+          <cite class="cita" data-fuente="rl2diapo" data-pag="23" data-seccion="Curva precisión-recall, AUC-PR" data-que="La curva precisión-recall con puntos numerados, la línea No Skill en 0.5 y el modelo perfecto, presentada como la opción para clases desbalanceadas. Es esta misma curva." data-cuando="Después de barrer los cortes"></cite>.</p>
+          <div class="check" id="chk3"><p class="check-tit">Predice antes de barrer</p><div class="cuerpo"></div></div>
+          <div class="btn-row" style="margin-top:12px">
+            <button type="button" class="primary" id="btnBarrer" disabled>Barrer todos los cortes</button>
+            <span class="zhint" id="barrerHint">Responde la predicción para activar el botón.</span>
+          </div>
+          <details class="profundizar">
+            <summary>¿Por qué la curva PR sube y baja, si la ROC solo sube?</summary>
+            <div>
+              <p>En la ROC los dos ejes son tasas dentro de cada clase, y al bajar el corte las dos solo pueden crecer. La precisión, en cambio, es una fracción dentro de los que <b>das por aprobados</b>, y ese grupo cambia de composición: si entra un aprobado sube, si entra un reprobado baja. Por eso la curva PR tiene dientes de sierra.</p>
+              <p>Su área tiene nombre: la <b>precisión promedio</b> (AP, o AUC-PR). Suma, por cada aprobado que vas encontrando, la precisión en ese momento por el pedazo de recall que agrega: <span data-tex="\text{AP} = \sum_k (R_k - R_{k-1})\,P_k"></span>. Con estas 12 fichas da 0.931.</p>
+            </div>
+          </details>
+        </section>
+
+        <section class="paso card" data-titulo="Elegir por costos">
+          <span class="etapa">Paso 4</span>
+          <h3>Elegir el corte con lo que cuesta cada error</h3>
+          <p>La curva te muestra todas las opciones, pero no te dice cuál elegir. Eso depende de cuánto duele cada error. En la página de riesgo y criterios de decisión se sacó la cuenta: si un falso positivo cuesta <span data-tex="c_{FP}"></span> y un falso negativo cuesta <span data-tex="c_{FN}"></span>, decir "positivo" tiene menor riesgo cuando</p>
+          <div class="fbloque">
+            <div data-tex="\hat p \ \ge\ t^{*} = \frac{c_{FP}}{c_{FP} + c_{FN}}" data-display></div>
+            <div class="vivo" id="vivoCosto"></div>
+          </div>
+          <p>Con costos iguales sale 0.5: el corte de siempre es el caso particular en que los dos errores duelen lo mismo. En la escuela, dar por aprobado a quien reprueba cuesta más, así que <span data-tex="c_{FP} > c_{FN}"></span> y el corte sube, como predijiste en el paso 1.</p>
+          <p>El escenario dibuja el costo total de los 12 estudiantes, <span data-tex="c_{FP}\cdot FP + c_{FN}\cdot FN"></span>, para cada corte. La fórmula supone que las probabilidades están bien calibradas; con datos reales conviene comprobarlo así, mirando dónde cae el mínimo.</p>
+          <p>Hay otros criterios: el corte que maximiza el F1 (con estas fichas, 0.256) o el que maximiza TPR − FPR en la ROC (el índice de Youden). Ninguno está en el material de la unidad, que no da criterio alguno.</p>
+          <div class="cita" id="citaHipo" hidden></div>
+          <div class="check" id="chk4"><p class="check-tit">Calcula antes de mirar</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Desbalance">
+          <span class="etapa">Paso 5</span>
+          <h3>Cuando casi nadie aprueba, la exactitud engaña</h3>
+          <p>Hasta ahora la mitad de los estudiantes aprobaba. Imagina el mismo modelo en un curso muy difícil: 120 estudiantes, de los que solo <b>6 aprueban (5 %)</b>. Para no inventar fichas nuevas, cada reprobado del escenario va a valer por 19: 6 × 19 = 114 reprobados.</p>
+          <div class="check" id="chk5"><p class="check-tit">Calcula antes de tocar el botón</p><div class="cuerpo"></div></div>
+          <p>Nield cuenta la historia de un modelo con 98 % de exactitud que no sirve para nada, porque los casos positivos son rarísimos
+          <cite class="cita" data-fuente="nield6" data-pag="29" data-seccion="Confusion Matrices" data-que="El ejemplo de un modelo inútil con 98 % de exactitud (Figure 6-17) y la idea de datos desbalanceados, que sigue en la p. 30 antes de la matriz de confusión." data-cuando="Al terminar este paso"></cite>,
+          y Raschka hace la cuenta con tumores: con 90 % de sanos, decir siempre "sano" da 90 %
+          <cite class="cita" data-fuente="raschka6" data-pag="31" data-pimp="201" data-seccion="Dealing with class imbalance" data-que="Spam, fraude y tamizaje como ejemplos; con 90 % de una clase, predecir siempre la mayoría da 90 % de exactitud. En la p. 202 crea el desbalance a propósito y obtiene 89.92 %." data-cuando="Al terminar este paso"></cite>.</p>
+
+          <div class="destacado" id="destacado">
+            <p class="dest-tit">Una confusión muy común</p>
+            <h4>Si un modelo tiene 95 % de exactitud, ¿es bueno?</h4>
+            <p>Depende de contra qué lo compares. En un curso con 5 % de aprobados, el "modelo" que no mira nada y dice "reprueba" a todos ya tiene 95 %. Activa el botón del escenario, deja el corte en 0.5 y compara.</p>
+            <div class="check" id="chk5b"><p class="check-tit">Predice antes de mirar</p><div class="cuerpo"></div></div>
+            <div class="grande" id="vivoExactitud"></div>
+          </div>
+          <p>El recall no cambió: se calcula solo con los aprobados. La precisión se desplomó: los 19 reprobados de cada ficha rellena entran todos en el denominador. Por eso con clases raras se miran precisión, recall y F1, no la exactitud.</p>
+        </section>
+
+        <section class="paso card" data-titulo="Remedios">
+          <span class="etapa">Paso 6</span>
+          <h3>Tres remedios que hacen casi lo mismo</h3>
+          <p>Hasta aquí el modelo se entrenó con 6 y 6 y lo usaste en un curso con 5 %. ¿Qué pasa si lo <b>entrenas</b> directamente con los 120 estudiantes del curso difícil?</p>
+          <div class="check" id="chk6"><p class="check-tit">Predice antes de elegir</p><div class="cuerpo"></div></div>
+          <p>Los remedios clásicos, uno por botón del escenario:</p>
+          <ul>
+            <li><b>Pesos de clase</b>: en la verosimilitud, cada error con un aprobado cuenta más. Con <code>class_weight="balanced"</code> cada clase pesa en proporción inversa a su tamaño
+            <cite class="cita" data-fuente="raschka6" data-pag="32" data-pimp="202" data-seccion="Dealing with class imbalance" data-que="Por qué la pérdida, al sumar sobre ejemplos, se sesga hacia la clase mayoritaria; elegir recall o precisión según la aplicación; y class_weight='balanced'. En las pp. 202 y 203 sigue con resample para sobremuestrear de 40 a 357." data-cuando="Al terminar este paso"></cite>.</li>
+            <li><b>Remuestreo</b>: repetir los aprobados (sobremuestreo) o quitar reprobados (submuestreo) hasta equilibrar. Las diapositivas de introducción de SM142003 los presentan con un ejemplo de 5 % de impagos y dicen que ninguno gana siempre
+            <cite class="cita" data-fuente="intro3" data-pag="24" data-ancla="5/9" data-seccion="4.3.3 Class imbalance" data-que="Down-sampling contra up-sampling con un ejemplo de 5 % de impagos. Solo menciona repetir o hacer bootstrap de la clase rara: no nombra SMOTE, que el caso real de kNN sí usa." data-cuando="Al terminar este paso"></cite>.
+            Una variante es <b>SMOTE</b>, que en vez de repetir inventa casos nuevos entre vecinos de la clase rara
+            <cite class="cita" data-fuente="raschka6" data-pag="33" data-pimp="203" data-seccion="Generating new training data to address class imbalance" data-que="Un recuadro que nombra SMOTE (Chawla y otros, 2002) y la librería imbalanced-learn, sin desarrollarlo." data-cuando="Si quieres saber de dónde sale SMOTE"></cite>;
+            el caso real de kNN la usa en su receta con <code>step_smote(over_ratio = 0.8)</code>
+            <cite class="cita" data-fuente="knn3real" data-pag="7" data-ancla="preprocesamiento-de-datos-feature-engineering" data-seccion="Preprocesamiento de datos (feature engineering)" data-que="La receta de tidymodels del caso de diabetes: imputación con kNN, normalización y step_smote(over_ratio = 0.8), que deja el entrenamiento horneado en 675 filas." data-cuando="Antes del cuestionario de kNN"></cite>.</li>
+            <li><b>Mover el corte</b>: dejar el modelo como salió y bajar el corte.</li>
+          </ul>
+          <p>Toca cada botón y compara la matriz. Con estos datos, pesar las clases y sobremuestrear dan <b>exactamente</b> los mismos coeficientes que el modelo de 6 y 6: multiplicar los términos de la log-verosimilitud por una constante no mueve su máximo. Y bajar el corte del modelo sin remedio a 0.05 da la misma matriz que los otros dos con 0.5.</p>
+          <p>Un aviso sobre un libro. Nield dice que <code>stratify=Y</code> duplica la clase minoritaria hasta igualarla
+          <cite class="cita" data-fuente="nield6" data-pag="38" data-seccion="Class Imbalance" data-que="El desbalance como problema abierto (fraude, enfermedades), con más datos, otros modelos, duplicar la clase minoritaria, SMOTE y detección de anomalías. Ahí está el error sobre stratify." data-cuando="Al terminar este paso"></cite>.
+          No es así: estratificar solo mantiene la misma proporción de clases en entrenamiento y en prueba. No agrega ni quita a nadie.</p>
+          <details class="profundizar">
+            <summary>¿Entonces cuál remedio uso?</summary>
+            <div>
+              <p>El modelo entrenado sin remedio no está "mal": sus probabilidades son las correctas para un curso donde aprueba el 5 %. Con 6 horas da 0.905, y eso es lo que pasa en ese curso. Los pesos y el sobremuestreo le hacen creer que el curso es mitad y mitad, y sus probabilidades dejan de ser frecuencias reales (con 6 horas dirían 0.98).</p>
+              <p>Si lo que necesitas es una <b>decisión</b>, mover el corte es lo más simple y no toca el modelo. Si necesitas <b>probabilidades</b> confiables, no pongas pesos. El remuestreo y SMOTE se aplican solo al conjunto de entrenamiento, nunca antes de separar la prueba: si no, copias de un mismo caso quedan en los dos lados y la prueba deja de medir.</p>
+            </div>
+          </details>
+        </section>
+
+        <section class="paso card" data-titulo="Relación con la ROC">
+          <span class="etapa">Paso 7</span>
+          <h3>La ROC no ve el desbalance; la curva PR sí</h3>
+          <p>En la página de curva ROC y AUC viste que repetir los negativos no mueve la ROC: sus dos tasas se calculan dentro de cada clase. La precisión mezcla las dos clases, y por eso depende de la proporción de positivos, <span data-tex="\pi"></span>. Escrita con las tasas de la ROC queda así (es el teorema de Bayes):</p>
+          <div class="fbloque">
+            <div data-tex="\text{precisión} = \frac{\text{TPR}\cdot\pi}{\text{TPR}\cdot\pi + \text{FPR}\cdot(1-\pi)}" data-display></div>
+            <div class="vivo" id="vivoBayes"></div>
+          </div>
+          <p>Cada corte es a la vez un punto de la ROC y un punto de la curva PR. Si <span data-tex="\pi"></span> baja, la ROC queda quieta y toda la curva PR se hunde, igual que su línea sin habilidad, que pasa de 0.5 a 0.05.</p>
+          <div class="check" id="chk7"><p class="check-tit">Calcula con la fórmula</p><div class="cuerpo"></div></div>
+          <p>Es lo que las diapositivas dicen sin mostrarlo: la ROC sirve "especialmente cuando las clases están balanceadas" y la curva PR "en problemas con clases desbalanceadas". La diapositiva que debía enseñarlo se titula "Balance de clases", pero en el PDF sus dos filas de gráficas son idénticas, con AUC 0.926 las dos: la animación no se conservó
+          <cite class="cita" data-fuente="rl2diapo" data-pag="27" data-seccion="Balance de clases" data-que="Dos filas de densidades, ROC y curva PR que deberían mostrar el efecto del desbalance. En el PDF son idénticas porque la animación se perdió. El botón del escenario de este paso es lo que faltaba." data-cuando="Al terminar este paso"></cite>.
+          Con el botón del escenario lo ves: la AUC de la ROC se queda en 0.917 y la precisión promedio de la curva PR baja de 0.931 a 0.724.</p>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+        </div>
+        <svg id="regla" tabindex="0" role="img" aria-label="Probabilidades de aprobar de cada estudiante sobre una regla de 0 a 1, con el corte como línea vertical. Arrastra o usa las flechas para moverlo."></svg>
+        <div class="umbral-row">
+          <label for="umbral">Corte</label>
+          <input type="range" id="umbral" min="0" max="1" step="0.01" value="0.5">
+          <b id="umbralVal">0.50</b>
+        </div>
+        <div id="conteo"></div>
+
+        <div id="costoBloque" hidden>
+          <p class="esc-sub">Costo de cada error</p>
+          <div class="costo-row"><label for="cfp">c<sub>FP</sub></label><input type="range" id="cfp" min="1" max="9" step="1" value="3" disabled><b id="cfpVal">3</b></div>
+          <div class="costo-row"><label for="cfn">c<sub>FN</sub></label><input type="range" id="cfn" min="1" max="9" step="1" value="1" disabled><b id="cfnVal">1</b></div>
+          <svg id="costo" role="img" aria-label="Costo total de los 12 estudiantes para cada corte"></svg>
+          <div class="cur-info" id="costoInfo"></div>
+        </div>
+
+        <div id="remBloque" hidden>
+          <p class="esc-sub">Entrenar con el curso de 5 %</p>
+          <div class="rem-opts" id="remedios">
+            <button type="button" data-r="nada" disabled>Sin remedio</button>
+            <button type="button" data-r="pesos" disabled>Pesos de clase</button>
+            <button type="button" data-r="sobre" disabled>Sobremuestrear</button>
+            <button type="button" data-r="umbral" disabled>Bajar el corte</button>
+          </div>
+          <p class="rem-txt" id="remTxt"></p>
+        </div>
+
+        <div id="curvaBloque" hidden>
+          <div class="dos-svg" id="curvas">
+            <div><p class="esc-sub">Curva precisión-recall</p><svg id="pr" role="img" aria-label="Curva precisión-recall: recall en el eje horizontal y precisión en el vertical"></svg></div>
+            <div id="rocCaja" hidden><p class="esc-sub">Curva ROC</p><svg id="roc" role="img" aria-label="Curva ROC: tasa de falsos positivos en el eje horizontal y tasa de verdaderos positivos en el vertical"></svg></div>
+          </div>
+          <div class="cur-info" id="curvaInfo"></div>
+        </div>
+
+        <button type="button" class="btn-desb" id="btnDesb" hidden disabled>Curso con 5 % de aprobados</button>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>Las mismas 12 probabilidades del recorrido, escritas como lo haría un programa. Un bucle prueba cada corte posible y guarda su precisión, su recall y su F1; después elige el corte con mayor F1; al final se compara con la librería. Elige Python o R y dale a reproducir.</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir</p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="true">Python</button>
+            <button type="button" data-lang="r" aria-pressed="false">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">1 · barrer los cortes</span><span data-f="2">2 · el mejor F1</span><span data-f="3">3 · la librería</span>
+        </div>
+        <h3 class="mini-tit vr-tit">El corte que se está probando</h3>
+        <svg id="vrRegla" role="img" aria-label="Probabilidades con el corte que se está evaluando"></svg>
+        <div class="vr-cuenta" id="vrCuenta"></div>
+        <h3 class="mini-tit vr-tit">Los puntos guardados en prec y rec</h3>
+        <svg id="vrPR" role="img" aria-label="Puntos de la curva precisión-recall calculados hasta ahora"></svg>
+        <h3 class="mini-tit vr-tit">Lo que imprime</h3>
+        <pre class="vr-salida" id="vrSalida"></pre>
+      </div>
+    </div>
+
+    <p class="vr-nota">En la práctica, la curva sale en una línea: <code>precision_recall_curve(y, p)</code> en scikit-learn y <code>coords(roc(y, p), "all", ret = c("precision", "recall"))</code> con pROC en R. Raschka la menciona al lado de la ROC, con el mismo patrón de código
+    <cite class="cita" data-fuente="raschka6" data-pag="28" data-pimp="198" data-seccion="Plotting a receiver operating characteristic" data-que="La ROC al mover el umbral y, en la misma página, la mención de las curvas precisión-recall con precision_recall_curve de scikit-learn." data-cuando="Después de reproducir el programa hasta el final"></cite>.
+    Dos detalles que el programa resuelve: scikit-learn agrega al final un punto extra (precisión 1, recall 0) sin corte asociado, por eso se compara <code>P[:-1]</code>; y pROC, con <code>input = "threshold"</code>, también cuenta como positivo el que está justo en el corte.</p>
+
+    <details class="profundizar">
+      <summary>Sin bucles: todos los cortes a la vez</summary>
+      <div>
+        <p>En Python se compara cada probabilidad con cada corte en una matriz de 12 × 12: <code>pred = p[None, :] &gt;= umbrales[:, None]</code>. Cada fila es un corte, y <code>tp = (pred &amp; (y == 1)).sum(axis=1)</code> da los 12 TP de una vez. En R, <code>tp &lt;- sapply(umbrales, function(t) sum(p &gt;= t &amp; y == 1))</code>.</p>
+        <p>Las librerías van más rápido todavía: ordenan las probabilidades una sola vez y acumulan con <code>cumsum</code>, porque al bajar el corte de una ficha a la siguiente solo cambia esa ficha.</p>
+      </div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>predict no sabe de tu corte</h3><span class="estado" data-reto="codigo2"></span></div>
+        <div id="codigo2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Lo que hace class_weight</h3><span class="estado" data-reto="codigo3"></span></div>
+        <div id="codigo3"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: la biblioteca te avisa en el índice cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>¿Qué corte?</h3><span class="estado" data-reto="ojo"></span></div>
+        <p class="desc">Tres cortes posibles, A, B y C. Mira las fichas y decide sin hacer cuentas largas. Apruebas con 4 de 5.</p>
+        <div id="ojo"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Construir</span><h3>Arma las métricas</h3><span class="estado" data-reto="constructor"></span></div>
+        <p class="desc">Cuatro aprobados y cuatro reprobados, con el corte fijo en 0.5. Arrastra las fichas hacia los lados hasta cumplir cada objetivo. Se marcan solos.</p>
+        <div class="constr-grid">
+          <svg id="constrRegla" role="img" aria-label="Fichas arrastrables de cuatro aprobados y cuatro reprobados"></svg>
+          <svg id="constrPR" role="img" aria-label="Curva precisión-recall de las fichas que armas"></svg>
+        </div>
+        <div class="grande" id="constrVivo"></div>
+        <ul class="objetivos" id="objetivos"></ul>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>La precisión en el curso real</h3><span class="estado" data-reto="mano"></span></div>
+        <p class="desc">Con papel, antes de pedir pistas.</p>
+        <div class="mano-txt" id="manoDatos"></div>
+        <div id="mano"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Alguien se equivocó</h3><span class="estado" data-reto="error"></span></div>
+        <p class="desc">Una de las líneas tiene un error. Tócala.</p>
+        <div id="error"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Bajar el corte</h3><span class="estado" data-reto="prop1"></span></div>
+        <div id="prop1"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Estratificar</h3><span class="estado" data-reto="prop2"></span></div>
+        <div id="prop2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>La línea sin habilidad</h3><span class="estado" data-reto="prop3"></span></div>
+        <div id="prop3"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Lo que no se mueve</h3><span class="estado" data-reto="prop4"></span></div>
+        <div id="prop4"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Corte por costos</h3><span class="estado" data-reto="prop5"></span></div>
+        <div id="prop5"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Recordar a la fuerza es lo que fija. Arma la regla de memoria y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Fórmula de memoria</span><h3>La regla del corte por costos</h3><span class="estado" data-reto="formula"></span></div>
+        <p class="desc">Hay piezas de más que no pertenecen. No mires arriba.</p>
+        <div id="formula"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el material</h2>
+      <p class="lecturas-intro">Ya moviste el corte con las manos. Ahora ve a la versión del máster y de los libros y comprueba que la reconoces. Cada entrada dice qué vas a encontrar y en qué momento conviene leerla. Si abres la biblioteca con doble clic, el enlace abre el PDF en esa página.</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> Los 12 estudiantes son los inventados de la página de regresión logística. Sus probabilidades salen del ajuste real con statsmodels y <code>glm</code>
+    (b = −4.6296, w = 1.4245), redondeadas a tres decimales. El curso con 5 % de aprobados repite 19 veces a cada reprobado: también es inventado.
+    El modelo "sin remedio" del paso 6 es el ajuste real sobre esos 120 estudiantes (b = −9.728, w = 1.996, el mismo en <code>glm</code> y en scikit-learn sin penalización).
+    Los datos de los retos también son inventados. Tu progreso se guarda solo en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+(function () {
+  "use strict";
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var RETOS = ["ojo", "constructor", "mano", "error", "prop1", "prop2", "prop3", "prop4", "prop5", "formula", "codigo1", "codigo2", "codigo3"];
+  var C = B.concepto({ id: "umbral-desbalance", retos: RETOS, pasos: 7 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  var f = B.fmt;
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+
+  /* ---------------- datos ----------------
+     12 estudiantes de "Regresion logistica": horas y aprobo (1) o no (0).
+     P0: probabilidades del ajuste b = -4.62962131, w = 1.42449887, redondeadas a 3 decimales.
+     PD: ajuste sobre el curso de 5 % (cada reprobado repetido 19 veces): b = -9.72788728, w = 1.99606349. */
+  var YS = [0, 0, 0, 0, 1, 0, 1, 0, 1, 1, 1, 1];
+  var P0 = [0.020, 0.039, 0.076, 0.144, 0.256, 0.412, 0.588, 0.744, 0.856, 0.924, 0.961, 0.980];
+  var PD = [0.000, 0.000, 0.001, 0.003, 0.009, 0.023, 0.061, 0.149, 0.322, 0.563, 0.777, 0.905];
+  var K = 19;
+
+  function separar(probs) {
+    var pos = [], neg = [];
+    YS.forEach(function (y, i) { (y ? pos : neg).push(probs[i]); });
+    return { pos: pos, neg: neg };
+  }
+  // metricas para listas pos y neg, corte t, cada negativo vale k
+  function met(pos, neg, t, k) {
+    k = k || 1;
+    var tp = 0, fpu = 0;
+    pos.forEach(function (s) { if (s >= t) tp++; });
+    neg.forEach(function (s) { if (s >= t) fpu++; });
+    var fp = fpu * k, fn = pos.length - tp, tn = neg.length * k - fp, n = pos.length + neg.length * k;
+    var prec = tp + fp > 0 ? tp / (tp + fp) : null, rec = tp / pos.length;
+    var f1 = prec !== null && prec + rec > 0 ? 2 * prec * rec / (prec + rec) : 0;
+    return { tp: tp, fp: fp, fn: fn, tn: tn, n: n, prec: prec, rec: rec, f1: f1, acc: (tp + tn) / n, tpr: rec, fpr: fpu / neg.length };
+  }
+  function desc(a) { return a.slice().sort(function (x, y) { return y - x; }); }
+  function unicos(a) { return desc(a).filter(function (v, i, b) { return i === 0 || v !== b[i - 1]; }); }
+  function curvaPR(pos, neg, k) {
+    return unicos(pos.concat(neg)).map(function (u) { var m = met(pos, neg, u, k); return { t: u, r: m.rec, p: m.prec === null ? 1 : m.prec }; });
+  }
+  function curvaROC(pos, neg) {
+    var pts = [{ fpr: 0, tpr: 0 }];
+    unicos(pos.concat(neg)).forEach(function (u) { var m = met(pos, neg, u, 1); pts.push({ fpr: m.fpr, tpr: m.tpr }); });
+    return pts;
+  }
+  function apPR(pos, neg, k) {
+    var a = 0, ant = 0;
+    curvaPR(pos, neg, k).forEach(function (q) { a += (q.r - ant) * q.p; ant = q.r; });
+    return a;
+  }
+  function aucROC(pos, neg) {
+    var s = 0;
+    pos.forEach(function (p) { neg.forEach(function (n) { s += p > n ? 1 : p === n ? 0.5 : 0; }); });
+    return s / (pos.length * neg.length);
+  }
+  function r2(v) { return Math.round(v * 100) / 100; }
+  function fp3(v) { return v === null ? "sin definir" : f(v, 3); }
+
+  /* ---------------- dibujo: la regla ---------------- */
+  var NS = "http://www.w3.org/2000/svg";
+  function nodo(tag, at, padre) {
+    var e = document.createElementNS(NS, tag);
+    for (var k in at) e.setAttribute(k, at[k]);
+    if (padre) padre.appendChild(e);
+    return e;
+  }
+  function texto(padre, at, t) { var e = nodo("text", at, padre); e.textContent = t; return e; }
+
+  var HG = { W: 440, H: 178, L: 84, R: 16, yP: 58, yN: 112, eje: 144 };
+  function hx(s) { return HG.L + s * (HG.W - HG.L - HG.R); }
+  function hInv(px) { return (px - HG.L) / (HG.W - HG.L - HG.R); }
+
+  function colocar(vals, y0) {
+    var orden = vals.map(function (v, i) { return i; }).sort(function (a, b) { return vals[a] - vals[b]; });
+    var filas = [0, -13, 13], ult = [-1e9, -1e9, -1e9], out = [];
+    orden.forEach(function (i) {
+      var x = hx(vals[i]), elegida = 0, mejor = -1e9;
+      for (var r = 0; r < filas.length; r++) {
+        if (x - ult[r] >= 14) { elegida = r; break; }
+        if (x - ult[r] > mejor) { mejor = x - ult[r]; elegida = r; }
+      }
+      ult[elegida] = x;
+      out[i] = { x: x, y: y0 + filas[elegida] };
+    });
+    return out;
+  }
+
+  // o: {pos, neg, t (null = sin corte), mult, arrastre, marcas [{t, lab}], tLab, marcar}
+  function dibujarRegla(svg, o) {
+    svg.setAttribute("viewBox", "0 0 " + HG.W + " " + HG.H);
+    svg.classList.add("regla-svg");
+    svg.innerHTML = "";
+    var t = o.t;
+    if (t != null) {
+      nodo("rect", { x: hx(t), y: 6, width: Math.max(0, hx(1) - hx(t) + 6), height: HG.eje - 6, "class": "zona" }, svg);
+      texto(svg, { x: HG.W - 4, y: HG.H - 4, "class": "zona-lab", "text-anchor": "end" }, "se da por aprobado");
+    }
+    for (var g = 0; g <= 10; g++) nodo("line", { x1: hx(g / 10), x2: hx(g / 10), y1: 30, y2: HG.eje, "class": "grid" }, svg);
+    nodo("line", { x1: hx(0), x2: hx(1), y1: HG.eje, y2: HG.eje, "class": "eje" }, svg);
+    for (var k = 0; k <= 5; k++) texto(svg, { x: hx(k / 5), y: HG.eje + 14, "class": "tick", "text-anchor": "middle" }, (k / 5).toFixed(1));
+    texto(svg, { x: 6, y: HG.yP + 4, "class": "carril j" }, "aprobaron");
+    texto(svg, { x: 6, y: HG.yN + 4, "class": "carril k" }, "reprobaron");
+    if (o.mult && o.mult > 1) texto(svg, { x: 6, y: HG.yN + 20, "class": "x19" }, "× " + o.mult + " cada una");
+    nodo("line", { x1: hx(0), x2: hx(1), y1: HG.yP, y2: HG.yP, "class": "grid" }, svg);
+    nodo("line", { x1: hx(0), x2: hx(1), y1: HG.yN, y2: HG.yN, "class": "grid" }, svg);
+    (o.marcas || []).forEach(function (m) {
+      nodo("line", { x1: hx(m.t), x2: hx(m.t), y1: 14, y2: HG.eje, "class": "marca" }, svg);
+      texto(svg, { x: hx(m.t), y: 12, "class": "marca-lab", "text-anchor": "middle" }, m.lab);
+    });
+    var cp = colocar(o.pos, HG.yP), cn = colocar(o.neg, HG.yN);
+    function punto(c, s, cls, tipo, i) {
+      var lleno = t == null || (o.marcar !== false && s >= t);
+      var at = { cx: c.x, cy: c.y, r: 6.5, "class": "dot " + cls + (lleno ? "" : " hueco") + (o.arrastre ? " arrastre" : "") };
+      if (o.arrastre) { at["data-c"] = tipo; at["data-i"] = i; }
+      nodo("circle", at, svg);
+    }
+    o.pos.forEach(function (s, i) { punto(cp[i], s, "j", "p", i); });
+    o.neg.forEach(function (s, i) { punto(cn[i], s, "k", "n", i); });
+    if (t != null) {
+      var ux = hx(t);
+      nodo("line", { x1: ux, x2: ux, y1: 8, y2: HG.eje + 2, "class": "umbral" }, svg);
+      nodo("circle", { cx: ux, cy: 10, r: 6, "class": "asa" }, svg);
+      texto(svg, { x: t > 0.72 ? ux - 10 : ux + 10, y: 24, "class": "umbral-lab", "text-anchor": t > 0.72 ? "end" : "start" }, o.tLab || "corte " + f(t, 2));
+    }
+  }
+
+  /* ---------------- dibujo: cuadrado para curvas ---------------- */
+  var RG = { W: 300, H: 286, L: 46, T: 12, S: 228 };
+  function rx(v) { return RG.L + v * RG.S; }
+  function ry(v) { return RG.T + (1 - v) * RG.S; }
+  function marco(svg, tx, ty) {
+    svg.setAttribute("viewBox", "0 0 " + RG.W + " " + RG.H);
+    svg.classList.add("cur-svg");
+    svg.innerHTML = "";
+    for (var g = 0; g <= 10; g++) {
+      nodo("line", { x1: rx(g / 10), x2: rx(g / 10), y1: ry(0), y2: ry(1), "class": g === 0 ? "eje" : "grid" }, svg);
+      nodo("line", { x1: rx(0), x2: rx(1), y1: ry(g / 10), y2: ry(g / 10), "class": g === 0 ? "eje" : "grid" }, svg);
+    }
+    for (var k = 0; k <= 5; k++) {
+      texto(svg, { x: rx(k / 5), y: ry(0) + 14, "class": "tick", "text-anchor": "middle" }, (k / 5).toFixed(1));
+      texto(svg, { x: rx(0) - 6, y: ry(k / 5) + 3.5, "class": "tick", "text-anchor": "end" }, (k / 5).toFixed(1));
+    }
+    texto(svg, { x: rx(0.5), y: RG.H - 6, "class": "eje-tit", "text-anchor": "middle" }, tx);
+    texto(svg, { x: 12, y: ry(0.5), "class": "eje-tit", "text-anchor": "middle", transform: "rotate(-90 12 " + ry(0.5) + ")" }, ty);
+  }
+  function poli(pts, ex, ey) { return pts.map(function (q) { return rx(q[ex]).toFixed(1) + "," + ry(q[ey]).toFixed(1); }).join(" "); }
+  function etiquetaPunto(svg, x, y, lab, cls) {
+    var px = rx(x), py = ry(y);
+    nodo("circle", { cx: px, cy: py, r: 6, "class": "punto" + (cls ? " " + cls : "") }, svg);
+    if (lab) {
+      var der = x < 0.6;
+      texto(svg, { x: px + (der ? 10 : -10), y: py + (y > 0.9 ? 18 : -9), "class": "punto-lab", "text-anchor": der ? "start" : "end" }, lab);
+    }
+  }
+
+  // o: {curva, fantasma, rastro, puntos (solo puntos sin linea), punto {r, p}, lab, base}
+  function dibujarPR(svg, o) {
+    marco(svg, "recall", "precisión");
+    if (o.base != null) {
+      nodo("line", { x1: rx(0), x2: rx(1), y1: ry(o.base), y2: ry(o.base), "class": "base" }, svg);
+      texto(svg, { x: rx(0.98), y: ry(o.base) - 5, "class": "base-lab", "text-anchor": "end" }, "sin habilidad " + f(o.base, 2));
+    }
+    if (o.fantasma) nodo("polyline", { points: poli(o.fantasma, "r", "p"), "class": "fantasma" }, svg);
+    if (o.rastro) o.rastro.forEach(function (q) { nodo("circle", { cx: rx(q.r), cy: ry(q.p), r: 3, "class": "rastro" }, svg); });
+    if (o.curva) {
+      nodo("polyline", { points: poli(o.curva, "r", "p"), "class": "curva" }, svg);
+      o.curva.forEach(function (q) { nodo("circle", { cx: rx(q.r), cy: ry(q.p), r: 2.6, "class": "pt" }, svg); });
+    }
+    if (o.puntos) o.puntos.forEach(function (q) { nodo("circle", { cx: rx(q.r), cy: ry(q.p), r: 3.4, "class": "pt" }, svg); });
+    if (o.punto && o.punto.p !== null) etiquetaPunto(svg, o.punto.r, o.punto.p, o.lab, o.cls);
+  }
+  function dibujarROC(svg, o) {
+    marco(svg, "FPR", "TPR");
+    nodo("line", { x1: rx(0), y1: ry(0), x2: rx(1), y2: ry(1), "class": "base" }, svg);
+    nodo("polyline", { points: poli(o.curva, "fpr", "tpr"), "class": "curva" }, svg);
+    if (o.punto) etiquetaPunto(svg, o.punto.fpr, o.punto.tpr, null);
+  }
+
+  /* costo total contra el corte */
+  var CG = { W: 440, H: 190, L: 40, R: 14, T: 12, B: 34 };
+  function cx(t) { return CG.L + t * (CG.W - CG.L - CG.R); }
+  function dibujarCosto(svg, o) {
+    svg.setAttribute("viewBox", "0 0 " + CG.W + " " + CG.H);
+    svg.classList.add("cur-svg");
+    svg.innerHTML = "";
+    var d = separar(P0), tope = Math.max(o.cfp, o.cfn) * 6, alto = CG.H - CG.T - CG.B;
+    function cy(v) { return CG.T + (1 - v / tope) * alto; }
+    for (var g = 0; g <= 10; g++) nodo("line", { x1: cx(g / 10), x2: cx(g / 10), y1: CG.T, y2: CG.T + alto, "class": "grid" }, svg);
+    nodo("line", { x1: cx(0), x2: cx(1), y1: CG.T + alto, y2: CG.T + alto, "class": "eje" }, svg);
+    nodo("line", { x1: cx(0), x2: cx(0), y1: CG.T, y2: CG.T + alto, "class": "eje" }, svg);
+    for (var k = 0; k <= 5; k++) texto(svg, { x: cx(k / 5), y: CG.T + alto + 14, "class": "tick", "text-anchor": "middle" }, (k / 5).toFixed(1));
+    [0, tope / 2, tope].forEach(function (v) { texto(svg, { x: cx(0) - 6, y: cy(v) + 3.5, "class": "tick", "text-anchor": "end" }, String(Math.round(v))); });
+    texto(svg, { x: cx(0.5), y: CG.H - 4, "class": "eje-tit", "text-anchor": "middle" }, "corte");
+    if (o.curva) {
+      var pts = [], cortes = [0].concat(P0.slice().sort(function (a, b) { return a - b; })).concat([1.0001]);
+      for (var i = 0; i < cortes.length - 1; i++) {
+        // para t en (cortes[i], cortes[i+1]] se da por aprobado a quien tiene p >= cortes[i+1]
+        var m = met(d.pos, d.neg, cortes[i + 1], 1), c = o.cfp * m.fp + o.cfn * m.fn;
+        var x0 = cx(cortes[i]), x1 = cx(Math.min(1, cortes[i + 1]));
+        pts.push(x0.toFixed(1) + "," + cy(c).toFixed(1), x1.toFixed(1) + "," + cy(c).toFixed(1));
+      }
+      nodo("polyline", { points: pts.join(" "), "class": "costo" }, svg);
+    }
+    if (o.tstar != null) {
+      nodo("line", { x1: cx(o.tstar), x2: cx(o.tstar), y1: CG.T, y2: CG.T + alto, "class": "tstar" }, svg);
+      texto(svg, { x: cx(o.tstar) + (o.tstar > 0.7 ? -6 : 6), y: CG.T + 12, "class": "tstar-lab", "text-anchor": o.tstar > 0.7 ? "end" : "start" }, "t* = " + f(o.tstar, 3));
+    }
+    var mt = met(d.pos, d.neg, o.t, 1), ct = o.cfp * mt.fp + o.cfn * mt.fn;
+    nodo("line", { x1: cx(o.t), x2: cx(o.t), y1: CG.T, y2: CG.T + alto, "class": "tact" }, svg);
+    nodo("circle", { cx: cx(o.t), cy: cy(ct), r: 6, "class": "punto" }, svg);
+  }
+
+  /* ---------------- estado del recorrido ---------------- */
+  var D0 = separar(P0), DD = separar(PD);
+  var est = {
+    paso: 0, t: 0.5, desb: false, remedio: null, cfp: 3, cfn: 1, rastro: {}, barrido: false, barriendo: null,
+    chk1: false, chk2: false, chk3: false, chk4: false, chk5: false, chk5b: false, chk6: false, chk7: false
+  };
+  var pasos, chk2;
+
+  var HINTS = [
+    "Responde la predicción para mover el corte",
+    "Mueve el corte y mira las dos filas",
+    "Mueve el corte y mira el rastro del punto",
+    "Mueve el corte y los costos",
+    "Toca el botón de abajo y compara",
+    "Elige un remedio",
+    "Compara las dos curvas con y sin el botón"
+  ];
+
+  function datos() {
+    if (est.paso === 5) {
+      var usaD = est.remedio === "nada" || est.remedio === "umbral";
+      return { d: usaD ? DD : D0, k: K };
+    }
+    if ((est.paso === 4 || est.paso === 6) && est.desb) return { d: D0, k: K };
+    return { d: D0, k: 1 };
+  }
+
+  function render() {
+    var q = datos(), m = met(q.d.pos, q.d.neg, est.t, q.k), p = est.paso;
+    if (p === 2 && m.prec !== null) est.rastro[f(m.rec, 3) + "|" + f(m.prec, 3)] = { r: m.rec, p: m.prec };
+    $("umbralVal").textContent = f(est.t, 2);
+    $("umbral").value = est.t;
+    dibujarRegla($("regla"), { pos: q.d.pos, neg: q.d.neg, t: est.t, mult: q.k });
+    pintarConteo(m, q.k);
+    pintarCosto();
+    pintarCurvas(q, m);
+    pintarVivos(q, m);
+    if (chk2) chk2.refrescar();
+  }
+
+  function pintarConteo(m, k) {
+    var p = est.paso, el = $("conteo");
+    if (p === 0) {
+      el.innerHTML = '<div class="conteo-simple">' +
+        '<span>Dados por aprobados: <b>' + (m.tp + m.fp) + '</b> de 12</span>' +
+        '<span>De ellos, reprobaron: <b>' + m.fp + '</b></span>' +
+        '<span>Aprobaron pero los diste por reprobados: <b>' + m.fn + '</b></span></div>';
+      return;
+    }
+    var ocPrec = (p === 1 && !est.chk2) || (p === 6 && !est.chk7);
+    var ocAcc = p === 4 && !est.chk5b;
+    var h = '<div class="conf-wrap"><table class="conf"><thead><tr><th></th><th>se da por aprobado</th><th>se da por reprobado</th></tr></thead><tbody>' +
+      '<tr><th class="fila j">aprobaron (6)</th><td class="bien"><small>TP</small>' + m.tp + '</td><td class="malo"><small>FN</small>' + m.fn + '</td></tr>' +
+      '<tr><th class="fila k">reprobaron (' + (6 * k) + ')</th><td class="malo"><small>FP</small>' + m.fp + '</td><td class="bien"><small>TN</small>' + m.tn + '</td></tr>' +
+      '</tbody></table></div>';
+    function caja(nom, v, oc) { return '<div>' + nom + '<b' + (oc ? ' class="oculto">?' : '>' + (v === null ? "—" : f(v, 3))) + '</b></div>'; }
+    h += '<div class="metr">' + caja("precisión", m.prec, ocPrec) + caja("recall", m.rec, false) + caja("F1", m.f1, ocPrec) + caja("exactitud", m.acc, ocAcc) + '</div>';
+    el.innerHTML = h;
+  }
+
+  function pintarCosto() {
+    var vis = est.paso === 3;
+    $("costoBloque").hidden = !vis;
+    if (!vis) return;
+    var tstar = est.cfp / (est.cfp + est.cfn), m = met(D0.pos, D0.neg, est.t, 1);
+    dibujarCosto($("costo"), { cfp: est.cfp, cfn: est.cfn, t: est.t, curva: est.chk4, tstar: est.chk4 ? tstar : null });
+    $("costoInfo").innerHTML = "Costo con el corte " + f(est.t, 2) + ": " + est.cfp + " × " + m.fp + " + " + est.cfn + " × " + m.fn + " = <b>" + (est.cfp * m.fp + est.cfn * m.fn) + "</b>" +
+      (est.chk4 ? "" : '<br>La curva de costos y <b class="oculto">t*</b> aparecen cuando resuelvas el chequeo.');
+  }
+
+  function pintarCurvas(q, m) {
+    var p = est.paso, vis = p >= 2 && p !== 3;
+    $("curvaBloque").hidden = !vis;
+    $("rocCaja").hidden = p !== 6;
+    $("btnDesb").hidden = !(p === 4 || p === 6);
+    if (!vis) return;
+    var pi = 6 / (6 + 6 * q.k), info = $("curvaInfo");
+    var cur = curvaPR(q.d.pos, q.d.neg, q.k), lab = m.prec === null ? null : "(" + f(m.rec, 2) + ", " + f(m.prec, 2) + ")";
+    if (p === 2) {
+      var rastro = Object.keys(est.rastro).map(function (k) { return est.rastro[k]; });
+      dibujarPR($("pr"), { curva: est.barrido ? cur : null, rastro: rastro, punto: { r: m.rec, p: m.prec }, lab: lab, base: 0.5 });
+      info.innerHTML = est.barrido ? "Curva completa: <b>" + cur.length + "</b> puntos, uno por cada corte distinto." : "Puntos visitados: <b>" + rastro.length + "</b>";
+      return;
+    }
+    if (p === 4 || p === 5) {
+      var ocultar = p === 4 && !est.chk5b && q.k > 1;
+      dibujarPR($("pr"), { curva: cur, fantasma: q.k > 1 && p === 4 ? curvaPR(D0.pos, D0.neg, 1) : null, punto: { r: m.rec, p: ocultar ? null : m.prec }, lab: lab, base: pi });
+      info.innerHTML = q.k > 1 ? (p === 4 ? "La línea punteada gris es la curva con 50 % de aprobados." : "Curso con 5 % de aprobados: 6 aprobados y 114 reprobados.") : "Curso con 50 % de aprobados.";
+      return;
+    }
+    // paso 7: las dos curvas
+    var ocu = !est.chk7;
+    dibujarPR($("pr"), { curva: cur, fantasma: q.k > 1 ? curvaPR(D0.pos, D0.neg, 1) : null, punto: { r: m.rec, p: m.prec }, lab: ocu ? null : lab, base: pi });
+    dibujarROC($("roc"), { curva: curvaROC(D0.pos, D0.neg), punto: { fpr: m.fpr, tpr: m.tpr } });
+    info.innerHTML = "AUC de la ROC = <b>" + f(aucROC(D0.pos, D0.neg), 3) + "</b> · precisión promedio (AUC-PR) = <b>" + f(apPR(q.d.pos, q.d.neg, q.k), 3) + "</b>" +
+      (q.k > 1 ? "<br>La ROC no se movió; la curva PR gris es la de 50 %." : "");
+  }
+
+  function pintarVivos(q, m) {
+    var oc = !est.chk2;
+    $("vivoPalabras").innerHTML = "precisión = aprobaron entre los dados por aprobados = " + (oc ? "?" : m.tp + " / " + (m.tp + m.fp) + " = " + fp3(m.prec)) +
+      "<br>recall = dados por aprobados entre los que aprobaron = " + m.tp + " / 6 = " + f(m.rec, 3);
+    if (est.paso === 2) {
+      $("vivoFormulas").innerHTML = "corte " + f(est.t, 2) + ": precisión = " + m.tp + " / (" + m.tp + " + " + m.fp + ") = " + fp3(m.prec) +
+        " · recall = " + m.tp + " / (" + m.tp + " + " + m.fn + ") = " + f(m.rec, 3) + " · F1 = " + f(m.f1, 3);
+    }
+    var ts = est.cfp / (est.cfp + est.cfn);
+    $("vivoCosto").innerHTML = est.chk4 ? "t* = " + est.cfp + " / (" + est.cfp + " + " + est.cfn + ") = " + f(ts, 3) : "t* = c_FP / (c_FP + c_FN) = ?";
+    if (est.paso === 4 && est.chk5b) {
+      $("vivoExactitud").innerHTML = q.k > 1
+        ? "Todos reprueban: 114 / 120 = <b>0.950</b><br>Logística con corte " + f(est.t, 2) + ": (" + m.tp + " + " + m.tn + ") / 120 = <b>" + f(m.acc, 3) + "</b>, precisión " + fp3(m.prec) + ", recall " + f(m.rec, 3)
+        : "Activa el botón del escenario para ver el curso con 5 % de aprobados.";
+    }
+    if (est.paso === 6) {
+      var pi = 6 / (6 + 6 * q.k);
+      $("vivoBayes").innerHTML = est.chk7
+        ? "corte " + f(est.t, 2) + ", π = " + f(pi, 2) + ": TPR = " + f(m.tpr, 3) + ", FPR = " + f(m.fpr, 3) + " → precisión = " +
+          (m.tpr * pi + m.fpr * (1 - pi) > 0 ? f(m.tpr * pi / (m.tpr * pi + m.fpr * (1 - pi)), 3) : "sin definir")
+        : "precisión = ?";
+    }
+  }
+
+  var REM_TXT = {
+    nada: "Sin remedio: el modelo aprende que aprobar es raro y sus probabilidades se encogen hacia 0 (b = −9.728, w = 1.996). Con corte 0.5 solo da por aprobados a 3: precisión perfecta, recall 0.5.",
+    pesos: "Pesos de clase (balanced): cada aprobado pesa 120 / 12 = 10 y cada reprobado 120 / 228. Como 114 × 120/228 = 6 × 10, las dos clases pesan lo mismo y el máximo de la verosimilitud es el del modelo de 6 y 6: las fichas vuelven a donde estaban.",
+    sobre: "Sobremuestrear: repetir 19 veces a cada aprobado deja 114 y 114. La log-verosimilitud es la del modelo de 6 y 6 multiplicada por 19, con el mismo máximo: mismas fichas, misma matriz que con pesos.",
+    umbral: "Bajar el corte: el modelo sin remedio, sin tocarlo, con corte 0.05 = 1 / (1 + 19). Da la misma matriz que los pesos o el sobremuestreo con 0.5."
+  };
+  function ponerRemedio(r) {
+    est.remedio = r;
+    est.t = r === "umbral" ? 0.05 : 0.5;
+    [].forEach.call($("remedios").querySelectorAll("button"), function (b) { b.classList.toggle("on", b.getAttribute("data-r") === r); });
+    $("remTxt").textContent = REM_TXT[r] || "";
+    render();
+  }
+  $("remedios").addEventListener("click", function (e) {
+    var b = e.target.closest("button");
+    if (!b || b.disabled) return;
+    ponerRemedio(b.getAttribute("data-r"));
+  });
+
+  function entrar(i) {
+    detenerBarrido();
+    est.paso = i;
+    if (i === 4 || i === 6) { est.t = 0.5; est.desb = false; $("btnDesb").classList.remove("on"); }
+    $("btnDesb").disabled = !((i === 4 && est.chk5) || (i === 6 && est.chk7));
+    $("btnDesb").textContent = "Curso con 5 % de aprobados";
+    $("remBloque").hidden = i !== 5;
+    if (i === 5) {
+      if (est.chk6) ponerRemedio(est.remedio || "nada");
+      else { est.remedio = null; est.t = 0.5; $("remTxt").textContent = "Los botones se activan cuando resuelvas la predicción."; }
+    }
+    $("escHint").textContent = i === 0 && est.chk1 ? "Arrastra el corte" : HINTS[i];
+    $("umbral").disabled = i === 0 && !est.chk1;
+    $("regla").classList.toggle("mover", !$("umbral").disabled);
+    render();
+  }
+
+  /* ---------------- mover el corte ---------------- */
+  function ponerUmbral(v) {
+    if ($("umbral").disabled) return;
+    v = Math.max(0, Math.min(1, Math.round(v * 100) / 100));
+    if (v === est.t) return;
+    est.t = v;
+    render();
+  }
+  $("umbral").addEventListener("input", function () { ponerUmbral(+this.value); });
+  (function () {
+    var svg = $("regla"), arr = false;
+    function valor(e) { var r = svg.getBoundingClientRect(); return hInv((e.clientX - r.left) / r.width * HG.W); }
+    svg.addEventListener("pointerdown", function (e) {
+      if ($("umbral").disabled) return;
+      arr = true;
+      try { svg.setPointerCapture(e.pointerId); } catch (err) { /* nada */ }
+      e.preventDefault();
+      ponerUmbral(valor(e));
+    });
+    svg.addEventListener("pointermove", function (e) { if (arr) ponerUmbral(valor(e)); });
+    svg.addEventListener("pointerup", function () { arr = false; });
+    svg.addEventListener("pointercancel", function () { arr = false; });
+    svg.addEventListener("keydown", function (e) {
+      var d = { ArrowLeft: -0.01, ArrowRight: 0.01, ArrowDown: -0.05, ArrowUp: 0.05 }[e.key];
+      if (!d) return;
+      e.preventDefault();
+      ponerUmbral(est.t + d);
+    });
+  })();
+
+  /* costos */
+  ["cfp", "cfn"].forEach(function (id) {
+    $(id).addEventListener("input", function () {
+      est[id] = +this.value;
+      $(id + "Val").textContent = this.value;
+      render();
+    });
+  });
+
+  /* barrido del paso 3 */
+  function detenerBarrido() { if (est.barriendo) { clearInterval(est.barriendo); est.barriendo = null; } }
+  $("btnBarrer").addEventListener("click", function () {
+    detenerBarrido();
+    est.t = 1;
+    render();
+    est.barriendo = setInterval(function () {
+      if (est.paso !== 2) { detenerBarrido(); return; }
+      est.t = Math.round((est.t - 0.01) * 100) / 100;
+      if (est.t <= 0) { est.t = 0; est.barrido = true; detenerBarrido(); }
+      render();
+    }, 30);
+  });
+
+  /* boton de desbalance */
+  $("btnDesb").addEventListener("click", function () {
+    est.desb = !est.desb;
+    this.textContent = est.desb ? "Volver a 50 % de aprobados" : "Curso con 5 % de aprobados";
+    this.classList.toggle("on", est.desb);
+    render();
+  });
+
+  /* ---------------- chequeos de cada paso ---------------- */
+  B.opcionMultiple(cuerpo("chk1"), {
+    pregunta: "Dar por aprobado a quien después reprueba es el error grave; dar tutoría de más es el leve. ¿Dónde conviene poner el corte?",
+    opciones: [
+      "Más arriba de 0.5: solo doy por aprobado a quien el modelo ve muy seguro",
+      "Justo en 0.5: es donde aprobar y reprobar son igual de probables",
+      "Más abajo de 0.5: así doy por aprobados a más estudiantes",
+      "Da igual: el corte no cambia cuántos errores de cada tipo cometes"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "0.5 es lo correcto solo si los dos errores duelen lo mismo. Aquí uno duele mucho más.",
+      "Dar por aprobados a más estudiantes es justo lo que produce más errores graves: más gente sin tutoría que después reprueba.",
+      "Cada ficha cambia de lado cuando la línea la cruza. Mover la línea cambia qué errores cometes."],
+    explicacion: "Si el error grave es dar por aprobado a quien reprueba, hay que exigir más para dar por aprobado: el corte sube. <b>0.5 no es sagrado</b>: es el caso en que los dos errores cuestan lo mismo. Ahora arrastra la línea, o usa la barra de abajo, y mira cómo cambian los conteos.",
+    alResolver: function () {
+      est.chk1 = true;
+      $("umbral").disabled = false;
+      $("regla").classList.add("mover");
+      $("escHint").textContent = "Arrastra el corte";
+      pasos.completar(0);
+    }
+  });
+
+  chk2 = B.numerico(cuerpo("chk2"), {
+    pregunta: function () {
+      var m = met(D0.pos, D0.neg, est.t, 1);
+      if (m.prec === null) return "Con el corte en " + f(est.t, 2) + " no das a nadie por aprobado. Bájalo un poco y vuelve a leer la pregunta.";
+      return "Con el corte en " + f(est.t, 2) + ", de los estudiantes que das por aprobados, ¿qué fracción aprobó de verdad? Es la <b>precisión</b>.";
+    },
+    respuesta: function () { var m = met(D0.pos, D0.neg, est.t, 1); return m.prec === null ? -999 : m.prec; },
+    tolerancia: 0.002,
+    pistas: [
+      "Los que das por aprobados son las fichas rellenas de las dos filas. Cuéntalas.",
+      "De esas, ¿cuántas están en la fila de arriba, la de los que aprobaron? Divide."
+    ],
+    diagnostico: function (v) {
+      var m = met(D0.pos, D0.neg, est.t, 1);
+      if (Math.abs(v - m.rec) < 0.002 && Math.abs(m.rec - m.prec) > 0.002) return "Ese es el recall: divides entre los 6 que aprobaron. La precisión divide entre los que <b>diste por aprobados</b>.";
+      if (Math.abs(v - m.tp) < 1e-9 && m.tp > 1) return "Ese es el número de aciertos. Falta dividir entre todos los que diste por aprobados.";
+      if (m.tp + m.fp > 0 && Math.abs(v - m.fp / (m.tp + m.fp)) < 0.002) return "Esa es la fracción de los dados por aprobados que <b>reprobó</b>. Te pido la que aprobó.";
+      return null;
+    },
+    explicacion: function () { var m = met(D0.pos, D0.neg, est.t, 1); return m.tp + " aprobados entre " + (m.tp + m.fp) + " dados por aprobados: precisión = " + fp3(m.prec) + ". Mueve el corte: cuando sube, la precisión tiende a subir y el recall baja."; },
+    alResolver: function () { est.chk2 = true; render(); pasos.completar(1); }
+  });
+
+  B.opcionMultiple(cuerpo("chk3"), {
+    pregunta: "Vas a bajar el corte de 1 a 0. Cuando la línea cruza a un estudiante que <b>reprobó</b>, el punto de la curva precisión-recall...",
+    opciones: ["Baja: la precisión cae y el recall no cambia", "Se corre a la derecha: el recall sube", "Sube: la precisión mejora", "No se mueve"],
+    correcta: 0,
+    pistas: [null,
+      "El recall solo cuenta a los que aprobaron. ¿Cruzar a un reprobado cambia cuántos aprobados encontraste?",
+      "Ese reprobado pasa a estar dado por aprobado: es un falso positivo más en el denominador de la precisión.",
+      "Al cruzarlo, FP aumenta en 1. ¿Cambia la precisión?"],
+    explicacion: "Un reprobado más entre los dados por aprobados suma 1 a FP: la precisión baja y el recall queda igual. Un aprobado suma 1 a TP: el recall sube y la precisión también sube o se queda. Por eso la curva hace dientes de sierra. <b>Ahora toca el botón</b> y mira cómo se arma.",
+    alResolver: function () {
+      est.chk3 = true;
+      $("btnBarrer").disabled = false;
+      $("barrerHint").textContent = "";
+      pasos.completar(2);
+    }
+  });
+
+  B.numerico(cuerpo("chk4"), {
+    pregunta: "En la escuela, dar por aprobado a quien reprueba cuesta 3 y dar tutoría de más cuesta 1: $c_{FP} = 3$, $c_{FN} = 1$. ¿Cuánto vale el corte $t^{*}$?",
+    respuesta: 0.75,
+    tolerancia: 0.002,
+    pistas: [
+      "Es una fracción: el costo del falso positivo arriba y la suma de los dos costos abajo.",
+      "$3 / (3 + 1)$."
+    ],
+    diagnostico: function (v) {
+      if (Math.abs(v - 0.25) < 0.002) return "Pusiste $c_{FN}$ arriba. Si el falso positivo es el caro, el corte tiene que subir, no bajar.";
+      if (Math.abs(v - 3) < 1e-9) return "Ese es el cociente $c_{FP}/c_{FN}$. El corte divide entre la suma de los dos costos.";
+      if (Math.abs(v - 0.5) < 0.002) return "0.5 es el corte con costos iguales. Aquí no lo son.";
+      return null;
+    },
+    explicacion: "$t^{*} = 3/(3+1) = 0.75$. Ahora aparece la curva de costo total: su mínimo, 2, está entre 0.744 y 0.856, justo donde cae $t^{*}$. Mueve el corte para comprobarlo y cambia los costos con las barras.",
+    alResolver: function () {
+      est.chk4 = true;
+      $("cfp").disabled = false; $("cfn").disabled = false;
+      render();
+      pasos.completar(3);
+    }
+  });
+
+  B.numerico(cuerpo("chk5"), {
+    pregunta: "En el curso difícil aprueban 6 de 120. Un \"modelo\" que no mira nada y dice \"reprueba\" a todos, ¿qué exactitud tiene?",
+    respuesta: 0.95,
+    tolerancia: 0.002,
+    pistas: [
+      "Ese modelo acierta con todos los que reprobaron y falla con todos los que aprobaron.",
+      "Acierta con 114 de 120."
+    ],
+    diagnostico: function (v) {
+      if (Math.abs(v - 0.05) < 0.002) return "0.05 es la fracción de aprobados, que son justo los que falla.";
+      if (Math.abs(v - 114) < 1e-9) return "Esos son los aciertos. La exactitud los divide entre los 120.";
+      if (Math.abs(v - 95) < 1e-9) return "Escríbelo como fracción de 1: 0.95.";
+      return null;
+    },
+    explicacion: "114 / 120 = <b>0.95</b>, sin aprender nada. Su recall es 0: no encuentra a ningún aprobado. <b>Ahora toca el botón del escenario</b>.",
+    alResolver: function () { est.chk5 = true; if (est.paso === 4) $("btnDesb").disabled = false; cerrarPaso5(); }
+  });
+
+  B.opcionMultiple(cuerpo("chk5b"), {
+    pregunta: "En el curso con 5 % y con el corte en 0.5, la logística, ¿tiene más o menos exactitud que \"todos reprueban\" (0.95)?",
+    opciones: ["Menos", "Más", "Exactamente lo mismo", "No se pueden comparar"],
+    correcta: 0,
+    pistas: [null,
+      "Con corte 0.5 la logística da por aprobada a una ficha de reprobado, que ahora vale 19. Son 19 errores.",
+      "Cuenta: 5 aciertos arriba y 114 − 19 = 95 abajo, de 120.",
+      "Las dos son fracciones de aciertos sobre los mismos 120 estudiantes."],
+    explicacion: "La logística acierta (5 + 95) / 120 = 0.833: <b>menos</b> que no hacer nada. Y aun así es mucho más útil: encuentra a 5 de los 6 aprobados. La exactitud premia a la clase grande.",
+    alResolver: function () { est.chk5b = true; render(); cerrarPaso5(); }
+  });
+  function cerrarPaso5() { if (est.chk5 && est.chk5b) pasos.completar(4); }
+
+  B.opcionMultiple(cuerpo("chk6"), {
+    pregunta: "Entrenas la logística con los 120 estudiantes tal cual: 6 aprueban y 114 reprueban. Con el corte en 0.5, ¿qué le pasa al recall comparado con el modelo de 6 y 6?",
+    opciones: [
+      "Baja: el modelo aprende que aprobar es raro y sus probabilidades se encogen",
+      "Sube: con más datos el modelo encuentra más aprobados",
+      "No cambia: los coeficientes son los mismos",
+      "Llega a 1"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "Hay más datos, pero casi todos son de reprobados. ¿Hacia qué lado empuja eso a la verosimilitud?",
+      "La verosimilitud ahora tiene 114 términos de reprobados y 6 de aprobados. El máximo se mueve.",
+      "Para llegar a 1 tendría que dar por aprobados a todos los que aprobaron, incluido el de 2.5 horas."],
+    explicacion: "El ajuste sobre los 120 da b = −9.728 y w = 1.996: las probabilidades se encogen y con 0.5 solo quedan 3 dados por aprobados. Recall 0.5. <b>Ahora prueba los cuatro botones</b>.",
+    alResolver: function () {
+      est.chk6 = true;
+      [].forEach.call($("remedios").querySelectorAll("button"), function (b) { b.disabled = false; });
+      if (est.paso === 5) ponerRemedio("nada");
+      pasos.completar(5);
+    }
+  });
+
+  B.numerico(cuerpo("chk7"), {
+    pregunta: "En el curso con 5 % ($\\pi = 0.05$), el corte 0.5 tiene TPR = 5/6 y FPR = 1/6. ¿Cuál es la precisión?",
+    respuesta: 5 / 24,
+    tolerancia: 0.002,
+    pistas: [
+      "Arriba: $\\text{TPR}\\cdot\\pi = \\frac{5}{6}\\cdot 0.05$. Abajo, súmale $\\text{FPR}\\cdot(1-\\pi) = \\frac{1}{6}\\cdot 0.95$.",
+      "$\\frac{0.0417}{0.0417 + 0.1583} = \\frac{0.0417}{0.2}$."
+    ],
+    diagnostico: function (v) {
+      if (Math.abs(v - 5 / 6) < 0.002) return "Esa es la precisión con 50 % de aprobados. Con $\\pi = 0.05$ el término de los falsos positivos pesa 19 veces más.";
+      if (Math.abs(v - 5 / 6 * 0.05) < 0.002) return "Ese es solo el numerador. Falta dividir entre la suma.";
+      return null;
+    },
+    explicacion: "$\\frac{0.0417}{0.0417 + 0.1583} = 0.208$, lo mismo que contar: 5 aprobados entre 5 + 19 dados por aprobados. Ahora activa el botón del escenario y mira las dos curvas.",
+    alResolver: function () { est.chk7 = true; if (est.paso === 6) $("btnDesb").disabled = false; render(); pasos.completar(6); }
+  });
+
+  pasos = B.pasos($("recorrido"), {
+    concepto: C,
+    alEntrar: entrar,
+    alTerminar: function () { location.hash = "retos"; }
+  });
+  if (pasos.hecho(0)) est.chk1 = true;
+  if (pasos.hecho(1)) est.chk2 = true;
+  if (pasos.hecho(2)) { est.chk3 = true; $("btnBarrer").disabled = false; $("barrerHint").textContent = ""; }
+  if (pasos.hecho(3)) { est.chk4 = true; $("cfp").disabled = false; $("cfn").disabled = false; }
+  if (pasos.hecho(4)) est.chk5 = est.chk5b = true;
+  if (pasos.hecho(5)) { est.chk6 = true; [].forEach.call($("remedios").querySelectorAll("button"), function (b) { b.disabled = false; }); }
+  if (pasos.hecho(6)) est.chk7 = true;
+  entrar(0);
+
+  /* ---------------- hipotesis inicial ---------------- */
+  (function () {
+    var ta = $("hipotesis"), t = null;
+    ta.value = B.nota("umbral-desbalance", "hipotesis");
+    function cita() {
+      var v = ta.value.trim(), el = $("citaHipo");
+      el.hidden = !v;
+      if (v) { el.textContent = ""; el.appendChild(document.createTextNode("Al principio escribiste: «" + v + "». El corte sale de cuánto cuesta cada error, y 0.5 es solo el caso de costos iguales. ¿Se parece a tu idea?")); }
+    }
+    cita();
+    ta.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { B.nota("umbral-desbalance", "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; cita(); }, 500);
+    });
+  })();
+
+  /* ---------------- marcadores de estado de retos ---------------- */
+  function pintarEstados() {
+    [].forEach.call(document.querySelectorAll("[data-reto]"), function (el) {
+      var ok = C.retoOk(el.getAttribute("data-reto"));
+      el.textContent = ok ? "resuelto" : "pendiente";
+      el.classList.toggle("ok", ok);
+    });
+  }
+  C.alCambiar(pintarEstados);
+
+  /* ---------------- reto: ojo clinico ---------------- */
+  (function () {
+    var TIPOS = {
+      recall: { preg: "¿Con cuál corte es mayor el recall?", val: function (m) { return m.rec; }, max: true },
+      prec: { preg: "¿Con cuál corte es mayor la precisión?", val: function (m) { return m.prec === null ? -1 : m.prec; }, max: true },
+      costo: { preg: "Un falso positivo cuesta 4 veces lo que un falso negativo. ¿Con cuál corte es menor el costo total?", val: function (m) { return 4 * m.fp + m.fn; }, max: false },
+      fn: { preg: "¿Con cuál corte hay menos falsos negativos?", val: function (m) { return m.fn; }, max: false },
+      fp: { preg: "¿Con cuál corte hay menos falsos positivos?", val: function (m) { return m.fp; }, max: false }
+    };
+    function sortear(tipo) {
+      for (;;) {
+        var usados = {}, todos = [];
+        while (todos.length < 14) { var v = 4 + Math.floor(Math.random() * 93); if (!usados[v]) { usados[v] = 1; todos.push(v / 100); } }
+        var pos = todos.slice(0, 7).map(function (s) { return r2(Math.min(0.97, s + 0.12)); }), neg = todos.slice(7);
+        var cs = [], ok = true;
+        while (cs.length < 3) { var c = (15 + Math.floor(Math.random() * 71)) / 100; if (cs.every(function (x) { return Math.abs(x - c) >= 0.14; }) && pos.concat(neg).indexOf(c) < 0) cs.push(c); }
+        cs.sort(function (a, b) { return a - b; });
+        var vals = cs.map(function (c) { return TIPOS[tipo].val(met(pos, neg, c, 1)); });
+        var mejor = TIPOS[tipo].max ? Math.max.apply(null, vals) : Math.min.apply(null, vals);
+        var cuantos = vals.filter(function (x) { return Math.abs(x - mejor) < 1e-9; }).length;
+        if (cuantos !== 1) ok = false;
+        if (ok) return { pos: pos, neg: neg, cs: cs, vals: vals, resp: vals.indexOf(mejor) };
+      }
+    }
+    var cont = $("ojo");
+    cont.innerHTML = '<div class="ronda"></div><p class="ojo-preg"></p><svg role="img" aria-label="Fichas con tres cortes marcados A, B y C"></svg>' +
+      '<div class="ojo-opts"><button type="button" class="opt" data-a="0">A</button><button type="button" class="opt" data-a="1">B</button><button type="button" class="opt" data-a="2">C</button></div>' +
+      '<div class="fb" aria-live="polite"></div><div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    var svg = cont.querySelector("svg"), tipos, ronda, aciertos, respondida, dat;
+    function nueva() {
+      tipos = B.mezclar(["recall", "prec", "costo", "fn", "fp"]);
+      ronda = 0; aciertos = 0;
+      mostrar();
+    }
+    function mostrar() {
+      respondida = false;
+      dat = sortear(tipos[ronda]);
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 5 · aciertos " + aciertos;
+      cont.querySelector(".ojo-preg").textContent = TIPOS[tipos[ronda]].preg;
+      dibujarRegla(svg, { pos: dat.pos, neg: dat.neg, t: null, marcas: dat.cs.map(function (c, i) { return { t: c, lab: "ABC"[i] }; }) });
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (b) { b.disabled = false; b.className = "opt"; });
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+    }
+    cont.querySelector(".ojo-opts").addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || respondida) return;
+      respondida = true;
+      var tipo = tipos[ronda], ok = +b.getAttribute("data-a") === dat.resp;
+      if (ok) aciertos++;
+      b.classList.add(ok ? "ok" : "mal");
+      if (!ok) cont.querySelector('[data-a="' + dat.resp + '"]').classList.add("ok");
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (x) { x.disabled = true; });
+      var detalle = dat.cs.map(function (c, i) {
+        var m = met(dat.pos, dat.neg, c, 1);
+        return "ABC"[i] + ": " + (tipo === "recall" ? "recall " + f(m.rec, 2) : tipo === "prec" ? "precisión " + fp3(m.prec) : tipo === "costo" ? "costo 4 × " + m.fp + " + " + m.fn + " = " + (4 * m.fp + m.fn) : tipo === "fn" ? "FN = " + m.fn : "FP = " + m.fp);
+      }).join(" · ");
+      var porque = tipo === "recall" ? "El corte más bajo siempre tiene el mayor recall (o empata)."
+        : tipo === "prec" ? "La precisión no sigue siempre al corte: depende de qué fichas quedan a la derecha de cada línea."
+        : tipo === "costo" ? "Con el falso positivo caro conviene un corte alto, pero manda la cuenta."
+        : tipo === "fn" ? "Bajar el corte rellena más fichas de arriba: menos falsos negativos."
+        : "Subir el corte vacía fichas de abajo: menos falsos positivos.";
+      cont.querySelector(".fb").innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No.</span> ') + detalle + ". " + porque;
+      var sig = cont.querySelector(".sig");
+      sig.hidden = false;
+      if (ronda === 4) {
+        var aprobo = aciertos >= 4;
+        C.reto("ojo", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertos + " de 5" + (aprobo ? ". Aprobado." : ". Necesitas 4 para aprobar.");
+        sig.textContent = "Otra tanda";
+      } else sig.textContent = "Siguiente ronda";
+    });
+    cont.querySelector(".sig").addEventListener("click", function () { if (ronda === 4) nueva(); else { ronda++; mostrar(); } });
+    nueva();
+  })();
+
+  /* ---------------- reto: constructor ---------------- */
+  (function () {
+    var D = { pos: [0.2, 0.45, 0.6, 0.85], neg: [0.3, 0.55, 0.7, 0.9] };
+    var OBJ = [
+      { t: "Precisión 1 y recall 0.5: dos aprobados dados por aprobados y ningún reprobado.", ok: function (m) { return m.tp === 2 && m.fp === 0; } },
+      { t: "Recall 1 y precisión 0.5: todos dados por aprobados.", ok: function (m) { return m.tp === 4 && m.fp === 4; } },
+      { t: "Precisión y recall iguales a 0.75.", ok: function (m) { return m.tp === 3 && m.fp === 1; } }
+    ];
+    var logrados = [false, false, false], avisado = false, ul = $("objetivos"), svg = $("constrRegla"), arr = null;
+    OBJ.forEach(function (o) { var li = document.createElement("li"); li.innerHTML = '<span class="m"></span><span>' + o.t + '</span>'; ul.appendChild(li); });
+    function pintar() {
+      var m = met(D.pos, D.neg, 0.5, 1);
+      dibujarRegla(svg, { pos: D.pos, neg: D.neg, t: 0.5, arrastre: true });
+      dibujarPR($("constrPR"), { curva: curvaPR(D.pos, D.neg, 1), punto: { r: m.rec, p: m.prec }, lab: null, base: 0.5 });
+      $("constrVivo").innerHTML = "Con corte 0.5: TP = <b>" + m.tp + "</b>, FP = <b>" + m.fp + "</b> · precisión = <b>" + fp3(m.prec) + "</b> · recall = <b>" + f(m.rec, 3) + "</b>";
+      OBJ.forEach(function (o, i) { if (!logrados[i] && o.ok(m)) logrados[i] = true; ul.children[i].classList.toggle("hecho", logrados[i]); });
+      if (!avisado && logrados.every(Boolean)) { avisado = true; C.reto("constructor", true); }
+    }
+    svg.style.touchAction = "none";
+    svg.addEventListener("pointerdown", function (e) {
+      var c = e.target.getAttribute && e.target.getAttribute("data-c");
+      if (!c) return;
+      arr = { c: c, i: +e.target.getAttribute("data-i") };
+      try { svg.setPointerCapture(e.pointerId); } catch (err) { /* nada */ }
+      e.preventDefault();
+    });
+    svg.addEventListener("pointermove", function (e) {
+      if (!arr) return;
+      var r = svg.getBoundingClientRect(), v = r2(hInv((e.clientX - r.left) / r.width * HG.W));
+      v = Math.max(0.01, Math.min(0.99, v));
+      if (v === 0.5) v = 0.51;
+      var lista = arr.c === "p" ? D.pos : D.neg;
+      if (lista[arr.i] === v) return;
+      lista[arr.i] = v;
+      pintar();
+    });
+    svg.addEventListener("pointerup", function () { arr = null; });
+    svg.addEventListener("pointercancel", function () { arr = null; });
+    pintar();
+  })();
+
+  /* ---------------- reto: a mano ---------------- */
+  (function () {
+    var D;
+    function generar() {
+      var ks = [3, 4, 5, 9, 19];
+      D = { a: 5 + Math.floor(Math.random() * 5), b: 1 + Math.floor(Math.random() * 4), k: ks[Math.floor(Math.random() * ks.length)] };
+      D.prec = D.a / (D.a + D.k * D.b);
+      $("manoDatos").innerHTML = "Pruebas un modelo en una muestra de <b>10 aprobados y 10 reprobados</b>. Con su corte da por aprobados a " + D.a + " de los aprobados (TP = " + D.a + ") y a " + D.b +
+        " de los reprobados (FP = " + D.b + "). En el curso real hay <b>" + D.k + " reprobados por cada aprobado</b>, y el modelo se comporta igual con cada grupo.";
+    }
+    var cfg = {
+      pregunta: "¿Qué precisión vas a tener en el curso real? Puedes escribirla como decimal o como fracción.",
+      respuesta: function () { return D.prec; },
+      tolerancia: 0.002,
+      pistas: [
+        "El recall y la tasa de falsos positivos no cambian: son fracciones dentro de cada grupo. Lo que cambia es cuántos reprobados hay.",
+        function () { return "Por cada 10 aprobados hay " + 10 * D.k + " reprobados. Si con 10 reprobados salían " + D.b + " falsos positivos, ahora salen " + D.k * D.b + "."; },
+        function () { return "precisión = " + D.a + " / (" + D.a + " + " + D.k * D.b + ")."; }
+      ],
+      diagnostico: function (v) {
+        if (Math.abs(v - D.a / (D.a + D.b)) < 0.002) return "Esa es la precisión en la muestra mitad y mitad. En el curso real los falsos positivos se multiplican por " + D.k + ".";
+        if (Math.abs(v - D.a / 10) < 0.002) return "Ese es el recall, que no cambia. Te pido la precisión.";
+        return null;
+      },
+      explicacion: function () { return "FP en el curso real = " + D.k + " × " + D.b + " = " + D.k * D.b + ". precisión = " + D.a + " / (" + D.a + " + " + D.k * D.b + ") = <b>" + f(D.prec, 3) + "</b>, contra " + f(D.a / (D.a + D.b), 3) + " en la muestra."; },
+      reintentable: true,
+      textoReintentar: "Otro ejercicio",
+      antesDeReintentar: generar,
+      alResolver: function (ok) { C.reto("mano", ok); }
+    };
+    generar();
+    B.numerico($("mano"), cfg);
+  })();
+
+  /* ---------------- reto: cazar el error ---------------- */
+  B.cazarError($("error"), {
+    variantes: [
+      {
+        intro: "En un tamizaje, un falso positivo (pruebas extra) cuesta 1 y un falso negativo (enfermedad sin tratar) cuesta 4. Alguien eligió el corte así:",
+        lineas: ["c_{FP} = 1,\\ c_{FN} = 4", "t^{*} = \\dfrac{c_{FN}}{c_{FP} + c_{FN}} = \\dfrac{4}{5} = 0.8", "\\text{se dice positivo si } \\hat p \\ge 0.8", "\\text{con el FN caro, el modelo dice positivo menos seguido}"],
+        erronea: 1,
+        explicacion: "El costo de arriba es el del falso positivo: $t^{*} = 1/5 = 0.2$. Si el falso negativo es el caro, el corte baja y el modelo dice positivo <b>más</b> seguido."
+      },
+      {
+        intro: "En una muestra de 10 positivos y 10 negativos, un corte da TP = 8 y FP = 2. En la población real hay 9 negativos por cada positivo. Alguien estimó la precisión real así:",
+        lineas: ["\\text{TPR} = 8/10 = 0.8", "\\text{FPR} = 2/10 = 0.2", "\\text{en la población: } 9 \\text{ negativos por positivo}", "\\text{precisión} = \\dfrac{8}{8 + 2} = 0.8"],
+        erronea: 3,
+        explicacion: "Con 9 negativos por positivo, por cada 10 positivos hay 90 negativos y salen 18 falsos positivos: precisión = 8/(8 + 18) = 0.308. Las tasas no cambian; la precisión sí."
+      },
+      {
+        intro: "Con 5 % de casos positivos, alguien armó este plan para entrenar y evaluar un modelo:",
+        lineas: ["\\text{1. sobremuestrear los positivos en todos los datos}", "\\text{2. separar en entrenamiento y prueba}", "\\text{3. ajustar el modelo en entrenamiento}", "\\text{4. medir precisión y recall en prueba}"],
+        erronea: 0,
+        explicacion: "El remuestreo va <b>después</b> de separar y solo sobre el entrenamiento. Si no, copias del mismo caso quedan en entrenamiento y prueba, y la prueba ya no tiene el 5 % real: las métricas salen infladas."
+      }
+    ],
+    alResolver: function (ok) { C.reto("error", ok); }
+  });
+
+  /* ---------------- retos: propiedades ---------------- */
+  function prop(id, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple($(id), cfg);
+  }
+  prop("prop1", {
+    pregunta: "Bajas el corte de 0.6 a 0.4. ¿Qué es seguro?",
+    opciones: [
+      "El recall no baja; la precisión puede subir o bajar",
+      "Los dos suben",
+      "La precisión siempre baja",
+      "El recall puede bajar si entran reprobados"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "La precisión solo sube si entran más aprobados que reprobados en proporción.",
+      "Si entre 0.4 y 0.6 solo hay aprobados, la precisión sube.",
+      "El recall solo cuenta aprobados: bajar el corte nunca saca a un aprobado de los dados por aprobados."],
+    explicacion: "Bajar el corte solo agrega dados por aprobados. El recall no puede bajar. La precisión depende de quiénes entran: por eso la curva PR tiene dientes de sierra."
+  });
+  prop("prop2", {
+    pregunta: "Con 5 % de positivos usas <code>train_test_split(X, y, stratify=y)</code>. ¿Qué hace <code>stratify</code>?",
+    opciones: [
+      "Mantiene el 5 % de positivos en entrenamiento y en prueba",
+      "Duplica los positivos hasta que sean la mitad",
+      "Quita negativos hasta equilibrar las clases",
+      "Le da más peso a los positivos en la pérdida"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "Eso dice Nield en la p. 38, y es un error del libro. Estratificar no cambia cuántos casos hay.",
+      "Quitar negativos es submuestrear, otra técnica.",
+      "Eso es class_weight, en el modelo, no en la partición."],
+    explicacion: "Estratificar reparte los casos para que cada parte tenga la misma proporción de clases que el total. No agrega ni quita a nadie: no es un remedio para el desbalance, solo evita que la prueba quede sin positivos por mala suerte."
+  });
+  prop("prop3", {
+    pregunta: "Con 5 % de positivos, ¿a qué altura está la línea de un modelo sin habilidad en la curva precisión-recall?",
+    opciones: ["0.05", "0.5", "Es la diagonal", "0.95"],
+    correcta: 0,
+    pistas: [null,
+      "0.5 es la línea «No Skill» de la diapositiva porque ahí las clases están balanceadas.",
+      "La diagonal es la del azar en la ROC, no en la PR.",
+      "0.95 sería la exactitud de decir siempre negativo."],
+    explicacion: "Un modelo que elige al azar tiene en sus positivos la misma proporción que el total: precisión = π = 0.05 para cualquier recall. Por eso una AUC-PR de 0.3 puede ser muy buena con clases raras."
+  });
+  prop("prop4", {
+    pregunta: "Repites 19 veces a cada negativo sin tocar el modelo. ¿Cuál de estas <b>no</b> cambia?",
+    opciones: ["La curva ROC", "La precisión", "La exactitud", "La curva precisión-recall"],
+    correcta: 0,
+    pistas: [null,
+      "La precisión tiene FP en el denominador, y FP se multiplica por 19.",
+      "La exactitud cuenta aciertos sobre el total: los negativos pasan a pesar mucho más.",
+      "La curva PR tiene la precisión en el eje vertical."],
+    explicacion: "TPR y FPR son fracciones dentro de cada clase: multiplicar los negativos por 19 multiplica arriba y abajo de la FPR. La ROC y su AUC no se mueven; todo lo que mezcla las clases sí."
+  });
+  prop("prop5", {
+    pregunta: "Un falso negativo cuesta 4 veces lo que un falso positivo. Con probabilidades bien calibradas, el mejor corte es...",
+    opciones: ["0.2", "0.8", "0.5", "0.25"],
+    correcta: 0,
+    pistas: [null,
+      "0.8 sería si el caro fuera el falso positivo.",
+      "0.5 es el corte con costos iguales.",
+      "Con $c_{FP} = 1$ y $c_{FN} = 4$, la suma es 5, no 4."],
+    explicacion: "$t^{*} = c_{FP}/(c_{FP} + c_{FN}) = 1/(1 + 4) = 0.2$. El error caro es dejar pasar un positivo, así que el modelo dice positivo con menos evidencia."
+  });
+
+  /* ---------------- formula de memoria ---------------- */
+  B.ordenar($("formula"), {
+    piezas: ["\\text{decir positivo si}", "\\hat p", "\\ge", "\\dfrac{c_{FP}}{c_{FP} + c_{FN}}"],
+    distractores: ["\\dfrac{c_{FN}}{c_{FP} + c_{FN}}", "\\le", "0.5"],
+    soluciones: [[0, 1, 2, 3]],
+    explicacion: "Se dice positivo cuando la probabilidad supera el costo del falso positivo sobre la suma de los dos costos. Con costos iguales queda 0.5.",
+    alResolver: function (ok) { C.reto("formula", ok); }
+  });
+
+  /* ---------------- vida real: el algoritmo en codigo ---------------- */
+  (function () {
+    var CODIGO = {
+      py: [
+        ["import", "import numpy as np"],
+        ["import", "from sklearn.metrics import precision_recall_curve"],
+        [null, ""],
+        [null, "# probabilidad de aprobar que da la logística y lo que pasó (1 = aprobó)"],
+        ["p", "p = np.array([0.020, 0.039, 0.076, 0.144, 0.256, 0.412,"],
+        ["p", "              0.588, 0.744, 0.856, 0.924, 0.961, 0.980])"],
+        ["y", "y = np.array([0, 0, 0, 0, 1, 0, 1, 0, 1, 1, 1, 1])"],
+        [null, ""],
+        ["umbrales", "umbrales = np.sort(p)                  # cada probabilidad es un corte posible"],
+        ["vacias", "prec, rec, f1 = [], [], []"],
+        ["for_t", "for t in umbrales:                     # 1. barrer los umbrales"],
+        ["pred", "    pred = p >= t                      # True = se predice que aprueba"],
+        ["tp", "    tp = np.sum(pred & (y == 1))"],
+        ["fp", "    fp = np.sum(pred & (y == 0))"],
+        ["fn", "    fn = np.sum(~pred & (y == 1))"],
+        ["pr", "    pr = tp / (tp + fp)                # precisión"],
+        ["rc", "    rc = tp / (tp + fn)                # recall"],
+        ["guardar", "    prec.append(pr); rec.append(rc)"],
+        ["f1", "    f1.append(2 * pr * rc / (pr + rc))"],
+        [null, ""],
+        ["mejor", "mejor = np.argmax(f1)                  # 2. el umbral con mayor F1"],
+        ["imp_mejor", "print(umbrales[mejor], round(f1[mejor], 3))"],
+        ["lib", "P, R, T = precision_recall_curve(y, p) # 3. la librería"],
+        ["comparar", "print(np.allclose(P[:-1], prec), np.allclose(R[:-1], rec))"]
+      ],
+      r: [
+        ["import", "suppressPackageStartupMessages(library(pROC))"],
+        [null, ""],
+        [null, "# probabilidad de aprobar que da la logística y lo que pasó (1 = aprobó)"],
+        ["p", "p <- c(0.020, 0.039, 0.076, 0.144, 0.256, 0.412,"],
+        ["p", "       0.588, 0.744, 0.856, 0.924, 0.961, 0.980)"],
+        ["y", "y <- c(0, 0, 0, 0, 1, 0, 1, 0, 1, 1, 1, 1)"],
+        [null, ""],
+        ["umbrales", "umbrales <- sort(p)                    # cada probabilidad es un corte posible"],
+        ["vacias", "prec <- c(); rec <- c(); f1 <- c()"],
+        ["for_t", "for (t in umbrales) {                  # 1. barrer los umbrales"],
+        ["pred", "  pred <- p >= t                       # TRUE = se predice que aprueba"],
+        ["tp", "  tp <- sum(pred & y == 1)"],
+        ["fp", "  fp <- sum(pred & y == 0)"],
+        ["fn", "  fn <- sum(!pred & y == 1)"],
+        ["pr", "  pr <- tp / (tp + fp)                 # precisión"],
+        ["rc", "  rc <- tp / (tp + fn)                 # recall"],
+        ["guardar", "  prec <- c(prec, pr); rec <- c(rec, rc)"],
+        ["f1", "  f1 <- c(f1, 2 * pr * rc / (pr + rc))"],
+        [null, "}"],
+        [null, ""],
+        ["mejor", "mejor <- which.max(f1)                 # 2. el umbral con mayor F1"],
+        ["imp_mejor", "print(c(umbrales[mejor], round(f1[mejor], 3)))"],
+        ["lib", "r <- roc(y, p, direction = \"<\", quiet = TRUE)   # 3. la librería"],
+        ["lib", "co <- coords(r, umbrales, input = \"threshold\", ret = c(\"precision\", \"recall\"))"],
+        ["comparar", "print(c(all.equal(co$precision, prec), all.equal(co$recall, rec)))"]
+      ]
+    };
+    var SALIDA = { py: ["0.256 0.857", "True True"], r: ["[1] 0.256 0.857", "[1] TRUE TRUE"] };
+    var U = P0.slice().sort(function (a, b) { return a - b; });
+
+    /* eventos: una foto del estado despues de ejecutar cada linea */
+    var EV = [], PTS = [], F1S = [];
+    (function () {
+      var fase = 0, n = 0;
+      function foto(id, extra) {
+        EV.push(Object.assign({ id: id, fase: fase, n: n, u: null, tp: null, fp: null, fn: null, pr: null, rc: null, f1: null, salida: 0, mejor: null }, extra || {}));
+      }
+      foto("import"); foto("p"); foto("y"); foto("umbrales"); foto("vacias");
+      fase = 1;
+      U.forEach(function (t, u) {
+        var m = met(D0.pos, D0.neg, t, 1);
+        foto("for_t", { u: u });
+        foto("pred", { u: u });
+        foto("tp", { u: u, tp: m.tp });
+        foto("fp", { u: u, tp: m.tp, fp: m.fp });
+        foto("fn", { u: u, tp: m.tp, fp: m.fp, fn: m.fn });
+        foto("pr", { u: u, tp: m.tp, fp: m.fp, fn: m.fn, pr: m.prec });
+        foto("rc", { u: u, tp: m.tp, fp: m.fp, fn: m.fn, pr: m.prec, rc: m.rec });
+        n++;
+        PTS.push({ r: m.rec, p: m.prec });
+        foto("guardar", { u: u, tp: m.tp, fp: m.fp, fn: m.fn, pr: m.prec, rc: m.rec });
+        F1S.push(m.f1);
+        foto("f1", { u: u, tp: m.tp, fp: m.fp, fn: m.fn, pr: m.prec, rc: m.rec, f1: m.f1 });
+      });
+      var mej = F1S.indexOf(Math.max.apply(null, F1S));
+      fase = 2;
+      foto("mejor", { mejor: mej });
+      foto("imp_mejor", { mejor: mej, salida: 1 });
+      fase = 3;
+      foto("lib", { mejor: mej, salida: 1 });
+      foto("comparar", { mejor: mej, salida: 2, fin: true });
+    })();
+
+    function narrar(e, ctx) {
+      var py = ctx.lang() === "py", ix = ctx.ix;
+      switch (e.id) {
+        case "import": return py ? "Carga NumPy y, de scikit-learn, la función con la que se compara al final." : "Carga el paquete <b>pROC</b> sin los avisos de inicio. R base no trae curvas precisión-recall.";
+        case "p": return "Las 12 probabilidades de aprobar que dio la logística, de menos a más horas de estudio.";
+        case "y": return "Lo que pasó de verdad: 1 aprobó, 0 reprobó. Son 6 y 6.";
+        case "umbrales": return "Los cortes a probar: cada probabilidad, ordenada de menor a mayor. Entre dos probabilidades vecinas cualquier corte da lo mismo.";
+        case "vacias": return "Tres listas vacías: precisión, recall y F1 de cada corte.";
+        case "for_t": return "Toma el corte de la posición <b>" + ix(e.u) + "</b>: t = <b>" + f(U[e.u], 3) + "</b>.";
+        case "pred": return "Para cada estudiante, ¿su probabilidad es mayor o igual que " + f(U[e.u], 3) + "? " + (py ? "True" : "TRUE") + " es darlo por aprobado.";
+        case "tp": return "Aprobados dados por aprobados: <b>TP = " + e.tp + "</b>.";
+        case "fp": return "Reprobados dados por aprobados: <b>FP = " + e.fp + "</b>.";
+        case "fn": return "Aprobados dados por reprobados: <b>FN = " + e.fn + "</b>. " + (py ? "<b>~pred</b>" : "<b>!pred</b>") + " es la negación.";
+        case "pr": return "Precisión = " + e.tp + " / (" + e.tp + " + " + e.fp + ") = <b>" + f(e.pr, 3) + "</b>.";
+        case "rc": return "Recall = " + e.tp + " / (" + e.tp + " + " + e.fn + ") = <b>" + f(e.rc, 3) + "</b>.";
+        case "guardar": return "Guarda el par. Ya hay <b>" + e.n + "</b> puntos de la curva.";
+        case "f1": return "F1 = 2 · " + f(e.pr, 3) + " · " + f(e.rc, 3) + " / (" + f(e.pr, 3) + " + " + f(e.rc, 3) + ") = <b>" + f(e.f1, 3) + "</b>.";
+        case "mejor": return "Busca la posición del F1 más alto: la <b>" + ix(e.mejor) + "</b>, con F1 = " + f(F1S[e.mejor], 3) + ".";
+        case "imp_mejor": return "Imprime ese corte y su F1: <b>" + SALIDA[ctx.lang()][0] + "</b>. Es el corte 0.256, el más bajo que todavía deja fuera a los cuatro reprobados de menos horas.";
+        case "lib": return py ? "<b>precision_recall_curve</b> devuelve precisión, recall y los cortes. Agrega al final el punto (precisión 1, recall 0), que no tiene corte."
+          : "<b>roc()</b> arma la curva con <b>direction = \"&lt;\"</b> (los aprobados tienen probabilidades más altas) y <b>coords()</b> calcula precisión y recall justo en nuestros cortes.";
+        case "comparar": return py ? "Quitando ese punto extra con <b>[:-1]</b>, los 12 pares coinciden con los del bucle: <b>True True</b>."
+          : "Los dos vectores coinciden con los del bucle: <b>TRUE TRUE</b>.";
+      }
+      return "";
+    }
+    function visual(e, anterior, ctx) {
+      var u = e && e.fase === 1 ? e.u : null;
+      dibujarRegla($("vrRegla"), { pos: D0.pos, neg: D0.neg, t: u === null ? null : U[u], marcar: u !== null && e.id !== "for_t" });
+      var pts = PTS.slice(0, e ? e.n : 0), mej = e && e.mejor !== null ? PTS[e.mejor] : null;
+      var act = e && e.fase === 1 && e.rc !== null ? { r: e.rc, p: e.pr } : mej;
+      dibujarPR($("vrPR"), { puntos: pts, punto: act, cls: mej && act === mej ? "mejor" : null, lab: mej && act === mej ? "F1 " + f(F1S[e.mejor], 3) : null, base: 0.5 });
+      $("vrCuenta").innerHTML = !e || e.fase !== 1 || e.tp === null ? (mej ? "mejor corte: <b>" + f(U[e.mejor], 3) + "</b>, F1 = <b>" + f(F1S[e.mejor], 3) + "</b>" : "")
+        : "TP = <b>" + e.tp + "</b>" + (e.fp !== null ? " · FP = <b>" + e.fp + "</b>" : "") + (e.fn !== null ? " · FN = <b>" + e.fn + "</b>" : "") +
+          (e.pr !== null ? " · precisión <b>" + f(e.pr, 3) + "</b>" : "") + (e.rc !== null ? " · recall <b>" + f(e.rc, 3) + "</b>" : "") + (e.f1 !== null ? " · F1 <b>" + f(e.f1, 3) + "</b>" : "");
+      $("vrSalida").textContent = e ? SALIDA[ctx.lang()].slice(0, e.salida).join("\n") : "";
+    }
+    B.vidaReal($("vidareal"), {
+      codigo: CODIGO,
+      eventos: EV,
+      narrar: narrar,
+      vars: function (e, ctx) {
+        var v = [];
+        if (e && e.fase === 1 && e.u !== null) v.push('<span>t = <b>' + f(U[e.u], 3) + '</b></span>');
+        if (e && e.tp !== null && e.fase === 1) v.push('<span class="vj">tp = <b>' + e.tp + '</b></span>');
+        if (e && e.fp !== null && e.fase === 1) v.push('<span class="vk">fp = <b>' + e.fp + '</b></span>');
+        if (e && e.fn !== null && e.fase === 1) v.push('<span>fn = <b>' + e.fn + '</b></span>');
+        if (e && e.mejor !== null) v.push('<span>mejor = <b>' + ctx.ix(e.mejor) + '</b></span>');
+        v.push('<span>puntos guardados: <b>' + (e ? e.n : 0) + '</b></span>');
+        return v;
+      },
+      visual: visual,
+      demora: function (e) {
+        if (!e) return 600;
+        return { for_t: 420, pred: 300, tp: 260, fp: 260, fn: 260, pr: 300, rc: 300, guardar: 420, f1: 360 }[e.id] || 1000;
+      }
+    });
+
+    /* chequeo de prediccion y trampas reales */
+    B.opcionMultiple(cuerpo("vrPred"), {
+      mezclar: true,
+      alResolver: function (ok) { C.reto("codigo1", ok); },
+      pregunta: "El programa prueba los 12 cortes y se queda con el de mayor F1. ¿Cuál crees que gana?",
+      opciones: ["0.256: deja dentro a todos los aprobados y solo a 2 reprobados", "0.588: el primero por encima de 0.5", "0.856: precisión perfecta", "0.980: el más exigente"],
+      correcta: 0,
+      pistas: [null,
+        "Con 0.588 la precisión y el recall valen 0.833: F1 = 0.833. ¿Hay alguno mejor?",
+        "Con 0.856 la precisión es 1 pero el recall es 0.667: F1 = 0.8.",
+        "Con 0.980 solo encuentras a 1 de 6 aprobados: F1 = 0.286."],
+      explicacion: "Con 0.256 el recall es 1 y la precisión 6/8 = 0.75: F1 = 0.857, el más alto. El F1 premia no perder aprobados. Fíjate que no coincide con el corte por costos del paso 4 (0.75): cada criterio responde a otra pregunta. Ahora dale a reproducir."
+    });
+    prop("codigo2", {
+      pregunta: "Ajustaste <code>modelo = LogisticRegression(penalty=None).fit(X, y)</code> con los 12 estudiantes y quieres el corte 0.75 de los costos. Escribes <code>modelo.predict(X).sum()</code>. ¿Cuántos da por aprobados?",
+      opciones: [
+        "6: predict corta siempre en 0.5",
+        "4: los que pasan de 0.75",
+        "Un error, porque falta decirle el corte",
+        "12: predict devuelve probabilidades y todas son mayores que 0"
+      ],
+      correcta: 0,
+      pistas: [null,
+        "¿En qué parte del código le dijiste a scikit-learn que querías 0.75?",
+        "No da error: usa un corte que trae fijo, sin avisar.",
+        "Las probabilidades salen de <code>predict_proba</code>; <code>predict</code> devuelve 0 o 1."],
+      explicacion: "Corrido de verdad, imprime <code>6</code>. <code>predict</code> usa siempre 0.5. Para tu corte: <code>(modelo.predict_proba(X)[:, 1] &gt;= 0.75).sum()</code> da <code>4</code>, y desde la versión 1.5 de scikit-learn también <code>FixedThresholdClassifier(modelo, threshold=0.75)</code>, que da 4. En R no hay trampa porque <code>glm</code> no decide la clase: haces <code>predict(m, type = \"response\") &gt;= 0.75</code> tú mismo."
+    });
+    prop("codigo3", {
+      pregunta: "Con el curso de 5 % (6 aprobados, 114 reprobados) entrenas <code>LogisticRegression(penalty=None, class_weight=\"balanced\")</code>. ¿Qué probabilidad de aprobar da para alguien con 6 horas?",
+      opciones: [
+        "Alrededor de 0.98: la misma que el modelo entrenado con 6 y 6",
+        "Alrededor de 0.905: la misma que sin pesos",
+        "0.05, la proporción de aprobados",
+        "Exactamente 0.5, porque las clases quedan equilibradas"
+      ],
+      correcta: 0,
+      pistas: [null,
+        "Los pesos cambian la verosimilitud que se maximiza. ¿Puede salir el mismo modelo que sin pesos?",
+        "Los pesos no cambian las horas de nadie: la probabilidad sigue dependiendo de las horas.",
+        "Equilibrar las clases no fija ninguna probabilidad en 0.5: cambia la curva entera."],
+      explicacion: "Corrido de verdad: sin pesos, <code>glm</code> en R da <code>0.905</code> (scikit-learn, con su tolerancia por defecto, 0.903); con <code>class_weight=\"balanced\"</code> da <code>0.981</code>, y <code>glm</code> con <code>weights</code> equivalentes da <code>0.98</code>, la del modelo de 6 y 6. El modelo ahora cree que la mitad aprueba: sirve para decidir con 0.5, pero sus probabilidades ya no son frecuencias del curso real."
+    });
+  })();
+
+  /* ---------------- tarjetas ---------------- */
+  B.tarjetas($("tarjetas"), [
+    ["¿Qué cambia al subir el corte?", "Menos falsos positivos y más falsos negativos. El recall baja o se queda; la precisión suele subir, pero no siempre."],
+    ["¿Qué es un punto de la curva precisión-recall?", "Un corte: su par (recall, precisión). La curva une los puntos de todos los cortes."],
+    ["¿A qué altura está un modelo sin habilidad en la curva PR?", "En la proporción de positivos, π: 0.5 con clases balanceadas, 0.05 con 5 %."],
+    ["¿Cómo se elige el corte con costos?", "$t^{*} = c_{FP}/(c_{FP} + c_{FN})$. Con costos iguales es 0.5; si el falso negativo es más caro, baja."],
+    ["¿Por qué la exactitud engaña con clases raras?", "Decir siempre la clase grande ya da una exactitud alta (95 % con 5 % de positivos) sin encontrar a nadie."],
+    ["Tres remedios para el desbalance", "Pesos de clase, remuestreo (sobremuestreo, submuestreo, SMOTE) y mover el corte. Con la logística, los dos primeros equivalen a cambiar la proporción de clases."],
+    ["¿Por qué la ROC no ve el desbalance y la curva PR sí?", "TPR y FPR son fracciones dentro de cada clase. La precisión mezcla las dos: precisión = TPR·π / (TPR·π + FPR·(1 − π))."],
+    ["¿Qué corte usa <code>predict</code> en scikit-learn?", "Siempre 0.5. Para otro corte: <code>predict_proba(X)[:, 1] &gt;= t</code> o <code>FixedThresholdClassifier</code>."]
+  ]);
+
+  /* ---------------- conexiones ---------------- */
+  B.conexiones("umbral-desbalance");
+})();
+</script>
+</body>
+</html>

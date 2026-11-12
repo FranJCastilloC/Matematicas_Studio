@@ -56,8 +56,8 @@ CSS ni JS relativos con `file://`, así que para probar siempre usar el servidor
    usar exactamente el mismo título.
 6. Verificar en el navegador (servidor `biblioteca`): recorrer todos los pasos, responder bien y mal
    cada chequeo, revisar ancho móvil (375 px) sin scroll horizontal, y sin errores de consola.
-   Las pruebas se hacen en una pestaña propia con `http://127.0.0.1:8765` (otro origen, otro almacenamiento), nunca en
-   `localhost:8765`, donde Francisco puede estar estudiando. Al terminar, borrar el progreso de prueba en esa pestaña:
+   Las pruebas se hacen con la configuración `biblioteca-pruebas` de `.claude/launch.json` (`localhost:8766`, otro origen
+   con su propio almacenamiento), nunca en `localhost:8765`, donde Francisco puede estar estudiando. Al terminar, borrar el progreso de prueba en esa pestaña:
    `localStorage.removeItem('biblioteca:v1')`.
 
 ## Construir por tandas
