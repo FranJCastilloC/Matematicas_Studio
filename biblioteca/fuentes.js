@@ -200,7 +200,7 @@ window.FUENTES = {
   },
   db6caso: {
     corto: "DBSCAN caso",
-    titulo: "UD6. Caso: estaciones meteorológicas",
+    titulo: "UD6. Práctica 1: DBSCAN (multishapes y billetes suizos)",
     autor: "Máster en IA, UAX. Técnicas de IA: clasificaciones y agrupaciones (Jorge Colomer)",
     archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142003 - Clasificaciones y agrupaciones/UD6. DBSCAN/ud6-caso.html",
     tipo: "documento",

@@ -1,0 +1,2010 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Validación de clusters</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+/* ---------- colores de los grupos y del ruido (solo esta pagina; los de DBSCAN) ---------- */
+:root { --g0: #c96f14; --g1: #2f68c4; --g2: #2c8a47; --g3: #1f8a8a; --g4: #8a7a12; --g5: #b0477f; --ruido: #8d6e63; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --g0: #f0a35a; --g1: #7aa9f2; --g2: #6cc584; --g3: #5ccfcf; --g4: #d6c55a; --g5: #e58fbf; --ruido: #c9a99d; }
+}
+:root[data-theme="dark"] { --g0: #f0a35a; --g1: #7aa9f2; --g2: #6cc584; --g3: #5ccfcf; --g4: #d6c55a; --g5: #e58fbf; --ruido: #c9a99d; }
+
+/* ---------- planos ---------- */
+.plano-svg { width: 100%; height: auto; display: block; user-select: none; -webkit-user-select: none; }
+.plano-svg .grid { stroke: var(--line-soft); stroke-width: 1; }
+.plano-svg .tick { font: 10px var(--f-mono); fill: var(--ink-3); }
+.plano-svg .marco { fill: none; stroke: var(--line); }
+.plano-svg .pt { fill: var(--ink-3); }
+.plano-svg .pt.g0 { fill: var(--g0); } .plano-svg .pt.g1 { fill: var(--g1); } .plano-svg .pt.g2 { fill: var(--g2); }
+.plano-svg .pt.g3 { fill: var(--g3); } .plano-svg .pt.g4 { fill: var(--g4); } .plano-svg .pt.g5 { fill: var(--g5); }
+.plano-svg .pt.fuera { fill: var(--surface); stroke: var(--ink-3); stroke-width: 1.2; opacity: .6; }
+.plano-svg .rx { stroke: var(--ruido); stroke-width: 2.2; stroke-linecap: round; }
+.plano-svg .anillo { fill: none; stroke: var(--accent); stroke-width: 2; }
+.plano-svg .seg-x { stroke: var(--j); stroke-width: 2.2; }
+.plano-svg .seg-y { stroke: var(--k); stroke-width: 2; stroke-dasharray: 4 3; }
+.plano-svg .sonda { fill: var(--surface); stroke: var(--k); stroke-width: 2; }
+.plano-svg .caja { fill: none; stroke: var(--ink-3); stroke-dasharray: 3 4; }
+.plano-svg .sep { stroke: var(--accent); stroke-width: 3; }
+.plano-svg .diam { stroke: var(--ink); stroke-width: 2; stroke-dasharray: 6 4; }
+.plano-svg .cent { stroke: var(--ink); stroke-width: 2.4; }
+.plano-svg .disp { fill: none; stroke-width: 1.6; stroke-dasharray: 4 3; }
+.plano-svg .disp.g0 { stroke: var(--g0); } .plano-svg .disp.g1 { stroke: var(--g1); } .plano-svg .disp.g2 { stroke: var(--g2); }
+.plano-svg .disp.g3 { stroke: var(--g3); } .plano-svg .disp.g4 { stroke: var(--g4); }
+.plano-svg .union { stroke: var(--accent); stroke-width: 2.4; }
+.plano-svg .lab { font: 600 13px var(--f-mono); fill: var(--accent); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.esc-head .hint { font-size: 12.5px; color: var(--ink-2); }
+.duo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+.duo figure { margin: 0; min-width: 0; }
+.duo figcaption { font: 500 12px var(--f-mono); color: var(--ink-2); margin-bottom: 4px; overflow-wrap: anywhere; }
+.fila-ctl { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; margin: 8px 0; }
+.fila-ctl[hidden] { display: none; }
+.fila-ctl .lab-ctl { font-size: 12.5px; color: var(--ink-2); }
+.deslizador { display: grid; grid-template-columns: 7.5em minmax(0, 1fr); align-items: center; gap: 10px; margin: 8px 0 2px; font-size: 13px; color: var(--ink-2); }
+.deslizador input[type="range"] { width: 100%; accent-color: var(--accent); }
+.deslizador b { font-family: var(--f-mono); font-weight: 500; color: var(--ink); font-variant-numeric: tabular-nums; }
+.deslizador[hidden] { display: none; }
+.leyenda { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 6px; font-size: 12.5px; color: var(--ink-2); align-items: center; }
+.leyenda[hidden] { display: none; }
+.leyenda i { display: inline-block; width: 16px; height: 0; margin-right: 6px; vertical-align: 3px; }
+.leyenda i.l-x { border-top: 2.5px solid var(--j); }
+.leyenda i.l-y { border-top: 2.5px dashed var(--k); }
+.leyenda i.l-s { width: 10px; height: 10px; border: 2px solid var(--k); vertical-align: -1px; }
+.leyenda i.l-sep { border-top: 3px solid var(--accent); }
+.leyenda i.l-diam { border-top: 2px dashed var(--ink); }
+.info { margin-top: 10px; font-size: 13px; color: var(--ink-2); line-height: 1.55; overflow-wrap: anywhere; }
+.info b { color: var(--ink); font-weight: 600; }
+.grande { font-family: var(--f-mono); font-size: 13.5px; color: var(--ink-2); margin: 6px 0 12px; font-variant-numeric: tabular-nums; line-height: 1.6; overflow-wrap: anywhere; }
+.grande b { color: var(--ink); font-weight: 500; }
+.grande:empty { display: none; }
+.vivo { overflow-wrap: anywhere; }
+
+/* ---------- matriz VAT ---------- */
+.matriz-svg { width: 100%; max-width: 360px; height: auto; display: block; margin: 0 auto; }
+.matriz-svg .celda { fill: var(--ink); }
+.matriz-svg .borde { fill: none; stroke: var(--line); }
+
+/* ---------- tablero de indices ---------- */
+.tablero-wrap { overflow-x: auto; margin-top: 10px; }
+.tablero-wrap[hidden] { display: none; }
+.tablero { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.tablero th, .tablero td { padding: 5px 6px; border-bottom: 1px solid var(--line-soft); text-align: right; white-space: nowrap; }
+.tablero th { font-weight: 500; color: var(--ink-3); font-size: 11.5px; }
+.tablero td:first-child, .tablero th:first-child { text-align: left; white-space: normal; }
+.tablero td { font-family: var(--f-mono); color: var(--ink-2); }
+.tablero td:first-child { font-family: var(--f-body); color: var(--ink); }
+.tablero td.mejor { color: var(--accent); font-weight: 600; }
+.tablero tr.sub td { font-family: var(--f-mono); font-size: 10.5px; color: var(--ink-3); padding-top: 9px; text-transform: uppercase; letter-spacing: .06em; border-bottom: 1px solid var(--line); }
+.tablero .dir { color: var(--ink-3); font-size: 11px; }
+.cont-duo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; margin-top: 10px; }
+.cont-duo[hidden] { display: none; }
+.ct { border-collapse: collapse; font-family: var(--f-mono); font-size: 12px; font-variant-numeric: tabular-nums; margin-top: 4px; }
+.ct th, .ct td { border: 1px solid var(--line); padding: 3px 7px; text-align: center; }
+.ct th { color: var(--ink-3); font-weight: 500; font-size: 11px; }
+.ct td.cero { color: var(--ink-3); }
+.ct td.on { box-shadow: inset 0 0 0 2px var(--accent); }
+.ct-tit { font-size: 12px; color: var(--ink-2); }
+
+/* ---------- vida real ---------- */
+.vr-salida { margin: 10px 0 0; padding: 8px 12px; background: var(--surface-2); border-radius: 8px; font-family: var(--f-mono); font-size: 12px; line-height: 1.5; min-height: 3em; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); }
+.vr-cuenta { overflow-wrap: anywhere; }
+.mini-code { margin: 8px 0; padding: 8px 12px; background: var(--surface-2); border-radius: 8px; font-family: var(--f-mono); font-size: 12px; line-height: 1.55; white-space: pre; overflow-x: auto; }
+
+/* ---------- retos propios ---------- */
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.ojo-opts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
+.ojo-opts .opt { text-align: center; }
+.ojo-svg { max-width: 300px; margin: 6px auto 0; }
+.objetivos { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.objetivos li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.objetivos .m { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.objetivos li.hecho { color: var(--ink); }
+.objetivos li.hecho .m { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 3px var(--surface); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ Validación de clusters</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Aprendizaje automático · SM142003 UD6 (Unit 7, Clustering Validation) y Raschka cap. 10</p>
+    <h1>Validación de clusters: ¿los grupos son reales?</h1>
+    <p class="lede">
+      Un algoritmo de agrupamiento siempre devuelve grupos, aunque los datos no los tengan. Validar es preguntar
+      <b>antes</b> si hay algo que agrupar, y <b>después</b> qué tan buenos son los grupos que salieron.
+      Lo vas a ver con las dos lunas de la página de DBSCAN, agrupadas por DBSCAN y por k-means, y un tablero de índices
+      que a veces le da la razón al que se equivoca.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> Tienes dos agrupaciones distintas de los mismos puntos y nadie te dice cuál es la buena. No tienes las respuestas. ¿Qué medirías para decidir cuál es mejor? Escríbelo como te salga, aunque esté incompleto.</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: miraría si los puntos de cada grupo están..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>De "¿hay grupos?" a "¿son buenos?"</h2>
+      <p>Ocho pasos. Cada uno termina con un chequeo: hasta que no lo resuelves, el siguiente queda cerrado. Equivocarte aquí no resta nada, es parte del método.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="Siempre hay grupos">
+          <span class="etapa">Paso 1</span>
+          <h3>El algoritmo no sabe decir "aquí no hay nada"</h3>
+          <p>En el escenario hay 30 puntos sorteados al azar, parejos en un cuadrado: los mismos "clientes al azar" de la página de <a href="elegir-k.html">elegir k</a>. No tienen grupos. A la izquierda se los vas a dar a k-means con k = 2; a la derecha, a DBSCAN con ε = 1 y minPts = 3, como en la página de <a href="dbscan.html">DBSCAN</a>.</p>
+          <div class="check" id="chk1"><p class="check-tit">Predice antes de ver</p><div class="cuerpo"></div></div>
+          <p>Las diapositivas de validación lo dicen sin rodeos: los algoritmos son "ciegos", devuelven grupos aunque los datos sean aleatorios, así que primero hay que medir si hay <b>tendencia</b> a agruparse
+          <cite class="cita" data-fuente="val7" data-pag="4" data-ancla="assessing-clustering-tendency" data-seccion="2 Assessing clustering tendency" data-que="Por qué medir la tendencia antes de agrupar: k-means y el jerárquico devuelven grupos aunque los datos sean puro azar. La diapositiva anterior (3) ordena la validación en antes, durante y después." data-cuando="Al terminar este paso"></cite>.
+          Validar tiene tres momentos: <b>antes</b> (¿hay algo que agrupar?), <b>durante</b> (qué algoritmo y qué parámetros) y <b>después</b> (¿qué tan buenos son los grupos?). Esta página recorre los tres. Cuántos grupos pedir ya lo viste en la página de elegir k, con el codo, la silueta y el gap: aquí no se repite.</p>
+          <p>Toca <b>Lunas</b> en el escenario: con datos que sí tienen forma, los dos algoritmos dan repartos distintos. ¿Cuál es mejor? Tu ojo lo sabe. La pregunta de toda la página es si un número, sin ver las respuestas, también lo sabe.</p>
+        </section>
+
+        <section class="paso card" data-titulo="Hopkins">
+          <span class="etapa">Paso 2</span>
+          <h3>¿Están más amontonados que el azar?</h3>
+          <p>El estadístico de Hopkins compara dos distancias. Elige 10 puntos de tus datos y mide, para cada uno, la distancia a su vecino más cercano: son las <b style="color:var(--j)">x</b>, las rayas llenas. Después sortea 10 puntos nuevos, parejos dentro de la caja de los datos (los cuadraditos), y mide la distancia de cada uno al dato más cercano: son las <b style="color:var(--k)">y</b>, las rayas cortadas.</p>
+          <div class="fbloque">
+            <div data-tex="H = \frac{\sum_{i=1}^{m} y_i}{\sum_{i=1}^{m} x_i + \sum_{i=1}^{m} y_i}" data-display></div>
+            <div class="vivo" id="vivo2"></div>
+          </div>
+          <div class="check" id="chk2"><p class="check-tit">Predice antes de sortear</p><div class="cuerpo"></div></div>
+          <p>Es la fórmula de las diapositivas
+          <cite class="cita" data-fuente="val7" data-pag="11" data-ancla="3/7" data-seccion="2.5.1 Hopkins statistic" data-que="El procedimiento: muestrear n puntos de los datos con su distancia al vecino más cercano (x), generar n puntos uniformes con su distancia al dato más cercano (y), y H = Σy / (Σx + Σy)." data-cuando="Al terminar este paso"></cite>.
+          Ojo con lo que viene después: la diapositiva siguiente dice que "H cerca de 0" quiere decir agrupable, y el ejemplo en R da 0.165 para iris y 0.513 para datos al azar
+          <cite class="cita" data-fuente="val7" data-pag="13" data-ancla="3/9" data-seccion="Hopkins statistic in R" data-que="clustertend::hopkins sobre iris da H = 0.1652538 y sobre datos uniformes 0.5129723. Esa función usa la convención contraria a la fórmula de la diapositiva 11: devuelve Σx / (Σx + Σy)." data-cuando="Después de jugar con el escenario"></cite>.
+          Con la fórmula de arriba, unos datos agrupados dan H cerca de <b>1</b>, no de 0. Las dos cosas son ciertas en su convención: la función de R usa la otra, Σx / (Σx + Σy), que es 1 − H. En esta página, <b>H cerca de 1 es agrupable y 0.5 es azar</b>.</p>
+          <p>Toca los cuatro juegos de datos y sortea varias veces. Con los clientes, mueve <b>apretar</b>: las tres nubes se encogen hacia su centro.</p>
+          <details class="profundizar">
+            <summary>¿Por qué las lunas engañan a Hopkins?</summary>
+            <div>
+              <p>Hopkins solo mira distancias al vecino más cercano. En las lunas, con 30 puntos, cada punto tiene a su vecino a unos 0.8, y un punto sorteado al azar en la caja cae, en promedio, a una distancia parecida de algún dato: las lunas cruzan casi toda la caja. Las x y las y se parecen, y H queda cerca de 0.5. Con 264 puntos sobre las mismas curvas, los vecinos quedan a 0.07 y H sube a cerca de 0.9. Hopkins no ve formas: ve si los puntos están más apretados que el azar, a la escala del vecino más cercano. Y con m = 10, un solo sorteo baila mucho: promedia muchos.</p>
+            </div>
+          </details>
+        </section>
+
+        <section class="paso card" data-titulo="VAT">
+          <span class="etapa">Paso 3</span>
+          <h3>Ver la tendencia en una imagen</h3>
+          <p>Otra forma de mirar antes de agrupar. Haz la tabla de distancias entre los 30 puntos: 30 filas por 30 columnas. Pinta cada casilla más intensa cuanto más cerca están los dos puntos. Si las filas vienen en cualquier orden, la imagen parece ruido.</p>
+          <p>El método <b>VAT</b> reordena las filas: empieza por un punto del borde y va agregando siempre el punto más cercano a los que ya puso. Si hay grupos, sus puntos quedan seguidos y en la diagonal aparecen cuadros intensos, uno por grupo
+          <cite class="cita" data-fuente="val7" data-pag="14" data-ancla="3/10" data-seccion="2.5.2 Visual method (VAT)" data-que="VAT de Bezdek y Hathaway (2002): la matriz de disimilitud, el reordenamiento (ODM) y la imagen (ODI), con el código de seriation::seriate(method = 'VAT') y la comparación con datos al azar." data-cuando="Al terminar este paso"></cite>.</p>
+          <div class="check" id="chk3"><p class="check-tit">Predice antes de ordenar</p><div class="cuerpo"></div></div>
+          <p>Cambia de datos y de orden. Mira las lunas: el orden de VAT recorre una luna de punta a punta, como la cadena de núcleos de DBSCAN. Por eso no salen cuadros parejos sino una franja intensa que se va aclarando lejos de la diagonal. Y mira el azar: también aparecen cuadritos. VAT siempre ordena algo, así que <b>se lee comparando</b> con datos al azar, como hacen las diapositivas.</p>
+          <details class="profundizar">
+            <summary>¿Por qué VAT es primo del enlace simple?</summary>
+            <div>
+              <p>El orden de VAT sale de ir uniendo siempre el punto más cercano a los ya elegidos. Es el algoritmo de Prim para el árbol de expansión mínimo, el mismo árbol que arma el agrupamiento jerárquico con enlace simple. Por eso VAT encadena como el enlace simple: sigue curvas y anillos, y se confunde con puentes de puntos entre dos grupos.</p>
+            </div>
+          </details>
+        </section>
+
+        <section class="paso card" data-titulo="Índices internos">
+          <span class="etapa">Paso 4</span>
+          <h3>Juzgar un reparto sin conocer las respuestas</h3>
+          <p>Ahora el escenario muestra la imagen de toda la página: las mismas 30 lunas agrupadas de dos formas. A la izquierda DBSCAN (ε = 1, minPts = 3), que separa las lunas y deja 4 puntos de ruido. A la derecha k-means con k = 2, que corta con una recta y mezcla 7 puntos.</p>
+          <p>Un <b>índice interno</b> mira solo los puntos y el reparto, sin saber cuál es la verdad. Todos miden dos cosas: <b>compacidad</b> (qué tan juntos están los puntos de un mismo grupo) y <b>separación</b> (qué tan lejos quedan los grupos entre sí)
+          <cite class="cita" data-fuente="val7" data-pag="25" data-ancla="internal-measures-for-cluster-validation" data-seccion="4.1 Internal measures for cluster validation" data-que="Cohesión y separación, compacidad, separación y conectividad, y la forma general de un índice interno: separación dividida por compacidad, con pesos α y β. La diapositiva 24, antes, distingue validación interna, externa y relativa." data-cuando="Al terminar este paso"></cite>.
+          El tablero tiene cuatro: la <b>silueta media</b>, que ya conoces de la página de elegir k; <b>Davies-Bouldin</b>; <b>Calinski-Harabasz</b> y <b>Dunn</b>. Al ruido de DBSCAN se lo deja fuera: no pertenece a ningún grupo.</p>
+          <div class="check" id="chk4"><p class="check-tit">Predice antes de ver el tablero</p><div class="cuerpo"></div></div>
+
+          <div class="destacado" id="destacado">
+            <p class="dest-tit">Una confusión muy común</p>
+            <h4>¿Cómo puede sacar mejor nota el que se equivoca?</h4>
+            <p>k-means mezcla 7 puntos y aun así gana en silueta, en Davies-Bouldin y en Calinski-Harabasz. No es un error de cuenta: es lo que esos índices miden. Raschka presenta la silueta como una medida para cualquier algoritmo, no solo para k-means
+            <cite class="cita" data-fuente="raschka10" data-pag="10" data-pimp="314" data-seccion="Quantifying the quality of clustering via silhouette plots" data-que="La silueta como métrica para evaluar cualquier agrupamiento, con a(i) como cohesión (distancia media a su grupo) y b(i) como separación (distancia media al grupo más cercano). En la página siguiente, el rango de −1 a 1." data-cuando="Al terminar este recuadro"></cite>,
+            y lo es, pero mide distancias <b>promedio</b>: un grupo largo y curvo tiene puntos en una punta que quedan lejos de los de la otra punta.</p>
+            <div class="check" id="chk4b"><p class="check-tit">Predice antes de seguir</p><div class="cuerpo"></div></div>
+          </div>
+          <div class="cita" id="citaHipo" hidden></div>
+        </section>
+
+        <section class="paso card" data-titulo="Qué mide cada uno">
+          <span class="etapa">Paso 5</span>
+          <h3>Dunn y Davies-Bouldin, dibujados</h3>
+          <p>El índice de <b>Dunn</b> divide la menor distancia entre dos puntos de grupos distintos (la separación, raya violeta) por la mayor distancia entre dos puntos de un mismo grupo (el diámetro, raya cortada). Se busca grande. Las diapositivas lo definen así, sin más
+          <cite class="cita" data-fuente="val7" data-pag="27" data-ancla="5/3" data-seccion="4.1.2 Dunn index" data-que="Dunn como separación mínima entre grupos dividida por el diámetro máximo, y que conviene maximizarlo. En la diapositiva 37, cluster.stats da un Dunn de 0.026 para k-means en iris: un solo par de puntos cercanos de grupos distintos lo hunde." data-cuando="Al terminar este paso"></cite>.</p>
+          <p><b>Davies-Bouldin</b> mira cada grupo con su peor vecino. Para cada grupo i calcula su dispersión <span data-tex="s_i"></span> (la distancia media de sus puntos a su centroide, los círculos), y lo compara con cada otro grupo j: dispersiones sumadas sobre distancia entre centroides. Se queda con el peor j y promedia. Se busca chico
+          <cite class="cita" data-fuente="val7" data-pag="28" data-ancla="5/4" data-seccion="4.1.3 Davies-Bouldin index" data-que="La idea del índice (similitud media de cada grupo con su más parecido, que hay que minimizar), sin fórmula. Incluye el recuadro No Free Lunch: ningún índice sirve para todos los datos." data-cuando="Al terminar este paso"></cite>.
+          La diapositiva no da la fórmula; es esta:</p>
+          <div class="fbloque">
+            <div data-tex="D = \frac{\min_{a, b \text{ en grupos distintos}} d(a,b)}{\max_{a, b \text{ en un mismo grupo}} d(a,b)} \qquad DB = \frac{1}{k}\sum_{i=1}^{k} \max_{j \ne i} \frac{s_i + s_j}{d(c_i, c_j)}" data-display></div>
+            <div class="vivo" id="vivo5"></div>
+          </div>
+          <div class="check" id="chk5"><p class="check-tit">Explica con lo que ves</p><div class="cuerpo"></div></div>
+          <p>Mueve ε y k. Mira cómo Davies-Bouldin mejora con más grupos de k-means, y qué le pasa a Dunn cuando un grupo es largo. <b>Calinski-Harabasz</b> es la cuenta del análisis de varianza: dispersión entre centroides sobre dispersión dentro de los grupos, cada una dividida por sus grados de libertad. También premia nubes redondas alrededor de su centroide.</p>
+          <details class="profundizar">
+            <summary>La fórmula de Calinski-Harabasz</summary>
+            <div>
+              <p>Con n puntos, k grupos, <span data-tex="n_j"></span> puntos en el grupo j, centroides <span data-tex="c_j"></span> y media general <span data-tex="\bar x"></span>:</p>
+              <div data-tex="CH = \frac{\sum_j n_j \lVert c_j - \bar x \rVert^2 / (k-1)}{\sum_j \sum_{x \in j} \lVert x - c_j \rVert^2 / (n-k)}" data-display></div>
+              <p>Es el estadístico F del análisis de varianza de una vía, aplicado a los grupos que el algoritmo inventó. Por eso no sirve como prueba: los grupos se eligieron justo para que la F salga grande.</p>
+            </div>
+          </details>
+        </section>
+
+        <section class="paso card" data-titulo="Externos">
+          <span class="etapa">Paso 6</span>
+          <h3>Cuando sí tienes las respuestas</h3>
+          <p>A veces sabes de qué luna es cada punto: las etiquetas reales. Un <b>índice externo</b> compara el reparto contra esas etiquetas. Se cuenta todo en la <b>tabla de contingencia</b>: filas, la luna real; columnas, el grupo del algoritmo. Se usan los 26 puntos de las lunas; los 4 sueltos no tienen luna.</p>
+          <p>La <b>pureza</b> toma, en cada columna, la luna que más aparece, y suma. El <b>índice de Rand</b> mira todos los pares de puntos: cuenta en cuántos los dos repartos están de acuerdo (juntos en los dos, o separados en los dos). Con 26 puntos hay <span data-tex="\binom{26}{2} = 325"></span> pares.</p>
+          <div class="check" id="chk6"><p class="check-tit">Calcula con la tabla de k-means</p><div class="cuerpo"></div></div>
+          <p>El Rand tiene un problema: un reparto al azar ya saca cerca de 0.5. El <b>Rand ajustado</b> le resta lo que se esperaría por azar y lo escala para que el acuerdo perfecto valga 1:</p>
+          <div class="fbloque">
+            <div data-tex="ARI = \frac{\sum_{ij}\binom{n_{ij}}{2} - E}{\tfrac12\left[\sum_i \binom{a_i}{2} + \sum_j \binom{b_j}{2}\right] - E}, \qquad E = \frac{\sum_i \binom{a_i}{2}\,\sum_j \binom{b_j}{2}}{\binom{n}{2}}" data-display></div>
+            <div class="vivo" id="vivo6"></div>
+          </div>
+          <p>Aquí <span data-tex="n_{ij}"></span> son las casillas de la tabla, <span data-tex="a_i"></span> las sumas de las filas y <span data-tex="b_j"></span> las de las columnas. Las diapositivas usan el "Rand corregido" de <code>fpc::cluster.stats</code> y dicen que va de −1 (sin acuerdo) a 1
+          <cite class="cita" data-fuente="val7" data-pag="29" data-ancla="external-measures-for-clustering-validation" data-seccion="4.2 External measures for clustering validation" data-que="El Rand corregido y la variación de la información (VI) de Meila con fpc::cluster.stats. Léelo sabiendo que 0 es el acuerdo del azar, no 'sin acuerdo', y que los negativos son peores que el azar." data-cuando="Al terminar este paso"></cite>.
+          No es así: <b>0 es lo que da el azar</b>, y los negativos, como el −0.017 del reparto al azar, son apenas peores que el azar; en general no llegan a −1. En iris, k-means saca 0.620; la misma diapositiva llama "acuerdo" 0.748 al VI, pero el VI es una <b>distancia</b>: 0 es particiones idénticas y menos es mejor
+          <cite class="cita" data-fuente="val7" data-pag="39" data-ancla="5/15" data-seccion="Corrected Rand and VI" data-que="cluster.stats(d, species, km.res$cluster) en iris: corrected.rand 0.6201352 y vi 0.7477749. En la diapositiva 40, PAM da VI 0.713 y el jerárquico 0.694: concuerdan más que k-means, aunque los números sean menores." data-cuando="Después de mover el panel derecho"></cite>.
+          Por eso, en la diapositiva siguiente, PAM (0.713) y el jerárquico (0.694) concuerdan más con las especies que k-means.</p>
+        </section>
+
+        <section class="paso card" data-titulo="Estabilidad">
+          <span class="etapa">Paso 7</span>
+          <h3>Quitar unos puntos y volver a agrupar</h3>
+          <p>Otra pregunta, sin etiquetas: si los datos fueran un poco distintos, ¿saldrían los mismos grupos? Se quitan 6 de los 30 puntos al azar, se vuelve a correr el algoritmo con los 24 que quedan, y se compara con lo que daba con los 30, en esos mismos 24 puntos, con el Rand ajustado. Si da cerca de 1, el reparto es <b>estable</b>. Al ruido de DBSCAN se lo cuenta como un grupo más.</p>
+          <div class="check" id="chk7"><p class="check-tit">Predice antes de remuestrear</p><div class="cuerpo"></div></div>
+          <p>El caso de la UD6 hace esto mismo con <code>fpc::clusterboot</code> y 500 remuestreos bootstrap, y da un Jaccard medio por grupo de 0.697, 0.814 y 0.683
+          <cite class="cita" data-fuente="db6caso" data-pag="3" data-ancla="ejemplo-2-dataset-real" data-seccion="Ejemplo 2: dataset real" data-que="Los billetes suizos con DBSCAN (eps = 1.2, minPts = 9) y la estabilidad con fpc::clusterboot: Jaccard medio 0.697, 0.814 y 0.683. El texto dice 81.1 % para el segundo grupo; la salida es 0.8138829, un 81.4 %." data-cuando="Al terminar este paso"></cite>.
+          Dos detalles: el texto lee 81.1 % donde la salida dice 0.814, y aparecen tres grupos cuando DBSCAN encontró dos; lo más probable es que el tercero sea el ruido, que <code>dbscanCBI</code> trata como un grupo más.</p>
+          <p>Las diapositivas miden la estabilidad de otra forma: quitan una <b>columna</b> cada vez, no filas, y comparan con cuatro medidas, APN, AD, ADM y FOM
+          <cite class="cita" data-fuente="val7" data-pag="43" data-ancla="6/2" data-seccion="Measures for comparing clustering algorithms (stability)" data-que="Las definiciones de APN (proporción de no coincidencia), AD, ADM y FOM, todas para minimizar. Dice que las cuatro van de 0 a 1, pero solo APN es una proporción; las otras son distancias o varianzas." data-cuando="Después de remuestrear varias veces"></cite>.
+          La diapositiva dice que las cuatro van de 0 a 1; solo APN es una proporción. AD, ADM y FOM son distancias y varianzas, y pueden pasar de 1: en iris, AD da 1.004.</p>
+        </section>
+
+        <section class="paso card" data-titulo="Comparar algoritmos">
+          <span class="etapa">Paso 8</span>
+          <h3>Ningún índice es el juez</h3>
+          <p>Para comparar algoritmos, las diapositivas usan <code>clValid</code>: corre jerárquico, k-means y PAM con k de 2 a 6 y calcula conectividad, Dunn y silueta. En iris, los tres índices eligen el jerárquico con <b>2</b> grupos
+          <cite class="cita" data-fuente="val7" data-pag="45" data-ancla="6/4" data-seccion="clValid internal validation in iris" data-que="clValid(df, nClust = 2:6, clMethods = c('hierarchical', 'kmeans', 'pam'), validation = 'internal'): conectividad 0.9762, Dunn 0.2674 y silueta 0.5818, los tres para el jerárquico con 2 grupos. La diapositiva 46 hace lo mismo con la estabilidad." data-cuando="Al terminar este paso"></cite>.
+          Iris tiene tres especies. Es lo mismo que te pasó con las lunas: los índices internos premian lo que está bien separado en la geometría, y versicolor y virginica se solapan.</p>
+          <div class="check" id="chk8"><p class="check-tit">Decide</p><div class="cuerpo"></div></div>
+          <p>Con DBSCAN el problema es doble. Los índices que usan centroides fallan con formas arbitrarias, y el ruido no es un grupo. Las diapositivas proponen mirar la proporción de ruido y usar índices de densidad
+          <cite class="cita" data-fuente="val7" data-pag="30" data-ancla="validation-in-density-based-clustering-dbscan" data-seccion="4.3 Validation in density-based clustering (DBSCAN)" data-que="Por qué la WSS y los centroides no sirven para DBSCAN, y tres alternativas: la proporción de ruido, una silueta basada en densidad y el índice que escribe 'DCBVI'. Es DBCV (Moulavi y otros, 2014); la diapositiva no da la referencia." data-cuando="Al terminar este paso"></cite>.
+          El que escriben "DCBVI" es <b>DBCV</b>, de Moulavi y otros (2014), y no está en scikit-learn. En el escenario, el tablero completo con los tres repartos. Con ε = 1, Dunn coincide con el Rand ajustado. Ahora baja ε a 0.80: DBSCAN deja 24 puntos como ruido y se queda con dos grupitos apretados. La silueta sube a 0.739 y Dunn a 2.042, sus mejores notas, mientras el Rand ajustado cae a 0.023. Un índice interno sin el ruido se puede ganar tirando puntos a la basura.</p>
+          <p><b>La versión del libro.</b> Con k grupos <span data-tex="C_1, \dots, C_k"></span>, centroides <span data-tex="c_j"></span> y <span data-tex="d"></span> la distancia euclídea, los dos índices del paso 5 son:</p>
+          <div class="fbloque">
+            <div data-tex="D = \frac{\min_{i \ne j}\ \min_{a \in C_i,\, b \in C_j} d(a,b)}{\max_{l}\ \max_{a, b \in C_l} d(a,b)}, \qquad s_i = \frac{1}{\lvert C_i \rvert}\sum_{x \in C_i} d(x, c_i)" data-display></div>
+          </div>
+          <p>y no hay índice que gane siempre: es el recuadro "No Free Lunch" de la diapositiva 28. Se elige el índice según lo que quieres que sea un grupo, y se usan varios a la vez.</p>
+          <details class="profundizar">
+            <summary>Validación relativa: los índices como función de un parámetro</summary>
+            <div>
+              <p>La diapositiva 24 llama <b>relativa</b> a la validación que corre el mismo algoritmo con parámetros distintos y compara un índice. El codo, la silueta y el gap de la página de elegir k son eso. En el caso de la UD6 se hace con una rejilla de 81 combinaciones de eps y minPts, midiendo Davies-Bouldin, la pseudo F (Calinski-Harabasz) y Dunn sobre 10 muestras bootstrap sin el ruido, y se elige eps = 1.2 y minPts = 9. Es el método de este paso, en grande.</p>
+            </div>
+          </details>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+        </div>
+
+        <div class="fila-ctl" id="selDatos1" hidden>
+          <span class="lab-ctl">Datos:</span>
+          <button type="button" data-d="azar" disabled>Azar</button>
+          <button type="button" data-d="lunas" disabled>Lunas</button>
+        </div>
+
+        <div class="duo" id="vistaDuo">
+          <figure><figcaption id="capA"></figcaption><svg id="planoA" role="img" aria-label="Panel izquierdo con los puntos agrupados"></svg></figure>
+          <figure><figcaption id="capB"></figcaption><svg id="planoB" role="img" aria-label="Panel derecho con los puntos agrupados"></svg></figure>
+        </div>
+
+        <div id="vistaHop" hidden>
+          <div class="fila-ctl" id="hopDatos">
+            <button type="button" data-d="clientes" disabled>Clientes</button>
+            <button type="button" data-d="lunas" disabled>Lunas</button>
+            <button type="button" data-d="azar" disabled>Azar</button>
+            <button type="button" data-d="densas" disabled>Lunas con más puntos</button>
+          </div>
+          <svg id="planoH" role="img" aria-label="Los datos con los puntos elegidos, los puntos sorteados y sus distancias al vecino más cercano"></svg>
+          <div class="leyenda"><span><i class="l-x"></i>x: dato a su vecino</span><span><i class="l-y"></i>y: sorteado al dato más cercano</span><span><i class="l-s"></i>punto sorteado</span></div>
+          <div class="deslizador" id="ctlApretar" hidden><label for="apretar">apretar = <b id="aprVal">1.00</b></label><input type="range" id="apretar" min="20" max="100" step="5" value="100" disabled></div>
+          <div class="fila-ctl">
+            <button type="button" id="btnHop1" disabled>Otra muestra</button>
+            <button type="button" id="btnHop500" disabled>Promedio de 500 muestras</button>
+          </div>
+        </div>
+
+        <div id="vistaVat" hidden>
+          <div class="fila-ctl" id="vatDatos">
+            <button type="button" data-d="clientes" disabled>Clientes</button>
+            <button type="button" data-d="lunas" disabled>Lunas</button>
+            <button type="button" data-d="azar" disabled>Azar</button>
+          </div>
+          <div class="fila-ctl" id="vatOrden">
+            <button type="button" data-o="mezcla" disabled>Filas mezcladas</button>
+            <button type="button" data-o="vat" disabled>Ordenadas con VAT</button>
+          </div>
+          <svg id="matriz" class="matriz-svg" role="img" aria-label="Matriz de distancias de 30 por 30; más intenso quiere decir más cerca"></svg>
+        </div>
+
+        <div class="fila-ctl" id="selB" hidden>
+          <span class="lab-ctl">Panel derecho:</span>
+          <button type="button" data-b="km">k-means</button>
+          <button type="button" data-b="az">Al azar</button>
+        </div>
+        <div class="fila-ctl" id="selDibujo" hidden>
+          <span class="lab-ctl">Dibujar:</span>
+          <button type="button" data-v="dunn">Dunn</button>
+          <button type="button" data-v="db">Davies-Bouldin</button>
+        </div>
+        <div class="leyenda" id="leyDunn" hidden><span><i class="l-sep"></i>separación mínima</span><span><i class="l-diam"></i>diámetro máximo</span></div>
+        <div class="deslizador" id="ctlEps" hidden><label for="eps">DBSCAN ε = <b id="epsVal">1.00</b></label><input type="range" id="eps" min="60" max="160" step="5" value="100"></div>
+        <div class="deslizador" id="ctlK" hidden><label for="kk">k-means k = <b id="kVal">2</b></label><input type="range" id="kk" min="2" max="5" step="1" value="2"></div>
+        <div class="fila-ctl" id="ctlEstab" hidden>
+          <button type="button" class="primary" id="btnRem1" disabled>Remuestrear una vez</button>
+          <button type="button" id="btnRem50" disabled>50 remuestreos</button>
+        </div>
+        <div class="tablero-wrap" id="tableroWrap" hidden><table class="tablero" id="tablero"></table></div>
+        <div class="cont-duo" id="contWrap" hidden></div>
+        <div class="info" id="escInfo"></div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>El Rand ajustado y Davies-Bouldin escritos con bucles, sobre las mismas 30 lunas y los mismos dos repartos del recorrido: DBSCAN (ε = 1, minPts = 3) y k-means (k = 2). Las etiquetas de los dos repartos van escritas en el código, tal como salieron en la página de DBSCAN. Elige Python o R, dale a reproducir y mira cómo se llena la tabla de contingencia y cómo se comparan los centroides. Para no tener cientos de pasos, el conteo de la tabla avanza de a una luna. Al final se compara con la librería.</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir <span class="estado" data-reto="codigo1"></span></p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="true">Python</button>
+            <button type="button" data-lang="r" aria-pressed="false">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">1 · datos</span><span data-f="2">2 · Rand ajustado</span><span data-f="3">3 · Davies-Bouldin</span><span data-f="4">4 · comparar</span>
+        </div>
+        <svg id="vrPlano" role="img" aria-label="Las 30 lunas con el reparto que se está evaluando"></svg>
+        <div id="vrTabla"></div>
+        <div class="vr-cuenta" id="vrCuenta"></div>
+        <h3 class="mini-tit vr-tit">Lo que imprime el programa</h3>
+        <div class="vr-salida" id="vrSalida"></div>
+      </div>
+    </div>
+
+    <p class="vr-nota">En la práctica es una línea por índice. En Python, <code>adjusted_rand_score(real, grupos)</code>, <code>davies_bouldin_score(X, grupos)</code>, <code>silhouette_score(X, grupos)</code> y <code>calinski_harabasz_score(X, grupos)</code>, todos en <code>sklearn.metrics</code>; Dunn no está en scikit-learn. En R, <code>fpc::cluster.stats(dist(X), grupos, real)</code> da casi todo junto (<code>dunn</code>, <code>corrected.rand</code>, <code>vi</code>), como en las diapositivas, y <code>mclust::adjustedRandIndex</code> o <code>clusterCrit::intCriteria</code> son otras opciones. En esta máquina R solo tiene <code>cluster</code>, que trae la silueta pero no el Rand ajustado ni Davies-Bouldin: por eso el programa de R compara contra una versión vectorizada propia, con <code>table()</code> y <code>choose()</code>. Lo que muestra esta parte se corrió con Python 3, NumPy 2.1.3, scikit-learn 1.6.1 y R 4.6.1.</p>
+
+    <details class="profundizar">
+      <summary>Las versiones sin bucles, en Python</summary>
+      <div>
+        <p>La tabla de contingencia sale de una vez con <code>pd.crosstab</code> o con <code>sklearn.metrics.cluster.contingency_matrix</code>, y los pares con <code>scipy.special.comb</code>:</p>
+        <pre class="mini-code">from scipy.special import comb
+from sklearn.metrics.cluster import contingency_matrix
+n = contingency_matrix(real[luna], km[luna])          # [[10, 3], [4, 9]]
+f, g = comb(n.sum(axis=1), 2).sum(), comb(n.sum(axis=0), 2).sum()
+e = f * g / comb(n.sum(), 2)
+print((comb(n, 2).sum() - e) / ((f + g) / 2 - e))     # 0.1804...</pre>
+        <p>Davies-Bouldin, con todas las parejas de centroides en una matriz:</p>
+        <pre class="mini-code">c = np.array([X[km == j].mean(axis=0) for j in range(2)])
+s = np.array([np.linalg.norm(X[km == j] - c[j], axis=1).mean() for j in range(2)])
+D = np.linalg.norm(c[:, None] - c[None, :], axis=2)  # distancias entre centroides
+np.fill_diagonal(D, np.inf)                           # j = i no cuenta
+R = (s[:, None] + s[None, :]) / D
+print(R.max(axis=1).mean())                           # 0.8794...</pre>
+      </div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>La silueta con el ruido adentro</h3><span class="estado" data-reto="codigo2"></span></div>
+        <div id="codigo2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Comparar etiquetas una por una</h3><span class="estado" data-reto="codigo3"></span></div>
+        <div id="codigo3"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: la biblioteca te avisa en el índice cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>¿Silueta alta, media o baja?</h3><span class="estado" data-reto="ojo"></span></div>
+        <p class="desc">Un reparto inventado al azar en cada ronda. Decide cuánto da su silueta media mirando el dibujo, sin calcular. Alta: más de 0.5. Media: entre 0.2 y 0.5. Baja: menos de 0.2. Apruebas con 4 de 5.</p>
+        <div id="ojo"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Construir</span><h3>Haz trampa con los índices</h3><span class="estado" data-reto="construir"></span></div>
+        <p class="desc">Las dos lunas. Mueve ε de DBSCAN y k de k-means hasta cumplir cada objetivo. Se marcan solos.</p>
+        <div class="duo">
+          <figure><figcaption id="cCapA"></figcaption><svg id="cPlanoA" role="img" aria-label="DBSCAN con el ε elegido"></svg></figure>
+          <figure><figcaption id="cCapB"></figcaption><svg id="cPlanoB" role="img" aria-label="k-means con el k elegido"></svg></figure>
+        </div>
+        <div class="deslizador"><label for="cEps">ε = <b id="cEpsVal">1.00</b></label><input type="range" id="cEps" min="60" max="160" step="5" value="100"></div>
+        <div class="deslizador"><label for="cK">k = <b id="cKVal">2</b></label><input type="range" id="cK" min="2" max="5" step="1" value="2"></div>
+        <div class="grande" id="constrVivo"></div>
+        <ul class="objetivos" id="objetivos"></ul>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>Un índice de Rand con lápiz</h3><span class="estado" data-reto="mano"></span></div>
+        <p class="desc">Una tabla de contingencia inventada: filas, el grupo real; columnas, el grupo del algoritmo. Calcula el índice de Rand (sin ajustar) antes de pedir pistas. Dos decimales bastan.</p>
+        <div id="manoDatos" class="tabla-wrap"></div>
+        <div id="mano"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Alguien se equivocó</h3><span class="estado" data-reto="error"></span></div>
+        <p class="desc">Una de las líneas tiene un error. Tócala.</p>
+        <div id="error"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Un Rand ajustado negativo</h3><span class="estado" data-reto="prop1"></span></div>
+        <div id="prop1"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Davies-Bouldin</h3><span class="estado" data-reto="prop2"></span></div>
+        <div id="prop2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Las dos convenciones de Hopkins</h3><span class="estado" data-reto="prop3"></span></div>
+        <div id="prop3"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Estable no quiere decir correcto</h3><span class="estado" data-reto="prop4"></span></div>
+        <div id="prop4"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Recordar a la fuerza es lo que fija. Arma la fórmula de memoria y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Fórmula de memoria</span><h3>Arma Davies-Bouldin pieza por pieza</h3><span class="estado" data-reto="formula"></span></div>
+        <p class="desc">Hay piezas de más que no pertenecen. No mires arriba.</p>
+        <div id="formula"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el libro</h2>
+      <p class="lecturas-intro">Ya construiste la idea con las manos. Ahora ve a la versión técnica y comprueba que la reconoces. Cada entrada dice qué vas a encontrar y en qué momento conviene leerla. Si abres la biblioteca con doble clic, el enlace abre el PDF o la diapositiva en ese lugar.</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> Todos los puntos son inventados. Las lunas son las de la página de DBSCAN: 13 puntos en cada media luna y 4 sueltos. Los clientes (tres nubes de 10)
+    y los 30 puntos al azar son los de la página de elegir k. Los repartos de k-means son el mejor que encontró scikit-learn con 300 arranques, y el reparto "al azar" sale de
+    <code>numpy.random.default_rng(1)</code>. Los números de Hopkins y de la estabilidad cambian en cada sorteo; los que dice el texto son promedios de miles de sorteos hechos en Python.
+    Tu progreso se guarda solo en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+/*
+  DATOS DE ESTA PAGINA (inventados). Indices de Python, desde 0.
+  LUNAS: las 30 de dbscan.html. 0-12 luna de arriba, 13-25 luna de abajo, 26-29 sueltos.
+  DBSCAN eps = 1, minPts = 3: las dos lunas y 4 de ruido. k-means k = 2: mezcla 7 puntos.
+  Indices (scikit-learn 1.6.1; DBSCAN sin el ruido, 26 puntos; k-means y azar con los 30; externos sobre los 26 de las lunas):
+                 silueta  DB      CH      Dunn   Rand   ARI     pureza
+    DBSCAN       0.245   1.285   13.07   0.233  1      1       1
+    k-means k=2  0.415   0.879   29.49   0.092  0.591  0.180   0.731
+    al azar     -0.035   9.659   0.253   0.069  0.492  -0.017  0.577
+  k-means k = 3, 4, 5: DB 0.877, 0.787, 0.800. DBSCAN eps = 0.8: 2 grupos, 24 de ruido, silueta 0.739.
+  Silueta con el ruido como grupo (-1): 0.153.
+  Hopkins (m = 10, caja de los datos, promedio de 4000 sorteos): clientes 0.57, lunas 0.48, azar 0.47, lunas con 264 puntos 0.89;
+    clientes apretados al 40 %: 0.82; al 20 %: 0.92.
+  Estabilidad (quitar 6 de 30, 200 remuestreos, ARI en los 24): DBSCAN eps = 1: 0.50; k-means k = 2: 0.89.
+*/
+(function () {
+  "use strict";
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var RETOS = ["ojo", "construir", "mano", "error", "prop1", "prop2", "prop3", "prop4", "formula", "codigo1", "codigo2", "codigo3"];
+  var C = B.concepto({ id: "validacion-clusters", retos: RETOS, pasos: 8 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  /* ================= datos ================= */
+  var LUNAS = [[0.5, 4.5], [0.5, 5.3], [1.0, 5.9], [1.3, 6.7], [2.1, 7.0],
+    [2.7, 7.4], [3.5, 7.6], [4.3, 7.3], [4.9, 7.0], [5.7, 6.7],
+    [6.1, 6.0], [6.3, 5.3], [6.6, 4.5],
+    [3.5, 6.0], [3.7, 5.2], [3.8, 4.4], [4.4, 3.9], [4.9, 3.3],
+    [5.7, 3.2], [6.5, 2.9], [7.2, 3.2], [8.0, 3.4], [8.7, 3.8],
+    [9.1, 4.5], [9.3, 5.3], [9.6, 6.0],
+    [1.0, 1.5], [9.5, 8.5], [5.0, 9.0], [9.0, 1.0]];
+  var REAL = LUNAS.map(function (_, i) { return i < 13 ? 0 : i < 26 ? 1 : -1; });
+  var CLIENTES = [[0.5, 2.5], [1, 1], [1.5, 3], [2, 0.5], [2, 2], [2.5, 3.5], [2.5, 1.5], [3, 2.5], [3.5, 1], [1.5, 2.5],
+    [6.5, 3], [7, 4.5], [7.5, 2], [7.5, 3.5], [8, 1.5], [8, 4], [8.5, 3], [9, 2], [9, 4], [9, 2.5],
+    [3.5, 7.5], [4, 8.5], [4, 7], [4.5, 9.5], [5, 6.5], [5, 9], [5.5, 9], [6, 7.5], [6.5, 8.5], [6, 7]];
+  var CENTROS_CL = [[2, 2], [8, 3], [5, 8]];
+  var AZAR = [[3, 9], [2, 2], [3.5, 2.5], [6.5, 1.5], [8.5, 8], [0.5, 5.5], [1.5, 3], [4.5, 4.5], [4.5, 9], [3, 2],
+    [6.5, 9], [9, 8.5], [1, 9], [6.5, 8.5], [4, 2.5], [7.5, 6.5], [7.5, 2.5], [1.5, 7.5], [0.5, 9], [1.5, 6],
+    [4.5, 3.5], [2, 7.5], [8.5, 7], [6, 7], [5.5, 5.5], [8.5, 3], [2.5, 9], [9, 5], [7.5, 7], [9, 1]];
+  function cadena(s) { return s.split("").map(Number); }
+  // mejor reparto de k-means en las lunas (KMeans con n_init=300 de scikit-learn 1.6.1), renumerado por orden de aparicion
+  var KMP = {
+    2: cadena("000000000011100001111111110101"),
+    3: cadena("000011111112211112222222220212"),
+    4: cadena("000011111112211122222223330312"),
+    5: cadena("000011111122212222233334440413")
+  };
+  var KM_AZAR = cadena("000110000011010110000011110111");
+  // un reparto al azar en dos grupos de 15 (numpy default_rng(1).integers(0, 2, 30))
+  var AZ = [0, 1, 1, 1, 0, 0, 1, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 1, 1, 1, 1, 0, 0, 1, 0, 0];
+  // las mismas dos curvas con 130 puntos cada una, mas los 4 sueltos
+  var DENSAS = (function () {
+    var P = [], k, t;
+    for (k = 0; k < 130; k++) { t = Math.PI * k / 129; P.push([3.5 + 3 * Math.cos(t), 4.5 + 3 * Math.sin(t)]); }
+    for (k = 0; k < 130; k++) { t = Math.PI * k / 129; P.push([6.5 - 3 * Math.cos(t), 6.0 - 3 * Math.sin(t)]); }
+    return P.concat(LUNAS.slice(26));
+  })();
+
+  /* ================= azar con semilla ================= */
+  function rngSemilla(a) {
+    return function () {
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      var t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+
+  /* ================= algoritmos (sin DOM) ================= */
+  function dist(a, b) { var dx = a[0] - b[0], dy = a[1] - b[1]; return Math.sqrt(dx * dx + dy * dy); }
+  function renumerar(l) {
+    var m = {}, n = 0;
+    return l.map(function (v) { if (v < 0) return -1; if (!(v in m)) m[v] = n++; return m[v]; });
+  }
+  function dbscan(P, eps, mp) {
+    var n = P.length, lab = P.map(function () { return -2; }), g = -1;
+    var vec = P.map(function (p) { var r = []; for (var q = 0; q < n; q++) if (dist(p, P[q]) <= eps + 1e-9) r.push(q); return r; });
+    for (var i = 0; i < n; i++) {
+      if (lab[i] !== -2) continue;
+      if (vec[i].length < mp) { lab[i] = -1; continue; }
+      g++; lab[i] = g;
+      var cola = vec[i].slice();
+      while (cola.length) {
+        var j = cola.shift();
+        if (lab[j] === -1) lab[j] = g;
+        if (lab[j] !== -2) continue;
+        lab[j] = g;
+        if (vec[j].length >= mp) cola = cola.concat(vec[j]);
+      }
+    }
+    return lab;
+  }
+  function kmeans(P, k, arranques, rnd) {
+    var mejor = null, mejorI = Infinity;
+    for (var a = 0; a < arranques; a++) {
+      var Cs = [P[Math.floor(rnd() * P.length)].slice()];
+      while (Cs.length < k) {   // k-means++
+        var d2 = P.map(function (p) { var m = Infinity; Cs.forEach(function (c) { var d = dist(p, c); if (d * d < m) m = d * d; }); return m; });
+        var tot = d2.reduce(function (s, v) { return s + v; }, 0), u = rnd() * tot, acc = 0, e = 0;
+        for (e = 0; e < P.length; e++) { acc += d2[e]; if (acc >= u) break; }
+        Cs.push(P[Math.min(e, P.length - 1)].slice());
+      }
+      var lab = null;
+      for (var it = 0; it < 100; it++) {
+        var nuevo = P.map(function (p) { var b = 0, bd = Infinity; Cs.forEach(function (c, j) { var d = dist(p, c); if (d < bd) { bd = d; b = j; } }); return b; });
+        if (lab && nuevo.every(function (v, i) { return v === lab[i]; })) break;
+        lab = nuevo;
+        Cs = Cs.map(function (c, j) {
+          var sx = 0, sy = 0, m = 0;
+          P.forEach(function (p, i) { if (lab[i] === j) { sx += p[0]; sy += p[1]; m++; } });
+          return m ? [sx / m, sy / m] : c;
+        });
+      }
+      var iner = 0;
+      P.forEach(function (p, i) { var d = dist(p, Cs[lab[i]]); iner += d * d; });
+      if (iner < mejorI - 1e-9) { mejorI = iner; mejor = lab; }
+    }
+    return renumerar(mejor);
+  }
+
+  /* ================= indices ================= */
+  // deja fuera el ruido (-1) y renumera; guarda los indices originales
+  function sinRuido(P, lab) {
+    var Q = [], l = [], idx = [];
+    lab.forEach(function (g, i) { if (g >= 0) { Q.push(P[i]); l.push(g); idx.push(i); } });
+    l = renumerar(l);
+    var k = 0;
+    l.forEach(function (g) { if (g + 1 > k) k = g + 1; });
+    return { P: Q, l: l, idx: idx, k: k, n: Q.length };
+  }
+  function centroides(S) {
+    var c = [], m = [];
+    for (var j = 0; j < S.k; j++) { c.push([0, 0]); m.push(0); }
+    S.P.forEach(function (p, i) { c[S.l[i]][0] += p[0]; c[S.l[i]][1] += p[1]; m[S.l[i]]++; });
+    return c.map(function (v, j) { return [v[0] / m[j], v[1] / m[j]]; });
+  }
+  function silueta(S) {
+    if (S.k < 2 || S.k >= S.n) return null;
+    var tot = 0;
+    S.P.forEach(function (p, i) {
+      var suma = [], cnt = [], j;
+      for (j = 0; j < S.k; j++) { suma.push(0); cnt.push(0); }
+      S.P.forEach(function (q, h) { if (h !== i) { suma[S.l[h]] += dist(p, q); cnt[S.l[h]]++; } });
+      var g = S.l[i];
+      if (cnt[g] === 0) return;   // solo en su grupo: silueta 0
+      var a = suma[g] / cnt[g], b = Infinity;
+      for (j = 0; j < S.k; j++) if (j !== g && cnt[j] > 0) b = Math.min(b, suma[j] / cnt[j]);
+      tot += (b - a) / Math.max(a, b);
+    });
+    return tot / S.n;
+  }
+  function davies(S) {
+    if (S.k < 2) return null;
+    var c = centroides(S), s = [], m = [], j;
+    for (j = 0; j < S.k; j++) { s.push(0); m.push(0); }
+    S.P.forEach(function (p, i) { s[S.l[i]] += dist(p, c[S.l[i]]); m[S.l[i]]++; });
+    s = s.map(function (v, h) { return v / m[h]; });
+    var tot = 0, peores = [];
+    for (var i = 0; i < S.k; i++) {
+      var peor = 0, cual = -1;
+      for (j = 0; j < S.k; j++) if (j !== i) { var r = (s[i] + s[j]) / dist(c[i], c[j]); if (r > peor) { peor = r; cual = j; } }
+      tot += peor; peores.push(cual);
+    }
+    return { v: tot / S.k, c: c, s: s, peores: peores };
+  }
+  function calinski(S) {
+    if (S.k < 2 || S.k >= S.n) return null;
+    var c = centroides(S), mx = 0, my = 0, m = [], Bt = 0, W = 0;
+    S.P.forEach(function (p) { mx += p[0]; my += p[1]; });
+    mx /= S.n; my /= S.n;
+    for (var j = 0; j < S.k; j++) m.push(0);
+    S.P.forEach(function (p, i) { m[S.l[i]]++; var d = dist(p, c[S.l[i]]); W += d * d; });
+    c.forEach(function (cc, h) { var d = dist(cc, [mx, my]); Bt += m[h] * d * d; });
+    return (Bt / (S.k - 1)) / (W / (S.n - S.k));
+  }
+  function dunn(S) {
+    if (S.k < 2) return null;
+    var sep = Infinity, diam = 0, ps = null, pd = null;
+    for (var i = 0; i < S.n; i++) for (var h = i + 1; h < S.n; h++) {
+      var d = dist(S.P[i], S.P[h]);
+      if (S.l[i] === S.l[h]) { if (d > diam) { diam = d; pd = [S.idx[i], S.idx[h]]; } }
+      else if (d < sep) { sep = d; ps = [S.idx[i], S.idx[h]]; }
+    }
+    return { v: diam > 0 ? sep / diam : null, sep: sep, diam: diam, ps: ps, pd: pd };
+  }
+  // tabla de contingencia de dos listas de etiquetas cualesquiera (el ruido cuenta como un grupo mas)
+  function contingencia(a, b) {
+    var fa = [], fb = [];
+    a.forEach(function (v) { if (fa.indexOf(v) < 0) fa.push(v); });
+    b.forEach(function (v) { if (fb.indexOf(v) < 0) fb.push(v); });
+    fa.sort(function (x, y) { return x - y; }); fb.sort(function (x, y) { return x - y; });
+    var T = fa.map(function () { return fb.map(function () { return 0; }); });
+    a.forEach(function (v, i) { T[fa.indexOf(v)][fb.indexOf(b[i])]++; });
+    return { T: T, fa: fa, fb: fb };
+  }
+  function pares(m) { return m * (m - 1) / 2; }
+  function externos(a, b) {
+    var t = contingencia(a, b), T = t.T, n = a.length, J = 0, F = 0, G = 0, pur = 0;
+    T.forEach(function (fila) { var s = 0; fila.forEach(function (v) { J += pares(v); s += v; }); F += pares(s); });
+    T[0].forEach(function (_, j) {
+      var s = 0, mx = 0;
+      T.forEach(function (fila) { s += fila[j]; if (fila[j] > mx) mx = fila[j]; });
+      G += pares(s); pur += mx;
+    });
+    var N = pares(n), E = F * G / N, den = (F + G) / 2 - E;
+    return { tabla: t, J: J, F: F, G: G, N: N, E: E, rand: (N - F - G + 2 * J) / N, ari: den === 0 ? (J === E ? 1 : 0) : (J - E) / den, pureza: pur / n };
+  }
+  function indices(P, lab, real) {
+    var S = sinRuido(P, lab);
+    var dbd = davies(S), du = dunn(S);
+    var o = { S: S, sil: silueta(S), db: dbd ? dbd.v : null, dbd: dbd, ch: calinski(S), dunn: du ? du.v : null, dud: du, k: S.k, ruido: P.length - S.n };
+    if (real) {
+      var a = [], b = [];
+      real.forEach(function (v, i) { if (v >= 0) { a.push(v); b.push(lab[i]); } });
+      var e = externos(a, b);
+      o.rand = e.rand; o.ari = e.ari; o.pureza = e.pureza; o.ext = e;
+    }
+    return o;
+  }
+  function hopkins(P, m, rnd) {
+    var n = P.length, idx = [], i, j;
+    while (idx.length < m) { i = Math.floor(rnd() * n); if (idx.indexOf(i) < 0) idx.push(i); }
+    var x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    P.forEach(function (p) { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); });
+    var xs = idx.map(function (a) { var b = -1, bd = Infinity; for (j = 0; j < n; j++) if (j !== a) { var d = dist(P[a], P[j]); if (d < bd) { bd = d; b = j; } } return { i: a, j: b, d: bd }; });
+    var ys = [];
+    for (i = 0; i < m; i++) {
+      var q = [x0 + rnd() * (x1 - x0), y0 + rnd() * (y1 - y0)], b = -1, bd = Infinity;
+      for (j = 0; j < n; j++) { var d = dist(q, P[j]); if (d < bd) { bd = d; b = j; } }
+      ys.push({ q: q, j: b, d: bd });
+    }
+    var sx = xs.reduce(function (s, v) { return s + v.d; }, 0), sy = ys.reduce(function (s, v) { return s + v.d; }, 0);
+    return { xs: xs, ys: ys, sx: sx, sy: sy, H: sy / (sx + sy), caja: [x0, y0, x1, y1] };
+  }
+  function vatOrden(P) {
+    var n = P.length, D = P.map(function (p) { return P.map(function (q) { return dist(p, q); }); });
+    var mx = -1, ini = 0;
+    D.forEach(function (fila, i) { fila.forEach(function (v) { if (v > mx) { mx = v; ini = i; } }); });
+    var orden = [ini], dentro = {}, md = D[ini].slice();
+    dentro[ini] = true;
+    while (orden.length < n) {
+      var b = -1, bd = Infinity;
+      for (var j = 0; j < n; j++) if (!dentro[j] && md[j] < bd) { bd = md[j]; b = j; }
+      orden.push(b); dentro[b] = true;
+      for (j = 0; j < n; j++) if (D[b][j] < md[j]) md[j] = D[b][j];
+    }
+    return { orden: orden, D: D, max: mx };
+  }
+  // pinta un reparto de una submuestra con los colores del reparto completo (solo para el dibujo)
+  function alinear(completo, sub) {
+    var mapa = {}, usados = {};
+    var grupos = [];
+    sub.forEach(function (g) { if (g >= 0 && grupos.indexOf(g) < 0) grupos.push(g); });
+    grupos.forEach(function (g) {
+      var cuenta = {};
+      sub.forEach(function (h, i) { if (h === g && completo[i] >= 0) cuenta[completo[i]] = (cuenta[completo[i]] || 0) + 1; });
+      var mejor = null, mv = -1;
+      Object.keys(cuenta).forEach(function (c) { if (!usados[c] && cuenta[c] > mv) { mv = cuenta[c]; mejor = +c; } });
+      if (mejor === null) { mejor = 6; while (usados[mejor]) mejor++; }
+      usados[mejor] = true; mapa[g] = mejor;
+    });
+    return sub.map(function (g) { return g >= 0 ? mapa[g] : -1; });
+  }
+  var DB_LUNAS = dbscan(LUNAS, 1, 3);
+  /* ================= fin de la logica ================= */
+
+  var f = B.fmt;
+  function f3(v) { return v === null || v === undefined || isNaN(v) ? "—" : f(v, 3); }
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+  function gcls(l) { return l >= 0 ? " g" + (l % 6) : ""; }
+
+  /* ================= plano ================= */
+  var NS = "http://www.w3.org/2000/svg";
+  function nodo(tag, at, padre) {
+    var e = document.createElementNS(NS, tag);
+    for (var k in at) e.setAttribute(k, at[k]);
+    if (padre) padre.appendChild(e);
+    return e;
+  }
+  function texto(padre, at, t) { var e = nodo("text", at, padre); e.textContent = t; return e; }
+
+  function crearPlano(svg, o) {
+    o = o || {};
+    var W = o.W || 300, M = { l: 6, r: 6, t: 6, b: 6 }, A = W - M.l - M.r;
+    var vista = o.vista || { x0: 0, y0: 0, s: 10 };
+    svg.setAttribute("viewBox", "0 0 " + W + " " + W);
+    svg.classList.add("plano-svg");
+    function sx(v) { return M.l + (v - vista.x0) / vista.s * A; }
+    function sy(v) { return W - M.b - (v - vista.y0) / vista.s * A; }
+    function esc(r) { return r / vista.s * A; }
+    var gE = nodo("g", {}, svg), gL = nodo("g", {}, svg), gP = nodo("g", {}, svg), gT = nodo("g", {}, svg);
+    nodo("rect", { x: M.l, y: M.t, width: A, height: A, "class": "marco" }, gE);
+    for (var t = vista.x0 + 1; t < vista.x0 + vista.s; t++) {
+      nodo("line", { x1: sx(t), x2: sx(t), y1: M.t, y2: W - M.b, "class": "grid" }, gE);
+      nodo("line", { x1: M.l, x2: W - M.r, y1: sy(t), y2: sy(t), "class": "grid" }, gE);
+    }
+    var R = o.r || 5;
+    function set(c) {
+      gL.innerHTML = ""; gP.innerHTML = ""; gT.innerHTML = "";
+      var P = c.P, lab = c.lab, fuera = c.fuera || {}, r = c.r || R;
+      if (c.caja) nodo("rect", { x: sx(c.caja[0]), y: sy(c.caja[3]), width: esc(c.caja[2] - c.caja[0]), height: esc(c.caja[3] - c.caja[1]), "class": "caja" }, gL);
+      (c.disp || []).forEach(function (d) { nodo("circle", { cx: sx(d.c[0]), cy: sy(d.c[1]), r: esc(d.r), "class": "disp" + gcls(d.g) }, gL); });
+      (c.segs || []).forEach(function (s) { nodo("line", { x1: sx(s.a[0]), y1: sy(s.a[1]), x2: sx(s.b[0]), y2: sy(s.b[1]), "class": s.cls }, gL); });
+      P.forEach(function (p, i) {
+        var x = sx(p[0]), y = sy(p[1]), l = lab ? lab[i] : null;
+        if (fuera[i]) { nodo("circle", { cx: x, cy: y, r: r * 0.75, "class": "pt fuera" }, gP); return; }
+        if (l === -1) {
+          var h = r * 0.85;
+          nodo("path", { d: "M" + (x - h) + " " + (y - h) + " L" + (x + h) + " " + (y + h) + " M" + (x - h) + " " + (y + h) + " L" + (x + h) + " " + (y - h), "class": "rx" }, gP);
+          return;
+        }
+        nodo("circle", { cx: x, cy: y, r: r, "class": "pt" + (l !== null && l !== undefined ? gcls(l) : "") }, gP);
+      });
+      (c.anillos || []).forEach(function (i) { nodo("circle", { cx: sx(P[i][0]), cy: sy(P[i][1]), r: r + 3.5, "class": "anillo" }, gT); });
+      (c.sondas || []).forEach(function (q) { var h = r * 0.95; nodo("rect", { x: sx(q[0]) - h, y: sy(q[1]) - h, width: 2 * h, height: 2 * h, "class": "sonda" }, gT); });
+      (c.cents || []).forEach(function (q) {
+        var h = r * 1.3, x = sx(q[0]), y = sy(q[1]);
+        nodo("path", { d: "M" + (x - h) + " " + y + " L" + (x + h) + " " + y + " M" + x + " " + (y - h) + " L" + x + " " + (y + h), "class": "cent" }, gT);
+      });
+      (c.marcas || []).forEach(function (m) { texto(gT, { x: sx(m.p[0]) + 8, y: sy(m.p[1]) - 8, "class": "lab" }, m.t); });
+    }
+    return { set: set };
+  }
+
+  /* ================= matriz VAT ================= */
+  var PERM = (function () {
+    var r = rngSemilla(31), a = [];
+    for (var i = 0; i < 30; i++) a.push(i);
+    for (i = 29; i > 0; i--) { var j = Math.floor(r() * (i + 1)), t = a[i]; a[i] = a[j]; a[j] = t; }
+    return a;
+  })();
+  function pintarMatriz(P, ordenar) {
+    var svg = $("matriz"), n = P.length, W = 300, c = W / n;
+    svg.setAttribute("viewBox", "0 0 " + W + " " + W);
+    svg.innerHTML = "";
+    var v = vatOrden(P), orden = ordenar ? v.orden : PERM;
+    for (var i = 0; i < n; i++) for (var j = 0; j < n; j++) {
+      var d = v.D[orden[i]][orden[j]];
+      nodo("rect", { x: j * c, y: i * c, width: c + 0.3, height: c + 0.3, "class": "celda", "fill-opacity": (Math.pow(1 - d / v.max, 2.2)).toFixed(3) }, svg);
+    }
+    nodo("rect", { x: 0, y: 0, width: W, height: W, "class": "borde" }, svg);
+    return v;
+  }
+
+  /* ================= tablero ================= */
+  var FILAS = {
+    sil: { t: "Silueta media", dir: 1 },
+    db: { t: "Davies-Bouldin", dir: -1 },
+    ch: { t: "Calinski-Harabasz", dir: 1 },
+    dunn: { t: "Dunn", dir: 1 },
+    rand: { t: "Rand", dir: 1 },
+    ari: { t: "Rand ajustado", dir: 1 },
+    pureza: { t: "Pureza", dir: 1 }
+  };
+  function tablero(cols, filas, ocultas) {
+    var h = '<thead><tr><th>Índice</th>' + cols.map(function (c) { return '<th>' + c.t + '</th>'; }).join("") + '</tr></thead><tbody>';
+    var grupo = null;
+    filas.forEach(function (k) {
+      var g = ["sil", "db", "ch", "dunn"].indexOf(k) >= 0 ? "int" : "ext";
+      if (g !== grupo) { grupo = g; h += '<tr class="sub"><td colspan="' + (cols.length + 1) + '">' + (g === "int" ? "internos (sin etiquetas)" : "externos (contra las lunas reales)") + '</td></tr>'; }
+      var F = FILAS[k], oc = ocultas && ocultas[g];
+      var vals = cols.map(function (c) { return c.o[k]; });
+      var mejor = null;
+      vals.forEach(function (v) { if (v !== null && v !== undefined && !isNaN(v) && (mejor === null || F.dir * v > F.dir * mejor + 1e-12)) mejor = v; });
+      h += '<tr><td>' + F.t + ' <span class="dir">' + (F.dir > 0 ? "↑" : "↓") + '</span></td>' + vals.map(function (v) {
+        var es = !oc && v !== null && v !== undefined && Math.abs(v - mejor) < 1e-9;
+        return '<td' + (es ? ' class="mejor"' : '') + '>' + (oc ? "?" : k === "ch" && v !== null ? f(v, 2) : f3(v)) + '</td>';
+      }).join("") + '</tr>';
+    });
+    return h + '</tbody>';
+  }
+  function tablaCont(o, tit, marcar) {
+    var t = o.ext.tabla;
+    return '<div><div class="ct-tit">' + tit + '</div><table class="ct"><tr><th></th>' + t.fb.map(function (g) { return '<th>' + (g < 0 ? "ruido" : "g" + (g + 1)) + '</th>'; }).join("") + '</tr>' +
+      t.T.map(function (fila, i) {
+        return '<tr><th>luna ' + (t.fa[i] + 1) + '</th>' + fila.map(function (v, j) {
+          var col = t.T.map(function (r) { return r[j]; }), esMax = marcar && v === Math.max.apply(null, col) && v > 0;
+          return '<td class="' + (v === 0 ? "cero" : "") + (esMax ? " on" : "") + '">' + v + '</td>';
+        }).join("") + '</tr>';
+      }).join("") + '</table></div>';
+  }
+
+  /* ================= estado del recorrido ================= */
+  var est = { paso: 0, chk: {}, datos1: "azar", hop: "clientes", apretar: 1, hopM: null, hopProm: null, vatD: "clientes", vatO: "mezcla",
+    eps: 1, k: 2, b: "km", dibujo: "dunn", rem: null, rem50: null };
+  var pasos;
+  var HINTS = [
+    "Treinta puntos sin grupos",
+    "Sortea y compara las x con las y",
+    "La matriz de distancias como imagen",
+    "Dos repartos de las mismas lunas",
+    "Mueve ε y k, y mira los dibujos",
+    "La tabla de contingencia",
+    "Quita puntos y vuelve a agrupar",
+    "El tablero completo"
+  ];
+  var pA = crearPlano($("planoA")), pB = crearPlano($("planoB"));
+  var pH = crearPlano($("planoH"), { W: 400, vista: { x0: 0, y0: 0, s: 10 }, r: 5 });
+
+  function datosHop() {
+    if (est.hop === "lunas") return LUNAS;
+    if (est.hop === "azar") return AZAR;
+    if (est.hop === "densas") return DENSAS;
+    return CLIENTES.map(function (p, i) { var c = CENTROS_CL[Math.floor(i / 10)]; return [c[0] + est.apretar * (p[0] - c[0]), c[1] + est.apretar * (p[1] - c[1])]; });
+  }
+  function nuevaMuestraHop() { est.hopM = hopkins(datosHop(), 10, Math.random); est.hopProm = null; }
+
+  function columnaA() { var lab = dbscan(LUNAS, est.eps, 3); return { lab: lab, o: indices(LUNAS, lab, REAL) }; }
+  function columnaB(cual) { var lab = (cual || est.b) === "az" ? AZ : KMP[est.k]; return { lab: lab, o: indices(LUNAS, lab, REAL) }; }
+  function capA() { return "DBSCAN · ε = " + f(est.eps, 2); }
+  function capB(cual) { return (cual || est.b) === "az" ? "Al azar · 2 grupos" : "k-means · k = " + est.k; }
+
+  function mostrar(id, si) { $(id).hidden = !si; }
+  function habilitar(cont, si) { [].forEach.call($(cont).querySelectorAll("button"), function (b) { b.disabled = !si; }); }
+  function marcarOn(cont, attr, val) { [].forEach.call($(cont).querySelectorAll("button"), function (b) { b.classList.toggle("on", b.getAttribute(attr) === val); }); }
+
+  function entrar(i) {
+    est.paso = i;
+    var ch = est.chk, info = "";
+    $("escHint").textContent = HINTS[i];
+    mostrar("selDatos1", i === 0);
+    mostrar("vistaDuo", i !== 1 && i !== 2);
+    mostrar("vistaHop", i === 1);
+    mostrar("vistaVat", i === 2);
+    if (i === 6) est.b = "km";
+    mostrar("selB", (i === 4 || i === 5 || i === 7) && !!ch["c" + (i + 1)]);
+    mostrar("selDibujo", i === 4 && !!ch.c5);
+    mostrar("leyDunn", i === 4 && !!ch.c5 && est.dibujo === "dunn");
+    mostrar("ctlEps", i >= 4 && !!ch["c" + (i + 1)]);
+    mostrar("ctlK", i >= 4 && !!ch["c" + (i + 1)] && est.b === "km");
+    mostrar("ctlEstab", i === 6);
+    mostrar("tableroWrap", i === 3 || i === 4 || i === 5 || i === 7);
+    mostrar("contWrap", i === 5);
+    // mientras el chequeo del paso esta abierto, los parametros quedan en los del recorrido
+    var bloqueado = i >= 3 && !ch["c" + (i + 1)];
+    if (bloqueado) { ponerEps(1); ponerK(2); est.b = "km"; }
+    marcarOn("selB", "data-b", est.b);
+    marcarOn("selDibujo", "data-v", est.dibujo);
+
+    if (i === 0) {
+      marcarOn("selDatos1", "data-d", est.datos1);
+      var P = est.datos1 === "lunas" ? LUNAS : AZAR;
+      $("capA").textContent = "k-means · k = 2";
+      $("capB").textContent = "DBSCAN · ε = 1";
+      if (!ch.c1) {
+        pA.set({ P: AZAR }); pB.set({ P: AZAR });
+        info = "30 puntos sorteados parejos en un cuadrado. Sin colores: todavía nadie los agrupó.";
+      } else {
+        var la = est.datos1 === "lunas" ? KMP[2] : KM_AZAR, lb = dbscan(P, 1, 3), ob = indices(P, lb);
+        pA.set({ P: P, lab: la }); pB.set({ P: P, lab: lb });
+        info = est.datos1 === "lunas" ?
+          "Las lunas. k-means corta con una recta y mezcla 7 puntos; DBSCAN separa las dos lunas y deja 4 sueltos como ruido (×)." :
+          "Datos al azar. k-means devuelve sus 2 grupos de siempre. DBSCAN arma <b>" + ob.k + "</b> grupitos y deja <b>" + ob.ruido + "</b> de 30 como ruido.";
+      }
+    } else if (i === 1) {
+      marcarOn("hopDatos", "data-d", est.hop);
+      mostrar("ctlApretar", est.hop === "clientes");
+      var PH = datosHop();
+      if (!ch.c2) {
+        pH.set({ P: PH, r: 5 });
+        info = "Los 30 clientes de la página de k-means: tres nubes de 10. Sin sorteo todavía.";
+      } else {
+        if (!est.hopM) nuevaMuestraHop();
+        var hm = est.hopM, segs = [];
+        hm.xs.forEach(function (x) { segs.push({ a: PH[x.i], b: PH[x.j], cls: "seg-x" }); });
+        hm.ys.forEach(function (y) { segs.push({ a: y.q, b: PH[y.j], cls: "seg-y" }); });
+        pH.set({ P: PH, r: est.hop === "densas" ? 2.6 : 5, segs: segs, anillos: hm.xs.map(function (x) { return x.i; }), sondas: hm.ys.map(function (y) { return y.q; }), caja: hm.caja });
+        var nombre = { clientes: "Clientes", lunas: "Lunas", azar: "Azar", densas: "Lunas con " + DENSAS.length + " puntos" }[est.hop];
+        info = nombre + ". Suma de las x: <b>" + f(hm.sx, 2) + "</b> · suma de las y: <b>" + f(hm.sy, 2) + "</b> · H = <b>" + f(hm.H, 3) + "</b>" +
+          (est.hopProm !== null ? ". Promedio de 500 muestras: <b>" + f(est.hopProm, 3) + "</b>." : ".");
+      }
+      pintarVivo2();
+    } else if (i === 2) {
+      marcarOn("vatDatos", "data-d", est.vatD);
+      marcarOn("vatOrden", "data-o", est.vatO);
+      var PV = { clientes: CLIENTES, lunas: LUNAS, azar: AZAR }[est.vatD];
+      pintarMatriz(PV, !!ch.c3 && est.vatO === "vat");
+      info = (est.vatO === "vat" && ch.c3 ? "Filas en el orden de VAT. " : "Filas en un orden cualquiera. ") +
+        "Cada casilla es la distancia entre dos de los 30 puntos; más intensa, más cerca. La diagonal es cada punto consigo mismo.";
+    } else {
+      var A = columnaA(), Bc = columnaB();
+      $("capA").textContent = capA();
+      $("capB").textContent = capB();
+      var cA = { P: LUNAS, lab: A.lab }, cB = { P: LUNAS, lab: Bc.lab };
+      if (i === 4 && ch.c5) {
+        [[cA, A.o], [cB, Bc.o]].forEach(function (par) {
+          var c = par[0], o = par[1];
+          if (est.dibujo === "dunn" && o.dud && o.dud.ps) {
+            c.segs = [{ a: LUNAS[o.dud.ps[0]], b: LUNAS[o.dud.ps[1]], cls: "sep" }, { a: LUNAS[o.dud.pd[0]], b: LUNAS[o.dud.pd[1]], cls: "diam" }];
+          } else if (est.dibujo === "db" && o.dbd) {
+            c.cents = o.dbd.c;
+            c.disp = o.dbd.c.map(function (cc, j) { return { c: cc, r: o.dbd.s[j], g: j }; });
+          }
+        });
+      }
+      if (i === 6) {
+        habilitar("ctlEstab", !!ch.c7);
+        if (est.rem) {
+          var fuera = {};
+          LUNAS.forEach(function (_, h) { if (est.rem.idx.indexOf(h) < 0) fuera[h] = true; });
+          var la6 = LUNAS.map(function () { return null; }), lb6 = la6.slice();
+          est.rem.idx.forEach(function (h, q) { la6[h] = est.rem.labA[q]; lb6[h] = est.rem.labB[q]; });
+          cA = { P: LUNAS, lab: la6, fuera: fuera }; cB = { P: LUNAS, lab: lb6, fuera: fuera };
+        }
+      }
+      pA.set(cA); pB.set(cB);
+      var cols = [{ t: "DBSCAN", o: A.o }, { t: est.b === "az" ? "azar" : "k-means", o: Bc.o }];
+      if (i === 7 && ch.c8) {
+        var otra = columnaB(est.b === "az" ? "km" : "az");
+        cols.push({ t: est.b === "az" ? "k-means" : "azar", o: otra.o });
+      }
+      if (i === 3) $("tablero").innerHTML = tablero(cols, ["sil", "db", "ch", "dunn"], { int: !ch.c4 });
+      if (i === 4) $("tablero").innerHTML = tablero(cols, ["sil", "db", "ch", "dunn"], {});
+      if (i === 5) {
+        $("tablero").innerHTML = tablero(cols, ["sil", "db", "rand", "ari", "pureza"], { ext: !ch.c6 });
+        $("contWrap").innerHTML = tablaCont(A.o, "Luna real × DBSCAN", !!ch.c6) + tablaCont(Bc.o, "Luna real × " + (est.b === "az" ? "azar" : "k-means"), !!ch.c6);
+      }
+      if (i === 7) $("tablero").innerHTML = tablero(cols, ["sil", "db", "ch", "dunn", "rand", "ari", "pureza"], { int: !ch.c8, ext: !ch.c8 });
+      info = resumenReparto(A.o, "DBSCAN") + " · " + resumenReparto(Bc.o, est.b === "az" ? "Azar" : "k-means");
+      if (i === 3 && !ch.c4) info += ". El tablero se descubre al responder.";
+      if (i === 6) info = textoEstab();
+      if (i === 4) pintarVivo5(A.o, Bc.o);
+      if (i === 5) pintarVivo6(Bc.o);
+    }
+    $("escInfo").innerHTML = info;
+  }
+  function resumenReparto(o, nombre) {
+    return nombre + ": <b>" + o.k + "</b> " + (o.k === 1 ? "grupo" : "grupos") + (o.ruido ? " y <b>" + o.ruido + "</b> de ruido" : "");
+  }
+  function textoEstab() {
+    var t = "Panel izquierdo: DBSCAN (ε = " + f(est.eps, 2) + "); derecho: k-means (k = " + est.k + "). ";
+    if (!est.chk.c7) return t + "Todavía sin remuestrear: los repartos con los 30 puntos.";
+    if (!est.rem) return t + "Toca <b>Remuestrear una vez</b>.";
+    t += "Se quitaron 6 puntos (círculos vacíos). Rand ajustado contra el reparto con los 30, en los 24 que quedan: DBSCAN <b>" + f(est.rem.ariA, 3) + "</b>, k-means <b>" + f(est.rem.ariB, 3) + "</b>.";
+    if (est.rem50) t += " Con 50 remuestreos, el promedio: DBSCAN <b>" + f(est.rem50.a, 3) + "</b> (el peor " + f(est.rem50.minA, 3) + "), k-means <b>" + f(est.rem50.b, 3) + "</b> (el peor " + f(est.rem50.minB, 3) + ").";
+    return t;
+  }
+
+  /* ---------- controles del escenario ---------- */
+  function ponerEps(v) { est.eps = v; $("eps").value = Math.round(v * 100); $("epsVal").textContent = f(v, 2); }
+  function ponerK(k) { est.k = k; $("kk").value = k; $("kVal").textContent = k; }
+  $("eps").addEventListener("input", function () { ponerEps(+this.value / 100); est.rem = null; est.rem50 = null; entrar(est.paso); });
+  $("kk").addEventListener("input", function () { ponerK(+this.value); est.rem = null; est.rem50 = null; entrar(est.paso); });
+  $("selDatos1").addEventListener("click", function (e) { var b = e.target.closest("button"); if (!b || b.disabled) return; est.datos1 = b.getAttribute("data-d"); entrar(0); });
+  $("hopDatos").addEventListener("click", function (e) { var b = e.target.closest("button"); if (!b || b.disabled) return; est.hop = b.getAttribute("data-d"); nuevaMuestraHop(); entrar(1); });
+  $("apretar").addEventListener("input", function () { est.apretar = +this.value / 100; $("aprVal").textContent = f(est.apretar, 2); nuevaMuestraHop(); entrar(1); });
+  $("btnHop1").addEventListener("click", function () { nuevaMuestraHop(); entrar(1); });
+  $("btnHop500").addEventListener("click", function () {
+    var P = datosHop(), s = 0;
+    for (var q = 0; q < 500; q++) s += hopkins(P, 10, Math.random).H;
+    var p = s / 500;
+    nuevaMuestraHop(); est.hopProm = p; entrar(1);
+  });
+  $("vatDatos").addEventListener("click", function (e) { var b = e.target.closest("button"); if (!b || b.disabled) return; est.vatD = b.getAttribute("data-d"); entrar(2); });
+  $("vatOrden").addEventListener("click", function (e) { var b = e.target.closest("button"); if (!b || b.disabled) return; est.vatO = b.getAttribute("data-o"); entrar(2); });
+  $("selB").addEventListener("click", function (e) { var b = e.target.closest("button"); if (!b) return; est.b = b.getAttribute("data-b"); entrar(est.paso); });
+  $("selDibujo").addEventListener("click", function (e) { var b = e.target.closest("button"); if (!b) return; est.dibujo = b.getAttribute("data-v"); entrar(est.paso); });
+
+  function remuestrear(rnd) {
+    var idx = [];
+    while (idx.length < 24) { var h = Math.floor(rnd() * 30); if (idx.indexOf(h) < 0) idx.push(h); }
+    idx.sort(function (a, b) { return a - b; });
+    var P = idx.map(function (h) { return LUNAS[h]; });
+    var fa = dbscan(LUNAS, est.eps, 3), fb = KMP[est.k];
+    var la = dbscan(P, est.eps, 3), lb = kmeans(P, est.k, 10, rnd);
+    var ca = idx.map(function (h) { return fa[h]; }), cb = idx.map(function (h) { return fb[h]; });
+    return { idx: idx, labA: alinear(ca, la), labB: alinear(cb, lb), ariA: externos(ca, la).ari, ariB: externos(cb, lb).ari };
+  }
+  $("btnRem1").addEventListener("click", function () { est.rem = remuestrear(Math.random); entrar(6); });
+  $("btnRem50").addEventListener("click", function () {
+    var sa = 0, sb = 0, ma = 1, mb = 1, r;
+    for (var q = 0; q < 50; q++) { r = remuestrear(Math.random); sa += r.ariA; sb += r.ariB; ma = Math.min(ma, r.ariA); mb = Math.min(mb, r.ariB); }
+    est.rem = r; est.rem50 = { a: sa / 50, b: sb / 50, minA: ma, minB: mb };
+    entrar(6);
+  });
+
+  /* ---------- formulas vivas ---------- */
+  function pintarVivo2() {
+    var hm = est.hopM;
+    if (!est.chk.c2 || !hm) { $("vivo2").innerHTML = "Con m = 10 puntos de los datos y 10 sorteados: H = ?"; return; }
+    $("vivo2").innerHTML = "H = " + f(hm.sy, 2) + " / (" + f(hm.sx, 2) + " + " + f(hm.sy, 2) + ") = <b>" + f(hm.H, 3) + "</b>" + (hm.H > 0.5 ? "  (las y le ganan a las x)" : "  (las x le ganan a las y)");
+  }
+  function pintarVivo5(a, b) {
+    if (!est.chk.c5) { $("vivo5").innerHTML = "Toca el chequeo para ver los números con los repartos de ahora."; return; }
+    function linea(o, nombre) {
+      if (!o.dud || o.dud.v === null) return nombre + ": con un solo grupo no hay separación; Dunn y Davies-Bouldin no existen.";
+      return nombre + ": D = " + f(o.dud.sep, 2) + " / " + f(o.dud.diam, 2) + " = <b>" + f(o.dud.v, 3) + "</b> · DB = <b>" + f(o.db, 3) + "</b>";
+    }
+    $("vivo5").innerHTML = linea(a, "DBSCAN") + "<br>" + linea(b, est.b === "az" ? "Azar" : "k-means");
+  }
+  function pintarVivo6(o) {
+    var e = o.ext, nombre = est.b === "az" ? "azar" : "k-means";
+    if (!est.chk.c6) { $("vivo6").innerHTML = "Para " + nombre + ": ARI = ?"; return; }
+    var d = (e.F + e.G) / 2;
+    $("vivo6").innerHTML = nombre + ": Σ C(n<sub>ij</sub>, 2) = " + fn(e.J) + ", filas " + fn(e.F) + ", columnas " + fn(e.G) + ", E = " + f(e.E, 2) +
+      "<br>ARI = (" + fn(e.J) + " − " + f(e.E, 2) + ") / (" + fn(d) + " − " + f(e.E, 2) + ") = <b>" + f(e.ari, 3) + "</b> · Rand = <b>" + f(e.rand, 3) + "</b> · pureza = <b>" + f(e.pureza, 3) + "</b>";
+  }
+  function fn(v) { return Math.abs(v - Math.round(v)) < 1e-9 ? f(v, 0) : f(v, 1); }
+
+  /* ---------- paso 1 ---------- */
+  B.opcionMultiple(cuerpo("chk1"), {
+    pregunta: "Le das estos 30 puntos sin grupos a k-means con k = 2 y a DBSCAN con ε = 1 y minPts = 3. ¿Qué devuelve cada uno?",
+    opciones: [
+      "k-means, dos grupos como siempre; DBSCAN deja la mayoría como ruido y arma un par de grupitos",
+      "Los dos dicen que no hay grupos",
+      "Los dos encuentran dos grupos parecidos",
+      "k-means da un aviso de que los datos no tienen grupos"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "k-means no tiene forma de decir \"no hay grupos\": reparte todos los puntos en los k que le pediste.",
+      "DBSCAN puede dejar puntos sin grupo. Con puntos sueltos a casi 1 de distancia, ¿cuántos tendrán 3 puntos en su círculo?",
+      "Ninguna librería avisa eso: k-means siempre devuelve k grupos."],
+    explicacion: "k-means parte el cuadrado en dos mitades, como haría con cualquier cosa. DBSCAN deja <b>21</b> de los 30 como ruido y arma dos grupitos de 4 y 5, donde el azar juntó unos puntos. Ninguno de los dos te avisa nada: medir si hay algo que agrupar es tu trabajo. <b>Ahora toca Lunas</b> y compara.",
+    alResolver: function () {
+      est.chk.c1 = true;
+      habilitar("selDatos1", true);
+      entrar(0);
+      pasos.completar(0);
+    }
+  });
+
+  /* ---------- paso 2 ---------- */
+  B.opcionMultiple(cuerpo("chk2"), {
+    pregunta: "Si los datos están amontonados en grupos, ¿cómo son las y (de un punto sorteado al dato más cercano) frente a las x (de un dato a su vecino), y adónde va H?",
+    opciones: [
+      "Las y son más grandes, porque los sorteados caen en huecos; H se acerca a 1",
+      "Las x son más grandes; H se acerca a 1",
+      "Son parecidas; H se acerca a 0.5",
+      "Las y son más grandes; H se acerca a 0"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "Dentro de un grupo, los vecinos están apretados: las x son cortas.",
+      "Eso es lo que pasa cuando los datos están parejos, como el azar.",
+      "Si las y son grandes, el numerador de la fórmula es grande frente al total. Haz la cuenta con y = 3 y x = 1."],
+    explicacion: "Los datos están apretados entre sí (x cortas) y dejan huecos donde caen muchos sorteados (y largas): H = Σy / (Σx + Σy) se acerca a 1. Si los datos son parejos, x e y se parecen y H queda cerca de 0.5. <b>Ahora sortea</b> con los cuatro juegos de datos.",
+    alResolver: function () {
+      est.chk.c2 = true;
+      habilitar("hopDatos", true); $("apretar").disabled = false; $("btnHop1").disabled = false; $("btnHop500").disabled = false;
+      nuevaMuestraHop();
+      entrar(1);
+      pasos.completar(1);
+    }
+  });
+
+  /* ---------- paso 3 ---------- */
+  B.opcionMultiple(cuerpo("chk3"), {
+    pregunta: "Ordenas con VAT la matriz de distancias de los clientes: tres nubes de 10. ¿Qué imagen esperas?",
+    opciones: [
+      "Tres cuadros intensos sobre la diagonal, de unos 10 por 10",
+      "Una sola mancha pareja",
+      "Tres franjas verticales",
+      "Lo mismo que con las filas mezcladas: VAT no cambia las distancias"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "Los puntos de una misma nube están cerca entre sí, y lejos de las otras dos.",
+      "La matriz es simétrica: lo que pasa en las filas pasa igual en las columnas.",
+      "Las distancias no cambian, pero el orden de las filas sí, y eso cambia lo que ves."],
+    explicacion: "Los 10 puntos de cada nube quedan seguidos, así que las casillas entre ellos (todas cercanas) forman un cuadro intenso de 10 por 10 sobre la diagonal. Fuera de los cuadros, las distancias entre nubes son grandes: casillas claras. <b>Ahora cambia el orden</b> y los datos.",
+    alResolver: function () {
+      est.chk.c3 = true;
+      habilitar("vatDatos", true); habilitar("vatOrden", true);
+      est.vatO = "vat";
+      entrar(2);
+      pasos.completar(2);
+    }
+  });
+
+  /* ---------- paso 4 ---------- */
+  B.opcionMultiple(cuerpo("chk4"), {
+    pregunta: "La silueta media no conoce las lunas. ¿Cuál de los dos repartos saca mejor silueta: DBSCAN (sin contar su ruido) o k-means?",
+    opciones: [
+      "k-means",
+      "DBSCAN, porque acierta las dos lunas",
+      "Empatan: los dos tienen dos grupos",
+      "No se puede calcular para DBSCAN"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "Acertar es saber la verdad, y la silueta no la sabe. Mira las puntas de una luna: ¿están cerca entre sí?",
+      "La silueta depende de dónde está cada punto, no solo de cuántos grupos hay.",
+      "Sí se puede: se deja fuera el ruido y se calcula con los 26 puntos que tienen grupo."],
+    explicacion: "k-means gana: silueta 0.415 contra 0.245. Y no solo la silueta: Davies-Bouldin (más chico es mejor) da 0.879 contra 1.285, y Calinski-Harabasz 29.49 contra 13.07. Solo Dunn prefiere a DBSCAN. Mira el tablero. Aunque calcules k-means con los mismos 26 puntos, sin los sueltos, sigue ganando: 0.454.",
+    alResolver: function () { est.chk.c4 = true; entrar(3); cerrar4(); }
+  });
+  B.opcionMultiple(cuerpo("chk4b"), {
+    pregunta: "¿Qué tienen los grupos de k-means que la silueta premia, y que las lunas no tienen?",
+    opciones: [
+      "Son más redondos: ningún punto queda muy lejos del resto de su grupo",
+      "Tienen más puntos cada uno",
+      "No tienen ruido: k-means usa los 30 puntos",
+      "Están más cerca del centro del plano"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "Los dos repartos tienen dos grupos de tamaños parecidos.",
+      "Aun comparando con los mismos 26 puntos, k-means gana (0.454 contra 0.245).",
+      "La silueta no mira dónde está el grupo, sino las distancias entre puntos."],
+    explicacion: "En una luna, un punto de una punta está a más de 6 de la otra punta: su distancia media a su propio grupo, a, es grande, y se parece a su distancia media a la otra luna, b. La silueta, Davies-Bouldin y Calinski-Harabasz usan promedios o centroides, y premian <b>nubes redondas y compactas</b>. Un índice interno no responde \"¿es correcto?\": responde \"¿se parece a lo que este índice llama un buen grupo?\".",
+    alResolver: function () { est.chk.c4b = true; cerrar4(); }
+  });
+  function cerrar4() { if (est.chk.c4 && est.chk.c4b) pasos.completar(3); }
+
+  /* ---------- paso 5 ---------- */
+  B.opcionMultiple(cuerpo("chk5"), {
+    pregunta: "Dunn es el único índice interno que prefiere a DBSCAN: 0.233 contra 0.092 de k-means. ¿Por qué?",
+    opciones: [
+      "Mide la separación con el par más cercano: entre las lunas hay un hueco de 1.43, y la recta de k-means corta por donde hay vecinos a 0.78",
+      "Porque Dunn ignora el ruido y los otros no",
+      "Porque Dunn usa centroides, como DBSCAN",
+      "Porque Dunn premia los grupos con más puntos"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "Todos los índices de este tablero dejan fuera el ruido de DBSCAN.",
+      "DBSCAN no usa centroides, y Dunn tampoco: usa distancias entre pares de puntos.",
+      "Los dos repartos tienen grupos de tamaños parecidos. Mira la fórmula: un mínimo arriba y un máximo abajo."],
+    explicacion: "Dunn = separación mínima / diámetro máximo. En DBSCAN, la separación es el hueco entre las lunas, 1.43, y el diámetro es una luna de punta a punta, 6.15. En k-means, la recta deja de un lado y del otro dos puntos que están a 0.78: la separación se hunde. Dunn mira el <b>peor par</b>, y por eso premia huecos limpios aunque los grupos sean largos. <b>Ahora mira los dibujos</b> y mueve ε y k.",
+    alResolver: function () { est.chk.c5 = true; entrar(4); pasos.completar(4); }
+  });
+
+  /* ---------- paso 6 ---------- */
+  B.numerico(cuerpo("chk6"), {
+    pregunta: "Mira la tabla de k-means: la luna 1 queda 10 en g1 y 3 en g2; la luna 2, 4 en g1 y 9 en g2. ¿Cuánto vale la pureza? Suma lo máximo de cada columna y divide por 26.",
+    respuesta: 19 / 26,
+    tolerancia: 0.01,
+    pistas: ["En la columna g1, la luna que más aparece tiene 10 puntos. ¿Y en la columna g2?", "(10 + 9) / 26."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 19) < 0.5) return "Ese es el total de aciertos. Divide por los 26 puntos.";
+      if (Math.abs(v - 7 / 26) < 0.01) return "Esos son los mal puestos. La pureza cuenta los bien puestos.";
+      return null;
+    },
+    explicacion: "Pureza = (10 + 9) / 26 = <b>0.731</b>. Suena bien, pero un reparto al azar ya saca 0.577. Por eso se usa el Rand ajustado: para k-means da <b>0.180</b>, apenas mejor que el azar, y para DBSCAN, 1. <b>Ahora cambia el panel derecho</b> a \"al azar\" y mira un Rand ajustado negativo.",
+    alResolver: function () { est.chk.c6 = true; entrar(5); pasos.completar(5); }
+  });
+
+  /* ---------- paso 7 ---------- */
+  B.opcionMultiple(cuerpo("chk7"), {
+    pregunta: "Quitas 6 puntos al azar y vuelves a agrupar. ¿Cuál de los dos repartos se mantiene más parecido?",
+    opciones: [
+      "k-means: su recta casi no se mueve; DBSCAN puede partir una luna si falta un eslabón",
+      "DBSCAN, porque acierta las lunas",
+      "Los dos igual: los dos tienen 2 grupos",
+      "Ninguno: con menos puntos todo cambia"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "Acertar con los 30 no garantiza nada con 24. Recuerda cómo crece un grupo de DBSCAN: de vecino en vecino, a menos de ε.",
+      "Lo que importa es qué tanto depende el reparto de cada punto.",
+      "Prueba a pensar en qué depende cada uno: k-means de dos promedios, DBSCAN de una cadena de vecinos a 0.8."],
+    explicacion: "k-means depende de dos centroides, que casi no se mueven si quitas unos puntos: su Rand ajustado contra el original ronda 0.9. DBSCAN depende de una cadena de vecinos a 0.8 con ε = 1: si se cae un eslabón, la luna se parte. Ronda 0.5. <b>Estable no quiere decir correcto</b>: k-means es estable y se equivoca siempre igual. <b>Ahora remuestrea</b>, y prueba después con k = 3 o 4.",
+    alResolver: function () { est.chk.c7 = true; habilitar("ctlEstab", true); entrar(6); pasos.completar(6); }
+  });
+
+  /* ---------- paso 8 ---------- */
+  B.opcionMultiple(cuerpo("chk8"), {
+    pregunta: "Tienes datos nuevos sin etiquetas y sospechas que los grupos son alargados o curvos. Quieres elegir entre DBSCAN y k-means. ¿Qué haces?",
+    opciones: [
+      "Miras varios índices sabiendo qué premia cada uno: no te fías solo de la silueta, que prefiere grupos redondos, y revisas la estabilidad y el ruido",
+      "Eliges el que tenga mejor silueta media",
+      "Eliges el que tenga mejor Rand ajustado",
+      "Eliges el más estable al remuestrear"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "Con las lunas, la silueta eligió al que se equivoca.",
+      "Sin etiquetas no hay Rand ajustado: es un índice externo.",
+      "k-means fue el más estable con las lunas, y se equivocaba siempre igual."],
+    explicacion: "Ningún índice es el juez: cada uno define a su manera qué es un buen grupo. Con formas curvas, la silueta, Davies-Bouldin y Calinski-Harabasz van a preferir cortes redondos; Dunn o un índice de densidad como DBCV miran huecos. La estabilidad dice si el resultado se repite, no si es cierto. Y si consigues etiquetas para una parte de los datos, aunque sean pocas, un índice externo vale más que todos los internos juntos.",
+    alResolver: function () { est.chk.c8 = true; entrar(7); pasos.completar(7); }
+  });
+
+  pasos = B.pasos($("recorrido"), {
+    concepto: C,
+    alEntrar: entrar,
+    alTerminar: function () { location.hash = "vidareal"; }
+  });
+  // al volver a la pagina con pasos hechos, se habilita lo que corresponde
+  if (pasos.hecho(0)) { est.chk.c1 = true; habilitar("selDatos1", true); }
+  if (pasos.hecho(1)) { est.chk.c2 = true; habilitar("hopDatos", true); $("apretar").disabled = false; $("btnHop1").disabled = false; $("btnHop500").disabled = false; }
+  if (pasos.hecho(2)) { est.chk.c3 = true; habilitar("vatDatos", true); habilitar("vatOrden", true); est.vatO = "vat"; }
+  if (pasos.hecho(3)) { est.chk.c4 = true; est.chk.c4b = true; }
+  if (pasos.hecho(4)) est.chk.c5 = true;
+  if (pasos.hecho(5)) est.chk.c6 = true;
+  if (pasos.hecho(6)) { est.chk.c7 = true; habilitar("ctlEstab", true); }
+  if (pasos.hecho(7)) est.chk.c8 = true;
+  entrar(0);
+
+  /* ---------------- hipotesis inicial ---------------- */
+  (function () {
+    var ta = $("hipotesis"), t = null;
+    ta.value = B.nota("validacion-clusters", "hipotesis");
+    function cita() {
+      var v = ta.value.trim(), el = $("citaHipo");
+      el.hidden = !v;
+      if (v) { el.textContent = ""; el.appendChild(document.createTextNode("Al principio escribiste: «" + v + "». ¿Medías compacidad y separación, como estos índices? Si es así, acabas de ver su punto ciego: un grupo largo y curvo no es compacto, y aun así es un grupo.")); }
+    }
+    cita();
+    ta.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { B.nota("validacion-clusters", "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; cita(); }, 500);
+    });
+  })();
+
+  /* ---------------- marcadores de estado de retos ---------------- */
+  function pintarEstados() {
+    [].forEach.call(document.querySelectorAll("[data-reto]"), function (el) {
+      var ok = C.retoOk(el.getAttribute("data-reto"));
+      el.textContent = ok ? "resuelto" : "pendiente";
+      el.classList.toggle("ok", ok);
+    });
+  }
+  C.alCambiar(pintarEstados);
+
+  /* ---------------- reto: ojo clinico ---------------- */
+  (function () {
+    var cont = $("ojo");
+    cont.innerHTML = '<div class="ronda"></div><svg class="ojo-svg" role="img" aria-label="Puntos inventados coloreados por grupo"></svg>' +
+      '<div class="ojo-opts"><button type="button" class="opt" data-a="alta">Alta</button><button type="button" class="opt" data-a="media">Media</button><button type="button" class="opt" data-a="baja">Baja</button></div>' +
+      '<div class="fb" aria-live="polite"></div><div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    var p = crearPlano(cont.querySelector("svg"));
+    var ronda, aciertos, respondida, caso;
+    function cat(s) { return s > 0.5 ? "alta" : s >= 0.2 ? "media" : "baja"; }
+    function generar() {
+      var objetivo = ["alta", "media", "baja"][Math.floor(Math.random() * 3)];
+      for (var t = 0; t < 4000; t++) {
+        var k = 2 + Math.floor(Math.random() * 2), P = [], real = [], spread = 0.4 + Math.random() * 1.6;
+        for (var g = 0; g < k; g++) {
+          var cx = 2 + Math.random() * 6, cy = 2 + Math.random() * 6, n = 6 + Math.floor(Math.random() * 4);
+          for (var h = 0; h < n; h++) {
+            var a = Math.random() * 2 * Math.PI, rr = Math.sqrt(Math.random()) * spread;
+            var q = [Math.round((cx + rr * Math.cos(a)) * 10) / 10, Math.round((cy + rr * Math.sin(a)) * 10) / 10];
+            if (q[0] < 0.3 || q[0] > 9.7 || q[1] < 0.3 || q[1] > 9.7) continue;
+            P.push(q); real.push(g);
+          }
+        }
+        var tipo = Math.random(), lab;
+        if (tipo < 0.45) lab = real.slice();
+        else if (tipo < 0.7) lab = real.map(function () { return Math.floor(Math.random() * k); });
+        else lab = kmeans(P, k, 3, Math.random);
+        var S = sinRuido(P, lab), s = silueta(S);
+        if (s === null) continue;
+        if (Math.abs(s - 0.5) < 0.05 || Math.abs(s - 0.2) < 0.05) continue;
+        if (cat(s) === objetivo) return { P: P, lab: S.l, s: s, ok: objetivo };
+      }
+      return { P: LUNAS, lab: KMP[2], s: 0.415, ok: "media" };
+    }
+    function nueva() { ronda = 0; aciertos = 0; mostrar(); }
+    function mostrar() {
+      respondida = false;
+      caso = generar();
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 5 · aciertos " + aciertos;
+      p.set({ P: caso.P, lab: caso.lab });
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (b) { b.disabled = false; b.className = "opt"; });
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+    }
+    cont.querySelector(".ojo-opts").addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || respondida) return;
+      respondida = true;
+      var ok = b.getAttribute("data-a") === caso.ok;
+      if (ok) aciertos++;
+      b.classList.add(ok ? "ok" : "mal");
+      if (!ok) cont.querySelector('[data-a="' + caso.ok + '"]').classList.add("ok");
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (x) { x.disabled = true; });
+      cont.querySelector(".fb").innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No.</span> ') + "La silueta media es <b>" + f(caso.s, 3) + "</b>. " +
+        (caso.ok === "alta" ? "Grupos apretados y lejos entre sí: cada punto tiene a los suyos mucho más cerca que al grupo de al lado." :
+          caso.ok === "media" ? "Hay grupos, pero se tocan o son anchos: muchos puntos tienen al grupo vecino no tan lejos." :
+          "Los colores no siguen a las nubes, o las nubes se mezclan: para muchos puntos, el grupo de al lado está igual de cerca que el suyo.");
+      var sig = cont.querySelector(".sig");
+      sig.hidden = false;
+      if (ronda === 4) {
+        var aprobo = aciertos >= 4;
+        C.reto("ojo", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertos + " de 5" + (aprobo ? ". Aprobado." : ". Necesitas 4 para aprobar.");
+        sig.textContent = "Otra tanda";
+      } else sig.textContent = "Siguiente ronda";
+    });
+    cont.querySelector(".sig").addEventListener("click", function () { if (ronda === 4) nueva(); else { ronda++; mostrar(); } });
+    nueva();
+  })();
+
+  /* ---------------- reto: construir ---------------- */
+  (function () {
+    var OBJ = [
+      { t: "DBSCAN acierta las dos lunas: Rand ajustado igual a 1.", ok: function (a) { return Math.abs(a.ari - 1) < 1e-9; } },
+      { t: "DBSCAN con una silueta media mayor que 0.7. Mira cuánto ruido hizo falta.", ok: function (a) { return a.sil !== null && a.sil > 0.7; } },
+      { t: "k-means con un Davies-Bouldin menor que 0.79. Fíjate en cuántos grupos pide.", ok: function (a, b) { return b.db !== null && b.db < 0.79; } },
+      { t: "Que la silueta de DBSCAN no se pueda calcular.", ok: function (a) { return a.sil === null; } }
+    ];
+    var logrados = OBJ.map(function () { return false; }), avisado = false;
+    var ul = $("objetivos");
+    OBJ.forEach(function (o) { var li = document.createElement("li"); li.innerHTML = '<span class="m"></span><span>' + o.t + '</span>'; ul.appendChild(li); });
+    var qa = crearPlano($("cPlanoA")), qb = crearPlano($("cPlanoB"));
+    function actualizar() {
+      var eps = +$("cEps").value / 100, k = +$("cK").value;
+      $("cEpsVal").textContent = f(eps, 2); $("cKVal").textContent = k;
+      var la = dbscan(LUNAS, eps, 3), a = indices(LUNAS, la, REAL), b = indices(LUNAS, KMP[k], REAL);
+      qa.set({ P: LUNAS, lab: la }); qb.set({ P: LUNAS, lab: KMP[k] });
+      $("cCapA").textContent = "DBSCAN · ε = " + f(eps, 2);
+      $("cCapB").textContent = "k-means · k = " + k;
+      $("constrVivo").innerHTML = "DBSCAN: " + a.k + " " + (a.k === 1 ? "grupo" : "grupos") + ", ruido " + a.ruido + ", silueta <b>" + f3(a.sil) + "</b>, DB <b>" + f3(a.db) + "</b>, ARI <b>" + f3(a.ari) + "</b><br>" +
+        "k-means: silueta <b>" + f3(b.sil) + "</b>, DB <b>" + f3(b.db) + "</b>, ARI <b>" + f3(b.ari) + "</b>";
+      OBJ.forEach(function (o, i) { if (!logrados[i] && o.ok(a, b)) logrados[i] = true; ul.children[i].classList.toggle("hecho", logrados[i]); });
+      if (!avisado && logrados.every(Boolean)) { avisado = true; C.reto("construir", true); }
+    }
+    $("cEps").addEventListener("input", actualizar);
+    $("cK").addEventListener("input", actualizar);
+    actualizar();
+  })();
+
+  /* ---------------- reto: a mano ---------------- */
+  (function () {
+    var D = null;
+    function generar() {
+      for (;;) {
+        var T = [[0, 0], [0, 0]];
+        for (var i = 0; i < 2; i++) for (var j = 0; j < 2; j++) T[i][j] = Math.floor(Math.random() * 6);
+        var n = T[0][0] + T[0][1] + T[1][0] + T[1][1];
+        if (n < 7 || n > 12) continue;
+        if (T[0][0] + T[0][1] === 0 || T[1][0] + T[1][1] === 0 || T[0][0] + T[1][0] === 0 || T[0][1] + T[1][1] === 0) continue;
+        var e = externos(expandir(T, 0), expandir(T, 1));
+        D = { T: T, n: n, e: e };
+        break;
+      }
+      $("manoDatos").innerHTML = '<table class="ct"><tr><th></th><th>grupo A</th><th>grupo B</th><th>total</th></tr>' +
+        D.T.map(function (fila, i) { return '<tr><th>real ' + (i + 1) + '</th><td>' + fila[0] + '</td><td>' + fila[1] + '</td><td>' + (fila[0] + fila[1]) + '</td></tr>'; }).join("") +
+        '<tr><th>total</th><td>' + (D.T[0][0] + D.T[1][0]) + '</td><td>' + (D.T[0][1] + D.T[1][1]) + '</td><td>' + D.n + '</td></tr></table>';
+    }
+    // pasa la tabla a dos listas de etiquetas (lado 0: real, lado 1: algoritmo)
+    function expandir(T, lado) {
+      var r = [];
+      for (var i = 0; i < 2; i++) for (var j = 0; j < 2; j++) for (var c = 0; c < T[i][j]; c++) r.push(lado === 0 ? i : j);
+      return r;
+    }
+    generar();
+    function C2(m) { return pares(m); }
+    B.numerico($("mano"), {
+      pregunta: "¿Cuánto vale el índice de Rand?",
+      respuesta: function () { return D.e.rand; },
+      tolerancia: 0.01,
+      pistas: [
+        function () { return "Hay $\\binom{" + D.n + "}{2} = " + fn(D.e.N) + "$ pares en total. Un par está de acuerdo si los dos repartos lo ponen junto, o si los dos lo separan."; },
+        function () { return "Pares juntos en los dos (casillas): " + D.T[0].concat(D.T[1]).map(function (v) { return "C(" + v + ", 2) = " + fn(C2(v)); }).join(", ") + ". En total, " + fn(D.e.J) + "."; },
+        function () { return "Juntos en la real (filas): " + fn(D.e.F) + ". Juntos en el algoritmo (columnas): " + fn(D.e.G) + ". Separados en los dos: " + fn(D.e.N) + " − " + fn(D.e.F) + " − " + fn(D.e.G) + " + " + fn(D.e.J) + " = " + fn(D.e.N - D.e.F - D.e.G + D.e.J) + "."; }
+      ],
+      diagnostico: function (v) {
+        if (Math.abs(v - D.e.ari) < 0.01) return "Ese es el Rand ajustado. La pregunta es el Rand sin ajustar: acuerdos sobre el total de pares.";
+        if (Math.abs(v - D.e.J / D.e.N) < 0.01) return "Contaste solo los pares juntos en los dos. Faltan los que los dos separan.";
+        return null;
+      },
+      explicacion: function () {
+        var sep = D.e.N - D.e.F - D.e.G + D.e.J;
+        return "Juntos en los dos: " + fn(D.e.J) + ". Separados en los dos: " + fn(sep) + ". Rand = (" + fn(D.e.J) + " + " + fn(sep) + ") / " + fn(D.e.N) + " = <b>" + f(D.e.rand, 3) + "</b>. El Rand ajustado de esta tabla es " + f(D.e.ari, 3) + ".";
+      },
+      reintentable: true,
+      textoReintentar: "Otro ejercicio",
+      antesDeReintentar: generar,
+      alResolver: function (ok) { C.reto("mano", ok); }
+    });
+  })();
+
+  /* ---------------- reto: cazar el error ---------------- */
+  B.cazarError($("error"), {
+    variantes: [
+      {
+        intro: "Tres grupos con dispersiones $s_1 = 1$, $s_2 = 1$, $s_3 = 2$. Alguien calculó la parte del grupo 1 en Davies-Bouldin:",
+        lineas: ["R_{12} = \\frac{s_1 + s_2}{d(c_1, c_2)} = \\frac{1 + 1}{4} = 0.5",
+          "R_{13} = \\frac{s_1 + s_3}{d(c_1, c_3)} = \\frac{1 + 2}{3} = 1",
+          "D_1 = \\min(R_{12}, R_{13}) = 0.5",
+          "DB = \\tfrac{1}{3}(D_1 + D_2 + D_3)"],
+        erronea: 2,
+        explicacion: "Davies-Bouldin toma el <b>peor</b> vecino de cada grupo: $D_1 = \\max(0.5, 1) = 1$. Con el mínimo, un grupo pegado a otro pasaría desapercibido si tiene un tercero lejos."
+      },
+      {
+        intro: "Un reparto tiene separación mínima 1.2 (el par más cercano de grupos distintos) y diámetro máximo 4. Alguien calculó Dunn:",
+        lineas: ["\\text{separación mínima} = 1.2",
+          "\\text{diámetro máximo} = 4",
+          "D = \\frac{4}{1.2} = 3.33",
+          "\\text{Dunn se busca grande}"],
+        erronea: 2,
+        explicacion: "Dunn es separación sobre diámetro: $D = 1.2 / 4 = 0.3$. Al revés, un reparto con grupos enormes y pegados sacaría la mejor nota."
+      },
+      {
+        intro: "Con las lunas y un reparto al azar, alguien leyó el Rand ajustado:",
+        lineas: ["\\text{ARI} = -0.017",
+          "\\text{ARI} < 0",
+          "\\Rightarrow \\text{el peor acuerdo posible con las lunas}",
+          "\\text{Rand sin ajustar} = 0.492"],
+        erronea: 2,
+        explicacion: "0 es el acuerdo que se espera por azar, y −0.017 está pegado a 0: es un reparto <b>como el azar</b>, que es justo lo que es. Los negativos son apenas peores que el azar; el Rand ajustado no tiene a −1 como \"peor caso\" en general, aunque las diapositivas lo digan."
+      }
+    ],
+    alResolver: function (ok) { C.reto("error", ok); }
+  });
+
+  /* ---------------- retos: propiedades ---------------- */
+  function prop(id, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple($(id), cfg);
+  }
+  prop("prop1", {
+    pregunta: "Un reparto saca Rand ajustado −0.02 contra las etiquetas reales. ¿Qué quiere decir?",
+    opciones: ["Que coincide con las etiquetas tanto como un reparto al azar", "Que es el peor reparto posible", "Que acierta el 2 % de los puntos", "Que hubo un error de cálculo: no puede ser negativo"],
+    correcta: 0,
+    pistas: [null, "El peor caso no es un número fijo; −1 casi nunca se alcanza.", "El Rand ajustado no cuenta puntos acertados: cuenta pares, y le resta lo esperado por azar.", "Puede ser negativo: cuando el acuerdo queda por debajo de lo que daría el azar."],
+    explicacion: "El Rand ajustado vale 0 cuando el acuerdo es el esperado por azar y 1 cuando es perfecto. −0.02 es, en la práctica, azar. Es lo que da el reparto al azar del recorrido: −0.017."
+  });
+  prop("prop2", {
+    pregunta: "Sobre Davies-Bouldin, ¿cuál es cierta?",
+    opciones: ["Se busca chico, y tiende a bajar con más grupos de k-means aunque los grupos no sean reales", "Se busca grande, como la silueta", "Va de −1 a 1", "Necesita las etiquetas reales"],
+    correcta: 0,
+    pistas: [null, "Es un cociente de dispersión sobre distancia: un número chico quiere decir grupos apretados y lejos.", "Es un promedio de cocientes positivos: no tiene un tope en 1, ni es negativo. Con el reparto al azar dio 9.659.", "Es interno: usa solo los puntos y el reparto."],
+    explicacion: "Davies-Bouldin se minimiza. Con las lunas, k-means con k = 4 saca 0.787, mejor que con k = 2 (0.879), y DBSCAN, que acierta, saca el peor: 1.285."
+  });
+  prop("prop3", {
+    pregunta: "En R, clustertend::hopkins da 0.165 para iris. Si calculas con la fórmula de la diapositiva 11, H = Σy / (Σx + Σy), con los mismos puntos, ¿cuánto da?",
+    opciones: ["0.835: es la otra convención, 1 − H", "0.165: es la misma fórmula", "0.5: iris no tiene grupos", "No se puede saber sin volver a sortear"],
+    correcta: 0,
+    pistas: [null, "La diapositiva siguiente dice que cerca de 0 es agrupable. Con la fórmula de la 11, ¿hacia dónde van los datos agrupados?", "0.5 es lo que da el azar. Iris tiene grupos claros.", "Con la misma muestra y los mismos puntos sorteados, las dos sumas son las mismas: solo cambia cuál va arriba."],
+    explicacion: "clustertend devuelve Σx / (Σx + Σy); la diapositiva 11 escribe Σy / (Σx + Σy). Suman 1: 1 − 0.165 = 0.835. Las dos convenciones existen; lo que no puede pasar es mezclarlas, como hacen las diapositivas 11 y 12."
+  });
+  prop("prop4", {
+    pregunta: "Un algoritmo da casi el mismo reparto cada vez que quitas unos puntos al azar (Rand ajustado 0.95 en promedio). ¿Qué puedes concluir?",
+    opciones: ["Que el reparto no depende mucho de unos pocos puntos; no que sea el correcto", "Que encontró los grupos reales", "Que los datos tienen tendencia a agruparse", "Que tiene la mejor silueta"],
+    correcta: 0,
+    pistas: [null, "k-means con las lunas era el más estable y mezclaba 7 puntos.", "Datos al azar también dan repartos estables con k-means: siempre corta el cuadrado por la mitad.", "La estabilidad y la silueta miden cosas distintas."],
+    explicacion: "La estabilidad responde si el resultado se repite con datos parecidos. Un error sistemático, como la recta de k-means sobre las lunas, también se repite."
+  });
+
+  /* ---------------- formula de memoria ---------------- */
+  B.ordenar($("formula"), {
+    piezas: ["DB", "=", "\\frac{1}{k}", "\\sum_{i=1}^{k}", "\\max_{j \\ne i}", "\\frac{s_i + s_j}{d(c_i, c_j)}"],
+    distractores: ["\\min_{j \\ne i}", "\\frac{d(c_i, c_j)}{s_i + s_j}", "\\frac{1}{n}"],
+    soluciones: [[0, 1, 2, 3, 4, 5]],
+    explicacion: "Para cada grupo, el peor vecino (el máximo del cociente dispersiones sobre distancia entre centroides), y el promedio sobre los k grupos. Se busca chico.",
+    alResolver: function (ok) { C.reto("formula", ok); }
+  });
+
+  /* ---------------- vida real: Rand ajustado y Davies-Bouldin con bucles ---------------- */
+  (function () {
+    var CODIGO = {
+      py: [
+        ["import", "import numpy as np"],
+        ["import", "from sklearn.metrics import adjusted_rand_score, davies_bouldin_score"],
+        [null, ""],
+        [null, "# las 30 lunas de la página de DBSCAN (inventadas)"],
+        ["datos", "X = np.array([[0.5, 4.5], [0.5, 5.3], [1.0, 5.9], [1.3, 6.7], [2.1, 7.0],"],
+        ["datos", "              [2.7, 7.4], [3.5, 7.6], [4.3, 7.3], [4.9, 7.0], [5.7, 6.7],"],
+        ["datos", "              [6.1, 6.0], [6.3, 5.3], [6.6, 4.5],"],
+        ["datos", "              [3.5, 6.0], [3.7, 5.2], [3.8, 4.4], [4.4, 3.9], [4.9, 3.3],"],
+        ["datos", "              [5.7, 3.2], [6.5, 2.9], [7.2, 3.2], [8.0, 3.4], [8.7, 3.8],"],
+        ["datos", "              [9.1, 4.5], [9.3, 5.3], [9.6, 6.0],"],
+        ["datos", "              [1.0, 1.5], [9.5, 8.5], [5.0, 9.0], [9.0, 1.0]])"],
+        ["real", "real = np.array([0] * 13 + [1] * 13 + [-1] * 4)   # luna de cada punto; -1: suelto"],
+        ["dbs", "dbs = np.array([0] * 13 + [1] * 13 + [-1] * 4)    # DBSCAN, eps = 1, min_pts = 3"],
+        ["km", "km = np.array([0] * 10 + [1] * 3 + [0] * 4 + [1] * 9 + [0, 1, 0, 1])  # k-means, k = 2"],
+        [null, ""],
+        ["pares", "def pares(m):"],
+        ["pares", "    return m * (m - 1) / 2"],
+        [null, ""],
+        ["defari", "def rand_ajustado(a, b):"],
+        ["tabla", "    n = np.zeros((a.max() + 1, b.max() + 1))"],
+        ["cuenta", "    for i in range(len(a)):                       # tabla de contingencia"],
+        ["cuenta", "        n[a[i], b[i]] += 1"],
+        ["juntos0", "    juntos = 0"],
+        ["nij", "    for nij in n.flatten():                       # pares juntos en las dos"],
+        ["nij", "        juntos += pares(nij)"],
+        ["filas", "    filas = sum(pares(x) for x in n.sum(axis=1))"],
+        ["cols", "    cols = sum(pares(x) for x in n.sum(axis=0))"],
+        ["azar", "    azar = filas * cols / pares(len(a))           # lo esperado por azar"],
+        ["ret", "    return (juntos - azar) / ((filas + cols) / 2 - azar)"],
+        [null, ""],
+        ["defdb", "def davies_bouldin(X, g):"],
+        ["k", "    k = g.max() + 1"],
+        ["cent", "    c = np.array([X[g == j].mean(axis=0) for j in range(k)])"],
+        ["disp", "    s = [np.sqrt(((X[g == j] - c[j]) ** 2).sum(axis=1)).mean() for j in range(k)]"],
+        ["total0", "    total = 0"],
+        ["fori", "    for i in range(k):"],
+        ["fori", "        peor = 0"],
+        ["r", "        for j in range(k):"],
+        ["r", "            if j != i:"],
+        ["r", "                r = (s[i] + s[j]) / np.sqrt(((c[i] - c[j]) ** 2).sum())"],
+        ["r", "                peor = max(peor, r)"],
+        ["total", "        total += peor"],
+        ["retdb", "    return total / k"],
+        [null, ""],
+        ["luna", "luna = real >= 0                                  # los 26 puntos de las lunas"],
+        ["p1", "print(round(rand_ajustado(real[luna], dbs[luna]), 3), round(rand_ajustado(real[luna], km[luna]), 3))"],
+        ["con", "con = dbs >= 0                                    # DBSCAN sin el ruido"],
+        ["p2", "print(round(davies_bouldin(X[con], dbs[con]), 3), round(davies_bouldin(X, km), 3))"],
+        ["lib1", "print(round(adjusted_rand_score(real[luna], dbs[luna]), 3), round(adjusted_rand_score(real[luna], km[luna]), 3))"],
+        ["lib2", "print(round(davies_bouldin_score(X[con], dbs[con]), 3), round(davies_bouldin_score(X, km), 3))"]
+      ],
+      r: [
+        [null, "# las 30 lunas de la página de DBSCAN (inventadas)"],
+        ["datos", "X <- matrix(c(0.5, 4.5, 0.5, 5.3, 1.0, 5.9, 1.3, 6.7, 2.1, 7.0,"],
+        ["datos", "              2.7, 7.4, 3.5, 7.6, 4.3, 7.3, 4.9, 7.0, 5.7, 6.7,"],
+        ["datos", "              6.1, 6.0, 6.3, 5.3, 6.6, 4.5,"],
+        ["datos", "              3.5, 6.0, 3.7, 5.2, 3.8, 4.4, 4.4, 3.9, 4.9, 3.3,"],
+        ["datos", "              5.7, 3.2, 6.5, 2.9, 7.2, 3.2, 8.0, 3.4, 8.7, 3.8,"],
+        ["datos", "              9.1, 4.5, 9.3, 5.3, 9.6, 6.0,"],
+        ["datos", "              1.0, 1.5, 9.5, 8.5, 5.0, 9.0, 9.0, 1.0), ncol = 2, byrow = TRUE)"],
+        ["real", "real <- c(rep(1, 13), rep(2, 13), rep(0, 4))    # luna de cada punto; 0: suelto"],
+        ["dbs", "dbs <- c(rep(1, 13), rep(2, 13), rep(0, 4))     # DBSCAN, eps = 1, minPts = 3"],
+        ["km", "km <- c(rep(1, 10), rep(2, 3), rep(1, 4), rep(2, 9), 1, 2, 1, 2)  # k-means, k = 2"],
+        [null, ""],
+        ["pares", "pares <- function(m) m * (m - 1) / 2"],
+        [null, ""],
+        ["defari", "rand_ajustado <- function(a, b) {"],
+        ["tabla", "  n <- matrix(0, max(a), max(b))"],
+        ["cuenta", "  for (i in seq_along(a)) {                     # tabla de contingencia"],
+        ["cuenta", "    n[a[i], b[i]] <- n[a[i], b[i]] + 1"],
+        [null, "  }"],
+        ["juntos0", "  juntos <- 0"],
+        ["nij", "  for (nij in n) {                              # pares juntos en las dos"],
+        ["nij", "    juntos <- juntos + pares(nij)"],
+        [null, "  }"],
+        ["filas", "  filas <- sum(pares(rowSums(n)))"],
+        ["cols", "  cols <- sum(pares(colSums(n)))"],
+        ["azar", "  azar <- filas * cols / pares(length(a))       # lo esperado por azar"],
+        ["ret", "  (juntos - azar) / ((filas + cols) / 2 - azar)"],
+        [null, "}"],
+        [null, ""],
+        ["defdb", "davies_bouldin <- function(X, g) {"],
+        ["k", "  k <- max(g)"],
+        ["cent", "  c <- t(sapply(1:k, function(j) colMeans(X[g == j, , drop = FALSE])))"],
+        ["disp", "  s <- sapply(1:k, function(j) mean(sqrt(colSums((t(X[g == j, , drop = FALSE]) - c[j, ])^2))))"],
+        ["total0", "  total <- 0"],
+        ["fori", "  for (i in 1:k) {"],
+        ["fori", "    peor <- 0"],
+        ["r", "    for (j in 1:k) {"],
+        ["r", "      if (j != i) {"],
+        ["r", "        r <- (s[i] + s[j]) / sqrt(sum((c[i, ] - c[j, ])^2))"],
+        ["r", "        peor <- max(peor, r)"],
+        [null, "      }"],
+        [null, "    }"],
+        ["total", "    total <- total + peor"],
+        [null, "  }"],
+        ["retdb", "  total / k"],
+        [null, "}"],
+        [null, ""],
+        ["luna", "luna <- real > 0                                # los 26 puntos de las lunas"],
+        ["p1", "print(round(c(rand_ajustado(real[luna], dbs[luna]), rand_ajustado(real[luna], km[luna])), 3))"],
+        ["con", "con <- dbs > 0                                  # DBSCAN sin el ruido"],
+        ["p2", "print(round(c(davies_bouldin(X[con, ], dbs[con]), davies_bouldin(X, km)), 3))"],
+        [null, ""],
+        [null, "# sin mclust ni clusterCrit: versiones vectorizadas para comparar"],
+        ["lib1", "ari_vec <- function(a, b) {"],
+        ["lib1", "  t <- table(a, b)"],
+        ["lib1", "  f <- sum(choose(rowSums(t), 2)); g <- sum(choose(colSums(t), 2))"],
+        ["lib1", "  e <- f * g / choose(length(a), 2)"],
+        ["lib1", "  (sum(choose(t, 2)) - e) / ((f + g) / 2 - e)"],
+        ["lib1", "}"],
+        ["lib2", "db_vec <- function(X, g) {"],
+        ["lib2", "  c <- rowsum(X, g) / as.vector(table(g))"],
+        ["lib2", "  s <- tapply(sqrt(rowSums((X - c[g, ])^2)), g, mean)"],
+        ["lib2", "  R <- outer(s, s, \"+\") / as.matrix(dist(c)); diag(R) <- 0"],
+        ["lib2", "  mean(apply(R, 1, max))"],
+        ["lib2", "}"],
+        ["lib1", "print(round(c(ari_vec(real[luna], dbs[luna]), ari_vec(real[luna], km[luna])), 3))"],
+        ["lib2", "print(round(c(db_vec(X[con, ], dbs[con]), db_vec(X, km)), 3))"]
+      ]
+    };
+    // lo que imprimio cada lenguaje (Python 3 + NumPy 2.1.3 + scikit-learn 1.6.1, y R 4.6.1)
+    var SAL = {
+      py: ["1.0 0.18", "1.285 0.879", "1.0 0.18", "1.285 0.879"],
+      r: ["[1] 1.00 0.18", "[1] 1.285 0.879", "[1] 1.00 0.18", "[1] 1.285 0.879"]
+    };
+    var DBS = DB_LUNAS, KM = KMP[2];
+
+    /* fotos de la ejecucion */
+    var EV = [];
+    (function () {
+      var fase = 1, salidas = [], T = null, J = { py: null, r: null }, F = null, G = null, E = null, quien = null, hasta = -1, d = null;
+      function foto(id, extra) {
+        EV.push(Object.assign({ id: id, fase: fase, salidas: salidas.slice(), T: T ? T.map(function (r) { return r.slice(); }) : null,
+          J: { py: J.py, r: J.r }, F: F, G: G, E: E, quien: quien, hasta: hasta, d: d ? JSON.parse(JSON.stringify(d)) : null, celda: null, fin: false }, extra || {}));
+      }
+      ["import", "datos", "real", "dbs", "km", "pares", "defari", "defdb", "luna"].forEach(function (id) { foto(id); });
+      fase = 2;
+      var res = {};
+      [["dbs", DBS], ["km", KM]].forEach(function (par, vez) {
+        quien = par[0];
+        var a = [], b = [];
+        REAL.forEach(function (v, i) { if (v >= 0) { a.push(v); b.push(par[1][i]); } });
+        T = null; J = { py: null, r: null }; F = G = E = null; hasta = -1;
+        foto("p1", { entra: true });
+        T = [[0, 0], [0, 0]];
+        foto("tabla");
+        var cortes = vez === 0 ? [0, 12, 25] : [25];
+        for (var i = 0; i < a.length; i++) {
+          T[a[i]][b[i]]++;
+          if (cortes.indexOf(i) >= 0) { hasta = i; foto("cuenta", { i: i }); }
+        }
+        J = { py: 0, r: 0 };
+        foto("juntos0");
+        var ordPy = [[0, 0], [0, 1], [1, 0], [1, 1]], ordR = [[0, 0], [1, 0], [0, 1], [1, 1]];
+        for (var q = 0; q < 4; q++) {
+          J.py += pares(T[ordPy[q][0]][ordPy[q][1]]);
+          J.r += pares(T[ordR[q][0]][ordR[q][1]]);
+          foto("nij", { celda: { py: ordPy[q], r: ordR[q] }, q: q });
+        }
+        F = pares(T[0][0] + T[0][1]) + pares(T[1][0] + T[1][1]);
+        foto("filas");
+        G = pares(T[0][0] + T[1][0]) + pares(T[0][1] + T[1][1]);
+        foto("cols");
+        E = F * G / pares(a.length);
+        foto("azar");
+        res[quien] = (J.py - E) / ((F + G) / 2 - E);
+        foto("ret", { val: res[quien] });
+      });
+      salidas.push(0);
+      foto("p1", { imprime: true, res: { dbs: res.dbs, km: res.km } });
+      fase = 3;
+      T = null; quien = null;
+      foto("con");
+      var rdb = {};
+      [["dbs", DBS], ["km", KM]].forEach(function (par) {
+        quien = par[0];
+        var S = sinRuido(LUNAS, par[1]), o = davies(S);
+        d = { k: null, c: null, s: null, total: null, i: null, j: null, r: null, peor: null, idx: S.idx, lab: S.l };
+        foto("p2", { entra: true });
+        d.k = S.k; foto("k");
+        d.c = o.c; foto("cent");
+        d.s = o.s; foto("disp");
+        d.total = 0; foto("total0");
+        for (var i = 0; i < S.k; i++) {
+          d.i = i; d.peor = 0; d.j = null; d.r = null; foto("fori");
+          for (var j = 0; j < S.k; j++) if (j !== i) {
+            d.j = j; d.r = (o.s[i] + o.s[j]) / dist(o.c[i], o.c[j]); d.peor = Math.max(d.peor, d.r); foto("r");
+          }
+          d.total += d.peor; foto("total");
+        }
+        rdb[quien] = d.total / S.k;
+        foto("retdb", { val: rdb[quien] });
+      });
+      salidas.push(1);
+      d = null; quien = null;
+      foto("p2", { imprime: true, res: rdb });
+      fase = 4;
+      salidas.push(2); foto("lib1", { fin: true });
+      salidas.push(3); foto("lib2", { fin: true });
+    })();
+
+    function nombreQ(q) { return q === "dbs" ? "DBSCAN" : "k-means"; }
+    function celdaTxt(c, ctx) { return "n[" + ctx.ix(c[0]) + ", " + ctx.ix(c[1]) + "]"; }
+    function narrar(e, ctx) {
+      var py = ctx.lang() === "py", ix = ctx.ix;
+      switch (e.id) {
+        case "import": return py ? "Carga NumPy y las dos funciones de scikit-learn con las que se compara al final." : "R no carga nada: el programa usa solo lo que viene con R.";
+        case "datos": return "Las 30 lunas: 13 de la luna de arriba, 13 de la de abajo y 4 sueltos.";
+        case "real": return py ? "La verdad: luna 0, luna 1, y <b>−1</b> para los 4 sueltos, que no son de ninguna luna." : "La verdad: luna 1, luna 2, y <b>0</b> para los 4 sueltos, que no son de ninguna luna.";
+        case "dbs": return "Lo que dio DBSCAN con ε = 1 y minPts = 3: una luna en cada grupo, y los 4 sueltos como ruido (" + (py ? "−1" : "0") + ").";
+        case "km": return "Lo que dio k-means con k = 2: los 10 primeros de la luna de arriba van al grupo " + (py ? "0" : "1") + ", las 3 puntas al otro, y así. Mezcla 7 puntos de las lunas.";
+        case "pares": return "<b>pares(m)</b> cuenta cuántos pares se pueden armar con m cosas: m(m − 1)/2. Con 26 puntos, 325 pares.";
+        case "defari": return "Define el Rand ajustado. Primero arma la tabla de contingencia; después cuenta pares.";
+        case "defdb": return "Define Davies-Bouldin: centroides, dispersión de cada grupo, y el peor vecino de cada uno.";
+        case "luna": return "Elige los 26 puntos que tienen luna real. Los externos solo se pueden calcular donde hay respuesta.";
+        case "p1":
+          if (e.imprime) return "Imprime los dos resultados redondeados: <b>1</b> para DBSCAN, <b>0.18</b> para k-means." + (py ? "" : " R completa con ceros: 1.00.");
+          return "Llama a <b>rand_ajustado</b> con las lunas reales y " + nombreQ(e.quien) + ", en los 26 puntos.";
+        case "tabla": return "La tabla de contingencia empieza en ceros: filas, la luna real; columnas, el grupo de " + nombreQ(e.quien) + ".";
+        case "cuenta":
+          if (e.quien === "km") return "De un salto, los 26 puntos: la luna " + ix(0) + " queda " + e.T[0][0] + " y " + e.T[0][1] + ", la luna " + ix(1) + " queda " + e.T[1][0] + " y " + e.T[1][1] + ". Las 3 puntas y los 4 de abajo son los mezclados.";
+          if (e.i === 0) return "i = " + ix(0) + ": el primer punto es de la luna " + ix(0) + " y DBSCAN lo puso en el grupo " + ix(0) + ". Suma 1 en " + celdaTxt([0, 0], ctx) + ".";
+          if (e.i === 12) return "Hasta i = " + ix(12) + ": los 13 de la luna de arriba cayeron todos en el grupo " + ix(0) + ".";
+          return "Hasta i = " + ix(25) + ": los 13 de la luna de abajo, todos en el grupo " + ix(1) + ". La tabla es diagonal.";
+        case "juntos0": return "Ahora cuenta los pares que los dos repartos ponen <b>juntos</b>. Empieza en 0.";
+        case "nij":
+          var c = py ? e.celda.py : e.celda.r, v = e.T[c[0]][c[1]];
+          return (e.q === 0 && !py ? "R recorre la matriz por columnas. " : "") + "Casilla " + celdaTxt(c, ctx) + " = " + v + ": " + (v < 2 ? "no alcanza para un par." : "suma pares(" + v + ") = " + fn(pares(v)) + " pares que están juntos en las dos.") + " juntos = <b>" + fn(py ? e.J.py : e.J.r) + "</b>.";
+        case "filas": return "Pares juntos según las lunas reales: dos lunas de 13, pares(13) + pares(13) = <b>" + fn(e.F) + "</b>.";
+        case "cols": return "Pares juntos según " + nombreQ(e.quien) + ": columnas de " + (e.T[0][0] + e.T[1][0]) + " y " + (e.T[0][1] + e.T[1][1]) + " puntos, <b>" + fn(e.G) + "</b> pares.";
+        case "azar": return "Cuántos pares juntos en los dos se esperarían si el reparto fuera al azar con esos tamaños: " + fn(e.F) + " × " + fn(e.G) + " / 325 = <b>" + f(e.E, 2) + "</b>.";
+        case "ret": return "Rand ajustado = (" + fn(e.J.py) + " − " + f(e.E, 2) + ") / (" + fn((e.F + e.G) / 2) + " − " + f(e.E, 2) + ") = <b>" + f(e.val, 3) + "</b>." +
+          (e.quien === "dbs" ? " Acuerdo perfecto." : " Apenas mejor que el azar.");
+        case "con": return "Para Davies-Bouldin de DBSCAN se deja fuera el ruido: quedan los 26 de las lunas. k-means usa los 30.";
+        case "p2":
+          if (e.imprime) return "Imprime: <b>1.285</b> para DBSCAN y <b>0.879</b> para k-means. Más chico es mejor: el índice interno prefiere a k-means.";
+          return "Llama a <b>davies_bouldin</b> con " + nombreQ(e.quien) + ".";
+        case "k": return "k = " + e.d.k + " grupos.";
+        case "cent": return "Los centroides: (" + f(e.d.c[0][0], 2) + ", " + f(e.d.c[0][1], 2) + ") y (" + f(e.d.c[1][0], 2) + ", " + f(e.d.c[1][1], 2) + "). Son las cruces del dibujo." +
+          (e.quien === "dbs" ? " El de cada luna cae en el hueco de su curva, lejos de sus puntos." : "");
+        case "disp": return "La dispersión de cada grupo, la distancia media de sus puntos a su centroide: s = " + f(e.d.s[0], 3) + " y " + f(e.d.s[1], 3) + ". Son los círculos.";
+        case "total0": return "total va a sumar el peor cociente de cada grupo.";
+        case "fori": return "Grupo i = " + ix(e.d.i) + ". peor empieza en 0.";
+        case "r": return "j = " + ix(e.d.j) + " (j = i se salta): r = (s<sub>i</sub> + s<sub>j</sub>) / d(c<sub>i</sub>, c<sub>j</sub>) = " + f(e.d.s[e.d.i] + e.d.s[e.d.j], 3) + " / " + f(dist(e.d.c[0], e.d.c[1]), 3) + " = <b>" + f(e.d.r, 3) + "</b>. peor = " + f(e.d.peor, 3) + ".";
+        case "total": return "Suma el peor del grupo " + ix(e.d.i) + ": total = <b>" + f(e.d.total, 3) + "</b>.";
+        case "retdb": return "Davies-Bouldin = total / k = <b>" + f(e.val, 3) + "</b>. Con dos grupos los dos cocientes son el mismo, así que DB es ese cociente." +
+          (e.quien === "dbs" ? " Las lunas son anchas respecto de la distancia entre sus centroides." : "");
+        case "lib1": return py ? "La librería: <b>adjusted_rand_score</b>. Da lo mismo: 1.0 y 0.18." : "Sin mclust ni clusterCrit instalados, <b>ari_vec</b> hace la misma cuenta sin bucles, con table() y choose(). Da lo mismo.";
+        case "lib2": return py ? "Y <b>davies_bouldin_score</b>: 1.285 y 0.879, igual que el bucle." : "Y <b>db_vec</b>, Davies-Bouldin con rowsum() y outer(): 1.285 y 0.879, igual que el bucle.";
+      }
+      return "";
+    }
+    var vrPlano = crearPlano($("vrPlano"), { W: 400, r: 5.5 });
+    function tablaVR(e, ctx) {
+      if (!e.T) return "";
+      var py = ctx.lang() === "py", c = e.celda ? (py ? e.celda.py : e.celda.r) : null;
+      return '<table class="ct"><tr><th></th><th>grupo ' + ctx.ix(0) + '</th><th>grupo ' + ctx.ix(1) + '</th></tr>' + e.T.map(function (fila, i) {
+        return '<tr><th>luna ' + ctx.ix(i) + '</th>' + fila.map(function (v, j) { return '<td class="' + (v === 0 ? "cero" : "") + (c && c[0] === i && c[1] === j ? " on" : "") + '">' + v + '</td>'; }).join("") + '</tr>';
+      }).join("") + '</table>';
+    }
+    function visual(e, anterior, ctx) {
+      var lang = ctx.lang();
+      if (!e) { vrPlano.set({ P: LUNAS }); $("vrSalida").textContent = ""; $("vrCuenta").innerHTML = ""; $("vrTabla").innerHTML = ""; return; }
+      $("vrSalida").textContent = e.salidas.map(function (s) { return SAL[lang][s]; }).join("\n");
+      $("vrTabla").innerHTML = tablaVR(e, ctx);
+      var lab = e.quien === "km" ? KM : e.quien === "dbs" ? DBS : ({ real: REAL, luna: REAL, dbs: DBS, con: DBS, km: KM }[e.id] || null);
+      if (e.fase === 2 && e.quien) {
+        var fuera = {}, lb = LUNAS.map(function (_, i) { return i < 26 && i <= e.hasta ? lab[i] : null; });
+        for (var i = 26; i < 30; i++) fuera[i] = true;
+        vrPlano.set({ P: LUNAS, lab: e.hasta >= 0 ? lb : null, fuera: fuera });
+      } else if (e.fase === 3 && e.d) {
+        var fuera3 = {};
+        if (e.quien === "dbs") for (var h = 26; h < 30; h++) fuera3[h] = true;
+        var c = { P: LUNAS, lab: lab, fuera: fuera3 };
+        if (e.d.c) c.cents = e.d.c;
+        if (e.d.s) c.disp = e.d.c.map(function (cc, j) { return { c: cc, r: e.d.s[j], g: j }; });
+        if (e.id === "r") c.segs = [{ a: e.d.c[0], b: e.d.c[1], cls: "union" }];
+        vrPlano.set(c);
+      } else vrPlano.set({ P: LUNAS, lab: lab });
+      var cu = "";
+      if (e.fase === 2 && e.J.py !== null) cu = "juntos = " + fn(lang === "py" ? e.J.py : e.J.r) + (e.F !== null ? " · filas = " + fn(e.F) : "") + (e.G !== null ? " · cols = " + fn(e.G) : "") + (e.E !== null ? " · azar = " + f(e.E, 2) : "");
+      else if (e.fase === 3 && e.d && e.d.s) cu = "s = [" + f(e.d.s[0], 3) + ", " + f(e.d.s[1], 3) + "]" + (e.d.r !== null ? " · r = " + f(e.d.r, 3) : "") + (e.d.total !== null ? " · total = " + f(e.d.total, 3) : "");
+      else if (e.fin) cu = "bucles y librería: 1.0 y 0.18; 1.285 y 0.879";
+      $("vrCuenta").innerHTML = cu;
+    }
+    B.vidaReal($("vidareal"), {
+      codigo: CODIGO,
+      eventos: EV,
+      narrar: narrar,
+      vars: function (e, ctx) {
+        var v = [];
+        if (!e) return v;
+        if (e.quien) v.push('<span>evaluando <b>' + nombreQ(e.quien) + '</b></span>');
+        if (e.fase === 2 && e.J.py !== null) v.push('<span>juntos = <b>' + fn(ctx.lang() === "py" ? e.J.py : e.J.r) + '</b></span>');
+        if (e.fase === 3 && e.d && e.d.i !== null) v.push('<span>i = <b>' + ctx.ix(e.d.i) + '</b></span>');
+        if (e.fase === 3 && e.d && e.d.peor !== null) v.push('<span>peor = <b>' + f(e.d.peor, 3) + '</b></span>');
+        return v;
+      },
+      visual: visual,
+      demora: function (e) {
+        if (!e) return 600;
+        return { cuenta: 1300, nij: 1000, ret: 1300, retdb: 1300, r: 1200, cent: 1100, disp: 1100 }[e.id] || 800;
+      }
+    });
+
+    /* prediccion y trampas reales */
+    B.numerico(cuerpo("vrPred"), {
+      pregunta: "Contando todo el programa, ¿cuántas veces se ejecuta la línea <code>juntos += pares(nij)</code> (en R, <code>juntos &lt;- juntos + pares(nij)</code>)?",
+      respuesta: 8,
+      tolerancia: 0,
+      pistas: [
+        "Ese bucle no recorre puntos: recorre las casillas de la tabla de contingencia. ¿Cuántas filas y columnas tiene, con dos lunas y dos grupos?",
+        "La tabla es de 2 × 2. ¿Y cuántas veces se llama a rand_ajustado?"
+      ],
+      diagnostico: function (v) {
+        if (v === 4) return "Eso es una llamada. El programa llama a rand_ajustado dos veces: una con DBSCAN y otra con k-means.";
+        if (v === 26 || v === 52) return "Los puntos se recorren en el bucle de la tabla. Este bucle recorre casillas.";
+        if (v === 2) return "Se llama dos veces, pero en cada llamada el bucle da una vuelta por casilla.";
+        return null;
+      },
+      explicacion: "<b>8</b>: la tabla es de 2 × 2, así que el bucle da 4 vueltas, y rand_ajustado se llama dos veces. El bucle de la tabla, en cambio, da 26 vueltas por llamada: por eso la animación lo muestra de a una luna. Ahora dale a reproducir.",
+      alResolver: function (ok) { C.reto("codigo1", ok); }
+    });
+    prop("codigo2", {
+      pregunta: "Quieres la silueta de DBSCAN y escribes:" +
+        '<pre class="mini-code">db = DBSCAN(eps=1.0, min_samples=3).fit(X)\nprint(round(silhouette_score(X, db.labels_), 3))</pre>' +
+        "Imprime <b>0.153</b>, y no 0.245 como en el recorrido. ¿Por qué?",
+      opciones: [
+        "Las 4 etiquetas −1 del ruido se tratan como un tercer grupo, disperso por todo el plano",
+        "scikit-learn usa otra fórmula de la silueta",
+        "Faltó escalar los datos",
+        "silhouette_score toma una muestra al azar de los puntos"
+      ],
+      correcta: 0,
+      pistas: [null,
+        "La fórmula es la misma; lo que cambia es qué puntos y qué grupos entran.",
+        "El recorrido tampoco escaló, y dio 0.245.",
+        "Solo muestrea si le pasas sample_size; por defecto usa todos."],
+      explicacion: "silhouette_score no sabe que −1 es ruido: lo toma como un grupo más, con 4 puntos en las cuatro esquinas, y eso baja la media. Hay que filtrar primero: <code>m = db.labels_ &gt;= 0</code> y <code>silhouette_score(X[m], db.labels_[m])</code>, que da 0.245. Lo mismo pasa con davies_bouldin_score, que con el ruido adentro da 6.644."
+    });
+    prop("codigo3", {
+      pregunta: "Corres DBSCAN con las filas al revés y comparas con las lunas reales:" +
+        '<pre class="mini-code">inv = DBSCAN(eps=1.0, min_samples=3).fit(X[::-1]).labels_[::-1]\nprint((inv[luna] == real[luna]).mean())\nprint(adjusted_rand_score(real[luna], inv[luna]))</pre>' +
+        "La primera línea imprime <b>0.0</b>. ¿Qué imprime la segunda?",
+      opciones: [
+        "1.0: el reparto es el mismo, solo cambió el nombre de los grupos",
+        "0.0, igual que la primera",
+        "−1.0: el peor acuerdo posible",
+        "0.5"
+      ],
+      correcta: 0,
+      pistas: [null,
+        "Con las filas al revés, la primera luna que encuentra DBSCAN es la de abajo: la llama 0. ¿Cambiaron los grupos o solo sus nombres?",
+        "El Rand ajustado cuenta pares juntos y separados: no le importa cómo se llama cada grupo.",
+        "Piensa en pares: ¿hay algún par que un reparto junte y el otro separe?"],
+      explicacion: "Imprime <b>1.0</b>. Comparar etiquetas una por una solo tiene sentido si los nombres de los grupos coinciden, y en agrupamiento los números son arbitrarios: aquí la luna de arriba se llamó 1 y la de abajo 0, y todas \"fallan\". El Rand ajustado compara pares, así que no depende de los nombres."
+    });
+  })();
+
+  /* ---------------- tarjetas ---------------- */
+  B.tarjetas($("tarjetas"), [
+    ["¿Qué significa validar un agrupamiento, y en qué tres momentos?", "Antes: ver si hay tendencia a agruparse (Hopkins, VAT). Durante: elegir algoritmo y parámetros. Después: medir la calidad de los grupos (índices internos, externos y estabilidad)."],
+    ["Con H = Σy / (Σx + Σy), ¿qué valor de Hopkins indica grupos?", "Cerca de 1; 0.5 es azar. Ojo: clustertend en R usa la convención contraria (Σx arriba), donde cerca de 0 es agrupable."],
+    ["¿Qué diferencia hay entre un índice interno y uno externo?", "El interno usa solo los puntos y el reparto (silueta, Davies-Bouldin, Calinski-Harabasz, Dunn). El externo compara con etiquetas reales (Rand, Rand ajustado, pureza, VI)."],
+    ["¿Por qué k-means puede ganar en silueta aunque se equivoque?", "Porque la silueta, Davies-Bouldin y Calinski-Harabasz usan promedios o centroides y premian grupos redondos y compactos. Un grupo largo, como una luna, sale castigado."],
+    ["¿Cuánto vale el Rand ajustado de un reparto al azar?", "Cerca de 0. Los negativos son apenas peores que el azar; 1 es acuerdo perfecto."],
+    ["¿Qué mide el índice de Dunn?", "La separación mínima entre grupos (el par más cercano de grupos distintos) dividida por el diámetro máximo de un grupo. Se busca grande."],
+    ["¿Qué te dice la estabilidad, y qué no?", "Si el reparto se repite al quitar o mover unos puntos. No dice si es correcto: un error sistemático también es estable."],
+    ["¿Qué hacer con el ruido de DBSCAN al calcular índices?", "Dejarlo fuera de los índices internos (no es un grupo), e informar aparte la proporción de ruido. scikit-learn lo toma como un grupo más si no lo filtras."]
+  ]);
+
+  /* ---------------- conexiones ---------------- */
+  B.conexiones("validacion-clusters");
+})();
+</script>
+</body>
+</html>
