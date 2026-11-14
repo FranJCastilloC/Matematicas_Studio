@@ -23,8 +23,14 @@ Piezas: `vercel.json` (sirve `biblioteca/` y manda `/api/*` a la función), `api
 3. **Pon la contraseña.** En *Settings → Environment Variables*, agrega:
    - `BIBLIOTECA_USUARIO`: el usuario que quieras, por ejemplo `francisco`
    - `BIBLIOTECA_CLAVE`: tu contraseña
-4. **Despliega.** *Deployments → Redeploy*, o haz cualquier `git push`. Las variables nuevas solo valen
+4. **Despliega.** Haz cualquier `git push` a `main`. Las variables nuevas solo valen
    a partir del siguiente despliegue.
+
+**Para publicar cambios, solo `git push`.** No uses *Redeploy* en el panel ni `vercel --prod` desde la terminal:
+*Redeploy* reconstruye el código de un deploy que ya existe, no el de GitHub, y si ese deploy es viejo
+se queda con el dominio (pasó el 2026-11-14: producción volvió a 53 páginas). Si producción quedó en un deploy
+equivocado, se arregla promoviendo el deploy de Git correcto:
+`node /opt/homebrew/bin/vercel promote <url-del-deploy> --scope francisco-castillos-projects-2eacffcf`.
 
 Al abrir la dirección `.vercel.app`, el navegador pide usuario y contraseña. En el índice aparece "Historial"
 con un punto verde cuando el progreso quedó guardado.
