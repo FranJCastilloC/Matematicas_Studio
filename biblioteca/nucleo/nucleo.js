@@ -175,7 +175,13 @@
     return { toca: pasados >= iv, pasados: pasados, intervalo: iv, sesiones: n };
   };
 
+  // "Ya lo domino": una marca que el usuario pone a mano. Se guarda como nota ("1" o "0") para que
+  // viaje con el resto del progreso al servidor. Un tema marcado cuenta como dominado al 100 %.
+  B.dominado = function (id) { return B.nota(id, "dominado") === "1"; };
+  B.marcarDominado = function (id, si) { B.nota(id, "dominado", si ? "1" : "0"); return !!si; };
+
   B.dominioDe = function (p) {
+    if (p && p.notas && p.notas.dominado === "1") return 1;
     if (!p || !p.total) return 0;
     var n = 0;
     for (var k in p.retos) if (p.retos[k] && p.retos[k].ok) n++;
@@ -217,8 +223,10 @@
         avisar();
       },
       retoOk: function (rid) { var r = propio(B.progreso(id).retos, rid); return !!(r && r.ok); },
+      marcarDominado: function (si) { B.marcarDominado(id, si); avisar(); },
       dominio: function () {
         var p = B.progreso(id), n = 0;
+        if (p.notas && p.notas.dominado === "1") return 1;
         cfg.retos.forEach(function (r) { var x = propio(p.retos, r); if (x && x.ok) n++; });
         return cfg.retos.length ? n / cfg.retos.length : 0;
       },
@@ -228,11 +236,15 @@
 
   B.medidor = function (el, concepto) {
     el.classList.add("meter");
-    el.innerHTML = '<span>dominio</span><span class="track"><span class="fill"></span></span><b>0%</b>';
+    el.innerHTML = '<span>dominio</span><span class="track"><span class="fill"></span></span><b>0%</b>' +
+      '<label class="domino-pag" title="Marca esta casilla si ya dominas el tema y no necesitas hacerlo"><input type="checkbox"><span>ya lo domino</span></label>';
+    var caja = el.querySelector(".domino-pag input");
+    caja.addEventListener("change", function () { concepto.marcarDominado(caja.checked); });
     concepto.alCambiar(function () {
       var d = concepto.dominio();
       el.querySelector(".fill").style.width = (d * 100).toFixed(1) + "%";
       el.querySelector("b").textContent = Math.round(d * 100) + "%";
+      caja.checked = B.dominado(concepto.id);
     });
   };
 

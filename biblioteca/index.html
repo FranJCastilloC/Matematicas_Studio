@@ -46,6 +46,9 @@ details.ruta > summary p { grid-column: 2 / -1; margin: 0; color: var(--ink-2); 
 .concepto { display: flex; flex-direction: column; gap: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; text-decoration: none; color: var(--ink); transition: border-color .15s, transform .15s; min-width: 0; }
 a.concepto:hover { border-color: var(--ink-3); transform: translateY(-1px); }
 .concepto .top { display: flex; align-items: center; gap: 8px; }
+.concepto .domino { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; font-family: var(--f-mono); font-size: 10.5px; color: var(--ink-3); cursor: pointer; white-space: nowrap; }
+.concepto .domino input { width: 15px; height: 15px; accent-color: var(--ok); cursor: pointer; margin: 0; }
+.concepto .domino:hover { color: var(--ink); }
 .concepto .area { font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
 .badge { margin-left: auto; font-family: var(--f-mono); font-size: 10.5px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink-2); white-space: nowrap; }
 .badge.nuevo { border-color: var(--j); color: var(--j); }
@@ -189,31 +192,36 @@ a.concepto:hover { border-color: var(--ink-3); transform: translateY(-1px); }
   try { ui = JSON.parse(localStorage.getItem(KEY_UI) || "{}") || {}; } catch (e) { ui = {}; }
   function guardarUi() { try { localStorage.setItem(KEY_UI, JSON.stringify(ui)); } catch (e) {} }
 
-  var filas = CAT.map(function (c) {
-    if (!lista(c)) return { c: c, dom: 0, pasos: 0, estado: "planeado" };
-    var p = B.progreso(c.id);
-    var dom = B.dominioDe(p);
-    var pasos = p.totalPasos ? Math.min(1, p.pasos.length / p.totalPasos) : 0;
-    var rep = B.estadoRepaso(p);
-    var estado = !p.vista ? "nuevo" : dom >= 1 && !(rep && rep.toca) ? "dominado" : rep && rep.toca ? "repasar" : "curso";
-    return { c: c, p: p, dom: dom, pasos: pasos, rep: rep, estado: estado };
-  });
-  var listas = filas.filter(function (f) { return f.estado !== "planeado"; });
+  var filas, listas, RUTAS;
+  function recalcular() {
+    filas = CAT.map(function (c) {
+      if (!lista(c)) return { c: c, dom: 0, pasos: 0, estado: "planeado" };
+      var p = B.progreso(c.id);
+      var marcado = B.dominado(c.id);   // "ya lo domino": cuenta como dominado sin hacer la pagina
+      var dom = marcado ? 1 : B.dominioDe(p);
+      var pasos = marcado ? 1 : (p.totalPasos ? Math.min(1, p.pasos.length / p.totalPasos) : 0);
+      var rep = marcado ? null : B.estadoRepaso(p);
+      var estado = marcado ? "dominado" : !p.vista ? "nuevo" : dom >= 1 && !(rep && rep.toca) ? "dominado" : rep && rep.toca ? "repasar" : "curso";
+      return { c: c, p: p, dom: dom, pasos: pasos, rep: rep, estado: estado, marcado: marcado };
+    });
+    listas = filas.filter(function (f) { return f.estado !== "planeado"; });
 
-  /* estadisticas */
-  var nDom = listas.filter(function (f) { return f.dom >= 1; }).length;
-  var nRep = listas.filter(function (f) { return f.estado === "repasar"; }).length;
-  var nCurso = listas.filter(function (f) { return f.p.vista && f.dom < 1; }).length;
-  $("stats").innerHTML =
-    '<div class="stat"><b>' + listas.length + ' <small>de ' + CAT.length + '</small></b><span>páginas construidas</span></div>' +
-    '<div class="stat"><b>' + nCurso + '</b><span>en curso</span></div>' +
-    '<div class="stat"><b>' + nDom + '</b><span>dominados</span></div>' +
-    '<div class="stat' + (nRep ? ' alerta' : '') + '"><b>' + nRep + '</b><span>para repasar hoy</span></div>';
+    /* estadisticas */
+    var nDom = listas.filter(function (f) { return f.dom >= 1; }).length;
+    var nRep = listas.filter(function (f) { return f.estado === "repasar"; }).length;
+    var nCurso = listas.filter(function (f) { return f.p.vista && f.dom < 1; }).length;
+    $("stats").innerHTML =
+      '<div class="stat"><b>' + listas.length + ' <small>de ' + CAT.length + '</small></b><span>páginas construidas</span></div>' +
+      '<div class="stat"><b>' + nCurso + '</b><span>en curso</span></div>' +
+      '<div class="stat"><b>' + nDom + '</b><span>dominados</span></div>' +
+      '<div class="stat' + (nRep ? ' alerta' : '') + '"><b>' + nRep + '</b><span>para repasar hoy</span></div>';
 
-  $("repaso").innerHTML = listas.filter(function (f) { return f.estado === "repasar"; }).map(function (f) {
-    return '<a class="item" href="' + esc(f.c.archivo) + '#retos"><span><b>' + esc(f.c.titulo) + '</b><br><small>Hace ' + f.rep.pasados +
-      ' días de tu última práctica. Haz los retos de nuevo sin mirar el recorrido.</small></span><span class="ir">repasar</span></a>';
-  }).join("");
+    $("repaso").innerHTML = listas.filter(function (f) { return f.estado === "repasar"; }).map(function (f) {
+      return '<a class="item" href="' + esc(f.c.archivo) + '#retos"><span><b>' + esc(f.c.titulo) + '</b><br><small>Hace ' + f.rep.pasados +
+        ' días de tu última práctica. Haz los retos de nuevo sin mirar el recorrido.</small></span><span class="ir">repasar</span></a>';
+    }).join("");
+    RUTAS = rutasDe();
+  }
 
   /* filtros: grupo, materia y unidad, solo construidas */
   var grupos = UNIS.map(function (u) { return u.grupo; }).filter(function (g, i, a) { return g && a.indexOf(g) === i; });
@@ -256,7 +264,8 @@ a.concepto:hover { border-color: var(--ink-3); transform: translateY(-1px); }
         '<div class="meta">' + apareceCorto(c) + '<span>' + esc(c.fuente) + '</span></div></div>';
     }
     return '<a class="concepto ' + f.estado + '" href="' + esc(c.archivo) + '">' +
-      '<div class="top"><span class="paso-n">' + c.orden + '</span><span class="area">' + esc(c.area) + '</span><span class="badge ' + f.estado + '">' + NOMBRES[f.estado] + '</span></div>' +
+      '<div class="top"><span class="paso-n">' + c.orden + '</span><span class="area">' + esc(c.area) + '</span><span class="badge ' + f.estado + '">' + NOMBRES[f.estado] + '</span>' +
+      '<label class="domino" title="Marca esta casilla si ya dominas el tema y no necesitas hacerlo"><input type="checkbox" data-dom="' + esc(c.id) + '"' + (f.marcado ? ' checked' : '') + '><span>ya lo domino</span></label></div>' +
       '<h3>' + esc(c.titulo) + '</h3><p>' + esc(c.resumen) + '</p>' +
       '<div class="barras">' +
       '<div class="b"><span>pasos</span><span class="t"><i class="p" style="width:' + (f.pasos * 100).toFixed(0) + '%"></i></span><span>' + Math.round(f.pasos * 100) + '%</span></div>' +
@@ -280,7 +289,7 @@ a.concepto:hover { border-color: var(--ink-3); transform: translateY(-1px); }
       return { u: u, todos: l };
     });
   }
-  var RUTAS = rutasDe();
+  recalcular();
   // por defecto se abren las rutas donde estas trabajando; si no hay ninguna, la primera con algo por dominar
   function abiertasPorDefecto() {
     var ab = RUTAS.filter(function (r) { return r.todos.some(function (f) { return f.estado === "curso" || f.estado === "repasar"; }); });
@@ -335,6 +344,17 @@ a.concepto:hover { border-color: var(--ink-3); transform: translateY(-1px); }
     });
   }
   $("buscar").addEventListener("input", pintar);
+  // la casilla "ya lo domino" vive dentro del enlace de la tarjeta: se evita abrir la pagina y se marca o desmarca
+  $("grid").addEventListener("click", function (e) {
+    var caja = e.target.closest ? e.target.closest(".domino") : null;
+    if (!caja) return;
+    e.preventDefault();
+    e.stopPropagation();
+    var inp = caja.querySelector("input"), id = inp.getAttribute("data-dom");
+    B.marcarDominado(id, !B.dominado(id));
+    recalcular();
+    pintar();
+  });
   pintar();
 
   /* lo proximo en construirse, por tanda */

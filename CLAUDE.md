@@ -145,6 +145,9 @@ se vuelve parte del recorrido como un recuadro `.destacado` con predicción, no 
 - `opcionMultiple`, `numerico`, `ordenar`, `cazarError`, `tarjetas`: ver comentarios en el archivo.
   En los textos, `$...$` se renderiza con KaTeX.
 - El progreso vive en `localStorage` con la clave `biblioteca:v1`. Repaso espaciado a 1, 3, 7, 14 y 30 días.
+- "Ya lo domino": casilla en cada tarjeta del índice y junto al medidor de cada página. Guarda la nota `dominado` ("1" o "0")
+  con `B.marcarDominado(id, si)` / `B.dominado(id)`; un tema marcado cuenta como dominado al 100 % y no pide repaso. Viaja
+  con el resto del progreso (es una nota, así que la mezcla del servidor no la pierde).
 - Si un componente nuevo sirve para más de un concepto, va al núcleo, no a la página.
 
 ## Estilo
