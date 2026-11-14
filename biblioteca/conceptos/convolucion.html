@@ -1,0 +1,1572 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Convolución y filtros</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+@media (min-width: 981px) { .escenario { max-height: calc(100vh - 80px); overflow-y: auto; } }
+
+/* ---------- cuadriculas (imagen, filtro, mapa) ---------- */
+.grilla { display: grid; gap: 2px; width: 100%; user-select: none; -webkit-user-select: none; }
+.grilla .cel { aspect-ratio: 1; min-width: 0; display: grid; place-items: center; border-radius: 3px; background: var(--cell-zero); color: var(--ink);
+  font: 500 10px var(--f-mono); font-variant-numeric: tabular-nums; overflow: hidden; position: relative; }
+.grilla.chica .cel { font-size: 9px; }
+.grilla.grande .cel { font-size: 12px; }
+.grilla .cel.ven { box-shadow: inset 0 0 0 2px var(--accent); }
+.grilla .cel.foco { box-shadow: 0 0 0 2px var(--accent); z-index: 1; }
+.grilla .cel.oculta { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.grilla .cel.vacia { background: transparent; box-shadow: inset 0 0 0 1px var(--line-soft); }
+.grilla .cel.llega { outline: 2px solid var(--ok); outline-offset: -2px; }
+.grilla.clic .cel { cursor: pointer; }
+.grilla .cel input { width: 100%; height: 100%; border: 0; padding: 0; margin: 0; background: transparent; color: inherit; text-align: center;
+  font: 600 12px var(--f-mono); -moz-appearance: textfield; appearance: textfield; }
+.grilla .cel input::-webkit-outer-spin-button, .grilla .cel input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.grilla .cel input:focus { outline: 2px solid var(--focus); outline-offset: -2px; border-radius: 3px; }
+.gfig { margin: 0; min-width: 0; }
+.gfig figcaption { font: 500 11px var(--f-mono); color: var(--ink-3); margin-bottom: 5px; }
+.gfig .factor { font: 500 11px var(--f-mono); color: var(--ink-2); margin-top: 4px; }
+.esc-fila { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 14px; align-items: start; margin-bottom: 12px; }
+.esc-cuenta { font-family: var(--f-mono); font-size: 12.5px; color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: pre-wrap; overflow-wrap: anywhere;
+  padding-top: 10px; border-top: 1px dashed var(--line); min-height: 2.6em; }
+.esc-cuenta b { color: var(--ink); font-weight: 600; }
+.esc-cuenta b.pos { color: var(--pos); }
+.esc-cuenta b.neg { color: var(--neg); }
+.esc-cuenta b.oculto { color: var(--accent); }
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.esc-head .hint { font-size: 12.5px; color: var(--ink-2); }
+.filtros { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+.filtros button { font-size: 12px; padding: 5px 9px; }
+
+/* ---------- tira 1D ---------- */
+.tira { display: grid; grid-template-columns: 58px repeat(8, minmax(0, 1fr)); gap: 3px; align-items: center; }
+.tira .rot { font: 500 10.5px var(--f-mono); color: var(--ink-3); text-align: right; padding-right: 4px; }
+.tira .cel { aspect-ratio: 1; display: grid; place-items: center; border-radius: 4px; background: var(--cell-zero); font: 500 12px var(--f-mono); font-variant-numeric: tabular-nums; min-width: 0; }
+.tira .cel.ven { box-shadow: inset 0 0 0 2px var(--accent); }
+.tira .cel.peso { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.tira .cel.oculta { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.tira .cel.foco { box-shadow: 0 0 0 2px var(--accent); }
+.tira .cel.clic { cursor: pointer; }
+.rango { display: flex; align-items: center; gap: 10px; margin: 12px 0 8px; font-size: 12.5px; color: var(--ink-2); }
+.rango input { flex: 1; min-width: 0; }
+
+/* ---------- pila de mapas y aprendizaje ---------- */
+.pila { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.aprende { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
+.grande-linea { font-family: var(--f-mono); font-size: 13.5px; color: var(--ink-2); margin: 10px 0; font-variant-numeric: tabular-nums; }
+.grande-linea b { color: var(--ink); font-size: 16px; font-weight: 500; }
+
+/* ---------- calculadora de parametros ---------- */
+.calc { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 10px 0; }
+.calc label { font-size: 12px; color: var(--ink-2); display: grid; gap: 3px; }
+.calc input { width: 100%; font: 500 13px var(--f-mono); padding: 5px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); }
+.calc-res { font-family: var(--f-mono); font-size: 12.5px; color: var(--ink-2); white-space: pre-wrap; overflow-wrap: anywhere; }
+.calc-res b { color: var(--ink); }
+
+/* ---------- tablas pequenas en el texto ---------- */
+.mini-tabla { border-collapse: collapse; font-family: var(--f-mono); font-size: 13px; margin: 6px 0 10px; }
+.mini-tabla td { border: 1px solid var(--line); padding: 3px 9px; text-align: right; font-variant-numeric: tabular-nums; }
+.mini-par { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-start; }
+.mini-par .rot { font: 500 11px var(--f-mono); color: var(--ink-3); margin-bottom: 2px; }
+
+/* ---------- vida real ---------- */
+.vr-g { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, .75fr) minmax(0, 1.1fr); gap: 10px; align-items: start; margin-top: 8px; }
+.vr-salida { margin: 10px 0 0; padding: 8px 10px; background: var(--surface-2); border-radius: 8px; font: 12px/1.5 var(--f-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (max-width: 560px) {
+  .vr-g { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); }
+  .vr-g .gfig:last-child { grid-column: 1 / -1; max-width: 220px; }
+  .calc { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .esc-fila { gap: 10px; }
+}
+
+/* ---------- retos propios ---------- */
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.ojo-par { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; max-width: 420px; margin-top: 8px; }
+.ojo-opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
+.ojo-opts .opt { text-align: center; }
+.objetivos { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.objetivos li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.objetivos .m { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.objetivos li.hecho { color: var(--ink); }
+.objetivos li.hecho .m { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 3px var(--surface); }
+.constr { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.4fr); gap: 14px; max-width: 440px; align-items: start; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ Convolución</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Aprendizaje automático · SM142004 UD5 y Raschka cap. 14</p>
+    <h1>Convolución y filtros: una ventanita que busca patrones</h1>
+    <p class="lede">
+      Una red convolucional no mira la imagen entera de una vez. Pasa una <b>ventanita de 3 × 3 pesos</b> por encima, posición por posición,
+      y en cada lugar multiplica y suma. El resultado es un mapa que dice <b>dónde aparece el patrón</b> que esos pesos describen: un borde, una mancha, una esquina.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> Tienes una foto en blanco y negro como una tabla de números (0 es negro, 9 es blanco). ¿Cómo le dirías a un programa que encuentre los bordes, los lugares donde el color cambia de golpe? Escríbelo como te salga.</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: compararía cada píxel con..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>De una tira de píxeles a un filtro que aprende</h2>
+      <p>Ocho pasos. Empiezas con una sola fila de píxeles, sin fórmulas, y terminas viendo cómo una red descubre sola el filtro de bordes. Cada paso cierra con un chequeo que abre el siguiente.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="Predecir">
+          <span class="etapa">Paso 1</span>
+          <h3>Una tira de ocho píxeles</h3>
+          <p>A la derecha hay una sola fila de una imagen: ocho píxeles. Los dos primeros son negros (0), después viene una franja blanca (9) y al final vuelve el negro.</p>
+          <p>Debajo hay una ventanita con tres pesos: <b>−1, 0 y 1</b>. La ventanita se apoya sobre tres píxeles seguidos, multiplica cada píxel por el peso que tiene debajo y suma los tres resultados. Después se corre un lugar a la derecha y repite. Cada suma es un número de la fila de salida.</p>
+          <p>Todavía no ves ninguna salida. Primero piensa qué va a pasar.</p>
+          <div class="check" id="chk1"><p class="check-tit">Predice antes de ver</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Deslizar">
+          <span class="etapa">Paso 2</span>
+          <h3>Deslizar, multiplicar, sumar</h3>
+          <p>Ahora la tira tiene grises intermedios. Mueve la ventana con el deslizador o tocando un píxel. En cada posición ves los tres productos y su suma, que cae en la fila de salida, justo debajo del píxel del centro.</p>
+          <div class="fbloque"><div class="vivo" id="vivo2"></div></div>
+          <p>Fíjate en el tamaño: la ventana tiene 3 de ancho y la tira 8, así que solo cabe en <b>8 − 3 + 1 = 6</b> posiciones. La salida es más corta que la entrada. Los dos píxeles de los extremos nunca quedan en el centro de la ventana.</p>
+          <p>Cambia el filtro. Con <b>suma [1 1 1]</b> la salida se parece a la tira, pero suavizada. Con <b>copia [0 1 0]</b> la salida repite el píxel del centro. El mismo mecanismo hace cosas muy distintas según los pesos.</p>
+          <p>Raschka empieza el capítulo de redes convolucionales exactamente aquí, con la convolución en una dimensión y su notación: la entrada se llama x, el filtro w (o núcleo, <i>kernel</i>) <cite class="cita" data-fuente="raschka14" data-pag="4" data-pimp="454" data-seccion="Discrete convolutions in one dimension" data-que="La definición y = x ∗ w con la suma de x[i − k] w[k], y las dos rarezas de la fórmula: índices que van a infinito y un índice negativo que gira el filtro." data-cuando="Después de mover la ventana por toda la tira"></cite>.</p>
+          <details class="profundizar">
+            <summary>¿Por qué la fórmula del libro tiene un x[i − k]?</summary>
+            <div>
+              <p>La convolución de los libros de señales recorre x y w en sentidos opuestos: mientras k sube, <span data-tex="i-k"></span> baja. Eso equivale a <b>girar el filtro</b> antes de deslizarlo. Lo que haces aquí, sin girar, se llama <b>correlación cruzada</b>. En el paso 6 vas a ver por qué las redes usan esta y la llaman convolución igual.</p>
+              <p>Un detalle si lees la página 455 de Raschka: la "fórmula práctica" <span data-tex="y[i]=\sum_{k=0}^{m-1} x^p[i+m-k]\,w[k]"></span> tiene un desfase de uno. Con <span data-tex="k=0"></span> toma <span data-tex="x^p[i+m]"></span>, que ya queda fuera de la ventana <span data-tex="x[i:i+m]"></span> que el mismo texto usa después. Lo coherente es <span data-tex="x^p[i+m-1-k]"></span>, y es lo que hace su propio código de la página 459.</p>
+            </div>
+          </details>
+          <div class="check" id="chk2"><p class="check-tit">Calcula con los datos</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="En 2D">
+          <span class="etapa">Paso 3</span>
+          <h3>Lo mismo, en dos dimensiones</h3>
+          <p>Una imagen es una tabla. Aquí tienes una cruz blanca de 8 × 8 sobre fondo negro (0 negro, 9 blanco) y un filtro de 3 × 3: el borde vertical de antes, repetido en tres filas. La ventana ya no se corre solo a la derecha: recorre filas y columnas. Toca la imagen o el mapa para moverla.</p>
+          <p>Ahora sí, con nombre. Si <span data-tex="X"></span> es la imagen y <span data-tex="W"></span> el filtro de <span data-tex="m \times m"></span>, la celda <span data-tex="(i, j)"></span> del mapa es</p>
+          <div class="fbloque">
+            <div data-tex="Y[i,j] \;=\; \sum_{u=0}^{m-1}\sum_{v=0}^{m-1} X[i+u,\; j+v]\; W[u,v]" data-display></div>
+            <div class="vivo" id="vivo3"></div>
+          </div>
+          <p>u y v recorren el filtro: fila y columna dentro de la ventana. La salida mide <span data-tex="(n-m+1)\times(n-m+1)"></span>: con 8 y 3 da 6 × 6. A ese mapa se le llama <b>mapa de características</b> o mapa de activación.</p>
+          <p>En el libro la convolución 2D se define igual, extendiendo cada idea de 1D a las dos dimensiones por separado <cite class="cita" data-fuente="raschka14" data-pag="9" data-pimp="459" data-seccion="Performing a discrete convolution in 2D" data-que="La definición de Y[i, j] con una suma doble y la condición de que el filtro no sea más grande que la imagen. Arriba de la página está el código conv1d." data-cuando="Al terminar este paso"></cite>.</p>
+          <details class="profundizar">
+            <summary>¿Por qué n − m + 1?</summary>
+            <div>
+              <p>La esquina izquierda de la ventana puede estar en las columnas 0, 1, 2, ... hasta que el borde derecho toque el final: la última posición es <span data-tex="n-m"></span>. De 0 a <span data-tex="n-m"></span> hay <span data-tex="n-m+1"></span> posiciones. Si quieres que la salida tenga el mismo tamaño que la entrada, hay que agregar un marco de ceros alrededor (<i>padding</i>): eso es la página siguiente de la ruta, "Stride, padding y pooling".</p>
+            </div>
+          </details>
+          <div class="check" id="chk3"><p class="check-tit">Calcula con los datos</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Producto punto">
+          <span class="etapa">Paso 4</span>
+          <h3>Cada celda es un producto punto</h3>
+          <p>Mira de otra forma lo que pasa en cada posición. Aplana la ventana en un vector de 9 números y el filtro en otro vector de 9. Multiplicar celda a celda y sumar es exactamente el <b>producto punto</b> de esos dos vectores.</p>
+          <div class="fbloque">
+            <div data-tex="Y[i,j] = \operatorname{vec}(\text{ventana}_{ij}) \cdot \operatorname{vec}(W)" data-display></div>
+            <div class="vivo" id="vivo4"></div>
+          </div>
+          <p>Y el producto punto mide parecido. Por eso el mapa se enciende donde la ventana <b>se parece al filtro</b>: el coseno entre los dos vectores (la similitud coseno de la página <a href="producto-punto-coseno.html">Producto punto y similitud coseno</a>) dice qué tan alineados están, sin importar el brillo total <cite class="cita" data-fuente="brasil3" data-pag="18" data-pimp="25" data-seccion="3.3 The Dot Product: cosine similarity" data-que="La similitud coseno explicada con vectores de dos dimensiones y la figura de qué tan parecidos son. Es la misma cuenta que hace un filtro sobre una ventana." data-cuando="Si quieres repasar por qué el producto punto mide parecido"></cite>.</p>
+          <p>Este es el ejemplo de la UD5: una imagen de 6 × 6 con números de 0 a 255 y un filtro en forma de X. La primera ventana da <b>429</b>, la cuenta que el material desarrolla término a término <cite class="cita" data-fuente="cnn5" data-pag="7" data-seccion="Convolución" data-que="Las dos figuras del ejemplo: la ventana de arriba a la izquierda, 18·1 + 54·0 + ... = 429, y la ventana corrida una columna, que da 505. Las dos cuentas están bien." data-cuando="Después de resolver el chequeo de este paso"></cite>.</p>
+          <div class="check" id="chk4"><p class="check-tit">Calcula con los datos</p><div class="cuerpo"></div></div>
+
+          <div class="destacado" id="destacado4">
+            <p class="dest-tit">Una frase del material que confunde</p>
+            <h4>¿La salida tiene el mismo tamaño que la entrada?</h4>
+            <p>La teoría de la UD5 dice que la salida de una capa convolucional "generalmente tiene las mismas dimensiones espaciales" que la entrada <cite class="cita" data-fuente="cnn5" data-pag="6" data-seccion="Capas convolucionales" data-que="La capa convolucional como producto punto entre una región de la entrada y los pesos, y la frase sobre las mismas dimensiones espaciales." data-cuando="Al leer este recuadro"></cite>. Su propio ejemplo la contradice: la imagen es 6 × 6 y la salida 4 × 4 <cite class="cita" data-fuente="cnn5" data-pag="8" data-seccion="Convolución: salida completa y detector de bordes" data-que="La figura Image 6x6 * Weight = 4x4 con la salida completa, y debajo el detector de bordes que vas a revisar en el paso 6." data-cuando="Al leer este recuadro"></cite>. El tamaño solo se conserva si se agrega un marco de ceros (padding "same"). Sin marco, cada filtro de 3 × 3 le quita un píxel a cada lado. Para practicar la cuenta, la UD5 trae LeNet capa por capa <cite class="cita" data-fuente="cnn5diapo" data-pag="48" data-seccion="LeNet" data-que="La arquitectura LeNet con el tamaño de cada mapa, capa por capa: sirve para practicar la cuenta n − m + 1 en cada convolución y ver la mitad en cada pooling." data-cuando="Después del chequeo de este recuadro"></cite>.</p>
+            <div class="check" id="chk4b"><p class="check-tit">Predice</p><div class="cuerpo"></div></div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Filtros clásicos">
+          <span class="etapa">Paso 5</span>
+          <h3>Cada filtro busca otra cosa</h3>
+          <p>Volvemos a la cruz. Con los botones del escenario cambias el filtro y el mapa se recalcula entero. También puedes escribir tus propios pesos en las celdas del filtro.</p>
+          <ul>
+            <li><b>Borde vertical</b>: −1 a la izquierda, +1 a la derecha. Sus pesos suman 0, así que en zonas lisas da 0 y solo responde donde el brillo cambia de izquierda a derecha.</li>
+            <li><b>Desenfoque</b>: nueve pesos de 1/9. Es el promedio de la ventana: suaviza.</li>
+            <li><b>Nitidez</b>: 5 en el centro y −1 en los cuatro vecinos. Resalta el píxel contra su entorno.</li>
+            <li><b>Identidad</b>: un 1 en el centro. Copia la imagen (recortada).</li>
+          </ul>
+          <p>Ninguno de estos filtros es mágico: son tablas de 9 números. Lo que hace cada uno sale de multiplicar y sumar.</p>
+          <div class="cita" id="citaHipo" hidden></div>
+          <div class="check" id="chk5"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Girar o no">
+          <span class="etapa">Paso 6</span>
+          <h3>Correlación cruzada contra convolución</h3>
+          <p>La convolución de los matemáticos <b>gira el filtro 180°</b> antes de deslizarlo (de ahí el <span data-tex="i-k"></span> de la fórmula del libro). Lo que hiciste hasta ahora, sin girar, es la <b>correlación cruzada</b>:</p>
+          <div class="fbloque">
+            <div data-tex="\underbrace{\sum_{u,v} X[i+u,\,j+v]\,W[u,v]}_{\text{correlación cruzada}} \qquad \underbrace{\sum_{u,v} X[i+u,\,j+v]\,W[m-1-u,\,m-1-v]}_{\text{convolución}}" data-display></div>
+          </div>
+          <p>Las redes calculan la primera y la llaman "convolución". PyTorch, Keras y casi todas las librerías lo hacen así <cite class="cita" data-fuente="raschka14" data-pag="6" data-pimp="456" data-seccion="Cross-correlation (recuadro)" data-que="El recuadro que define la correlación cruzada con x[i + k] y avisa que PyTorch y la mayoría de los frameworks la implementan y la llaman convolución." data-cuando="Después de girar el filtro en el escenario"></cite>. Girar 180° no es trasponer: es invertir el orden de las filas y también el de las columnas, <code>W[::-1, ::-1]</code> <cite class="cita" data-fuente="raschka14" data-pag="11" data-pimp="461" data-seccion="Performing a discrete convolution in 2D" data-que="El giro W_rot = W[::-1, ::-1], la advertencia de que no es la transpuesta y el resultado Y = [[4.6, 1.6], [7.5, 2.9]] de la figura 14.7." data-cuando="Cuando quieras hacer un giro a mano"></cite>.</p>
+          <p>La UD6 de Matemáticas escribe la fórmula de la convolución verdadera, con el núcleo volteado, y la presenta como lo que hacen las capas <code>Conv2D</code>, que en realidad no voltean <cite class="cita" data-fuente="ud6" data-pag="14" data-seccion="3.3.1 CNN" data-que="La fórmula (I ∗ K)(i, j) = Σ Σ I(m, n) K(i − m, j − n), con el núcleo volteado, junto a max pooling, average pooling y ReLU." data-cuando="Al terminar este paso"></cite>. Para aprender los pesos da igual: la red aprende directamente el filtro ya girado. Pero si comparas números a mano con un libro, el signo puede salir al revés.</p>
+          <div class="check" id="chk6"><p class="check-tit">Predice antes de girar</p><div class="cuerpo"></div></div>
+
+          <div class="destacado" id="destacado6">
+            <p class="dest-tit">Una errata del material</p>
+            <h4>El detector de bordes de la UD5 suma mal</h4>
+            <p>La teoría (p. 8) y la diapositiva 24 muestran esta ventana y este filtro, el de Sobel, que detecta bordes verticales dando más peso a la fila del centro:</p>
+            <div class="mini-par">
+              <div><div class="rot">ventana</div><table class="mini-tabla"><tr><td>0</td><td>25</td><td>75</td></tr><tr><td>0</td><td>75</td><td>80</td></tr><tr><td>0</td><td>75</td><td>80</td></tr></table></div>
+              <div><div class="rot">filtro de Sobel</div><table class="mini-tabla"><tr><td>−1</td><td>0</td><td>1</td></tr><tr><td>−2</td><td>0</td><td>2</td></tr><tr><td>−1</td><td>0</td><td>1</td></tr></table></div>
+            </div>
+            <p>El material escribe el producto elemento a elemento y la suma: <b>235</b>. Haz tú la cuenta antes de seguir leyendo.</p>
+            <div class="check" id="chk6b"><p class="check-tit">Calcula</p><div class="cuerpo"></div></div>
+            <p id="sobelExtra" hidden>Además, el material dibuja la salida de 5 × 5 a partir de una entrada de 5 × 5, con ese número en la segunda fila y la segunda columna. Eso solo cuadra con un marco de ceros (padding "same"), que no menciona: sin marco la salida sería 3 × 3 y el 315 iría en la esquina. Y como el filtro de Sobel no es simétrico, la convolución verdadera (girando el filtro) daría <b>−315</b>. El material llama convolución a una correlación cruzada y no lo dice.</p>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Canales y filtros">
+          <span class="etapa">Paso 7</span>
+          <h3>Varios filtros, varios canales</h3>
+          <p>Una capa convolucional no usa un solo filtro: usa varios a la vez, y cada uno produce su propio mapa. En el escenario, cuatro filtros sobre la misma cruz dan cuatro mapas de 6 × 6. Apilados forman una salida de <b>6 × 6 × 4</b>: alto, ancho y canales.</p>
+          <p>Y una imagen en color ya trae tres canales (rojo, verde, azul). Entonces cada filtro también tiene tres capas, una por canal: se hace la cuenta de siempre en cada canal y <b>se suman los tres resultados</b>, más un sesgo. Un filtro, un mapa, aunque la entrada tenga muchos canales <cite class="cita" data-fuente="raschka14" data-pag="15" data-pimp="465" data-seccion="Working with multiple input or color channels" data-que="Cómo se convoluciona cada canal con su propia capa del núcleo y se suman los resultados: Z = Σ_c W[:, :, c] ∗ X[:, :, c] + b, y después la activación." data-cuando="Al terminar este paso"></cite>.</p>
+          <div class="fbloque">
+            <div data-tex="Z_k = \sum_{c=1}^{C_{in}} W_{k,c} \star X_c \;+\; b_k \qquad A_k = \sigma(Z_k)" data-display></div>
+          </div>
+          <p>Es la misma forma que una capa de una <a href="red-multicapa.html">red multicapa</a>, <span data-tex="z = Wx + b"></span> y después la activación, solo que la multiplicación por la matriz se cambia por deslizar el filtro. Cada filtro tiene <span data-tex="k \cdot k \cdot C_{in}"></span> pesos más un sesgo, y esos pesos se reutilizan en todas las posiciones de la imagen <cite class="cita" data-fuente="raschka14" data-pag="17" data-pimp="467" data-seccion="How many trainable parameters exist in the preceding example? (recuadro)" data-que="La cuenta m1 × m2 × 3 × 5 + 5 de una capa convolucional contra los (n1 × n2)² × 3 × 5 pesos de una capa densa que hiciera lo mismo." data-cuando="Después de usar la calculadora"></cite>.</p>
+          <div class="check" id="chk7"><p class="check-tit">Calcula</p><div class="cuerpo"></div></div>
+          <div id="calcBox" hidden>
+            <p style="margin-top:14px"><b>Calculadora.</b> Cambia los números y compara con una capa densa que produjera una salida del mismo tamaño.</p>
+            <div class="calc">
+              <label>imagen n × n<input type="number" id="cN" min="4" max="512" value="28"></label>
+              <label>filtro k × k<input type="number" id="cK" min="1" max="11" value="5"></label>
+              <label>canales de entrada<input type="number" id="cCi" min="1" max="512" value="1"></label>
+              <label>filtros<input type="number" id="cCo" min="1" max="512" value="32"></label>
+            </div>
+            <div class="calc-res" id="calcRes"></div>
+          </div>
+          <details class="profundizar">
+            <summary>¿Por qué no usar una capa densa?</summary>
+            <div>
+              <p>Para pasar de la cruz de 8 × 8 a un mapa de 6 × 6 con una capa densa, cada una de las 36 salidas necesita un peso por cada uno de los 64 píxeles: <span data-tex="64 \cdot 36 + 36 = 2340"></span> parámetros. El filtro de bordes hace el trabajo con <span data-tex="9 + 1 = 10"></span>. Dos ideas lo permiten: cada salida mira solo una ventana (conectividad local) y todas las ventanas usan los mismos pesos (pesos compartidos). La teoría de la UD5 menciona los parámetros compartidos, pero no explica que lo compartido es el mismo filtro en todas las posiciones.</p>
+            </div>
+          </details>
+        </section>
+
+        <section class="paso card" data-titulo="Se aprenden">
+          <span class="etapa">Paso 8</span>
+          <h3>Los filtros no se diseñan: se aprenden</h3>
+          <p>En una red convolucional nadie escribe los −1 y los 1. Los nueve pesos empiezan en cualquier valor y se ajustan con descenso de gradiente, igual que los pesos de una red multicapa.</p>
+          <p>El escenario lo muestra en miniatura. El objetivo es el mapa que produce el filtro de bordes verticales sobre la cruz (con el blanco en 1 en lugar de 9). El filtro de la red empieza en <b>ceros</b>. Cada paso calcula el error cuadrático medio entre su mapa y el objetivo, y mueve cada peso en contra de su derivada:</p>
+          <div class="fbloque">
+            <div data-tex="\frac{\partial L}{\partial W[u,v]} = \frac{2}{N}\sum_{i,j}\big(Y[i,j]-T[i,j]\big)\,X[i+u,\,j+v] \qquad W \leftarrow W - 0.3\,\frac{\partial L}{\partial W}" data-display></div>
+          </div>
+          <p>Fíjate en la derivada: es otra vez una correlación, esta vez entre la imagen y el error. Las capas convolucionales se entrenan con las mismas herramientas que ya conoces, solo que cada peso recibe la suma de lo que aportó en todas las posiciones.</p>
+          <p>La UD6 entrena una red convolucional de verdad sobre MNIST con Keras: 32 filtros de 3 × 3 en la primera capa. El texto dice que entrena "con 1 época para simplificar", pero el código pone <code>epochs=5</code> y la salida muestra las cinco <cite class="cita" data-fuente="ud6" data-pag="15" data-seccion="3.3.1 CNN" data-que="El código Keras con Conv2D(32, (3, 3)), MaxPooling2D, Flatten y Dense, y la salida de las cinco épocas con val_accuracy de 0.9841 a 0.9898." data-cuando="Cuando termines la página"></cite>.</p>
+          <div class="check" id="chk8"><p class="check-tit">Predice antes de entrenar</p><div class="cuerpo"></div></div>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+        </div>
+
+        <div id="esc1d">
+          <div class="filtros" id="filtros1d"></div>
+          <div class="tira" id="tira"></div>
+          <div class="rango"><span>ventana</span><input type="range" id="rango1d" min="0" max="5" step="1" value="0" aria-label="Posición de la ventana"><span id="rangoLab"></span></div>
+          <div class="esc-cuenta" id="cuenta1d"></div>
+        </div>
+
+        <div id="esc2d" hidden>
+          <div class="filtros" id="filtros2d"></div>
+          <div class="btn-row" id="filaGirar" style="margin:-4px 0 12px" hidden>
+            <button type="button" id="btnGirar" disabled>Girar el filtro 180°</button>
+            <span class="hint" id="girarHint" style="font-size:12px;color:var(--ink-3)">Responde la predicción para activarlo.</span>
+          </div>
+          <div class="esc-fila">
+            <figure class="gfig"><figcaption id="capImg">Imagen</figcaption><div id="gImg"></div></figure>
+            <figure class="gfig"><figcaption id="capNuc">Filtro</figcaption><div id="gNuc"></div><div class="factor" id="nucFactor"></div></figure>
+          </div>
+          <div class="esc-fila">
+            <figure class="gfig"><figcaption id="capOut">Mapa</figcaption><div id="gOut"></div></figure>
+            <figure class="gfig"><figcaption>Productos de la ventana</figcaption><div id="gProd"></div></figure>
+          </div>
+          <div class="esc-cuenta" id="cuenta2d"></div>
+        </div>
+
+        <div id="escPila" hidden>
+          <figure class="gfig" style="max-width:200px;margin-bottom:12px"><figcaption>Entrada 8 × 8 × 1</figcaption><div id="pilaImg"></div></figure>
+          <div class="pila" id="pila"></div>
+          <p class="esc-cuenta" id="pilaCuenta"></p>
+        </div>
+
+        <div id="escAprende" hidden>
+          <div class="btn-row" style="margin-bottom:12px">
+            <button type="button" class="primary" id="btnPaso1" disabled>Un paso</button>
+            <button type="button" id="btnPaso10" disabled>10 pasos</button>
+            <button type="button" class="ghost" id="btnReAprende" disabled>Volver a ceros</button>
+          </div>
+          <div class="aprende">
+            <figure class="gfig"><figcaption>Objetivo T</figcaption><div id="apT"></div></figure>
+            <figure class="gfig"><figcaption>Mapa de la red Y</figcaption><div id="apY"></div></figure>
+            <figure class="gfig"><figcaption>Filtro de la red W</figcaption><div id="apW"></div></figure>
+            <figure class="gfig"><figcaption>Imagen X (blanco = 1)</figcaption><div id="apX"></div></figure>
+          </div>
+          <div class="grande-linea" id="apLinea"></div>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>El ejemplo de la UD5 escrito como un programa: la imagen de 6 × 6, el filtro en X y cuatro bucles. La primera ventana va producto por producto; las demás, de a bloques de nueve. Al final se compara con SciPy en Python y con una versión vectorizada propia en R, que no trae convolución 2D de serie.</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir</p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="true">Python</button>
+            <button type="button" data-lang="r" aria-pressed="false">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">1 · los datos</span><span data-f="2">2 · ventana por ventana</span><span data-f="3">3 · comparar</span>
+        </div>
+        <div class="vr-g">
+          <figure class="gfig"><figcaption>X (6 × 6)</figcaption><div id="vrX"></div></figure>
+          <figure class="gfig"><figcaption>W (3 × 3)</figcaption><div id="vrW"></div></figure>
+          <figure class="gfig"><figcaption>Y (4 × 4)</figcaption><div id="vrY"></div></figure>
+        </div>
+        <div class="vr-cuenta esc-cuenta" id="vrCuenta"></div>
+        <pre class="vr-salida" id="vrSalida" hidden></pre>
+      </div>
+    </div>
+
+    <p class="vr-nota">En la práctica no se escriben los cuatro bucles: <code>correlate2d(X, W, mode="valid")</code> de SciPy, o una capa <code>Conv2D</code> de Keras o <code>nn.Conv2d</code> de PyTorch, hacen esta misma cuenta. Raschka escribe la versión con bucles y la compara con <code>scipy.signal.convolve2d</code>, pero su función tiene un error que solo aparece con paso 2 <cite class="cita" data-fuente="raschka14" data-pag="12" data-pimp="462" data-seccion="Performing a discrete convolution in 2D" data-que="La función conv2d con giro, padding y stride, comparada con convolve2d sobre una matriz de 4 × 4. Ojo con el bucle: divide entre el stride en el límite y además avanza de a s." data-cuando="Después de reproducir el programa hasta el final"></cite>: su bucle hace <code>range(0, int((n_pad - m)/s) + 1, s)</code>, divide entre el paso <b>y además</b> avanza de a s. Con paso 1 no se nota; con el ejemplo de su propia figura 14.6 (paso 2) devuelve una sola celda en lugar de 2 × 2. Lo correcto es <code>range(0, n_pad - m + 1, s)</code>.</p>
+
+    <details class="profundizar">
+      <summary>La versión vectorizada, y cómo se escribe en PyTorch y Keras</summary>
+      <div>
+        <p>NumPy puede armar las 16 ventanas de una vez, sin bucles, y multiplicarlas por el filtro con <code>einsum</code>. Se corrió en esta máquina y da la misma matriz:</p>
+        <pre class="vr-salida">from numpy.lib.stride_tricks import sliding_window_view
+V = sliding_window_view(X, (3, 3))    # forma (4, 4, 3, 3): las 16 ventanas
+Y = np.einsum("ijuv,uv->ij", V, W)    # cada ventana por W, sumado</pre>
+        <p>En PyTorch y Keras la misma capa se escribe así. <b>Este código no se corrió</b>: en esta máquina no están instalados.</p>
+        <pre class="vr-salida"># PyTorch: formato (lote, canales, alto, ancho)
+capa = nn.Conv2d(1, 1, kernel_size=3, bias=False)
+capa.weight.data = torch.tensor(W, dtype=torch.float32).view(1, 1, 3, 3)
+Y = capa(torch.tensor(X, dtype=torch.float32).view(1, 1, 6, 6))   # (1, 1, 4, 4)
+
+# Keras: formato (lote, alto, ancho, canales)
+capa = keras.layers.Conv2D(1, (3, 3), use_bias=False)</pre>
+        <p>Las dos calculan correlación cruzada, sin girar el filtro. Y fíjate en el orden de las dimensiones: PyTorch pone los canales antes del alto y el ancho; Keras, al final.</p>
+      </div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Dos funciones, dos signos</h3><span class="estado" data-reto="codigo2"></span></div>
+        <div id="codigo2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>El modo por defecto</h3><span class="estado" data-reto="codigo3"></span></div>
+        <div id="codigo3"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: el índice te avisa cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>¿Qué filtro fue?</h3><span class="estado" data-reto="ojo"></span></div>
+        <p class="desc">Una imagen al azar y el mapa que salió. Decide qué filtro se usó sin calcular. Apruebas con 4 de 5.</p>
+        <div id="ojo"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Construir</span><h3>Escribe el filtro</h3><span class="estado" data-reto="construir"></span></div>
+        <p class="desc">Escribe números enteros en el filtro (el mapa se recalcula sobre la cruz) hasta cumplir cada objetivo. Se marcan solos.</p>
+        <div class="constr">
+          <figure class="gfig"><figcaption>Tu filtro</figcaption><div id="conNuc"></div></figure>
+          <figure class="gfig"><figcaption>Tu mapa</figcaption><div id="conOut"></div></figure>
+        </div>
+        <ul class="objetivos" id="objetivos"></ul>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>Una ventana con lápiz</h3><span class="estado" data-reto="mano"></span></div>
+        <p class="desc">Una ventana y un filtro al azar. Haz la cuenta en papel antes de pedir pistas.</p>
+        <div id="manoDatos"></div>
+        <div id="mano"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Alguien se equivocó</h3><span class="estado" data-reto="error"></span></div>
+        <p class="desc">Una de las líneas tiene un error. Tócala.</p>
+        <div id="error"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Zona lisa</h3><span class="estado" data-reto="prop1"></span></div>
+        <div id="prop1"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Filtro simétrico</h3><span class="estado" data-reto="prop2"></span></div>
+        <div id="prop2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Contar parámetros</h3><span class="estado" data-reto="prop3"></span></div>
+        <div id="prop3"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Pesos al doble</h3><span class="estado" data-reto="prop4"></span></div>
+        <div id="prop4"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>El tamaño del mapa</h3><span class="estado" data-reto="prop5"></span></div>
+        <div id="prop5"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Arma la operación de memoria y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Fórmula de memoria</span><h3>Arma la operación pieza por pieza</h3><span class="estado" data-reto="formula"></span></div>
+        <p class="desc">Lo que calcula una capa convolucional: la correlación cruzada, sin girar el filtro. Hay piezas de más. No mires arriba.</p>
+        <div id="formula"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el libro</h2>
+      <p class="lecturas-intro">Ya deslizaste la ventana con tus manos. Ahora ve a la versión técnica y comprueba que la reconoces. Cada entrada dice qué vas a encontrar y en qué momento conviene leerla. Si abres la biblioteca con doble clic, el enlace abre el PDF en esa página.</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+    <p style="margin-top:14px;font-size:14px;color:var(--ink-2)">También conviene tener a mano <a href="red-multicapa.html">Red multicapa y propagación hacia adelante</a>: una capa convolucional es una capa de esa red con la matriz cambiada por un filtro que se desliza.</p>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> La cruz de 8 × 8 (0 negro, 9 blanco) y las tiras de píxeles son inventadas, elegidas para que las cuentas den enteras.
+    La imagen de 6 × 6, el filtro en X y la ventana del detector de Sobel son los del material de la UD5 de SM142004. Tu progreso se guarda solo en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+/*
+  EJEMPLO COMUN DE LA PARTE CONVOLUCIONAL DE LA RUTA DE REDES (lo deja esta pagina, la primera;
+  "Stride, padding y pooling" y las siguientes reutilizan estos numeros, calculados con python3, numpy y scipy).
+
+  Imagen inventada: una cruz blanca de 8 x 8, 0 = negro, 9 = blanco (CRUZ abajo).
+     0 0 0 0 0 0 0 0
+     0 0 0 9 9 0 0 0
+     0 0 0 9 9 0 0 0
+     0 9 9 9 9 9 9 0
+     0 9 9 9 9 9 9 0
+     0 0 0 9 9 0 0 0
+     0 0 0 9 9 0 0 0
+     0 0 0 0 0 0 0 0
+  Filtros 3 x 3 (correlacion cruzada, sin girar, stride 1, sin padding -> mapa 6 x 6):
+    borde vertical   [[-1,0,1],[-1,0,1],[-1,0,1]]
+      [[0,18,18,-18,-18,0],[9,18,18,-18,-18,-9],[18,9,9,-9,-9,-18],[18,9,9,-9,-9,-18],[9,18,18,-18,-18,-9],[0,18,18,-18,-18,0]]
+    borde horizontal [[-1,-1,-1],[0,0,0],[1,1,1]]
+      [[0,9,18,18,9,0],[18,18,9,9,18,18],[18,18,9,9,18,18],[-18,-18,-9,-9,-18,-18],[-18,-18,-9,-9,-18,-18],[0,-9,-18,-18,-9,0]]
+    desenfoque       unos / 9
+      [[0,2,4,4,2,0],[2,5,7,7,5,2],[4,7,8,8,7,4],[4,7,8,8,7,4],[2,5,7,7,5,2],[0,2,4,4,2,0]]
+    nitidez          [[0,-1,0],[-1,5,-1],[0,-1,0]]
+      [[0,-9,27,27,-9,0],[-9,-18,18,18,-18,-9],[27,18,9,9,18,27],[27,18,9,9,18,27],[-9,-18,18,18,-18,-9],[0,-9,27,27,-9,0]]
+  Ejemplo del material (UD5, A p. 7-8, B p. 20-23): imagen 6 x 6 (UD5 abajo) con el filtro X [[1,0,1],[0,1,0],[1,0,1]]
+    -> [[429,505,686,856],[261,792,412,640],[633,653,851,751],[608,913,713,657]]  (simetrico: convolucion = correlacion)
+    max pooling 2 x 2 stride 2 -> [[792,856],[913,851]]  (lo calcula el mapa de citas; esta pagina no hace pooling)
+  Sobel del material: ventana [[0,25,75],[0,75,80],[0,75,80]] con [[-1,0,1],[-2,0,2],[-1,0,1]] = 315 (el material pone 235);
+    con el filtro girado (convolucion verdadera) = -315. Entrada 5 x 5 completa con padding same: 315 en la fila 2, columna 2.
+  Tiras 1D: [0,0,9,9,9,0,0,0] con [-1,0,1] -> [9,9,0,-9,-9,0]; [2,2,5,8,8,6,3,3] -> [3,6,3,-2,-5,-3].
+  Paso 8: aprender el borde vertical sobre la cruz con blanco = 1, filtro desde ceros, ECM, tasa 0.3:
+    error medio 1.3726 tras 1 paso, 0.0142 tras 10, 0.0008 tras 50; el filtro llega a [[-1,0,1]]*3 (la solucion es unica: rango 9).
+*/
+(function () {
+  "use strict";
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var RETOS = ["ojo", "construir", "mano", "error", "prop1", "prop2", "prop3", "prop4", "prop5", "formula", "codigo1", "codigo2", "codigo3"];
+  var C = B.concepto({ id: "convolucion", retos: RETOS, pasos: 8 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  /* ---------------- utilidades ---------------- */
+  var f = B.fmt;
+  function n(v) {
+    if (v === null || v === undefined) return "";
+    if (Math.abs(v - Math.round(v)) < 1e-9) return f(Math.round(v), 0);
+    if (Math.abs(v * 10 - Math.round(v * 10)) < 1e-9) return f(v, 1);
+    return f(v, 2);
+  }
+  function par(v) { return v < 0 ? "(" + n(v) + ")" : n(v); }
+  function copia(M) { return M.map(function (r) { return r.slice(); }); }
+  function girar(W) { return W.slice().reverse().map(function (r) { return r.slice().reverse(); }); }
+  function escalar(W, k) { return W.map(function (r) { return r.map(function (v) { return v * k; }); }); }
+  function corr(X, W) {
+    var m = W.length, o1 = X.length - m + 1, o2 = X[0].length - m + 1, Y = [];
+    for (var i = 0; i < o1; i++) {
+      Y.push([]);
+      for (var j = 0; j < o2; j++) {
+        var s = 0;
+        for (var u = 0; u < m; u++) for (var v = 0; v < m; v++) s += X[i + u][j + v] * W[u][v];
+        Y[i].push(Math.abs(s) < 1e-9 ? 0 : s);
+      }
+    }
+    return Y;
+  }
+  function ventana(X, i, j, m) {
+    var V = [];
+    for (var u = 0; u < m; u++) V.push(X[i + u].slice(j, j + m));
+    return V;
+  }
+  function maxAbs(M) { var t = 0; M.forEach(function (r) { r.forEach(function (v) { if (v !== null) t = Math.max(t, Math.abs(v)); }); }); return t; }
+  function iguales(A, B2) {
+    if (A.length !== B2.length) return false;
+    for (var i = 0; i < A.length; i++) for (var j = 0; j < A[i].length; j++) if (Math.abs(A[i][j] - B2[i][j]) > 1e-9) return false;
+    return true;
+  }
+
+  /* ---------------- datos ---------------- */
+  var CRUZ = [
+    [0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 9, 9, 0, 0, 0],
+    [0, 0, 0, 9, 9, 0, 0, 0],
+    [0, 9, 9, 9, 9, 9, 9, 0],
+    [0, 9, 9, 9, 9, 9, 9, 0],
+    [0, 0, 0, 9, 9, 0, 0, 0],
+    [0, 0, 0, 9, 9, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0]
+  ];
+  var UD5 = [
+    [18, 54, 51, 239, 244, 188],
+    [55, 121, 75, 78, 95, 88],
+    [35, 24, 204, 113, 109, 221],
+    [3, 154, 104, 235, 25, 130],
+    [15, 253, 225, 159, 78, 233],
+    [68, 85, 180, 214, 245, 0]
+  ];
+  var UNOS = [[1, 1, 1], [1, 1, 1], [1, 1, 1]];
+  var FILTROS = {
+    vert: { nom: "Borde vertical", w: [[-1, 0, 1], [-1, 0, 1], [-1, 0, 1]], fac: 1 },
+    hor: { nom: "Borde horizontal", w: [[-1, -1, -1], [0, 0, 0], [1, 1, 1]], fac: 1 },
+    blur: { nom: "Desenfoque", w: UNOS, fac: 1 / 9 },
+    sharp: { nom: "Nitidez", w: [[0, -1, 0], [-1, 5, -1], [0, -1, 0]], fac: 1 },
+    ident: { nom: "Identidad", w: [[0, 0, 0], [0, 1, 0], [0, 0, 0]], fac: 1 },
+    sobel: { nom: "Sobel (UD5)", w: [[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], fac: 1 },
+    equis: { nom: "La X de la UD5", w: [[1, 0, 1], [0, 1, 0], [1, 0, 1]], fac: 1 }
+  };
+  var TIRA_A = [0, 0, 9, 9, 9, 0, 0, 0];
+  var TIRA_B = [2, 2, 5, 8, 8, 6, 3, 3];
+  var F1D = { borde: { nom: "borde [−1 0 1]", w: [-1, 0, 1] }, suma: { nom: "suma [1 1 1]", w: [1, 1, 1] }, copia: { nom: "copia [0 1 0]", w: [0, 1, 0] } };
+
+  /* ---------------- cuadriculas ---------------- */
+  function grilla(el, M, o) {
+    o = o || {};
+    var cols = M[0].length, max = o.max || maxAbs(M) || 1, h = "";
+    for (var i = 0; i < M.length; i++) {
+      for (var j = 0; j < cols; j++) {
+        var v = M[i][j], cls = "cel", st = "", txt;
+        var oc = o.oculto && o.oculto(i, j);
+        if (o.ven && i >= o.ven[0] && i < o.ven[0] + o.ven[2] && j >= o.ven[1] && j < o.ven[1] + o.ven[2]) cls += " ven";
+        if (o.foco && o.foco[0] === i && o.foco[1] === j) cls += " foco";
+        if (o.llega && o.llega[0] === i && o.llega[1] === j) cls += " llega";
+        if (oc) { cls += " oculta"; txt = "?"; }
+        else if (v === null) { cls += " vacia"; txt = ""; }
+        else {
+          txt = o.fmt ? o.fmt(v) : n(v);
+          if (o.tipo === "gris") {
+            st = gris(v, max);
+          } else if (o.tipo === "signo") {
+            var q = Math.min(1, Math.abs(v) / max) * 62;
+            if (Math.abs(v) > 1e-9) st = "background:color-mix(in oklab, var(" + (v > 0 ? "--pos" : "--neg") + ") " + q.toFixed(0) + "%, var(--cell-zero));";
+          }
+        }
+        if (o.editable) txt = '<input type="number" step="1" inputmode="numeric" data-i="' + i + '" data-j="' + j + '" value="' + v + '" aria-label="Peso fila ' + (i + 1) + ', columna ' + (j + 1) + '">';
+        h += '<div class="' + cls + '" data-i="' + i + '" data-j="' + j + '"' + (st ? ' style="' + st + '"' : "") + '>' + txt + '</div>';
+      }
+    }
+    el.style.gridTemplateColumns = "repeat(" + cols + ", minmax(0, 1fr))";
+    el.className = "grilla " + (o.cls || "") + (o.clic ? " clic" : "");
+    el.innerHTML = h;
+    el._clic = o.clic || null;
+    if (!el._escucha) {
+      el._escucha = true;
+      el.addEventListener("click", function (e) {
+        var c = e.target.closest(".cel");
+        if (c && el._clic && e.target.tagName !== "INPUT") el._clic(+c.getAttribute("data-i"), +c.getAttribute("data-j"));
+      });
+    }
+  }
+  // escala de grises de verdad (0 negro, max blanco), igual en tema claro y oscuro
+  function gris(v, max) {
+    var g = Math.round(Math.max(0, Math.min(1, v / max)) * 255);
+    return "background:rgb(" + g + "," + g + "," + g + ");color:" + (g > 130 ? "#141821" : "#eef1f6") + ";";
+  }
+  function leerEditable(el) {
+    var W = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+    [].forEach.call(el.querySelectorAll("input"), function (inp) {
+      var v = parseFloat(inp.value);
+      W[+inp.getAttribute("data-i")][+inp.getAttribute("data-j")] = isFinite(v) ? v : 0;
+    });
+    return W;
+  }
+
+  /* ---------------- estado del recorrido ---------------- */
+  var est = {
+    paso: 0, chk: {}, t1: 0, f1: "borde",
+    img: CRUZ, filtro: "vert", W: FILTROS.vert.w, fac: 1, girado: false, ven: [0, 0], propio: false
+  };
+  var pasos;
+
+  var MODOS = [
+    { vista: "1d", tira: TIRA_A, f1: ["borde"], hint: "Predice antes de ver la salida" },
+    { vista: "1d", tira: TIRA_B, f1: ["borde", "suma", "copia"], hint: "Mueve la ventana o cambia el filtro" },
+    { vista: "2d", img: CRUZ, filtros: ["vert"], hint: "Toca la imagen o el mapa para mover la ventana", oculto: [2, 0], chk: 3 },
+    { vista: "2d", img: UD5, filtros: ["equis"], hint: "La imagen y el filtro de la UD5", oculto: [0, 1], chk: 4 },
+    { vista: "2d", img: CRUZ, filtros: ["vert", "hor", "blur", "sharp", "ident"], editable: true, hint: "Cambia de filtro o escribe tus pesos" },
+    { vista: "2d", img: CRUZ, filtros: ["vert", "sobel", "blur", "equis"], girar: true, hint: "Gira el filtro y compara" },
+    { vista: "pila", hint: "Cuatro filtros, cuatro mapas" },
+    { vista: "aprende", hint: "El filtro empieza en ceros" }
+  ];
+
+  function Wef() {
+    var W = escalar(est.W, est.fac);
+    return est.girado ? girar(W) : W;
+  }
+
+  /* ----- vista 1D ----- */
+  function pintar1d() {
+    var m = MODOS[est.paso], tira = m.tira, w = F1D[est.f1].w, k = est.t1;
+    var revelado = est.paso === 0 ? !!est.chk[1] : true;
+    var ocultoIdx = est.paso === 1 && est.f1 === "borde" && !est.chk[2] ? 4 : -1;
+    var sal = [];
+    for (var i = 0; i < 6; i++) sal.push(tira[i] * w[0] + tira[i + 1] * w[1] + tira[i + 2] * w[2]);
+    var h = '<span class="rot">píxeles</span>';
+    tira.forEach(function (v, i) {
+      h += '<div class="cel clic' + (i >= k && i < k + 3 ? " ven" : "") + '" data-i="' + i + '" style="' + gris(v, 9) + '">' + v + '</div>';
+    });
+    h += '<span class="rot">filtro</span>';
+    for (var c = 0; c < 8; c++) h += (c >= k && c < k + 3) ? '<div class="cel peso">' + n(w[c - k]) + '</div>' : '<span></span>';
+    h += '<span class="rot">productos</span>';
+    for (c = 0; c < 8; c++) {
+      if (c >= k && c < k + 3) {
+        var pr = tira[c] * w[c - k];
+        h += '<div class="cel">' + (revelado && k !== ocultoIdx ? n(pr) : "?") + '</div>';
+      } else h += '<span></span>';
+    }
+    h += '<span class="rot">salida</span><span></span>';
+    var tope = Math.max(1, maxAbs([sal]));
+    sal.forEach(function (v, i) {
+      var oc = !revelado || i === ocultoIdx;
+      var st = !oc && Math.abs(v) > 0 ? ' style="background:color-mix(in oklab, var(' + (v > 0 ? "--pos" : "--neg") + ') ' + (Math.abs(v) / tope * 62).toFixed(0) + '%, var(--cell-zero))"' : "";
+      h += '<div class="cel' + (oc ? " oculta" : "") + (i === k ? " foco" : "") + '"' + st + '>' + (oc ? "?" : n(v)) + '</div>';
+    });
+    h += '<span></span>';
+    $("tira").innerHTML = h;
+    $("rango1d").value = k;
+    $("rango1d").disabled = est.paso === 0 && !est.chk[1];
+    $("rangoLab").textContent = (k + 1) + " de 6";
+    var oculta = !revelado || k === ocultoIdx;
+    $("cuenta1d").innerHTML = "ventana " + (k + 1) + ": " + tira.slice(k, k + 3).map(function (v, i) { return v + "·" + par(w[i]); }).join(" + ") +
+      " = " + (oculta ? '<b class="oculto">?</b>' : '<b class="' + (sal[k] > 0 ? "pos" : sal[k] < 0 ? "neg" : "") + '">' + n(sal[k]) + "</b>");
+    $("vivo2").innerHTML = "salida = (" + sal.map(function (v, i) { return (i === ocultoIdx ? "?" : n(v)); }).join(", ") + ")<br>longitud: 8 − 3 + 1 = 6";
+    // botones de filtro
+    var fb = $("filtros1d");
+    fb.innerHTML = "";
+    m.f1.forEach(function (key) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.textContent = F1D[key].nom;
+      b.classList.toggle("on", est.f1 === key);
+      b.addEventListener("click", function () { est.f1 = key; pintar1d(); });
+      fb.appendChild(b);
+    });
+  }
+  $("tira").addEventListener("click", function (e) {
+    var c = e.target.closest(".cel.clic");
+    if (!c || (est.paso === 0 && !est.chk[1])) return;
+    est.t1 = Math.max(0, Math.min(5, +c.getAttribute("data-i") - 1));
+    pintar1d();
+  });
+  $("rango1d").addEventListener("input", function () { est.t1 = +this.value; pintar1d(); });
+
+  /* ----- vista 2D ----- */
+  function ocultoActual() {
+    var m = MODOS[est.paso];
+    if (!m.oculto || est.chk[m.chk]) return null;
+    if (est.propio) return null;
+    return m.oculto;
+  }
+  function pintar2d(sinNucleo) {
+    var m = MODOS[est.paso], X = est.img, W = Wef(), Y = corr(X, W), o = Y.length;
+    est.ven = [Math.min(est.ven[0], o - 1), Math.min(est.ven[1], o - 1)];
+    var vi = est.ven[0], vj = est.ven[1], oc = ocultoActual();
+    var esOculta = oc && oc[0] === vi && oc[1] === vj;
+    var esUD5 = X === UD5;
+    $("capImg").textContent = esUD5 ? "Imagen de la UD5, 6 × 6" : "Imagen 8 × 8";
+    $("capOut").textContent = "Mapa " + o + " × " + o;
+    $("capNuc").textContent = est.propio ? "Filtro (tuyo)" : FILTROS[est.filtro].nom + (est.girado ? ", girado" : "");
+    grilla($("gImg"), X, { tipo: "gris", max: esUD5 ? 255 : 9, ven: [vi, vj, 3], cls: esUD5 ? "chica" : "", clic: function (i, j) {
+      est.ven = [Math.max(0, Math.min(o - 1, i - 1)), Math.max(0, Math.min(o - 1, j - 1))]; pintar2d();
+    } });
+    var Wmostrar = est.girado ? girar(est.W) : est.W;
+    if (!sinNucleo) grilla($("gNuc"), Wmostrar, { tipo: "signo", max: 2, editable: !!m.editable && !est.girado, cls: "grande" });
+    $("nucFactor").textContent = est.fac !== 1 ? "todo × 1/9" : "";
+    grilla($("gOut"), Y, { tipo: "signo", foco: [vi, vj], cls: esUD5 ? "chica" : "", oculto: function (i, j) { return oc && oc[0] === i && oc[1] === j; },
+      clic: function (i, j) { est.ven = [i, j]; pintar2d(); } });
+    var V = ventana(X, vi, vj, 3), P = V.map(function (r, u) { return r.map(function (x, v) { return x * W[u][v]; }); });
+    grilla($("gProd"), P, { tipo: "signo", cls: esUD5 ? "chica" : "", oculto: function () { return esOculta; } });
+    var suma = Y[vi][vj];
+    var lineas = "Y[fila " + (vi + 1) + ", columna " + (vj + 1) + "] = suma de los 9 productos = " +
+      (esOculta ? '<b class="oculto">?</b>' : '<b class="' + (suma > 0 ? "pos" : suma < 0 ? "neg" : "") + '">' + n(suma) + "</b>");
+    $("cuenta2d").innerHTML = lineas;
+    // textos vivos de los pasos
+    if (est.paso === 2) {
+      $("vivo3").innerHTML = esOculta ? "ventana en fila " + (vi + 1) + ", columna " + (vj + 1) + ": la respuesta del chequeo, oculta"
+        : "Y[" + (vi + 1) + ", " + (vj + 1) + "] = " + V.map(function (r, u) { return r.map(function (x, v) { return x + "·" + par(W[u][v]); }).join(" + "); }).join("<br>&nbsp;&nbsp;+ ") + "<br>= " + n(suma);
+    }
+    if (est.paso === 3) {
+      var a = [], b = [];
+      V.forEach(function (r, u) { r.forEach(function (x, v) { a.push(x); b.push(W[u][v]); }); });
+      var dot = 0, na = 0, nb = 0;
+      a.forEach(function (x, k) { dot += x * b[k]; na += x * x; nb += b[k] * b[k]; });
+      var cos = na > 0 ? dot / Math.sqrt(na * nb) : 0;
+      $("vivo4").innerHTML = "(" + a.join(", ") + ")<br>· (" + b.join(", ") + ")<br>= " + (esOculta ? "?" : n(dot)) +
+        " &nbsp; · &nbsp; coseno = " + (esOculta ? "?" : f(cos, 3));
+    }
+    // botones
+    var fb = $("filtros2d");
+    fb.innerHTML = "";
+    (m.filtros || []).forEach(function (key) {
+      var bt = document.createElement("button");
+      bt.type = "button";
+      bt.textContent = FILTROS[key].nom;
+      bt.classList.toggle("on", !est.propio && est.filtro === key);
+      if (est.paso === 4 && key === "hor" && !est.chk[5]) { bt.disabled = true; bt.title = "Responde la predicción para activarlo"; }
+      bt.addEventListener("click", function () { ponerFiltro(key); pintar2d(); });
+      fb.appendChild(bt);
+    });
+    fb.hidden = (m.filtros || []).length < 2;
+    $("filaGirar").hidden = !m.girar;
+    $("btnGirar").textContent = est.girado ? "Volver al filtro sin girar" : "Girar el filtro 180°";
+    $("btnGirar").classList.toggle("on", est.girado);
+  }
+  function ponerFiltro(key) {
+    est.filtro = key; est.W = copia(FILTROS[key].w); est.fac = FILTROS[key].fac; est.propio = false;
+  }
+  $("gNuc").addEventListener("input", function () {
+    if (!MODOS[est.paso].editable) return;
+    est.W = leerEditable($("gNuc")); est.fac = 1; est.propio = true;
+    pintar2d(true);
+  });
+  $("btnGirar").addEventListener("click", function () { est.girado = !est.girado; pintar2d(); });
+
+  /* ----- vista pila (paso 7) ----- */
+  function pintarPila() {
+    grilla($("pilaImg"), CRUZ, { tipo: "gris", max: 9, cls: "chica" });
+    var p = $("pila");
+    if (!p.children.length) {
+      ["vert", "hor", "blur", "sharp"].forEach(function (k) {
+        var fg = document.createElement("figure");
+        fg.className = "gfig";
+        fg.innerHTML = "<figcaption>" + FILTROS[k].nom + "</figcaption><div></div>";
+        p.appendChild(fg);
+        grilla(fg.querySelector("div"), corr(CRUZ, escalar(FILTROS[k].w, FILTROS[k].fac)), { tipo: "signo", cls: "chica" });
+      });
+    }
+    $("pilaCuenta").innerHTML = "Salida apilada: <b>6 × 6 × 4</b>. Pesos: 4 filtros × (9 + 1 sesgo) = <b>40</b>, los mismos en cualquier tamaño de imagen.";
+  }
+
+  /* ----- vista aprende (paso 8) ----- */
+  var AX = CRUZ.map(function (r) { return r.map(function (v) { return v / 9; }); });
+  var AT = corr(AX, FILTROS.vert.w);
+  var ap = { W: [[0, 0, 0], [0, 0, 0], [0, 0, 0]], pasos: 0 };
+  function errorMedio(Y) { var s = 0, c = 0; Y.forEach(function (r, i) { r.forEach(function (v, j) { s += (v - AT[i][j]) * (v - AT[i][j]); c++; }); }); return s / c; }
+  function pasoAprende() {
+    var Y = corr(AX, ap.W), N = 36, G = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+    for (var i = 0; i < 6; i++) for (var j = 0; j < 6; j++) {
+      var r = Y[i][j] - AT[i][j];
+      for (var u = 0; u < 3; u++) for (var v = 0; v < 3; v++) G[u][v] += 2 / N * r * AX[i + u][j + v];
+    }
+    for (u = 0; u < 3; u++) for (v = 0; v < 3; v++) ap.W[u][v] -= 0.3 * G[u][v];
+    ap.pasos++;
+  }
+  function pintarAprende() {
+    var Y = corr(AX, ap.W);
+    grilla($("apT"), AT, { tipo: "signo", max: 2, cls: "chica" });
+    grilla($("apY"), Y, { tipo: "signo", max: 2, cls: "chica", fmt: function (v) { return f(v, 1); } });
+    grilla($("apW"), ap.W, { tipo: "signo", max: 1.2, cls: "grande", fmt: function (v) { return f(v, 2); } });
+    grilla($("apX"), AX, { tipo: "gris", max: 1, cls: "chica" });
+    $("apLinea").innerHTML = "pasos: <b>" + ap.pasos + "</b> &nbsp;·&nbsp; error medio: <b>" + f(errorMedio(Y), 4) + "</b>";
+  }
+  $("btnPaso1").addEventListener("click", function () { pasoAprende(); pintarAprende(); });
+  $("btnPaso10").addEventListener("click", function () { for (var k = 0; k < 10; k++) pasoAprende(); pintarAprende(); });
+  $("btnReAprende").addEventListener("click", function () { ap.W = [[0, 0, 0], [0, 0, 0], [0, 0, 0]]; ap.pasos = 0; pintarAprende(); });
+  function activarAprende() { ["btnPaso1", "btnPaso10", "btnReAprende"].forEach(function (id) { $(id).disabled = false; }); }
+
+  function entrar(i) {
+    est.paso = i;
+    var m = MODOS[i];
+    $("escHint").textContent = m.hint;
+    $("esc1d").hidden = m.vista !== "1d";
+    $("esc2d").hidden = m.vista !== "2d";
+    $("escPila").hidden = m.vista !== "pila";
+    $("escAprende").hidden = m.vista !== "aprende";
+    if (m.vista === "1d") {
+      est.f1 = m.f1[0];
+      est.t1 = 0;
+      pintar1d();
+    } else if (m.vista === "2d") {
+      est.img = m.img;
+      est.girado = false;
+      est.ven = [0, 0];
+      ponerFiltro(m.filtros[0]);
+      pintar2d();
+    } else if (m.vista === "pila") {
+      pintarPila();
+    } else {
+      pintarAprende();
+    }
+  }
+
+  /* ---------------- chequeos de cada paso ---------------- */
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+
+  B.opcionMultiple(cuerpo("chk1"), {
+    pregunta: "La ventana con pesos −1, 0, 1 recorre la tira 0 0 9 9 9 0 0 0. ¿Dónde da el número <b>más grande</b>?",
+    opciones: [
+      "Donde la tira pasa de oscuro a claro",
+      "En el medio de la franja clara",
+      "Donde la tira pasa de claro a oscuro",
+      "Da lo mismo en todas partes"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "En el medio de la franja los tres píxeles valen 9: −9 + 0 + 9. ¿Cuánto da?",
+      "Ahí el píxel de la izquierda es claro y el de la derecha oscuro. Con −1 a la izquierda y +1 a la derecha, ¿sale positivo o negativo?",
+      "Prueba una ventana sobre 0 0 9 y otra sobre 9 9 9. ¿Dan lo mismo?"],
+    explicacion: "El peso del centro es 0, así que la ventana solo hace <b>derecha menos izquierda</b>. Donde todo es igual da 0; donde sube de 0 a 9 da +9; donde baja de 9 a 0 da −9. Este filtro no mide brillo: mide <b>cambio</b>. Ahora mira la salida en el escenario y mueve la ventana.",
+    alResolver: function () { est.chk[1] = true; if (est.paso === 0) pintar1d(); pasos.completar(0); }
+  });
+
+  B.numerico(cuerpo("chk2"), {
+    pregunta: "Con el filtro <b>borde [−1 0 1]</b> sobre la tira 2 2 5 8 8 6 3 3, ¿cuánto vale la salida en la <b>ventana 5</b> (píxeles 5, 6 y 7)?",
+    respuesta: -5,
+    tolerancia: 0.001,
+    pistas: ["Los píxeles 5, 6 y 7 valen 8, 6 y 3.", "Es $8\\cdot(-1) + 6\\cdot 0 + 3\\cdot 1$."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 5) < 0.001) return "El tamaño está bien, pero el signo no. El −1 va con el píxel de la izquierda, que es el más claro.";
+      if (Math.abs(v + 2) < 0.001) return "Esa es la ventana 4 (píxeles 4, 5 y 6). Cuenta desde la ventana 1, que empieza en el píxel 1.";
+      if (Math.abs(v + 3) < 0.001) return "Esa es la ventana 6. La ventana 5 empieza en el píxel 5.";
+      return null;
+    },
+    explicacion: "$8\\cdot(-1) + 6\\cdot 0 + 3\\cdot 1 = -5$. Negativo: la tira se oscurece de izquierda a derecha en esa zona. Ya puedes ver esa celda en el escenario.",
+    alResolver: function () { est.chk[2] = true; if (est.paso === 1) pintar1d(); pasos.completar(1); }
+  });
+
+  B.numerico(cuerpo("chk3"), {
+    pregunta: "En el mapa, la celda de la <b>fila 3, columna 1</b> está oculta. Su ventana cubre las filas 3 a 5 y las columnas 1 a 3 de la cruz. ¿Cuánto vale?",
+    respuesta: 18,
+    tolerancia: 0.001,
+    pistas: ["Solo importan la primera columna de la ventana (peso −1) y la tercera (peso +1). La del medio se multiplica por 0.",
+      "Columna 1 de la ventana: 0, 0, 0. Columna 3: 0, 9, 9."],
+    diagnostico: function (v) {
+      if (Math.abs(v + 18) < 0.001) return "Signo al revés: el −1 va con la columna de la izquierda, que aquí es toda negra.";
+      if (Math.abs(v - 9) < 0.001) return "Cuenta las tres filas de la ventana: la columna derecha tiene dos 9, no uno.";
+      return null;
+    },
+    explicacion: "$-(0+0+0) + 0 + (0+9+9) = 18$. La ventana tiene negro a la izquierda y blanco a la derecha: está sobre el borde izquierdo del brazo horizontal.",
+    alResolver: function () { est.chk[3] = true; if (est.paso === 2) pintar2d(); pasos.completar(2); }
+  });
+
+  function cerrar4() { if (est.chk[4] && est.chk["4b"]) pasos.completar(3); }
+  B.numerico(cuerpo("chk4"), {
+    pregunta: "La ventana corrida una columna a la derecha (fila 1, columna 2) cubre <b>54 51 239 / 121 75 78 / 24 204 113</b>. Con el filtro en X, ¿cuánto vale?",
+    respuesta: 505,
+    tolerancia: 0.001,
+    pistas: ["El filtro en X solo deja pasar las cuatro esquinas y el centro de la ventana.", "Es $54 + 239 + 75 + 24 + 113$."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 429) < 0.001) return "Esa es la primera ventana. Esta empieza una columna más a la derecha.";
+      if (Math.abs(v - 959) < 0.001) return "Sumaste los nueve números. Los que caen sobre un 0 del filtro no cuentan.";
+      return null;
+    },
+    explicacion: "$54 + 239 + 75 + 24 + 113 = 505$, el mismo número que la UD5. Mueve la ventana por el mapa y mira el coseno: las celdas más altas son ventanas con mucha luz en las esquinas y el centro, con forma de X.",
+    alResolver: function () { est.chk[4] = true; if (est.paso === 3) pintar2d(); cerrar4(); }
+  });
+  B.opcionMultiple(cuerpo("chk4b"), {
+    pregunta: "LeNet, en la diapositiva 48 de la UD5, recibe una imagen de 32 × 32 y le pasa filtros de 5 × 5 sin marco de ceros. ¿De qué tamaño es cada mapa?",
+    opciones: ["28 × 28", "32 × 32", "27 × 27", "30 × 30"],
+    correcta: 0,
+    pistas: [null, "Eso pasaría con un marco de ceros (padding same). Aquí no hay marco.", "Revisa la cuenta: $n - m + 1$.", "Con 3 × 3 le quitarías 2. ¿Y con 5 × 5?"],
+    explicacion: "$32 - 5 + 1 = 28$. Es la capa C1 de la diapositiva: 6 mapas de 28 × 28. Después viene C3, otra vez con 5 × 5: de 14 a 10.",
+    alResolver: function () { est.chk["4b"] = true; cerrar4(); }
+  });
+
+  B.opcionMultiple(cuerpo("chk5"), {
+    pregunta: "Todavía no toques el botón <b>Borde horizontal</b> (−1 en la fila de arriba, +1 en la de abajo). Sobre la cruz, ¿qué se va a encender?",
+    opciones: [
+      "Los bordes de arriba y de abajo de cada brazo",
+      "Los bordes de la izquierda y de la derecha de cada brazo",
+      "Solo el centro de la cruz",
+      "Todo lo blanco por igual"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "Ese es el filtro vertical: compara izquierda con derecha. Este compara arriba con abajo.",
+      "En el centro todo es blanco: la fila de arriba y la de abajo valen lo mismo. ¿Qué da −9·3 + 9·3?",
+      "En medio de una zona blanca, arriba y abajo son iguales y la resta da 0."],
+    explicacion: "Compara la fila de abajo con la de arriba: responde donde el brillo cambia <b>de arriba hacia abajo</b>. Positivo donde el blanco empieza (borde superior), negativo donde termina (borde inferior). <b>Ahora toca el botón</b> y compruébalo.",
+    alResolver: function () { est.chk[5] = true; if (est.paso === 4) pintar2d(); pasos.completar(4); }
+  });
+
+  function cerrar6() { if (est.chk[6] && est.chk["6b"]) pasos.completar(5); }
+  function activarGirar() { $("btnGirar").disabled = false; $("girarHint").textContent = "Prueba también con el desenfoque y la X."; }
+  B.opcionMultiple(cuerpo("chk6"), {
+    pregunta: "Giras 180° el filtro de borde vertical: el −1 pasa a la derecha y el +1 a la izquierda. ¿Qué le pasa al mapa?",
+    opciones: ["Cada número cambia de signo", "No cambia nada", "El mapa se gira 180°", "Se vuelve todo cero"],
+    correcta: 0,
+    pistas: [null, "Mira dónde quedan el −1 y el +1 después de girar. ¿Es el mismo filtro?", "El filtro gira, pero la ventana sigue recorriendo la imagen en el mismo orden.", "Los pesos siguen sumando 0, pero en los bordes no se anulan."],
+    explicacion: "El filtro girado es exactamente el original multiplicado por −1, así que cada celda del mapa cambia de signo. <b>Ahora toca el botón</b>. Después prueba el desenfoque y la X: son simétricos, y girarlos no cambia nada.",
+    alResolver: function () { est.chk[6] = true; activarGirar(); cerrar6(); }
+  });
+  B.numerico(cuerpo("chk6b"), {
+    pregunta: "¿Cuánto da de verdad la suma de los 9 productos?",
+    respuesta: 315,
+    tolerancia: 0.001,
+    pistas: ["La primera columna de la ventana es toda 0 y la del medio se multiplica por 0. Solo cuenta la tercera columna.",
+      "Tercera columna: $75\\cdot 1 + 80\\cdot 2 + 80\\cdot 1$."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 235) < 0.001) return "Ese es el número del material. Revisa el peso del centro de la columna derecha: es 2, no 1.";
+      if (Math.abs(v + 315) < 0.001) return "Ese sería el resultado con el filtro girado. Aquí se desliza sin girar.";
+      return null;
+    },
+    explicacion: "$75 + 160 + 80 = 315$. El material escribe 80 en lugar de $80\\cdot 2 = 160$ y por eso suma 235 (teoría p. 8 y diapositiva 24).",
+    alResolver: function () { est.chk["6b"] = true; $("sobelExtra").hidden = false; cerrar6(); }
+  });
+
+  B.numerico(cuerpo("chk7"), {
+    pregunta: "Una capa con <b>8 filtros de 3 × 3</b> sobre una imagen en color (<b>3 canales</b>), con un sesgo por filtro. ¿Cuántos parámetros tiene?",
+    respuesta: 224,
+    tolerancia: 0.001,
+    pistas: ["Cada filtro tiene una capa de 3 × 3 por cada canal de entrada.", "Cada filtro: $3\\cdot 3\\cdot 3 = 27$ pesos más 1 sesgo."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 216) < 0.001) return "Faltan los sesgos: uno por filtro.";
+      if (Math.abs(v - 80) < 0.001 || Math.abs(v - 72) < 0.001) return "Te faltan los canales: cada filtro tiene tres capas de 3 × 3, una por canal.";
+      return null;
+    },
+    explicacion: "$8\\cdot(3\\cdot 3\\cdot 3 + 1) = 8\\cdot 28 = 224$. Y no depende del tamaño de la imagen. Abajo tienes la calculadora para comparar con una capa densa.",
+    alResolver: function () { abrirCalc(); pasos.completar(6); }
+  });
+  function abrirCalc() { $("calcBox").hidden = false; calc(); }
+  function calc() {
+    var nn = Math.max(1, +$("cN").value || 1), k = Math.max(1, +$("cK").value || 1), ci = Math.max(1, +$("cCi").value || 1), co = Math.max(1, +$("cCo").value || 1);
+    var o = nn - k + 1;
+    if (o < 1) { $("calcRes").textContent = "El filtro no cabe en la imagen."; return; }
+    var pc = k * k * ci * co + co, pd = nn * nn * ci * (o * o * co) + o * o * co;
+    function g(x) { return x.toLocaleString("es-ES").replace(/\./g, " "); }
+    $("calcRes").innerHTML = "salida: " + o + " × " + o + " × " + co + "\nconvolucional: " + k + "·" + k + "·" + ci + "·" + co + " + " + co + " = <b>" + g(pc) + "</b> parámetros" +
+      "\ndensa con la misma salida: <b>" + g(pd) + "</b> parámetros\nla densa necesita " + g(Math.round(pd / pc)) + " veces más";
+  }
+  ["cN", "cK", "cCi", "cCo"].forEach(function (id) { $(id).addEventListener("input", calc); });
+
+  B.opcionMultiple(cuerpo("chk8"), {
+    pregunta: "El filtro de la red empieza en nueve ceros y el objetivo es el mapa del borde vertical. Después de muchos pasos de descenso, ¿a qué se va a parecer el filtro?",
+    opciones: [
+      "Al filtro de borde vertical: −1 a la izquierda, 0 al medio, +1 a la derecha",
+      "Al desenfoque: nueve pesos iguales",
+      "Se queda en ceros: si empieza en cero, el gradiente es cero",
+      "A la propia cruz, recortada a 3 × 3"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "El desenfoque da un mapa sin negativos, y el objetivo tiene negativos.",
+      "El gradiente depende del error, y con el filtro en cero el error es grande. Los pesos sí se mueven.",
+      "El filtro tiene que producir el mapa objetivo, no parecerse a la imagen."],
+    explicacion: "El único filtro que produce exactamente ese mapa sobre la cruz es el de borde vertical, y el descenso lo encuentra. <b>Ahora entrena</b>: un paso y después de a diez. Mira cómo aparecen primero los signos y después los tamaños.",
+    alResolver: function () { activarAprende(); pasos.completar(7); }
+  });
+
+  pasos = B.pasos($("recorrido"), {
+    concepto: C,
+    alEntrar: entrar,
+    alTerminar: function () { location.hash = "retos"; }
+  });
+  [1, 2, 3, 5].forEach(function (k) { if (pasos.hecho(k - 1)) est.chk[k] = true; });
+  if (pasos.hecho(3)) { est.chk[4] = true; est.chk["4b"] = true; }
+  if (pasos.hecho(5)) { est.chk[6] = true; est.chk["6b"] = true; activarGirar(); $("sobelExtra").hidden = false; }
+  if (pasos.hecho(6)) abrirCalc();
+  if (pasos.hecho(7)) activarAprende();
+  entrar(0);
+
+  /* ---------------- hipotesis inicial ---------------- */
+  (function () {
+    var ta = $("hipotesis"), t = null;
+    ta.value = B.nota("convolucion", "hipotesis");
+    function cita() {
+      var v = ta.value.trim(), el = $("citaHipo");
+      el.hidden = !v;
+      if (v) { el.textContent = ""; el.appendChild(document.createTextNode("Al principio escribiste: «" + v + "». ¿Se parece a un filtro de bordes? ¿Qué número le darías a cada vecino?")); }
+    }
+    cita();
+    ta.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { B.nota("convolucion", "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; cita(); }, 500);
+    });
+  })();
+
+  /* ---------------- marcadores de estado de retos ---------------- */
+  function pintarEstados() {
+    [].forEach.call(document.querySelectorAll("[data-reto]"), function (el) {
+      var ok = C.retoOk(el.getAttribute("data-reto"));
+      el.textContent = ok ? "resuelto" : "pendiente";
+      el.classList.toggle("ok", ok);
+    });
+  }
+  C.alCambiar(pintarEstados);
+  pintarEstados();
+
+  /* ---------------- reto: ojo clinico ---------------- */
+  function azar(a, b) { return a + Math.floor(Math.random() * (b - a + 1)); }
+  function imagenAzar() {
+    for (;;) {
+      var M = [];
+      for (var i = 0; i < 8; i++) M.push([0, 0, 0, 0, 0, 0, 0, 0]);
+      var nr = azar(1, 2);
+      for (var r = 0; r < nr; r++) {
+        var h = azar(2, 5), w = azar(2, 5), i0 = azar(0, 8 - h), j0 = azar(0, 8 - w);
+        for (i = i0; i < i0 + h; i++) for (var j = j0; j < j0 + w; j++) M[i][j] = 9;
+      }
+      var tinta = 0;
+      M.forEach(function (row) { row.forEach(function (v) { if (v) tinta++; }); });
+      if (tinta >= 8 && tinta <= 40) return M;
+    }
+  }
+  (function () {
+    var cont = $("ojo");
+    cont.innerHTML = '<div class="ronda"></div><div class="ojo-par"><figure class="gfig"><figcaption>Imagen</figcaption><div class="oi"></div></figure>' +
+      '<figure class="gfig"><figcaption>Mapa</figcaption><div class="oo"></div></figure></div>' +
+      '<div class="ojo-opts"><button type="button" class="opt" data-a="vert">Borde vertical</button><button type="button" class="opt" data-a="hor">Borde horizontal</button>' +
+      '<button type="button" class="opt" data-a="blur">Desenfoque</button><button type="button" class="opt" data-a="sharp">Nitidez</button></div>' +
+      '<div class="fb" aria-live="polite"></div><div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    var tipos, ronda, aciertos, respondida;
+    var POR = {
+      vert: "Solo se encienden los lados izquierdo y derecho de las manchas, con signos opuestos: compara izquierda con derecha.",
+      hor: "Solo se encienden los lados de arriba y de abajo, con signos opuestos: compara arriba con abajo.",
+      blur: "Todo es positivo y suave, sin cambios bruscos: es un promedio.",
+      sharp: "Hay positivos fuertes dentro del blanco y negativos justo afuera del borde: realza el contraste."
+    };
+    function nueva() {
+      var extra = ["vert", "hor", "blur", "sharp"][azar(0, 3)];
+      tipos = B.mezclar(["vert", "hor", "blur", "sharp", extra]);
+      ronda = 0; aciertos = 0;
+      mostrar();
+    }
+    function mostrar() {
+      respondida = false;
+      var M = imagenAzar(), k = tipos[ronda];
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 5 · aciertos " + aciertos;
+      grilla(cont.querySelector(".oi"), M, { tipo: "gris", max: 9, cls: "chica" });
+      grilla(cont.querySelector(".oo"), corr(M, escalar(FILTROS[k].w, FILTROS[k].fac)), { tipo: "signo", cls: "chica" });
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (b) { b.disabled = false; b.className = "opt"; });
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+    }
+    cont.querySelector(".ojo-opts").addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || respondida) return;
+      respondida = true;
+      var k = tipos[ronda], ok = b.getAttribute("data-a") === k;
+      if (ok) aciertos++;
+      b.classList.add(ok ? "ok" : "mal");
+      if (!ok) cont.querySelector('[data-a="' + k + '"]').classList.add("ok");
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (x) { x.disabled = true; });
+      cont.querySelector(".fb").innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No.</span> ') + "Era " + FILTROS[k].nom.toLowerCase() + ". " + POR[k];
+      var sig = cont.querySelector(".sig");
+      sig.hidden = false;
+      if (ronda === 4) {
+        var aprobo = aciertos >= 4;
+        C.reto("ojo", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertos + " de 5" + (aprobo ? ". Aprobado." : ". Necesitas 4 para aprobar.");
+        sig.textContent = "Otra tanda";
+      } else sig.textContent = "Siguiente ronda";
+    });
+    cont.querySelector(".sig").addEventListener("click", function () { if (ronda === 4) nueva(); else { ronda++; mostrar(); } });
+    nueva();
+  })();
+
+  /* ---------------- reto: construir ---------------- */
+  (function () {
+    var OBJ = [
+      { t: "Copia: el mapa es la cruz sin el marco (las filas y columnas 2 a 7).",
+        meta: CRUZ.slice(1, 7).map(function (r) { return r.slice(1, 7); }) },
+      { t: "Corrida: cada celda copia el píxel que está justo a la izquierda del centro de su ventana.",
+        meta: CRUZ.slice(1, 7).map(function (r) { return r.slice(0, 6); }) },
+      { t: "Bordes al revés: el lado derecho de cada brazo en positivo y el izquierdo en negativo, con los mismos tamaños que el borde vertical.",
+        meta: corr(CRUZ, [[1, 0, -1], [1, 0, -1], [1, 0, -1]]) }
+    ];
+    var logrados = [false, false, false], avisado = false, ul = $("objetivos");
+    OBJ.forEach(function (o) { var li = document.createElement("li"); li.innerHTML = '<span class="m"></span><span>' + o.t + '</span>'; ul.appendChild(li); });
+    var W = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+    function pintar() {
+      grilla($("conNuc"), W, { tipo: "signo", max: 2, editable: true, cls: "grande" });
+      evaluar();
+    }
+    function evaluar() {
+      var Y = corr(CRUZ, W);
+      grilla($("conOut"), Y, { tipo: "signo", cls: "chica" });
+      OBJ.forEach(function (o, i) { if (!logrados[i] && iguales(Y, o.meta)) logrados[i] = true; ul.children[i].classList.toggle("hecho", logrados[i]); });
+      if (!avisado && logrados.every(Boolean)) { avisado = true; C.reto("construir", true); }
+    }
+    $("conNuc").addEventListener("input", function () { W = leerEditable($("conNuc")); evaluar(); });
+    pintar();
+  })();
+
+  /* ---------------- reto: a mano ---------------- */
+  (function () {
+    var D;
+    function generar() {
+      var V, K, s;
+      do {
+        V = [0, 1, 2].map(function () { return [0, 1, 2].map(function () { return azar(0, 5); }); });
+        K = [0, 1, 2].map(function () { return [0, 1, 2].map(function () { return [-1, 0, 1, 2][azar(0, 3)]; }); });
+        s = 0;
+        for (var u = 0; u < 3; u++) for (var v = 0; v < 3; v++) s += V[u][v] * K[u][v];
+      } while (s === 0);
+      D = { V: V, K: K, s: s };
+      function tabla(M) { return '<table class="mini-tabla">' + M.map(function (r) { return "<tr>" + r.map(function (x) { return "<td>" + n(x) + "</td>"; }).join("") + "</tr>"; }).join("") + "</table>"; }
+      $("manoDatos").innerHTML = '<div class="mini-par"><div><div class="rot">ventana</div>' + tabla(V) + '</div><div><div class="rot">filtro</div>' + tabla(K) + '</div></div>';
+    }
+    function prods() { return D.V.map(function (r, u) { return r.map(function (x, v) { return x * D.K[u][v]; }); }); }
+    B.numerico($("mano"), {
+      pregunta: "¿Cuánto vale la celda del mapa para esta ventana (sin girar el filtro)?",
+      respuesta: function () { return D.s; },
+      tolerancia: 0.001,
+      pistas: [
+        function () { return "Primera fila: $" + D.V[0].map(function (x, v) { return x + "\\cdot " + (D.K[0][v] < 0 ? "(" + D.K[0][v] + ")" : D.K[0][v]); }).join(" + ") + "$."; },
+        function () { return "Los nueve productos, fila por fila: " + prods().map(function (r) { return r.map(n).join(", "); }).join(" / ") + "."; },
+        function () { return "Suma por filas: " + prods().map(function (r) { return n(r[0] + r[1] + r[2]); }).join(", ") + "."; }
+      ],
+      diagnostico: function (v) {
+        var G = girar(D.K), sg = 0;
+        for (var u = 0; u < 3; u++) for (var w = 0; w < 3; w++) sg += D.V[u][w] * G[u][w];
+        if (sg !== D.s && Math.abs(v - sg) < 0.001) return "Ese resultado sale con el filtro girado. Aquí se multiplica cada celda con la que tiene encima.";
+        return null;
+      },
+      explicacion: function () { return "Productos " + prods().map(function (r) { return r.map(n).join(", "); }).join(" / ") + ". Suman " + n(D.s) + "."; },
+      reintentable: true,
+      textoReintentar: "Otra ventana",
+      antesDeReintentar: generar,
+      alResolver: function (ok) { C.reto("mano", ok); }
+    });
+    generar();
+  })();
+
+  /* ---------------- reto: cazar el error ---------------- */
+  B.cazarError($("error"), {
+    variantes: [
+      {
+        intro: "La ventana $\\begin{pmatrix}0&25&75\\\\0&75&80\\\\0&75&80\\end{pmatrix}$ con el filtro de Sobel $\\begin{pmatrix}-1&0&1\\\\-2&0&2\\\\-1&0&1\\end{pmatrix}$:",
+        lineas: ["\\text{columna izquierda: } 0\\cdot(-1) + 0\\cdot(-2) + 0\\cdot(-1) = 0",
+          "\\text{columna central: } 25\\cdot 0 + 75\\cdot 0 + 75\\cdot 0 = 0",
+          "\\text{columna derecha: } 75\\cdot 1 + 80\\cdot 1 + 80\\cdot 1 = 235",
+          "\\text{suma} = 0 + 0 + 235 = 235"],
+        erronea: 2,
+        explicacion: "El peso del centro de la columna derecha es 2: $75 + 160 + 80 = 315$. Es justo la errata de la UD5 (teoría p. 8, diapositiva 24)."
+      },
+      {
+        intro: "Una imagen de 10 × 10 con un filtro de 3 × 3, sin marco de ceros y avanzando de a 1:",
+        lineas: ["\\text{posiciones por fila} = 10 - 3 = 7",
+          "\\text{posiciones por columna} = 7",
+          "\\text{mapa} = 7 \\times 7 = 49 \\text{ celdas}",
+          "\\text{productos por celda} = 9"],
+        erronea: 0,
+        explicacion: "Falta el +1: la esquina de la ventana puede estar en las columnas 0 a 7, que son 8 posiciones. El mapa es 8 × 8."
+      },
+      {
+        intro: "Para hacer la convolución verdadera hay que girar el filtro $W=\\begin{pmatrix}1&2&3\\\\0&0&0\\\\0&0&0\\end{pmatrix}$:",
+        lineas: ["\\text{girar } 180^\\circ \\text{ es invertir el orden de filas y de columnas}",
+          "W^{r} = W^{\\top} = \\begin{pmatrix}1&0&0\\\\2&0&0\\\\3&0&0\\end{pmatrix}",
+          "\\text{después se desliza } W^{r} \\text{ como en la correlación}"],
+        erronea: 1,
+        explicacion: "Girar 180° no es trasponer. Invertir filas y columnas da $W^{r}=\\begin{pmatrix}0&0&0\\\\0&0&0\\\\3&2&1\\end{pmatrix}$. Raschka lo advierte en la p. 461."
+      }
+    ],
+    alResolver: function (ok) { C.reto("error", ok); }
+  });
+
+  /* ---------------- retos: propiedades ---------------- */
+  function prop(id, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple($(id), cfg);
+  }
+  prop("prop1", {
+    pregunta: "Un filtro cuyos pesos suman 0 (como el de bordes) pasa sobre una zona de color uniforme, todos los píxeles iguales a 7. Da...",
+    opciones: ["0", "7", "63", "Depende de cómo estén repartidos los pesos"],
+    correcta: 0,
+    pistas: [null, "Ese sería el filtro identidad. Este suma 0.", "Eso sería con nueve pesos de 1.", "Si todos los píxeles valen 7, la cuenta es 7 por la suma de los pesos."],
+    explicacion: "Con todos los píxeles iguales, la suma es $7\\cdot(\\text{suma de los pesos}) = 7\\cdot 0 = 0$. Por eso esos filtros solo responden a cambios: son detectores de bordes."
+  });
+  prop("prop2", {
+    pregunta: "Un filtro es igual a sí mismo girado 180° (como la X de la UD5). La correlación cruzada y la convolución con ese filtro...",
+    opciones: ["Dan exactamente lo mismo", "Dan lo mismo con el signo cambiado", "Dan mapas girados 180°", "Solo coinciden en el centro"],
+    correcta: 0,
+    pistas: [null, "El signo cambia con el borde vertical porque al girarlo queda multiplicado por −1. ¿Pasa eso aquí?", "Girar el filtro no gira el recorrido de la ventana.", "Si el filtro girado es el mismo, cada ventana se multiplica por los mismos pesos."],
+    explicacion: "La convolución desliza el filtro girado; si el girado es igual al original, las dos cuentas son idénticas. Por eso en el ejemplo de 6 × 6 de la UD5 no se nota la diferencia, y en el de Sobel sí."
+  });
+  prop("prop3", {
+    pregunta: "Una capa con 16 filtros de 3 × 3 sobre imágenes en color de 150 × 150 × 3, con sesgo. ¿Cuántos parámetros tiene?",
+    opciones: ["448", "432", "160", "360 016"],
+    correcta: 0,
+    pistas: [null, "Faltan los 16 sesgos.", "Cada filtro tiene una capa de 3 × 3 por cada uno de los 3 canales.", "El tamaño de la imagen no entra en la cuenta: los pesos se comparten en todas las posiciones."],
+    explicacion: "$16\\cdot(3\\cdot 3\\cdot 3 + 1) = 448$. Es la primera capa del cuaderno de perros y gatos de la UD5 (CNN03), que muestra exactamente 448 en su resumen."
+  });
+  prop("prop4", {
+    pregunta: "Multiplicas por 2 todos los pesos del filtro. El mapa...",
+    opciones: ["Se multiplica por 2", "Se multiplica por 4", "No cambia", "Cambia de forma"],
+    correcta: 0,
+    pistas: [null, "Cada producto tiene un solo peso. ¿Cuántas veces aparece el 2?", "Cada producto píxel por peso se duplica.", "Todos los números crecen en la misma proporción."],
+    explicacion: "Cada celda es una suma de píxel por peso: si todos los pesos se duplican, cada producto se duplica y la suma también. La convolución es lineal en el filtro (y en la imagen)."
+  });
+  prop("prop5", {
+    pregunta: "MNIST: imágenes de 28 × 28 y un filtro de 5 × 5, sin marco de ceros y avanzando de a 1. ¿Qué tamaño tiene el mapa?",
+    opciones: ["24 × 24", "28 × 28", "23 × 23", "26 × 26"],
+    correcta: 0,
+    pistas: [null, "Eso solo con un marco de ceros (padding same).", "Te faltó el +1 de la cuenta.", "Eso es con un filtro de 3 × 3."],
+    explicacion: "$28 - 5 + 1 = 24$. Es la primera capa del cuaderno CNN02 de la UD5: <code>Conv2D(32, (5, 5))</code> da (24, 24, 32)."
+  });
+
+  /* ---------------- formula de memoria ---------------- */
+  B.ordenar($("formula"), {
+    piezas: ["Y[i,j]", "=", "\\displaystyle\\sum_{u=0}^{m-1}", "\\displaystyle\\sum_{v=0}^{m-1}", "X[i+u,\\,j+v]", "W[u,v]"],
+    distractores: ["X[i-u,\\,j-v]", "W[v,u]", "\\dfrac{1}{m^2}"],
+    soluciones: [[0, 1, 2, 3, 4, 5], [0, 1, 3, 2, 4, 5], [0, 1, 2, 3, 5, 4], [0, 1, 3, 2, 5, 4]],
+    explicacion: "Para cada posición, recorre el filtro con u y v, multiplica cada peso por el píxel que tiene encima y suma. Con $X[i-u,\\,j-v]$ sería la convolución de los libros, que gira el filtro.",
+    alResolver: function (ok) { C.reto("formula", ok); }
+  });
+
+  /* ---------------- vida real ---------------- */
+  (function () {
+    var CODIGO = {
+      py: [
+        ["import", "import numpy as np"],
+        ["import", "from scipy.signal import correlate2d, convolve2d"],
+        [null, ""],
+        [null, "# la imagen 6x6 y el filtro 3x3 del material de la UD5"],
+        ["datos", "X = np.array([[ 18,  54,  51, 239, 244, 188],"],
+        ["datos", "              [ 55, 121,  75,  78,  95,  88],"],
+        ["datos", "              [ 35,  24, 204, 113, 109, 221],"],
+        ["datos", "              [  3, 154, 104, 235,  25, 130],"],
+        ["datos", "              [ 15, 253, 225, 159,  78, 233],"],
+        ["datos", "              [ 68,  85, 180, 214, 245,   0]])"],
+        ["filtro", "W = np.array([[1, 0, 1],"],
+        ["filtro", "              [0, 1, 0],"],
+        ["filtro", "              [1, 0, 1]])"],
+        ["dims", "n, m = X.shape[0], W.shape[0]"],
+        ["tam", "o = n - m + 1                     # tamaño de la salida: 4"],
+        [null, ""],
+        ["zeros", "Y = np.zeros((o, o), dtype=int)"],
+        ["fori", "for i in range(o):                # fila de la ventana"],
+        ["forj", "    for j in range(o):            # columna de la ventana"],
+        ["suma0", "        suma = 0"],
+        ["foru", "        for u in range(m):        # recorre el filtro"],
+        ["forv", "            for v in range(m):"],
+        ["acum", "                suma += X[i + u, j + v] * W[u, v]"],
+        ["asignar", "        Y[i, j] = suma"],
+        [null, ""],
+        ["imprimir", "print(Y)"],
+        ["corr", "print(np.array_equal(Y, correlate2d(X, W, mode=\"valid\")))  # True"],
+        ["conv", "print(np.array_equal(Y, convolve2d(X, W, mode=\"valid\")))   # True: W es simétrico"]
+      ],
+      r: [
+        [null, "# la imagen 6x6 y el filtro 3x3 del material de la UD5"],
+        ["datos", "X <- matrix(c( 18,  54,  51, 239, 244, 188,"],
+        ["datos", "               55, 121,  75,  78,  95,  88,"],
+        ["datos", "               35,  24, 204, 113, 109, 221,"],
+        ["datos", "                3, 154, 104, 235,  25, 130,"],
+        ["datos", "               15, 253, 225, 159,  78, 233,"],
+        ["datos", "               68,  85, 180, 214, 245,   0), nrow = 6, byrow = TRUE)"],
+        ["filtro", "W <- matrix(c(1, 0, 1,"],
+        ["filtro", "              0, 1, 0,"],
+        ["filtro", "              1, 0, 1), nrow = 3, byrow = TRUE)"],
+        ["dims", "n <- nrow(X); m <- nrow(W)"],
+        ["tam", "o <- n - m + 1                    # tamaño de la salida: 4"],
+        [null, ""],
+        ["zeros", "Y <- matrix(0, o, o)"],
+        ["fori", "for (i in 1:o) {                  # fila de la ventana"],
+        ["forj", "  for (j in 1:o) {                # columna de la ventana"],
+        ["suma0", "    suma <- 0"],
+        ["foru", "    for (u in 1:m) {              # recorre el filtro"],
+        ["forv", "      for (v in 1:m) {"],
+        ["acum", "        suma <- suma + X[i + u - 1, j + v - 1] * W[u, v]"],
+        [null, "      }"],
+        [null, "    }"],
+        ["asignar", "    Y[i, j] <- suma"],
+        [null, "  }"],
+        [null, "}"],
+        [null, ""],
+        ["imprimir", "print(Y)"],
+        [null, "# R base no trae convolución 2D: se compara con una versión vectorizada propia"],
+        ["corr", "correlacion <- function(i, j) sum(X[i:(i + m - 1), j:(j + m - 1)] * W)"],
+        ["conv", "convolucion <- function(i, j) sum(X[i:(i + m - 1), j:(j + m - 1)] * W[m:1, m:1])"],
+        ["corr", "all.equal(Y, outer(1:o, 1:o, Vectorize(correlacion)))  # TRUE"],
+        ["conv", "all.equal(Y, outer(1:o, 1:o, Vectorize(convolucion)))  # TRUE: W es simétrico"]
+      ]
+    };
+    var SALIDA = {"py": ["[[429 505 686 856]", " [261 792 412 640]", " [633 653 851 751]", " [608 913 713 657]]", "True", "True"], "r": ["     [,1] [,2] [,3] [,4]", "[1,]  429  505  686  856", "[2,]  261  792  412  640", "[3,]  633  653  851  751", "[4,]  608  913  713  657", "[1] TRUE", "[1] TRUE"]};
+    var W = FILTROS.equis.w, o = 4, m = 3;
+    var YF = corr(UD5, W);
+
+    /* eventos: una foto del estado despues de cada linea ejecutada */
+    var EV = [];
+    (function () {
+      var Y = null, fase = 1, veces = 0;
+      function foto(id, extra) {
+        EV.push(Object.assign({ id: id, fase: fase, Y: Y ? copia(Y) : null, veces: veces, i: null, j: null, u: null, v: null, suma: null }, extra || {}));
+      }
+      foto("import"); foto("datos"); foto("filtro"); foto("dims"); foto("tam");
+      Y = [[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]];
+      foto("zeros", { ceros: true });
+      fase = 2;
+      for (var i = 0; i < o; i++) {
+        foto("fori", { i: i });
+        for (var j = 0; j < o; j++) {
+          foto("forj", { i: i, j: j });
+          var suma = 0;
+          foto("suma0", { i: i, j: j, suma: 0 });
+          if (i === 0 && j === 0) {
+            for (var u = 0; u < m; u++) {
+              foto("foru", { i: i, j: j, u: u, suma: suma });
+              for (var v = 0; v < m; v++) {
+                foto("forv", { i: i, j: j, u: u, v: v, suma: suma });
+                suma += UD5[i + u][j + v] * W[u][v];
+                veces++;
+                foto("acum", { i: i, j: j, u: u, v: v, suma: suma, prod: UD5[i + u][j + v] * W[u][v] });
+              }
+            }
+          } else {
+            suma = YF[i][j];
+            veces += 9;
+            foto("acum", { i: i, j: j, suma: suma, bloque: true });
+          }
+          Y[i][j] = suma;
+          foto("asignar", { i: i, j: j, suma: suma, nuevo: true });
+        }
+      }
+      fase = 3;
+      foto("imprimir", { fin: true });
+      foto("corr", { fin: true });
+      foto("conv", { fin: true });
+    })();
+
+    function narrar(e, ctx) {
+      var py = ctx.lang() === "py", ix = ctx.ix;
+      switch (e.id) {
+        case "import": return py ? "Carga NumPy y, de SciPy, las dos funciones con las que vamos a comparar." : "R no necesita librerías: trae matrices de serie.";
+        case "datos": return "La imagen de 6 × 6 de la UD5: números de 0 (negro) a 255 (blanco).";
+        case "filtro": return "El filtro en X de la UD5. Es simétrico: girado 180° queda igual.";
+        case "dims": return "Guarda los tamaños: <b>n = 6</b> (imagen) y <b>m = 3</b> (filtro).";
+        case "tam": return "Cuántas posiciones caben por eje: <b>o = 6 − 3 + 1 = 4</b>. La salida es de 4 × 4, no de 6 × 6.";
+        case "zeros": return "Una matriz de 4 × 4 llena de ceros para ir guardando cada suma.";
+        case "fori": return "Fila de la ventana: <b>i = " + ix(e.i) + "</b>.";
+        case "forj": return "Columna de la ventana: <b>j = " + ix(e.j) + "</b>. La ventana cubre las filas " + ix(e.i) + " a " + ix(e.i + 2) + " y las columnas " + ix(e.j) + " a " + ix(e.j + 2) + " de X.";
+        case "suma0": return "La suma de esta ventana empieza en cero.";
+        case "foru": return "Fila <b>u = " + ix(e.u) + "</b> del filtro. El bucle de v recorre sus tres columnas.";
+        case "forv": return "Columna <b>v = " + ix(e.v) + "</b> del filtro: el peso W[" + ix(e.u) + ", " + ix(e.v) + "] y el píxel que tiene encima.";
+        case "acum":
+          if (e.bloque) return "Los nueve productos de esta ventana, de una vez (en el programa son nueve vueltas): la suma da <b>" + e.suma + "</b>.";
+          return "X[" + ix(e.i + e.u) + ", " + ix(e.j + e.v) + "] × W[" + ix(e.u) + ", " + ix(e.v) + "] = " + UD5[e.i + e.u][e.j + e.v] + " × " + W[e.u][e.v] +
+            " = <b>" + e.prod + "</b>. La suma va en <b>" + e.suma + "</b>.";
+        case "asignar": return "Y[" + ix(e.i) + ", " + ix(e.j) + "] = <b>" + e.suma + "</b>." + (e.i === 0 && e.j === 0 ? " Es el 429 de la UD5." : e.i === 0 && e.j === 1 ? " Es el 505 de la UD5." : "");
+        case "imprimir": return "Imprime el mapa de 4 × 4: el mismo de la teoría (p. 8) y de la diapositiva 23.";
+        case "corr": return py ? "Compara con <b>correlate2d(..., mode=\"valid\")</b> de SciPy: <b>True</b>, la misma matriz."
+          : "R base no trae convolución 2D. La compara con una versión propia que hace cada ventana con el producto elemento a elemento <code>*</code> y <code>sum</code>: <b>TRUE</b>.";
+        case "conv": return py ? "Y con <b>convolve2d</b>, que sí gira el filtro: también <b>True</b>, porque la X girada es la misma X. Con Sobel no pasaría (mira la primera trampa de abajo)."
+          : "La versión que gira el filtro, <code>W[m:1, m:1]</code>, también da <b>TRUE</b>, porque la X es simétrica.";
+      }
+      return "";
+    }
+    function visual(e, anterior, ctx) {
+      var ven = e && e.i !== null && e.j !== null && e.fase === 2 ? [e.i, e.j, 3] : null;
+      var celdaW = e && e.id === "acum" && !e.bloque ? [e.u, e.v] : null;
+      var Ypint = e && e.Y ? e.Y : [[null, null, null, null], [null, null, null, null], [null, null, null, null], [null, null, null, null]];
+      grilla($("vrX"), UD5, { tipo: "gris", max: 255, cls: "chica", ven: ven, foco: celdaW ? [e.i + e.u, e.j + e.v] : null });
+      grilla($("vrW"), W, { tipo: "signo", max: 1, foco: celdaW });
+      grilla($("vrY"), Ypint, { tipo: "signo", max: 913, cls: "chica", foco: e && e.i !== null && e.fase === 2 ? [e.i, e.j] : null, llega: e && e.nuevo ? [e.i, e.j] : null });
+      $("vrCuenta").innerHTML = e && e.id === "acum" && !e.bloque ? UD5[e.i + e.u][e.j + e.v] + " × " + W[e.u][e.v] + " = <b>" + e.prod + "</b> &nbsp;·&nbsp; suma = <b>" + e.suma + "</b>"
+        : e && e.bloque ? "ventana (" + ctx.ix(e.i) + ", " + ctx.ix(e.j) + "): nueve productos, suma = <b>" + e.suma + "</b>"
+        : e && e.id === "asignar" ? "Y[" + ctx.ix(e.i) + ", " + ctx.ix(e.j) + "] = <b>" + e.suma + "</b>"
+        : e && e.fin ? "16 ventanas × 9 productos = 144 multiplicaciones." : "";
+      var sal = $("vrSalida");
+      var lang = ctx.lang(), lin = SALIDA[lang], cuantas = !e ? 0 : e.id === "imprimir" ? lin.length - 2 : e.id === "corr" ? lin.length - 1 : e.id === "conv" ? lin.length : 0;
+      sal.hidden = cuantas === 0;
+      sal.textContent = lin.slice(0, cuantas).join("\n");
+    }
+    B.vidaReal($("vidareal"), {
+      codigo: CODIGO,
+      eventos: EV,
+      narrar: narrar,
+      vars: function (e, ctx) {
+        var v = [], ix = ctx.ix;
+        if (e && e.i !== null) v.push('<span>i = <b>' + ix(e.i) + '</b></span>');
+        if (e && e.j !== null) v.push('<span>j = <b>' + ix(e.j) + '</b></span>');
+        if (e && e.u !== null) v.push('<span class="vj">u = <b>' + ix(e.u) + '</b></span>');
+        if (e && e.v !== null) v.push('<span class="vk">v = <b>' + ix(e.v) + '</b></span>');
+        if (e && e.suma !== null) v.push('<span>suma = <b>' + e.suma + '</b></span>');
+        v.push('<span>la suma corrió <b>' + (e ? e.veces : 0) + '</b> veces</span>');
+        return v;
+      },
+      visual: visual,
+      demora: function (e) { return !e ? 600 : e.id === "acum" ? (e.bloque ? 700 : 900) : e.id === "asignar" ? 900 : e.id === "fori" || e.id === "forj" ? 450 : 1000; }
+    });
+
+    B.numerico(cuerpo("vrPred"), {
+      pregunta: "¿Cuántas veces se va a ejecutar la línea de la suma, <code>suma += X[i + u, j + v] * W[u, v]</code>, hasta terminar?",
+      respuesta: 144,
+      tolerancia: 0,
+      pistas: ["Primero cuenta cuántas ventanas hay: los dos bucles de afuera recorren las posiciones del mapa.",
+        "Hay 4 × 4 = 16 ventanas. Para cada una, los dos bucles de adentro recorren el filtro entero."],
+      diagnostico: function (v) {
+        if (v === 324) return "Ese sería el total si la ventana se pusiera en las 6 × 6 posiciones. Solo cabe en 4 × 4.";
+        if (v === 16) return "Esas son las ventanas. Por cada una, la suma se ejecuta una vez por peso del filtro.";
+        if (v === 9) return "Eso es una sola ventana. ¿Cuántas ventanas hay?";
+        if (v === 36) return "6 × 6 es el tamaño de la imagen. Cuenta ventanas (4 × 4) por pesos (9).";
+        return null;
+      },
+      explicacion: "16 ventanas por 9 pesos: <b>144</b>. Una imagen de MNIST (28 × 28) con un filtro de 5 × 5 ya pide 24 · 24 · 25 = 14 400 por filtro. Por eso las librerías no usan bucles de Python. Ahora dale a reproducir y mira el contador.",
+      alResolver: function (ok) { C.reto("codigo1", ok); }
+    });
+    prop("codigo2", {
+      pregunta: "En Python, con la entrada de 5 × 5 del detector de bordes de la UD5 y el filtro de Sobel, la esquina de <code>correlate2d(E, S, mode=\"valid\")</code> vale <b>315</b>. ¿Cuánto vale la de <code>convolve2d(E, S, mode=\"valid\")</code>?",
+      opciones: ["−315", "315", "235", "Da un error porque S no es simétrico"],
+      correcta: 0,
+      pistas: [null, "convolve2d gira el filtro antes de deslizarlo. ¿Sobel girado es igual a Sobel?", "235 es la errata del material, no lo que da SciPy.", "Las dos funciones aceptan cualquier filtro. Simplemente hacen cuentas distintas."],
+      explicacion: "Corrido en esta máquina, <code>correlate2d</code> y <code>convolve2d</code> dan:<pre class=\"vr-salida\">[[315  70   5]\n [315  25   5]\n [230  25  10]]\n[[-315  -70   -5]\n [-315  -25   -5]\n [-230  -25  -10]]</pre>Lo mismo con el signo cambiado: Sobel girado 180° es Sobel por −1. Si comparas tu código con la función equivocada, todo sale al revés y no da error."
+    });
+    prop("codigo3", {
+      pregunta: "Escribes <code>correlate2d(X, W)</code> sin <code>mode</code>, con la X de 6 × 6 y el filtro de 3 × 3. ¿Qué forma tiene el resultado?",
+      opciones: ["(8, 8)", "(4, 4)", "(6, 6)", "Da un error porque falta mode"],
+      correcta: 0,
+      pistas: [null, "Ese es el modo \"valid\", que hay que pedir. El modo por defecto es otro.", "Ese es el modo \"same\". El modo por defecto es otro.", "mode tiene un valor por defecto, así que no falla."],
+      explicacion: "Corrido en esta máquina, <code>correlate2d(X, W).shape</code> da <code>(8, 8)</code>. El modo por defecto de SciPy es <b>\"full\"</b>: rellena con ceros para que el filtro toque la imagen aunque sea en una celda, y la salida crece a <span data-tex=\"n+m-1\"></span>. Las capas de las redes usan \"valid\" o \"same\", nunca \"full\"."
+    });
+  })();
+
+  /* ---------------- tarjetas ---------------- */
+  B.tarjetas($("tarjetas"), [
+    ["¿Qué calcula cada celda del mapa de características?", "La suma de los productos entre la ventana y el filtro: un producto punto local entre la ventana aplanada y el filtro aplanado."],
+    ["¿Por qué el mapa es más chico que la imagen?", "Sin marco de ceros, el filtro de $m \\times m$ solo cabe en $n - m + 1$ posiciones por eje: 8 × 8 da 6 × 6, y 6 × 6 da 4 × 4."],
+    ["¿Qué hace un filtro cuyos pesos suman 0?", "Da 0 en las zonas lisas y solo responde donde el brillo cambia: detecta bordes."],
+    ["¿Correlación cruzada o convolución?", "La convolución gira el filtro 180° antes de deslizarlo. Las redes no lo giran, y aun así lo llaman convolución."],
+    ["¿Cuándo dan lo mismo las dos?", "Cuando el filtro es igual a sí mismo girado 180°, como la X de la UD5 o el desenfoque."],
+    ["¿Cuántos parámetros tiene una capa convolucional?", "$k\\cdot k\\cdot C_{in}\\cdot C_{out} + C_{out}$. No depende del tamaño de la imagen, porque los pesos se comparten."],
+    ["¿De dónde salen los filtros de una red convolucional?", "Se aprenden con descenso de gradiente, como cualquier peso. Nadie los escribe a mano."]
+  ]);
+
+  /* ---------------- conexiones ---------------- */
+  B.conexiones("convolucion");
+})();
+</script>
+</body>
+</html>

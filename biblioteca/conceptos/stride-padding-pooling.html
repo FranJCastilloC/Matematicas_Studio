@@ -1,0 +1,1670 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Stride, padding y pooling</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+@media (min-width: 981px) { .escenario { max-height: calc(100vh - 80px); overflow-y: auto; } }
+
+/* ---------- cuadriculas ---------- */
+.grilla { display: grid; gap: 2px; width: 100%; user-select: none; -webkit-user-select: none; }
+.grilla .cel { aspect-ratio: 1; min-width: 0; display: grid; place-items: center; border-radius: 3px; background: var(--cell-zero); color: var(--ink);
+  font: 500 10px var(--f-mono); font-variant-numeric: tabular-nums; overflow: hidden; position: relative; }
+.grilla.chica .cel { font-size: 9px; }
+.grilla.grande .cel { font-size: 12px; }
+.grilla .cel.pad { background: transparent; box-shadow: inset 0 0 0 1px var(--line); color: var(--ink-3); }
+.grilla .cel.sobra { box-shadow: inset 0 0 0 2px var(--bad); }
+.grilla .cel.ven { box-shadow: inset 0 0 0 2px var(--accent); }
+.grilla .cel.foco { box-shadow: 0 0 0 2px var(--accent); z-index: 1; }
+.grilla .cel.oculta { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.grilla .cel.vacia { background: transparent; box-shadow: inset 0 0 0 1px var(--line-soft); }
+.grilla .cel.llega { outline: 2px solid var(--ok); outline-offset: -2px; }
+.grilla .cel.cambia { outline: 2px solid var(--bad); outline-offset: -2px; }
+.grilla .cel.campo { box-shadow: inset 0 0 0 2px var(--accent); background: var(--accent-soft); }
+.grilla.clic .cel { cursor: pointer; }
+.gfig { margin: 0; min-width: 0; }
+.gfig figcaption { font: 500 11px var(--f-mono); color: var(--ink-3); margin-bottom: 5px; }
+.esc-fila { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 14px; align-items: start; margin-bottom: 12px; }
+.esc-cuenta { font-family: var(--f-mono); font-size: 12.5px; color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: pre-wrap; overflow-wrap: anywhere;
+  padding-top: 10px; border-top: 1px dashed var(--line); min-height: 2.6em; }
+.esc-cuenta b { color: var(--ink); font-weight: 600; }
+.esc-cuenta b.oculto { color: var(--accent); }
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.esc-head .hint { font-size: 12.5px; color: var(--ink-2); }
+
+/* ---------- controles ---------- */
+.ctrl { display: flex; flex-wrap: wrap; gap: 8px 14px; margin: 0 0 12px; align-items: center; }
+.ctrl .grupo { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.ctrl .grupo > span { font: 500 11.5px var(--f-mono); color: var(--ink-3); margin-right: 2px; }
+.ctrl button { font-size: 12px; padding: 4px 9px; }
+.ctrl[hidden], .ctrl .grupo[hidden] { display: none; }
+.num-ctrl { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 0 0 12px; }
+.num-ctrl label { font-size: 12px; color: var(--ink-2); display: grid; gap: 3px; }
+.num-ctrl input { width: 100%; font: 500 13px var(--f-mono); padding: 5px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); }
+
+/* ---------- tira 1D de la formula ---------- */
+.tira { display: grid; gap: 2px; margin: 6px 0 4px; }
+.tira .cel { aspect-ratio: 1; min-width: 0; border-radius: 3px; background: var(--cell-zero); display: grid; place-items: center; font: 500 9px var(--f-mono); color: var(--ink-3); }
+.tira .cel.pad { background: transparent; box-shadow: inset 0 0 0 1px var(--line); }
+.tira .cel.ven { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--accent); color: var(--accent); }
+.tira .cel.inicio { background: var(--j); color: #fff; }
+.tira .cel.sobra { box-shadow: inset 0 0 0 2px var(--bad); }
+.tira-rot { font: 500 10.5px var(--f-mono); color: var(--ink-3); margin-top: 6px; }
+.rango { display: flex; align-items: center; gap: 10px; margin: 10px 0 6px; font-size: 12.5px; color: var(--ink-2); }
+.rango input { flex: 1; min-width: 0; }
+.leyenda { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 11.5px; color: var(--ink-3); margin-top: 6px; }
+.leyenda i { display: inline-block; width: 11px; height: 11px; border-radius: 3px; vertical-align: -1px; margin-right: 4px; }
+
+/* ---------- tabla de la red ---------- */
+.tabla-red { border-collapse: collapse; width: 100%; font: 12.5px var(--f-mono); font-variant-numeric: tabular-nums; }
+.tabla-red th, .tabla-red td { border-bottom: 1px solid var(--line); padding: 5px 6px; text-align: left; }
+.tabla-red th { color: var(--ink-3); font-weight: 500; font-size: 11.5px; }
+.tabla-red td.oc { color: var(--accent); font-weight: 600; }
+.capas { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.capas span { font: 500 11.5px var(--f-mono); padding: 3px 8px; border-radius: 6px; background: var(--surface-2); }
+
+/* ---------- tablas pequenas ---------- */
+.mini-tabla { border-collapse: collapse; font-family: var(--f-mono); font-size: 13px; margin: 6px 0 10px; }
+.mini-tabla td { border: 1px solid var(--line); padding: 3px 9px; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* ---------- vida real ---------- */
+.vr-g { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, .7fr) minmax(0, 1fr); gap: 10px; align-items: start; margin-top: 8px; }
+.vr-salida { margin: 10px 0 0; padding: 8px 10px; background: var(--surface-2); border-radius: 8px; font: 12px/1.5 var(--f-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (max-width: 560px) {
+  .vr-g { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); }
+  .vr-g .gfig:last-child { grid-column: 1 / -1; max-width: 220px; }
+  .num-ctrl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .esc-fila { gap: 10px; }
+}
+
+/* ---------- retos propios ---------- */
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.ojo-conf { font: 500 15px var(--f-mono); margin: 10px 0; color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+.ojo-opts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
+.ojo-opts .opt { text-align: center; }
+.objetivos { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.objetivos li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.objetivos .m { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.objetivos li.hecho { color: var(--ink); }
+.objetivos li.hecho .m { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 3px var(--surface); }
+.constr { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; max-width: 460px; align-items: start; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ Stride, padding y pooling</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Aprendizaje automático · SM142004 UD5 y Raschka cap. 14</p>
+    <h1>Stride, padding y pooling: el tamaño de cada mapa</h1>
+    <p class="lede">
+      En la página de convolución la ventana avanzaba de a un píxel y el mapa salía un poco más chico que la imagen. Aquí tomas el control:
+      un <b>marco de ceros</b> (padding) para no perder los bordes, un <b>salto</b> (stride) para avanzar más rápido y el <b>pooling</b>, que resume cada zona en un solo número.
+      Todo se reduce a una cuenta: cuántas veces cabe la ventana.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> Cada capa convolucional sin marco le quita un píxel a cada lado de la imagen. Si una red tiene 50 capas, ¿qué harías para que la imagen no desaparezca? Y si al revés quisieras achicarla rápido a propósito, ¿qué harías?</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: agregaría..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>De los bordes olvidados a lo que ve una neurona</h2>
+      <p>Ocho pasos. Empiezas contando cuántas veces la ventana pasa por cada píxel, sin fórmulas, y terminas siguiendo el tamaño de cada mapa en una red entera. Cada paso cierra con un chequeo que abre el siguiente.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="Predecir">
+          <span class="etapa">Paso 1</span>
+          <h3>Los bordes se ven menos</h3>
+          <p>A la derecha está la cruz de 8 × 8 de la página de convolución, y una ventana de 3 × 3 que recorre todas las posiciones donde cabe: de a una, sin salirse de la imagen.</p>
+          <p>Piensa en dos píxeles: el de la <b>esquina</b> de arriba a la izquierda y uno del <b>centro</b>. Cada vez que la ventana pasa por encima de un píxel, ese píxel aporta a una celda del mapa.</p>
+          <p>Todavía no ves los conteos. Primero predice.</p>
+          <div class="check" id="chk1"><p class="check-tit">Predice antes de ver</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Padding">
+          <span class="etapa">Paso 2</span>
+          <h3>Un marco de ceros</h3>
+          <p>La solución es simple: rodear la imagen con un marco de ceros, el <b>padding</b>. Con un marco de ancho 1, la ventana ya puede centrarse en la esquina y el mapa vuelve a medir 8 × 8. Usa los botones de <b>marco</b> y mira cómo cambian los conteos y el tamaño del mapa.</p>
+          <p>El escenario usa el filtro de <b>suma</b> (nueve unos), así que cada celda del mapa suma los píxeles de su ventana. Las ventanas que tocan el marco suman ceros: por eso los bordes del mapa salen más oscuros.</p>
+          <p>Hay tres nombres que vas a ver en todas partes <cite class="cita" data-fuente="raschka14" data-pag="7" data-pimp="457" data-seccion="Padding inputs to control the size of the output feature maps" data-que="Por qué los píxeles del borde entran en menos salidas, y los tres modos: full (p = m − 1), same (salida del mismo tamaño) y valid (sin marco), con la figura 14.4." data-cuando="Al terminar este paso"></cite>:</p>
+          <ul>
+            <li><b>valid</b>: sin marco. El mapa se achica.</li>
+            <li><b>same</b>: el marco justo para que el mapa mida lo mismo que la imagen.</li>
+            <li><b>full</b>: tanto marco que la ventana toca la imagen aunque sea en una sola celda. El mapa crece. Casi no se usa en redes.</li>
+          </ul>
+          <p>La UD5 presenta valid y same en la sección de padding, pero no dice cuántos ceros hacen falta <cite class="cita" data-fuente="cnn5" data-pag="9" data-seccion="5.7 Padding (y los hiperparámetros de cada capa)" data-que="Los hiperparámetros de una capa (tamaño del filtro, profundidad, stride, zero-padding) y el padding valid contra same, en prosa y sin la cuenta de cuántos ceros poner." data-cuando="Después del chequeo de este paso"></cite>. Raschka tampoco da la regla en general. La vas a encontrar tú en el chequeo.</p>
+          <div class="check" id="chk2"><p class="check-tit">Calcula</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Stride">
+          <span class="etapa">Paso 3</span>
+          <h3>Saltar de a dos</h3>
+          <p>Hasta ahora la ventana avanzaba de a un píxel. El <b>stride</b> (salto, o paso) dice cuántos píxeles avanza cada vez. Con salto 2 la ventana se apoya en las columnas 1, 3, 5... y el mapa queda de la mitad, más o menos.</p>
+          <p>Lo de "más o menos" es importante. Si la ventana ya no cabe en el siguiente salto, <b>no se pone</b>: los últimos píxeles quedan sin mirar. En el escenario aparecen con borde rojo.</p>
+          <p>Raschka presenta el stride con una señal de 8 números y un filtro de 4, avanzando de a 2: tres salidas, 7, 9 y 8 <cite class="cita" data-fuente="raschka14" data-pag="6" data-pimp="456" data-seccion="Discrete convolutions in one dimension" data-que="La figura 14.3: x = [3 2 1 7 1 2 5 4] con un filtro de 4 y stride 2, sin marco. Las tres ventanas dan 7, 9 y 8. Abajo, el recuadro de correlación cruzada." data-cuando="Después de probar el salto 2 en el escenario"></cite>.</p>
+          <div class="check" id="chk3"><p class="check-tit">Cuenta antes de tocar</p><div class="cuerpo"></div></div>
+          <details class="profundizar">
+            <summary>¿Saltar de a 2 es lo mismo que calcular todo y quedarse con la mitad?</summary>
+            <div>
+              <p>Sí. Las ventanas que pone el salto 2 son exactamente las ventanas 1, 3, 5... del recorrido de a uno. Así que el mapa con salto 2 es el mapa con salto 1 quedándote con una fila de cada dos y una columna de cada dos. La diferencia es el trabajo: con salto 2 haces la cuarta parte de las cuentas. El programa de la vida real lo comprueba.</p>
+            </div>
+          </details>
+        </section>
+
+        <section class="paso card" data-titulo="La fórmula">
+          <span class="etapa">Paso 4</span>
+          <h3>Una sola cuenta para todo</h3>
+          <p>Junta las tres cosas en una tira de píxeles. Con <span data-tex="n"></span> píxeles y un marco de <span data-tex="p"></span> a cada lado, la tira mide <span data-tex="n+2p"></span>. La ventana de tamaño <span data-tex="m"></span> puede empezar en las posiciones <span data-tex="0, s, 2s, \dots"></span> mientras quepa: la última posible es <span data-tex="n+2p-m"></span>. Cuántos saltos enteros entran ahí, más la posición 0:</p>
+          <div class="fbloque">
+            <div data-tex="o \;=\; \left\lfloor \frac{n + 2p - m}{s} \right\rfloor + 1" data-display></div>
+            <div class="vivo" id="vivo4"></div>
+          </div>
+          <p>Los corchetes <span data-tex="\lfloor\ \rfloor"></span> son la parte entera hacia abajo: <span data-tex="\lfloor 2.5 \rfloor = 2"></span>. Es la cuenta de "la ventana que no cabe no se pone". Es la fórmula de Raschka, con sus dos ejemplos: 10, 5, 2, 1 da 10; y 10, 3, 2, 2 da 6 <cite class="cita" data-fuente="raschka14" data-pag="8" data-pimp="458" data-seccion="Determining the size of the convolution output" data-que="La fórmula o = ⌊(n + 2p − m)/s⌋ + 1, el recuadro de la función piso y los dos ejemplos numéricos. También por qué conviene same en las capas y achicar con pooling o con stride 2." data-cuando="Después de mover los controles de la tira"></cite>. Pruébalos en el escenario. El material de la UD5 no trae esta fórmula: solo ejemplos de los que se deduce.</p>
+          <p>Con <span data-tex="s=1"></span> y <span data-tex="p=0"></span> vuelve la cuenta de la página de convolución, <span data-tex="n-m+1"></span>. Y con <span data-tex="s=1"></span>, el marco same es <span data-tex="p=(m-1)/2"></span>: por eso los filtros casi siempre tienen tamaño impar.</p>
+          <div class="check" id="chk4"><p class="check-tit">Calcula</p><div class="cuerpo"></div></div>
+
+          <div class="destacado" id="destacado4">
+            <p class="dest-tit">Un número que no cuadra</p>
+            <h4>El 55 de AlexNet</h4>
+            <p>La diapositiva de AlexNet de la UD5 dibuja una imagen de <b>224 × 224 × 3</b>, un primer filtro de <b>11 × 11</b> con "Stride of 4", y un mapa de <b>55 × 55</b> <cite class="cita" data-fuente="cnn5diapo" data-pag="49" data-seccion="AlexNet" data-que="El diagrama de AlexNet: entrada 224 × 224 × 3, filtro de 11 × 11 con stride 4 y los tamaños 55, 27 y 13 de los mapas. Es el único stride mayor que 1 de la unidad." data-cuando="Al leer este recuadro"></cite>. Sin marco, ¿da 55?</p>
+            <div class="check" id="chk4b"><p class="check-tit">Calcula</p><div class="cuerpo"></div></div>
+            <p id="alexExtra" hidden>Da 54, no 55. Este desajuste viene del artículo original de AlexNet, que escribe 224, y se discute desde hace años. El 55 sale exacto con una entrada de <b>227</b>: <span data-tex="\lfloor (227-11)/4 \rfloor + 1 = 54 + 1 = 55"></span>, que es lo que usan las implementaciones. También saldría con un marco de 2 sobre 224: <span data-tex="\lfloor 217/4 \rfloor + 1 = 55"></span>. La fórmula te sirve justamente para detectar estas cosas.</p>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Pooling">
+          <span class="etapa">Paso 5</span>
+          <h3>Pooling: una zona, un número</h3>
+          <p>El <b>pooling</b> (agrupación) recorre el mapa con una ventana, casi siempre de 2 × 2 y con salto 2, y cambia cada zona por un solo número. No multiplica por pesos: solo resume.</p>
+          <ul>
+            <li><b>Max pooling</b>: se queda con el máximo de la zona. Pregunta "¿apareció el patrón por aquí?".</li>
+            <li><b>Average pooling</b> (promedio): se queda con la media. Pregunta "¿cuánto patrón hay por aquí, en promedio?".</li>
+          </ul>
+          <p>En el escenario está el mapa de 4 × 4 de la UD5 (el de la imagen de 6 × 6 con el filtro en X). Su max pooling es <b>792, 856, 913 y 851</b>, el mismo de la teoría <cite class="cita" data-fuente="cnn5" data-pag="10" data-seccion="5.9 Pooling" data-que="La figura del max pooling 2 × 2 sobre el mapa de 4 × 4 con un color por cuadrante, el resultado 792, 856, 913, 851, y el average pooling solo en palabras." data-cuando="Después del chequeo de este paso"></cite>. El material describe el average pooling pero no le pone números: tú los calculas.</p>
+          <p>El tamaño de salida es la misma fórmula, con el pooling como ventana y sin marco: <span data-tex="\lfloor (4-2)/2 \rfloor + 1 = 2"></span>. Raschka trae otro ejemplo, de 6 × 6 con ventanas de 3 × 3, en las dos versiones <cite class="cita" data-fuente="raschka14" data-pag="13" data-pimp="463" data-seccion="Subsampling layers" data-que="Max-pooling y mean-pooling con la figura 14.8: un 6 × 6 con ventanas de 3 × 3 y stride 3 da [[8, 5], [6, 3]] con el máximo y [[3.78, 2.33], [3, 1.22]] con la media. Abajo, el ejemplo de invariancia del paso 6." data-cuando="Al terminar este paso"></cite>.</p>
+          <div class="check" id="chk5"><p class="check-tit">Calcula con los datos</p><div class="cuerpo"></div></div>
+
+          <div class="destacado" id="destacado5">
+            <p class="dest-tit">Una frase del material que confunde</p>
+            <h4>¿El pooling reduce los parámetros?</h4>
+            <p>La teoría de la UD5 dice que el pooling "reduce la cantidad de parámetros y controla el sobreajuste". Antes de leer más, piensa cuántos pesos tiene que aprender una capa de pooling.</p>
+            <div class="check" id="chk5b"><p class="check-tit">Predice</p><div class="cuerpo"></div></div>
+            <p id="poolExtra" hidden>Ninguno. Tomar un máximo o una media no tiene nada que ajustar, y Raschka lo dice con todas las letras <cite class="cita" data-fuente="raschka14" data-pag="3" data-pimp="453" data-seccion="Understanding CNNs and feature hierarchies" data-que="La frase de que las capas de pooling no tienen parámetros que aprender, mientras que las convolucionales y las densas sí tienen pesos y sesgos." data-cuando="Al leer este recuadro"></cite>. Lo que el pooling reduce son los parámetros de las capas <b>que vienen después</b>. En el cuaderno de perros y gatos de la UD5 (CNN03), tres poolings dejan el mapa final en 17 × 17 × 64 = 18 496 números, y la capa densa de 512 neuronas tiene 9 470 464 parámetros. Sin esos poolings el mapa final sería de 144 × 144 × 64 = 1 327 104 números, y esa misma capa densa tendría unas 70 veces más. La frase de la UD5 es correcta solo en ese sentido indirecto.</p>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Invariancia">
+          <span class="etapa">Paso 6</span>
+          <h3>Moverse un píxel no importa (casi)</h3>
+          <p>El escenario muestra un mapa de activación de 8 × 8 donde un filtro encontró dos cosas: un 9 y un 6. A su lado, el max pooling de 2 × 2 con salto 2, que lo reduce a 4 × 4.</p>
+          <p>Si la imagen se corre un poco, las detecciones se corren con ella. La pregunta es qué le pasa al mapa reducido. Responde antes de usar las flechas.</p>
+          <div class="check" id="chk6"><p class="check-tit">Predice antes de mover</p><div class="cuerpo"></div></div>
+          <p>Esa es la <b>invariancia local</b>: pequeños desplazamientos que no sacan al máximo de su zona no cambian nada. Raschka lo muestra con dos matrices de 6 × 6 distintas que dan el mismo max pooling (p. 463, en la cita del paso anterior). No es invariancia total: si el máximo cruza la frontera de su zona, el mapa sí cambia.</p>
+          <p>Hoy muchas redes cambian el pooling por una convolución con salto 2: achica igual, pero con pesos que se aprenden. Raschka la llama un pooling con parámetros, y explica también el pooling solapado de AlexNet, con salto menor que la ventana <cite class="cita" data-fuente="raschka14" data-pag="14" data-pimp="464" data-seccion="Overlapping versus non-overlapping pooling (recuadro)" data-que="Pooling sin solapamiento (stride igual al tamaño de la ventana) y solapado (stride menor, como en AlexNet), y la convolución con stride 2 como alternativa al pooling." data-cuando="Al terminar este paso"></cite>.</p>
+        </section>
+
+        <section class="paso card" data-titulo="Una red entera">
+          <span class="etapa">Paso 7</span>
+          <h3>El tamaño, capa por capa</h3>
+          <p>Ya tienes todo para seguir una red real. La UD6 de Matemáticas entrena una red sobre MNIST (imágenes de 28 × 28) y muestra su resumen: convolución de 3 × 3 sin marco, pooling de 2 × 2, otra convolución, otro pooling, y al final se aplana <cite class="cita" data-fuente="ud6" data-pag="17" data-seccion="3.3.1 CNN" data-que="La salida de model.summary(): formas (26, 26, 32), (13, 13, 32), (11, 11, 64), (5, 5, 64), 1600, 128 y 10, con 320, 18 496, 204 928 y 1 290 parámetros (225 034 en total)." data-cuando="Después del chequeo de este paso"></cite>. En el escenario está esa red con un tamaño oculto.</p>
+          <p>Los dos poolings tienen 0 parámetros en el resumen. Casi todo lo que la red aprende está en la capa densa que viene después del aplanado: 204 928 de los 225 034.</p>
+          <div class="check" id="chk7"><p class="check-tit">Calcula</p><div class="cuerpo"></div></div>
+          <div class="cita" id="citaHipo" hidden></div>
+          <details class="profundizar">
+            <summary>¿Y si no quiero aplanar? El global average pooling</summary>
+            <div>
+              <p>El caso extremo del average pooling es usar una ventana del tamaño del mapa entero: cada canal se convierte en un solo número, su promedio. Un mapa de 8 × 8 × 256 queda en 256 números en lugar de 16 384, y la capa densa que sigue tiene 64 veces menos pesos. Raschka lo usa en su clasificador de sonrisas <cite class="cita" data-fuente="raschka14" data-pag="42" data-pimp="492" data-seccion="Training a CNN smile classifier" data-que="El global average pooling: el mapa de 8 × 8 × 256 que habría que aplanar en 16 384 entradas se promedia por canal y queda en 256, con nn.AvgPool2d(kernel_size=8) y la figura 14.18." data-cuando="Cuando termines la página"></cite>.</p>
+            </div>
+          </details>
+        </section>
+
+        <section class="paso card" data-titulo="Campo receptivo">
+          <span class="etapa">Paso 8</span>
+          <h3>Lo que ve una neurona de la capa profunda</h3>
+          <p>Cada celda de un mapa mira una ventana de la capa anterior, que a su vez miraba ventanas de la anterior. El trozo de la <b>imagen original</b> del que depende una celda es su <b>campo receptivo</b>. Las diapositivas de la UD5 lo dibujan con dos capas convolucionales apiladas <cite class="cita" data-fuente="cnn5diapo" data-pag="19" data-seccion="Campo receptivo en capas apiladas" data-que="Input layer, convolutional layer 1 y convolutional layer 2: una neurona de la capa 2 ve una región de la capa 1, que a su vez ve una región mayor de la entrada." data-cuando="Al empezar este paso"></cite>.</p>
+          <p>Cada capa agrega lo que su ventana sobresale, <span data-tex="m-1"></span>, multiplicado por el salto acumulado de las capas anteriores <span data-tex="J"></span> (el producto de sus strides):</p>
+          <div class="fbloque">
+            <div data-tex="r \leftarrow r + (m-1)\,J \qquad J \leftarrow J \cdot s \qquad (r = 1,\; J = 1 \text{ al empezar})" data-display></div>
+            <div class="vivo" id="vivo8"></div>
+          </div>
+          <p>Por eso importan el stride y el pooling: después de un salto 2, cada píxel de la capa vale por dos de la imagen, y las ventanas siguientes crecen el doble de rápido. Este cálculo no aparece en el material de la unidad: la diapositiva solo dibuja la idea.</p>
+          <div class="check" id="chk8"><p class="check-tit">Predice</p><div class="cuerpo"></div></div>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+        </div>
+
+        <div id="escRej">
+          <div class="ctrl" id="ctrlRej">
+            <div class="grupo" id="gP"><span>marco p</span></div>
+            <div class="grupo" id="gS"><span>salto s</span></div>
+            <div class="grupo" id="gM"><span>núcleo m</span></div>
+          </div>
+          <div class="esc-fila">
+            <figure class="gfig"><figcaption id="capRej">Imagen</figcaption><div id="gRej"></div></figure>
+            <figure class="gfig"><figcaption id="capMapa">Mapa</figcaption><div id="gMapa"></div></figure>
+          </div>
+          <div class="leyenda" id="leyRej"></div>
+          <div class="esc-cuenta" id="cuentaRej"></div>
+        </div>
+
+        <div id="escTira" hidden>
+          <div class="num-ctrl">
+            <label>píxeles n<input type="number" id="tN" min="1" max="16" value="10"></label>
+            <label>núcleo m<input type="number" id="tM" min="1" max="9" value="3"></label>
+            <label>marco p<input type="number" id="tP" min="0" max="4" value="2"></label>
+            <label>salto s<input type="number" id="tS" min="1" max="5" value="2"></label>
+          </div>
+          <div class="tira-rot" id="tiraRot"></div>
+          <div class="tira" id="tira"></div>
+          <div class="rango"><span>ventana</span><input type="range" id="tK" min="0" max="0" step="1" value="0" aria-label="Ventana que se muestra"><span id="tKLab"></span></div>
+          <div class="leyenda"><span><i style="background:transparent;box-shadow:inset 0 0 0 1px var(--line)"></i>marco</span><span><i style="background:var(--j)"></i>inicio de una ventana</span><span><i style="box-shadow:inset 0 0 0 2px var(--accent);background:var(--accent-soft)"></i>ventana elegida</span><span><i style="box-shadow:inset 0 0 0 2px var(--bad)"></i>nunca se mira</span></div>
+          <div class="esc-cuenta" id="cuentaTira"></div>
+        </div>
+
+        <div id="escPool" hidden>
+          <div class="ctrl">
+            <div class="grupo" id="gPool"><span>pooling</span></div>
+          </div>
+          <div class="esc-fila">
+            <figure class="gfig"><figcaption>Mapa de la UD5, 4 × 4</figcaption><div id="gPoolIn"></div></figure>
+            <figure class="gfig"><figcaption id="capPoolOut">Max pooling, 2 × 2</figcaption><div id="gPoolOut"></div></figure>
+          </div>
+          <div class="esc-cuenta" id="cuentaPool"></div>
+        </div>
+
+        <div id="escMueve" hidden>
+          <div class="ctrl">
+            <div class="grupo"><span>mover</span>
+              <button type="button" class="mv" data-d="0,-1" disabled>Izquierda</button>
+              <button type="button" class="mv" data-d="0,1" disabled>Derecha</button>
+              <button type="button" class="mv" data-d="-1,0" disabled>Arriba</button>
+              <button type="button" class="mv" data-d="1,0" disabled>Abajo</button>
+              <button type="button" class="ghost" id="mvReset" disabled>Volver</button>
+            </div>
+          </div>
+          <div class="esc-fila">
+            <figure class="gfig"><figcaption>Mapa de activación, 8 × 8</figcaption><div id="gMvIn"></div></figure>
+            <figure class="gfig"><figcaption>Max pooling, 4 × 4</figcaption><div id="gMvOut"></div></figure>
+          </div>
+          <div class="esc-cuenta" id="cuentaMv"></div>
+        </div>
+
+        <div id="escRed" hidden>
+          <table class="tabla-red" id="tablaRed"></table>
+          <div class="esc-cuenta" id="cuentaRed"></div>
+        </div>
+
+        <div id="escCampo" hidden>
+          <div class="ctrl">
+            <div class="grupo"><span>agregar</span>
+              <button type="button" class="cpo" data-m="3" data-s="1" disabled>conv 3 × 3</button>
+              <button type="button" class="cpo" data-m="2" data-s="2" disabled>pooling 2 × 2</button>
+              <button type="button" class="cpo" data-m="3" data-s="2" disabled>conv 3 × 3, salto 2</button>
+              <button type="button" class="ghost" id="cpoReset" disabled>Empezar de nuevo</button>
+            </div>
+          </div>
+          <div class="capas" id="capas"></div>
+          <figure class="gfig" style="max-width:320px"><figcaption>Imagen original, 15 × 15: en color, lo que ve una celda de la última capa</figcaption><div id="gCampo"></div></figure>
+          <div class="esc-cuenta" id="cuentaCampo"></div>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>Un programa con tres funciones: el tamaño de salida, una convolución con marco y salto, y un pooling. Se corre sobre la imagen de 6 × 6 de la UD5: primero con marco 1 y salto 2, después el max pooling y el average pooling de su mapa de 4 × 4. Al final se compara con versiones sin bucles: <code>sliding_window_view</code> de NumPy en Python, y una propia con <code>pmax</code> en R.</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir</p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="true">Python</button>
+            <button type="button" data-lang="r" aria-pressed="false">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">1 · definir</span><span data-f="2">2 · marco y salto</span><span data-f="3">3 · pooling</span><span data-f="4">4 · comparar</span>
+        </div>
+        <div class="vr-g">
+          <figure class="gfig"><figcaption id="vrCapA">Xp (8 × 8, con marco)</figcaption><div id="vrA"></div></figure>
+          <figure class="gfig"><figcaption id="vrCapB">W (3 × 3)</figcaption><div id="vrB"></div></figure>
+          <figure class="gfig"><figcaption id="vrCapC">Z (3 × 3)</figcaption><div id="vrC"></div></figure>
+        </div>
+        <div class="vr-cuenta esc-cuenta" id="vrCuenta"></div>
+        <pre class="vr-salida" id="vrSalida" hidden></pre>
+      </div>
+    </div>
+
+    <p class="vr-nota">En la práctica no se escriben los bucles: <code>nn.Conv2d(..., padding=1, stride=2)</code> y <code>nn.MaxPool2d(2)</code> en PyTorch, o <code>Conv2D(..., padding="same", strides=2)</code> y <code>MaxPooling2D(2)</code> en Keras, hacen estas mismas cuentas. Raschka escribe la convolución con bucles en NumPy y la prueba solo con salto 1 <cite class="cita" data-fuente="raschka14" data-pag="12" data-pimp="462" data-seccion="Performing a discrete convolution in 2D" data-que="La función conv2d con giro, marco y salto, comparada con scipy.signal.convolve2d sobre un 4 × 4 con marco 1 y salto 1. Su bucle divide entre el salto en el límite y además avanza de a s: con salto 2 falla." data-cuando="Antes de resolver la primera trampa de abajo"></cite>. Con salto 2 su función falla en silencio: mira la primera trampa.</p>
+
+    <details class="profundizar">
+      <summary>Cómo se escribe en PyTorch y Keras</summary>
+      <div>
+        <p><b>Este código no se corrió</b>: en esta máquina no están instalados PyTorch ni Keras. Las formas de la derecha salen de la fórmula.</p>
+        <pre class="vr-salida"># PyTorch: formato (lote, canales, alto, ancho)
+conv = nn.Conv2d(1, 1, kernel_size=3, padding=1, stride=2, bias=False)
+pool = nn.MaxPool2d(kernel_size=2)        # stride por defecto = 2
+x = torch.ones(1, 1, 6, 6)
+conv(x).shape                             # (1, 1, 3, 3)
+pool(torch.ones(1, 1, 4, 4)).shape        # (1, 1, 2, 2)
+nn.AvgPool2d(2)                           # average pooling
+
+# Keras: formato (lote, alto, ancho, canales)
+keras.layers.Conv2D(1, 3, strides=2, padding="same")   # 6 -> 3
+keras.layers.MaxPooling2D(2)                           # 4 -> 2
+keras.layers.GlobalAveragePooling2D()</pre>
+        <p>Un detalle que la fórmula explica: en Keras, <code>padding="same"</code> con salto 2 da <span data-tex="\lceil n/s \rceil"></span>, no <span data-tex="n"></span>. "Same" solo conserva el tamaño cuando el salto es 1. Raschka arma su red de MNIST con <code>padding=2</code> y núcleo 5, y el pooling de 2 × 2 con salto por defecto igual a 2, que divide cada lado a la mitad <cite class="cita" data-fuente="raschka14" data-pag="27" data-pimp="477" data-seccion="Constructing a CNN in PyTorch" data-que="nn.Conv2d(1, 32, kernel_size=5, padding=2), el uso de la fórmula para elegir p = 2 y obtener same (el texto escribe o = i donde quiere decir o = n), y nn.MaxPool2d(kernel_size=2) que divide por 2." data-cuando="Cuando quieras ver una red completa en PyTorch"></cite>.</p>
+      </div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>La función del libro con salto 2</h3><span class="estado" data-reto="codigo2"></span></div>
+        <div id="codigo2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Dividir con / en lugar de //</h3><span class="estado" data-reto="codigo3"></span></div>
+        <div id="codigo3"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: el índice te avisa cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>¿Crece, se queda o se achica?</h3><span class="estado" data-reto="ojo"></span></div>
+        <p class="desc">Una capa al azar. Decide sin hacer la cuenta completa si el mapa sale más grande, igual o más chico que la entrada. Apruebas con 4 de 5.</p>
+        <div id="ojo"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Construir</span><h3>Elige marco, salto y núcleo</h3><span class="estado" data-reto="construir"></span></div>
+        <p class="desc">Sobre la cruz de 8 × 8, con el filtro de suma. Cambia los controles hasta cumplir cada objetivo. Se marcan solos.</p>
+        <div class="ctrl" id="conCtrl">
+          <div class="grupo" id="conM"><span>núcleo m</span></div>
+          <div class="grupo" id="conP"><span>marco p</span></div>
+          <div class="grupo" id="conS"><span>salto s</span></div>
+        </div>
+        <div class="constr">
+          <figure class="gfig"><figcaption>Imagen con marco</figcaption><div id="conIn"></div></figure>
+          <figure class="gfig"><figcaption id="conCap">Mapa</figcaption><div id="conOut"></div></figure>
+        </div>
+        <ul class="objetivos" id="objetivos"></ul>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>El tamaño de una capa</h3><span class="estado" data-reto="mano"></span></div>
+        <p class="desc">Una capa al azar. Haz la cuenta en papel antes de pedir pistas.</p>
+        <div id="mano"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>Un pooling con lápiz</h3><span class="estado" data-reto="mano2"></span></div>
+        <p class="desc">Un mapa de 4 × 4 al azar y un pooling de 2 × 2 con salto 2.</p>
+        <div id="mano2Datos"></div>
+        <div id="mano2"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Alguien se equivocó</h3><span class="estado" data-reto="error"></span></div>
+        <p class="desc">Una de las líneas tiene un error. Tócala.</p>
+        <div id="error"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Pesos del pooling</h3><span class="estado" data-reto="prop1"></span></div>
+        <div id="prop1"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Un núcleo par</h3><span class="estado" data-reto="prop2"></span></div>
+        <div id="prop2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Salto 2 contra quedarse con la mitad</h3><span class="estado" data-reto="prop3"></span></div>
+        <div id="prop3"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Tres capas de 3 × 3</h3><span class="estado" data-reto="prop4"></span></div>
+        <div id="prop4"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Max o promedio</h3><span class="estado" data-reto="prop5"></span></div>
+        <div id="prop5"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Arma la fórmula del tamaño de salida y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Fórmula de memoria</span><h3>Arma el tamaño de salida pieza por pieza</h3><span class="estado" data-reto="formula"></span></div>
+        <p class="desc">Entrada n, núcleo m, marco p, salto s. Hay piezas de más. No mires arriba.</p>
+        <div id="formula"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el libro</h2>
+      <p class="lecturas-intro">Ya moviste el marco, el salto y el pooling con tus manos. Ahora ve a la versión técnica y comprueba que la reconoces. Cada entrada dice qué vas a encontrar y en qué momento conviene leerla. Si abres la biblioteca con doble clic, el enlace abre el PDF en esa página.</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> La cruz de 8 × 8 (0 negro, 9 blanco), el mapa de activación del paso 6 y los ejemplos de los retos son inventados, elegidos para que las cuentas den enteras.
+    La imagen de 6 × 6, el filtro en X y su mapa de 4 × 4 son los del material de la UD5 de SM142004; la red del paso 7 es la de la UD6 de SM142001. Tu progreso se guarda solo en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+/*
+  Reutiliza el ejemplo comun de convolucion.html (la cruz 8 x 8 y el ejemplo 6 x 6 de la UD5).
+  Numeros nuevos de esta pagina, calculados con python3 y numpy:
+    Tamano de salida o = (n + 2p - m) // s + 1.
+    UD5 6 x 6 con el filtro X, marco 1, salto 2 -> [[139,250,410],[310,792,640],[254,913,657]]
+      (= el mapa con marco 1 y salto 1 tomando filas y columnas 0, 2, 4).
+    Mapa 4 x 4 de la UD5: max pooling 2 x 2 -> [[792,856],[913,851]]; average -> [[496.75,648.5],[701.75,743]].
+    Cruz 8 x 8 con ventana 3 x 3 sin marco: la esquina entra en 1 ventana, el centro en 9; con marco 1, la esquina en 4.
+    AlexNet: (224 - 11) // 4 + 1 = 54; con 227 da 55. Red de la UD6: 28 -> 26 -> 13 -> 11 -> 5 -> 1600.
+    Raschka conv2d con la figura 14.6 (p = 1, s = 2) devuelve [[4.6]] en lugar de [[4.6, 1.6], [7.5, 2.9]].
+*/
+(function () {
+  "use strict";
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var RETOS = ["ojo", "construir", "mano", "mano2", "error", "prop1", "prop2", "prop3", "prop4", "prop5", "formula", "codigo1", "codigo2", "codigo3"];
+  var C = B.concepto({ id: "stride-padding-pooling", retos: RETOS, pasos: 8 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  /* ---------------- utilidades ---------------- */
+  var f = B.fmt;
+  function n(v) {
+    if (v === null || v === undefined) return "";
+    if (Math.abs(v - Math.round(v)) < 1e-9) return f(Math.round(v), 0);
+    if (Math.abs(v * 10 - Math.round(v * 10)) < 1e-9) return f(v, 1);
+    return f(v, 2);
+  }
+  function tam(nn, m, p, s) { return Math.floor((nn + 2 * p - m) / s) + 1; }
+  function ceros(a, b) { var M = []; for (var i = 0; i < a; i++) { M.push([]); for (var j = 0; j < b; j++) M[i].push(0); } return M; }
+  function marco(X, p) {
+    var N = X.length + 2 * p, M = ceros(N, N);
+    for (var i = 0; i < X.length; i++) for (var j = 0; j < X.length; j++) M[i + p][j + p] = X[i][j];
+    return M;
+  }
+  function conv(X, W, p, s) {
+    var Xp = marco(X, p), m = W.length, o = tam(X.length, m, p, s);
+    if (o < 1) return [];
+    var Y = ceros(o, o);
+    for (var i = 0; i < o; i++) for (var j = 0; j < o; j++) {
+      var t = 0;
+      for (var u = 0; u < m; u++) for (var v = 0; v < m; v++) t += Xp[i * s + u][j * s + v] * W[u][v];
+      Y[i][j] = t;
+    }
+    return Y;
+  }
+  function pool(A, k, s, modo) {
+    var o = tam(A.length, k, 0, s), P = ceros(o, o);
+    for (var i = 0; i < o; i++) for (var j = 0; j < o; j++) {
+      var mx = -Infinity, sm = 0;
+      for (var u = 0; u < k; u++) for (var v = 0; v < k; v++) { var x = A[i * s + u][j * s + v]; mx = Math.max(mx, x); sm += x; }
+      P[i][j] = modo === "max" ? mx : sm / (k * k);
+    }
+    return P;
+  }
+  function unos(m) { var W = []; for (var i = 0; i < m; i++) { W.push([]); for (var j = 0; j < m; j++) W[i].push(1); } return W; }
+  function maxAbs(M) { var t = 0; M.forEach(function (r) { r.forEach(function (v) { if (v !== null) t = Math.max(t, Math.abs(v)); }); }); return t; }
+  function azar(a, b) { return a + Math.floor(Math.random() * (b - a + 1)); }
+
+  /* ---------------- datos ---------------- */
+  var CRUZ = [
+    [0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 9, 9, 0, 0, 0],
+    [0, 0, 0, 9, 9, 0, 0, 0],
+    [0, 9, 9, 9, 9, 9, 9, 0],
+    [0, 9, 9, 9, 9, 9, 9, 0],
+    [0, 0, 0, 9, 9, 0, 0, 0],
+    [0, 0, 0, 9, 9, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0]
+  ];
+  var UD5 = [
+    [18, 54, 51, 239, 244, 188],
+    [55, 121, 75, 78, 95, 88],
+    [35, 24, 204, 113, 109, 221],
+    [3, 154, 104, 235, 25, 130],
+    [15, 253, 225, 159, 78, 233],
+    [68, 85, 180, 214, 245, 0]
+  ];
+  var EQUIS = [[1, 0, 1], [0, 1, 0], [1, 0, 1]];
+  var MAPA4 = conv(UD5, EQUIS, 0, 1); // [[429,505,686,856],[261,792,412,640],[633,653,851,751],[608,913,713,657]]
+
+  /* ---------------- cuadriculas ---------------- */
+  function gris(v, max) {
+    var g = Math.round(Math.max(0, Math.min(1, v / max)) * 255);
+    return "background:rgb(" + g + "," + g + "," + g + ");color:" + (g > 130 ? "#141821" : "#eef1f6") + ";";
+  }
+  function grilla(el, M, o) {
+    o = o || {};
+    var cols = M[0].length, max = o.max || maxAbs(M) || 1, h = "";
+    for (var i = 0; i < M.length; i++) {
+      for (var j = 0; j < cols; j++) {
+        var v = M[i][j], cls = "cel", st = "", txt;
+        var extra = o.clase ? o.clase(i, j) : "";
+        if (extra) cls += " " + extra;
+        if (o.ven && i >= o.ven[0] && i < o.ven[0] + o.ven[2] && j >= o.ven[1] && j < o.ven[1] + o.ven[2]) cls += " ven";
+        if (o.foco && o.foco[0] === i && o.foco[1] === j) cls += " foco";
+        if (o.llega && o.llega[0] === i && o.llega[1] === j) cls += " llega";
+        var oc = o.oculto && o.oculto(i, j);
+        if (oc) { cls += " oculta"; txt = "?"; }
+        else if (v === null) { cls += " vacia"; txt = ""; }
+        else {
+          txt = o.fmt ? o.fmt(v, i, j) : n(v);
+          if (o.tipo === "gris" && !(o.esPad && o.esPad(i, j))) st = gris(v, max);
+          else if (o.tipo === "calor") {
+            var q = Math.min(1, Math.abs(v) / max) * 70;
+            st = "background:color-mix(in oklab, var(--accent) " + q.toFixed(0) + "%, var(--cell-zero));";
+          } else if (o.tipo === "tinte" && o.tinte) st = o.tinte(i, j);
+        }
+        h += '<div class="' + cls + '" data-i="' + i + '" data-j="' + j + '"' + (st ? ' style="' + st + '"' : "") + '>' + txt + '</div>';
+      }
+    }
+    el.style.gridTemplateColumns = "repeat(" + cols + ", minmax(0, 1fr))";
+    el.className = "grilla " + (o.cls || "") + (o.clic ? " clic" : "");
+    el.innerHTML = h;
+    el._clic = o.clic || null;
+    if (!el._escucha) {
+      el._escucha = true;
+      el.addEventListener("click", function (e) {
+        var c = e.target.closest(".cel");
+        if (c && el._clic) el._clic(+c.getAttribute("data-i"), +c.getAttribute("data-j"));
+      });
+    }
+  }
+  function botones(cont, valores, actual, alElegir, bloqueado, etiqueta) {
+    [].slice.call(cont.querySelectorAll("button")).forEach(function (b) { b.remove(); });
+    valores.forEach(function (v) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.textContent = etiqueta ? etiqueta(v) : String(v);
+      b.classList.toggle("on", v === actual);
+      if (bloqueado && bloqueado(v)) { b.disabled = true; b.title = "Responde el chequeo para activarlo"; }
+      b.addEventListener("click", function () { alElegir(v); });
+      cont.appendChild(b);
+    });
+  }
+
+  /* ---------------- estado del recorrido ---------------- */
+  var est = { paso: 0, chk: {}, p: 0, s: 1, m: 3, ven: [0, 0], pool: "max", qd: [0, 0], mv: [0, 0], capas: [] };
+  var pasos;
+
+  var MODOS = [
+    { vista: "rej", P: [0], S: [1], M: [3], cobertura: true, hint: "Predice antes de ver los conteos" },
+    { vista: "rej", P: [0, 1, 2], S: [1], M: [3, 5], cobertura: true, hint: "Cambia el marco y mira el mapa" },
+    { vista: "rej", P: [0, 1], S: [1, 2, 3], M: [3], hint: "Prueba saltos de 2 y 3" },
+    { vista: "tira", hint: "Cambia n, m, p y s" },
+    { vista: "pool", hint: "Toca una zona del mapa" },
+    { vista: "mueve", hint: "Mueve las detecciones un píxel" },
+    { vista: "red", hint: "La red de MNIST de la UD6" },
+    { vista: "campo", hint: "Apila capas y mira el campo receptivo" }
+  ];
+
+  /* ----- vista rejilla (pasos 1 a 3) ----- */
+  function cobertura(N, m, s) {
+    var o = Math.floor((N - m) / s) + 1, K = ceros(N, N);
+    for (var i = 0; i < o; i++) for (var j = 0; j < o; j++)
+      for (var u = 0; u < m; u++) for (var v = 0; v < m; v++) K[i * s + u][j * s + v]++;
+    return K;
+  }
+  function pintarRej() {
+    var md = MODOS[est.paso], p = est.p, s = est.s, m = est.m;
+    var Xp = marco(CRUZ, p), N = Xp.length, o = tam(8, m, p, s);
+    est.ven = [Math.min(est.ven[0], o - 1), Math.min(est.ven[1], o - 1)];
+    var vi = est.ven[0], vj = est.ven[1];
+    var verCob = md.cobertura;
+    var cobOculta = est.paso === 0 && !est.chk[1];
+    var K = cobertura(N, m, s);
+    function esPad(i, j) { return i < p || j < p || i >= p + 8 || j >= p + 8; }
+    $("capRej").textContent = (p ? "Imagen con marco " + p + ", " + N + " × " + N : "Imagen 8 × 8") + (verCob ? ": veces que la mira la ventana" : "");
+    grilla($("gRej"), verCob ? K : Xp, {
+      tipo: verCob ? "calor" : "gris", max: verCob ? m * m : 9, cls: N > 10 ? "chica" : "",
+      esPad: esPad,
+      ven: [vi * s, vj * s, m],
+      clase: function (i, j) { return esPad(i, j) ? "pad" : (K[i][j] === 0 ? "sobra" : ""); },
+      oculto: function (i, j) { return cobOculta && !esPad(i, j); },
+      fmt: function (v) { return v; },
+      clic: function (i, j) {
+        est.ven = [Math.max(0, Math.min(o - 1, Math.floor((i - (m - 1) / 2) / s + 0.5))), Math.max(0, Math.min(o - 1, Math.floor((j - (m - 1) / 2) / s + 0.5)))];
+        pintarRej();
+      }
+    });
+    var Y = conv(CRUZ, unos(m), p, s);
+    $("capMapa").textContent = "Mapa " + o + " × " + o + " (filtro de suma)";
+    grilla($("gMapa"), Y, { tipo: "gris", max: 9 * m * m * 0.6, cls: o > 6 ? "chica" : "", foco: [vi, vj], fmt: function (v) { return v; },
+      clic: function (i, j) { est.ven = [i, j]; pintarRej(); } });
+    var ley = '<span><i style="background:transparent;box-shadow:inset 0 0 0 1px var(--line)"></i>marco de ceros</span><span><i style="box-shadow:inset 0 0 0 2px var(--accent)"></i>ventana</span>';
+    if (s > 1) ley += '<span><i style="box-shadow:inset 0 0 0 2px var(--bad)"></i>nunca se mira</span>';
+    $("leyRej").innerHTML = ley;
+    var sobran = 0;
+    for (var j = p; j < p + 8; j++) if (K[p + 3][j] === 0) sobran++;
+    var t = "entrada 8 × 8" + (p ? " + marco " + p + " = " + N + " × " + N : "") + " · núcleo " + m + " × " + m + " · salto " + s +
+      "\nla ventana cabe en <b>" + o + "</b> posiciones por fila → mapa <b>" + o + " × " + o + "</b>";
+    if (cobOculta) t += "\nesquina: <b class=\"oculto\">?</b> veces · centro: <b class=\"oculto\">?</b> veces";
+    else if (verCob) t += "\nesquina de la imagen: <b>" + K[p][p] + "</b> veces · centro: <b>" + K[p + 3][p + 3] + "</b> veces";
+    if (s > 1) t += "\ncolumnas de la imagen que nunca se miran: <b>" + sobran + "</b>";
+    t += "\nventana elegida: celda (" + (vi + 1) + ", " + (vj + 1) + ") del mapa, suma = <b>" + Y[vi][vj] + "</b>";
+    $("cuentaRej").innerHTML = t;
+    botones($("gP"), md.P, p, function (v) { est.p = v; pintarRej(); }, function (v) { return v === 2 && est.paso === 1 && !est.chk[2]; });
+    botones($("gS"), md.S, s, function (v) { est.s = v; pintarRej(); }, function (v) { return v > 1 && !est.chk[3]; });
+    botones($("gM"), md.M, m, function (v) { est.m = v; pintarRej(); }, function (v) { return v === 5 && !est.chk[2]; });
+    $("gP").hidden = md.P.length < 2;
+    $("gS").hidden = md.S.length < 2;
+    $("gM").hidden = md.M.length < 2;
+  }
+
+  /* ----- vista tira (paso 4) ----- */
+  function leerT(id, a, b, d) { var v = parseInt($(id).value, 10); if (!isFinite(v)) v = d; return Math.max(a, Math.min(b, v)); }
+  function pintarTira() {
+    var nn = leerT("tN", 1, 16, 10), m = leerT("tM", 1, 9, 3), p = leerT("tP", 0, 4, 2), s = leerT("tS", 1, 5, 2);
+    var L = nn + 2 * p, h = "";
+    var num = nn + 2 * p - m;
+    if (num < 0) {
+      $("tira").innerHTML = "";
+      $("tiraRot").textContent = "";
+      $("cuentaTira").innerHTML = "El núcleo (" + m + ") es más grande que la tira con marco (" + L + "): no cabe ninguna ventana.";
+      $("vivo4").innerHTML = "n + 2p − m = " + num + ": la ventana no cabe.";
+      return;
+    }
+    var o = Math.floor(num / s) + 1, k = Math.min(+$("tK").value || 0, o - 1);
+    $("tK").max = o - 1; $("tK").value = k;
+    $("tKLab").textContent = (k + 1) + " de " + o;
+    var visto = [];
+    for (var c = 0; c < L; c++) visto.push(false);
+    for (var w = 0; w < o; w++) for (var u = 0; u < m; u++) visto[w * s + u] = true;
+    for (c = 0; c < L; c++) {
+      var pad = c < p || c >= p + nn, ini = c % s === 0 && c / s < o;
+      var cls = "cel" + (pad ? " pad" : "") + (c >= k * s && c < k * s + m ? " ven" : "") + (ini && !(c >= k * s && c < k * s + m) ? " inicio" : "") + (!visto[c] && !pad ? " sobra" : "");
+      h += '<div class="' + cls + '">' + (pad ? "0" : c - p + 1) + '</div>';
+    }
+    $("tira").style.gridTemplateColumns = "repeat(" + L + ", minmax(0, 1fr))";
+    $("tira").innerHTML = h;
+    $("tiraRot").textContent = "tira de " + nn + " píxeles" + (p ? " con " + p + " ceros a cada lado: " + L + " celdas" : "");
+    var sobran = visto.filter(function (x, c) { return !x && !(c < p || c >= p + nn); }).length;
+    var div = num / s;
+    var linea = "o = ⌊(" + nn + " + 2·" + p + " − " + m + ") / " + s + "⌋ + 1 = ⌊" + num + "/" + s + "⌋ + 1 = ⌊" + n(div) + "⌋ + 1 = <b>" + o + "</b>";
+    $("vivo4").innerHTML = linea;
+    $("cuentaTira").innerHTML = "la ventana empieza en las celdas " + (function () { var a = []; for (var w = 0; w < o; w++) a.push(w * s + 1); return a.join(", "); })() +
+      " de la tira\nsalida: <b>" + o + "</b> números" + (sobran ? "\npíxeles de la imagen que nunca se miran: <b>" + sobran + "</b> (la división no fue entera)" : "") +
+      (o === nn ? "\nsalida del mismo tamaño que la entrada: padding same" : o > nn ? "\nla salida es más grande que la entrada" : "");
+  }
+  ["tN", "tM", "tP", "tS"].forEach(function (id) { $(id).addEventListener("input", function () { $("tK").value = 0; pintarTira(); }); });
+  $("tK").addEventListener("input", pintarTira);
+
+  /* ----- vista pooling (paso 5) ----- */
+  var TINTES = ["--j", "--k", "--pos", "--neg"];
+  function tinteQ(i, j) { var q = (i >= 2 ? 2 : 0) + (j >= 2 ? 1 : 0); return "background:color-mix(in oklab, var(" + TINTES[q] + ") 28%, var(--cell-zero));"; }
+  function pintarPool() {
+    var P = pool(MAPA4, 2, 2, est.pool), ocAvg = est.pool === "avg" && !est.chk[5];
+    var qi = est.qd[0], qj = est.qd[1];
+    grilla($("gPoolIn"), MAPA4, { tipo: "tinte", tinte: tinteQ, ven: [qi * 2, qj * 2, 2], clic: function (i, j) { est.qd = [i >> 1, j >> 1]; pintarPool(); } });
+    $("capPoolOut").textContent = (est.pool === "max" ? "Max pooling" : "Average pooling") + ", 2 × 2";
+    grilla($("gPoolOut"), P, { tipo: "tinte", tinte: function (i, j) { return tinteQ(i * 2, j * 2); }, cls: "grande", foco: [qi, qj],
+      oculto: function (i, j) { return ocAvg && i === 0 && j === 0; }, clic: function (i, j) { est.qd = [i, j]; pintarPool(); } });
+    var z = [MAPA4[qi * 2][qj * 2], MAPA4[qi * 2][qj * 2 + 1], MAPA4[qi * 2 + 1][qj * 2], MAPA4[qi * 2 + 1][qj * 2 + 1]];
+    var oc = ocAvg && qi === 0 && qj === 0;
+    var res = oc ? '<b class="oculto">?</b>' : "<b>" + n(P[qi][qj]) + "</b>";
+    $("cuentaPool").innerHTML = "zona (" + (qi + 1) + ", " + (qj + 1) + "): " + z.join(", ") + "\n" +
+      (est.pool === "max" ? "máximo = " + res : "promedio = (" + z.join(" + ") + ") / 4 = " + res) +
+      "\nsalida: ⌊(4 − 2)/2⌋ + 1 = 2 por lado · parámetros de esta capa: 0";
+    botones($("gPool"), ["max", "avg"], est.pool, function (v) { est.pool = v; pintarPool(); }, null, function (v) { return v === "max" ? "Máximo" : "Promedio"; });
+  }
+
+  /* ----- vista mover (paso 6) ----- */
+  var DET = [[2, 0, 9], [5, 5, 6]];
+  function mapaMv(d) {
+    var M = ceros(8, 8);
+    DET.forEach(function (t) {
+      var i = Math.max(0, Math.min(7, t[0] + d[0])), j = Math.max(0, Math.min(7, t[1] + d[1]));
+      M[i][j] = t[2];
+    });
+    return M;
+  }
+  function pintarMv() {
+    var M = mapaMv(est.mv), P = pool(M, 2, 2, "max"), P0 = pool(mapaMv([0, 0]), 2, 2, "max");
+    var cambian = 0;
+    grilla($("gMvIn"), M, { tipo: "gris", max: 9, cls: "chica", fmt: function (v) { return v || ""; } });
+    grilla($("gMvOut"), P, { tipo: "gris", max: 9, fmt: function (v) { return v; },
+      clase: function (i, j) { if (P[i][j] !== P0[i][j]) { cambian++; return "cambia"; } return ""; } });
+    // marcar las fronteras de las zonas de 2 x 2 en la entrada
+    [].forEach.call($("gMvIn").children, function (c) {
+      var i = +c.getAttribute("data-i"), j = +c.getAttribute("data-j");
+      if (((i >> 1) + (j >> 1)) % 2 === 1 && !M[i][j]) c.style.background = "var(--surface-2)";
+    });
+    $("cuentaMv").innerHTML = "desplazamiento desde el inicio: " + est.mv[1] + " a la derecha, " + est.mv[0] + " hacia abajo" +
+      "\nceldas del mapa reducido que cambiaron: <b>" + cambian + "</b> de 16" +
+      (cambian ? " (en rojo)" : " · el mapa reducido es idéntico");
+  }
+  [].forEach.call(document.querySelectorAll("#escMueve .mv"), function (b) {
+    b.addEventListener("click", function () {
+      var d = b.getAttribute("data-d").split(",").map(Number);
+      est.mv = [Math.max(-2, Math.min(2, est.mv[0] + d[0])), Math.max(-1, Math.min(2, est.mv[1] + d[1]))];
+      pintarMv();
+    });
+  });
+  $("mvReset").addEventListener("click", function () { est.mv = [0, 0]; pintarMv(); });
+  function activarMv() { [].forEach.call(document.querySelectorAll("#escMueve button"), function (b) { b.disabled = false; }); }
+
+  /* ----- vista red (paso 7) ----- */
+  function pintarRed() {
+    var oc = !est.chk[7];
+    var filas = [
+      ["entrada", "", "28 × 28 × 1", "", "0"],
+      ["Conv2D 32, 3 × 3", "28 − 3 + 1", "26 × 26 × 32", "", "320"],
+      ["MaxPooling 2 × 2", "⌊(26 − 2)/2⌋ + 1", "13 × 13 × 32", "", "0"],
+      ["Conv2D 64, 3 × 3", "13 − 3 + 1", "11 × 11 × 64", "", "18 496"],
+      ["MaxPooling 2 × 2", "⌊(11 − 2)/2⌋ + 1", oc ? "? × ? × 64" : "5 × 5 × 64", oc ? "oc" : "", "0"],
+      ["Flatten", oc ? "? · ? · 64" : "5 · 5 · 64", oc ? "?" : "1600", oc ? "oc" : "", "0"],
+      ["Dense 128", "", "128", "", "204 928"],
+      ["Dense 10", "", "10", "", "1 290"]
+    ];
+    $("tablaRed").innerHTML = "<tr><th>capa</th><th>cuenta</th><th>forma</th><th>parámetros</th></tr>" +
+      filas.map(function (r) { return "<tr><td>" + r[0] + "</td><td>" + r[1] + "</td><td class=\"" + r[3] + "\">" + r[2] + "</td><td>" + r[4] + "</td></tr>"; }).join("");
+    $("cuentaRed").innerHTML = oc ? "El segundo pooling recibe 11 × 11. Once no es par: ¿qué pasa con la última fila y la última columna?"
+      : "⌊9/2⌋ + 1 = 4 + 1 = 5. La fila 11 y la columna 11 se pierden: ninguna ventana de 2 × 2 cabe ahí.\nTotal de parámetros: 225 034, y los dos poolings no aportan ninguno.";
+  }
+
+  /* ----- vista campo receptivo (paso 8) ----- */
+  function campo(capas) {
+    var r = 1, J = 1, pasosR = [];
+    capas.forEach(function (c) { r += (c.m - 1) * J; J *= c.s; pasosR.push({ r: r, J: J }); });
+    return { r: r, J: J, pasos: pasosR };
+  }
+  function pintarCampo() {
+    var oc = !est.chk[8], cp = campo(est.capas), r = cp.r;
+    $("capas").innerHTML = est.capas.length ? est.capas.map(function (c, k) {
+      var nom = c.m === 2 ? "pooling 2 × 2" : "conv 3 × 3" + (c.s > 1 ? ", salto 2" : "");
+      return "<span>" + (k + 1) + ". " + nom + " → r = " + (oc ? "?" : cp.pasos[k].r) + "</span>";
+    }).join("") : "<span>solo la imagen: r = 1</span>";
+    var N = 15, M = ceros(N, N), a = Math.floor((N - Math.min(r, N)) / 2);
+    grilla($("gCampo"), M, { cls: "chica", fmt: function () { return ""; },
+      clase: function (i, j) { return !oc && i >= a && i < a + Math.min(r, N) && j >= a && j < a + Math.min(r, N) ? "campo" : ""; } });
+    var t = oc ? "campo receptivo de una celda de la última capa: <b class=\"oculto\">?</b>" : "campo receptivo: <b>" + r + " × " + r + "</b> píxeles de la imagen" + (r > N ? " (más grande que esta imagen)" : "") +
+      "\nsalto acumulado J = " + cp.J;
+    $("cuentaCampo").innerHTML = t;
+    if (!oc) {
+      var v = "r = 1";
+      cp.pasos.forEach(function (x, k) { var c = est.capas[k], Jant = k ? cp.pasos[k - 1].J : 1; v += " → " + (k ? cp.pasos[k - 1].r : 1) + " + " + (c.m - 1) + "·" + Jant + " = " + x.r; });
+      $("vivo8").innerHTML = v;
+    } else $("vivo8").innerHTML = "r = 1 → 1 + 2·1 = 3 → ?";
+  }
+  [].forEach.call(document.querySelectorAll("#escCampo .cpo"), function (b) {
+    b.addEventListener("click", function () {
+      if (est.capas.length >= 6) return;
+      est.capas.push({ m: +b.getAttribute("data-m"), s: +b.getAttribute("data-s") });
+      pintarCampo();
+    });
+  });
+  $("cpoReset").addEventListener("click", function () { est.capas = []; pintarCampo(); });
+  function activarCampo() { [].forEach.call(document.querySelectorAll("#escCampo button"), function (b) { b.disabled = false; }); }
+
+  function entrar(i) {
+    est.paso = i;
+    var md = MODOS[i];
+    $("escHint").textContent = md.hint;
+    ["Rej", "Tira", "Pool", "Mueve", "Red", "Campo"].forEach(function (k) { $("esc" + k).hidden = md.vista !== k.toLowerCase(); });
+    if (md.vista === "rej") {
+      est.p = md.P[0]; est.s = 1; est.m = 3; est.ven = [0, 0];
+      if (i === 1) est.p = 1;
+      pintarRej();
+    } else if (md.vista === "tira") pintarTira();
+    else if (md.vista === "pool") pintarPool();
+    else if (md.vista === "mueve") pintarMv();
+    else if (md.vista === "red") pintarRed();
+    else {
+      if (!est.capas.length) est.capas = [{ m: 3, s: 1 }, { m: 3, s: 1 }];
+      pintarCampo();
+    }
+  }
+
+  /* ---------------- chequeos de cada paso ---------------- */
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+
+  B.opcionMultiple(cuerpo("chk1"), {
+    pregunta: "La ventana de 3 × 3 recorre la imagen de 8 × 8 en todas las posiciones donde cabe. ¿Cuántas veces queda debajo de la ventana el píxel de la <b>esquina</b>, y cuántas uno del <b>centro</b>?",
+    opciones: ["1 la esquina y 9 el centro", "Las mismas veces los dos", "4 la esquina y 9 el centro", "1 la esquina y 3 el centro"],
+    correcta: 0,
+    pistas: [null,
+      "Para que la ventana tape la esquina, tiene que estar arriba a la izquierda del todo. ¿Hay otra posición que también la tape?",
+      "4 sería si la ventana pudiera salirse un poco de la imagen. Aquí no puede.",
+      "Un píxel del centro puede estar en cualquiera de las 9 celdas de la ventana: arriba a la izquierda, al medio, abajo a la derecha..."],
+    explicacion: "La esquina solo queda tapada cuando la ventana está en la primera posición: <b>1 vez</b>. Un píxel del centro puede caer en cualquiera de las 9 celdas de la ventana: <b>9 veces</b>. Sin marco, la red casi no se entera de lo que pasa en los bordes, y además el mapa sale de 6 × 6. Ahora mira los conteos de toda la imagen.",
+    alResolver: function () { est.chk[1] = true; if (est.paso === 0) pintarRej(); pasos.completar(0); }
+  });
+
+  B.numerico(cuerpo("chk2"), {
+    pregunta: "Con un núcleo de <b>5 × 5</b> y salto 1 sobre la imagen de 8 × 8, ¿de qué ancho tiene que ser el marco para que el mapa siga midiendo 8 × 8?",
+    respuesta: 2,
+    tolerancia: 0.001,
+    pistas: ["Sin marco el mapa mide $8 - 5 + 1 = 4$: pierdes 4 por lado. El marco agrega ceros a los dos lados.",
+      "Si pones $p$ ceros a cada lado, la imagen mide $8 + 2p$, y el mapa $8 + 2p - 5 + 1$. ¿Qué $p$ hace que eso sea 8?"],
+    diagnostico: function (v) {
+      if (Math.abs(v - 4) < 0.001) return "Con 4 por lado el mapa crecería a 12. Los ceros se ponen a los dos lados, así que cada uno cuenta doble.";
+      if (Math.abs(v - 1) < 0.001) return "Eso alcanza con el núcleo de 3 × 3. El de 5 × 5 sobresale dos celdas de su centro.";
+      return null;
+    },
+    explicacion: "$8 + 2\\cdot 2 - 5 + 1 = 8$. En general, con salto 1 hace falta $p = (m-1)/2$: la mitad de lo que el núcleo sobresale de su centro. Con 3 es 1, con 5 es 2. Ya puedes probar el núcleo de 5 y el marco de 2 en el escenario.",
+    alResolver: function () { est.chk[2] = true; if (est.paso === 1) pintarRej(); pasos.completar(1); }
+  });
+
+  B.numerico(cuerpo("chk3"), {
+    pregunta: "Sin marco, núcleo de 3 × 3 y <b>salto 2</b> sobre la imagen de 8 × 8. ¿En cuántas posiciones por fila cabe la ventana?",
+    respuesta: 3,
+    tolerancia: 0.001,
+    pistas: ["La ventana empieza en las columnas 1, 3, 5, 7... mientras quepa entera.", "Si empieza en la columna 7 ocuparía las columnas 7, 8 y 9. ¿Existe la columna 9?"],
+    diagnostico: function (v) {
+      if (Math.abs(v - 4) < 0.001) return "La cuarta ventana empezaría en la columna 7 y necesitaría una columna 9 que no existe.";
+      if (Math.abs(v - 3.5) < 0.001) return "No hay media ventana: si no cabe entera, no se pone.";
+      if (Math.abs(v - 6) < 0.001) return "Esas son las posiciones con salto 1. Con salto 2 la ventana se saltea una de cada dos.";
+      return null;
+    },
+    explicacion: "Empieza en las columnas 1, 3 y 5; la siguiente, en la 7, ya no cabe. Son <b>3</b> posiciones y el mapa es de 3 × 3. La columna 8 nunca se mira. Ya puedes elegir los saltos 2 y 3 en el escenario: mira las celdas con borde rojo.",
+    alResolver: function () { est.chk[3] = true; if (est.paso === 2) pintarRej(); pasos.completar(2); }
+  });
+
+  function cerrar4() { if (est.chk[4] && est.chk["4b"]) pasos.completar(3); }
+  B.numerico(cuerpo("chk4"), {
+    pregunta: "Una variante de la red de MNIST de Raschka: imagen de 28 × 28, núcleo de 5, marco de 2, pero con <b>salto 2</b>. ¿Qué tamaño tiene el mapa?",
+    respuesta: 14,
+    tolerancia: 0.001,
+    pistas: ["$n + 2p - m = 28 + 4 - 5 = 27$.", "$\\lfloor 27/2 \\rfloor + 1$. La parte entera de 13.5 es 13."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 28) < 0.001) return "Ese sería con salto 1: el marco de 2 conserva el tamaño solo si la ventana avanza de a uno.";
+      if (Math.abs(v - 14.5) < 0.001) return "Te faltó la parte entera: $\\lfloor 13.5 \\rfloor = 13$, y después se suma 1.";
+      if (Math.abs(v - 15) < 0.001) return "Redondeaste 13.5 hacia arriba. La fórmula usa la parte entera hacia abajo.";
+      if (Math.abs(v - 13) < 0.001) return "Falta el +1: la posición 0 también cuenta.";
+      return null;
+    },
+    explicacion: "$\\lfloor (28 + 4 - 5)/2 \\rfloor + 1 = 13 + 1 = 14$. Marco same con salto 2 deja la mitad, redondeada hacia arriba. Raschka usa salto 1 en esa capa y deja que el pooling haga la mitad: el tamaño final es el mismo, 14.",
+    alResolver: function () { est.chk[4] = true; cerrar4(); }
+  });
+  B.numerico(cuerpo("chk4b"), {
+    pregunta: "Entrada de 224, núcleo de 11, salto 4, sin marco. ¿Qué tamaño da la fórmula?",
+    respuesta: 54,
+    tolerancia: 0.001,
+    pistas: ["$224 - 11 = 213$.", "$\\lfloor 213/4 \\rfloor = \\lfloor 53.25 \\rfloor = 53$. No olvides el +1."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 55) < 0.001) return "Ese es el número de la diapositiva. Haz la cuenta tú: ¿cuánto da $\\lfloor 213/4 \\rfloor$?";
+      if (Math.abs(v - 53) < 0.001) return "Falta el +1.";
+      if (Math.abs(v - 54.25) < 0.001) return "Te faltó la parte entera de 53.25.";
+      return null;
+    },
+    explicacion: "$\\lfloor 213/4 \\rfloor + 1 = 53 + 1 = 54$. No es 55.",
+    alResolver: function () { est.chk["4b"] = true; $("alexExtra").hidden = false; cerrar4(); }
+  });
+
+  function cerrar5() { if (est.chk[5] && est.chk["5b"]) pasos.completar(4); }
+  B.numerico(cuerpo("chk5"), {
+    pregunta: "Cambia a <b>Promedio</b>. La celda de arriba a la izquierda está oculta: su zona es <b>429, 505, 261, 792</b>. ¿Cuánto vale el average pooling?",
+    respuesta: 496.75,
+    tolerancia: 0.01,
+    pistas: ["Suma los cuatro: $429 + 505 + 261 + 792$.", "La suma es 1987. Divide entre 4."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 792) < 0.01) return "Ese es el máximo. El promedio suma los cuatro y divide.";
+      if (Math.abs(v - 1987) < 0.01) return "Esa es la suma. Falta dividir entre los 4 números de la zona.";
+      if (Math.abs(v - 497) < 0.01 || Math.abs(v - 496.8) < 0.01) return "Muy cerca: escribe el valor exacto, con dos decimales.";
+      return null;
+    },
+    explicacion: "$(429 + 505 + 261 + 792)/4 = 1987/4 = 496.75$. El promedio queda bastante por debajo del máximo (792): en esa zona hay un valor alto y tres más bajos. Max pooling dice \"aquí hubo algo fuerte\"; el promedio lo diluye.",
+    alResolver: function () { est.chk[5] = true; if (est.paso === 4) pintarPool(); cerrar5(); }
+  });
+  B.opcionMultiple(cuerpo("chk5b"), {
+    pregunta: "Una capa de max pooling de 2 × 2 sobre un mapa con 32 canales. ¿Cuántos parámetros entrenables tiene?",
+    opciones: ["0", "4", "128", "132"],
+    correcta: 0,
+    pistas: [null, "¿Qué tendría que aprender para calcular un máximo?", "Eso sería si cada canal tuviera su propia ventana de 2 × 2 con pesos. El máximo no usa pesos.", "Ni pesos ni sesgos: el máximo de cuatro números no depende de nada ajustable."],
+    explicacion: "Cero. Un máximo o un promedio son operaciones fijas.",
+    alResolver: function () { est.chk["5b"] = true; $("poolExtra").hidden = false; B.tex($("poolExtra")); cerrar5(); }
+  });
+
+  B.opcionMultiple(cuerpo("chk6"), {
+    pregunta: "Mueves las dos detecciones <b>un píxel a la derecha</b>. ¿Qué le pasa al mapa reducido de 4 × 4?",
+    opciones: [
+      "Depende: si cada máximo se queda dentro de su zona de 2 × 2 no cambia nada; si cruza a la zona vecina, se corre",
+      "Siempre se corre un lugar a la derecha",
+      "Nunca cambia: el pooling ignora los desplazamientos",
+      "Cambia todo el mapa"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "El mapa reducido tiene la mitad de celdas por lado. Un píxel de la entrada es medio píxel de la salida: no siempre alcanza para moverse un lugar.",
+      "Ignora algunos desplazamientos, no todos. Piensa en un máximo que está en el borde derecho de su zona.",
+      "Cada celda reducida solo mira su zona de 2 × 2. Las zonas donde no hay nada siguen en 0."],
+    explicacion: "Cada celda del mapa reducido solo pregunta \"¿cuál es el máximo de mi zona?\". Si el 9 se corre pero sigue en la misma zona, la respuesta es la misma. <b>Ahora usa las flechas</b>: el 9 empieza a la izquierda de su zona y el 6 a la derecha. Muévelos a la derecha y mira cuál cambia.",
+    alResolver: function () { activarMv(); pasos.completar(5); }
+  });
+
+  B.numerico(cuerpo("chk7"), {
+    pregunta: "El segundo pooling (2 × 2, salto 2) recibe un mapa de <b>11 × 11</b>. ¿De qué tamaño sale cada lado?",
+    respuesta: 5,
+    tolerancia: 0.001,
+    pistas: ["Es la misma fórmula, sin marco: $\\lfloor (11 - 2)/2 \\rfloor + 1$.", "$\\lfloor 4.5 \\rfloor = 4$."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 5.5) < 0.001) return "No hay medias celdas. La ventana de 2 × 2 que empezaría en la columna 11 no cabe.";
+      if (Math.abs(v - 6) < 0.001) return "Redondeaste hacia arriba. El pooling por defecto descarta lo que sobra.";
+      if (Math.abs(v - 10) < 0.001) return "Ese sería un pooling con salto 1. Aquí salta de a 2.";
+      return null;
+    },
+    explicacion: "$\\lfloor 9/2 \\rfloor + 1 = 5$, como dice el resumen de la UD6: (5, 5, 64). Al aplanar quedan $5 \\cdot 5 \\cdot 64 = 1600$ números, que entran a la capa densa de 128 neuronas: $1600 \\cdot 128 + 128 = 204\\,928$ parámetros.",
+    alResolver: function () { est.chk[7] = true; if (est.paso === 6) pintarRed(); pasos.completar(6); }
+  });
+
+  B.numerico(cuerpo("chk8"), {
+    pregunta: "Dos capas convolucionales de 3 × 3 seguidas, con salto 1. Una celda de la segunda capa, ¿de un cuadrado de cuántos píxeles de lado de la imagen depende?",
+    respuesta: 5,
+    tolerancia: 0.001,
+    pistas: ["La celda de la capa 2 mira 3 × 3 celdas de la capa 1.", "Cada una de esas mira 3 × 3 píxeles, pero se solapan: las tres celdas de una fila de la capa 1 cubren 3 + 2 píxeles de la imagen."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 9) < 0.001) return "Multiplicaste 3 · 3, pero las ventanas vecinas se solapan: comparten dos de sus tres píxeles.";
+      if (Math.abs(v - 6) < 0.001) return "Casi. Las tres ventanas de la capa 1 empiezan en tres píxeles seguidos y cada una mide 3: del primero al último hay 5.";
+      if (Math.abs(v - 3) < 0.001) return "Ese es el campo de la primera capa. La segunda mira un poco más.";
+      return null;
+    },
+    explicacion: "$r = 1 + 2 + 2 = 5$. Dos capas de 3 × 3 ven lo mismo que una de 5 × 5, con 18 pesos en vez de 25 y una activación más en el medio: es la idea de VGG. Ahora empieza de nuevo y apila conv, pooling y conv: el campo salta a 8.",
+    alResolver: function () { est.chk[8] = true; activarCampo(); if (est.paso === 7) pintarCampo(); pasos.completar(7); }
+  });
+
+  pasos = B.pasos($("recorrido"), {
+    concepto: C,
+    alEntrar: entrar,
+    alTerminar: function () { location.hash = "retos"; }
+  });
+  [1, 2, 3, 7, 8].forEach(function (k) { if (pasos.hecho(k - 1)) est.chk[k] = true; });
+  if (pasos.hecho(3)) { est.chk[4] = true; est.chk["4b"] = true; $("alexExtra").hidden = false; }
+  if (pasos.hecho(4)) { est.chk[5] = true; est.chk["5b"] = true; $("poolExtra").hidden = false; }
+  if (pasos.hecho(5)) activarMv();
+  if (pasos.hecho(7)) activarCampo();
+  entrar(0);
+
+  /* ---------------- hipotesis inicial ---------------- */
+  (function () {
+    var ta = $("hipotesis"), t = null;
+    ta.value = B.nota("stride-padding-pooling", "hipotesis");
+    function cita() {
+      var v = ta.value.trim(), el = $("citaHipo");
+      el.hidden = !v;
+      if (v) { el.textContent = ""; el.appendChild(document.createTextNode("Al principio escribiste: «" + v + "». Ahora tienes nombres para las dos cosas: el marco de ceros para no perder tamaño, y el salto o el pooling para achicar a propósito. ¿Cuál usaste?")); }
+    }
+    cita();
+    ta.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { B.nota("stride-padding-pooling", "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; cita(); }, 500);
+    });
+  })();
+
+  /* ---------------- marcadores de estado de retos ---------------- */
+  function pintarEstados() {
+    [].forEach.call(document.querySelectorAll("[data-reto]"), function (el) {
+      var ok = C.retoOk(el.getAttribute("data-reto"));
+      el.textContent = ok ? "resuelto" : "pendiente";
+      el.classList.toggle("ok", ok);
+    });
+  }
+  C.alCambiar(pintarEstados);
+  pintarEstados();
+
+  /* ---------------- reto: ojo clinico ---------------- */
+  (function () {
+    var cont = $("ojo");
+    cont.innerHTML = '<div class="ronda"></div><div class="ojo-conf"></div>' +
+      '<div class="ojo-opts"><button type="button" class="opt" data-a="mas">Más grande</button><button type="button" class="opt" data-a="igual">Igual</button>' +
+      '<button type="button" class="opt" data-a="menos">Más chico</button></div>' +
+      '<div class="fb" aria-live="polite"></div><div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    var ronda, aciertos, respondida, caso, tipos;
+    function generar(tipo) {
+      for (;;) {
+        var nn = [16, 28, 32, 64, 224][azar(0, 4)], m = [1, 3, 5, 7][azar(0, 3)], p = azar(0, 3), s = [1, 1, 2, 3][azar(0, 3)];
+        var o = tam(nn, m, p, s), r = o > nn ? "mas" : o === nn ? "igual" : "menos";
+        if (r === tipo) return { n: nn, m: m, p: p, s: s, o: o, r: r };
+      }
+    }
+    function porque(c) {
+      if (c.s > 1) return "Con salto " + c.s + " la ventana se saltea posiciones: el mapa queda de alrededor de 1/" + c.s + ". Exacto: " + c.o + ".";
+      var d = 2 * c.p - (c.m - 1);
+      if (d === 0) return "Salto 1 y el marco justo: " + c.p + " = (" + c.m + " − 1)/2. Es padding same: " + c.o + ".";
+      if (d > 0) return "Salto 1 y más marco que lo que el núcleo sobresale (" + c.m + " − 1 = " + (c.m - 1) + " contra 2·" + c.p + "): crece a " + c.o + ".";
+      return "Salto 1 pero el marco no alcanza (2·" + c.p + " contra " + c.m + " − 1 = " + (c.m - 1) + "): se achica a " + c.o + ".";
+    }
+    function nueva() {
+      var extra = ["mas", "igual", "menos"][azar(0, 2)];
+      tipos = B.mezclar(["mas", "igual", "menos", "menos", extra]);
+      ronda = 0; aciertos = 0;
+      mostrar();
+    }
+    function mostrar() {
+      respondida = false;
+      caso = generar(tipos[ronda]);
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 5 · aciertos " + aciertos;
+      cont.querySelector(".ojo-conf").textContent = "entrada " + caso.n + " × " + caso.n + " · núcleo " + caso.m + " × " + caso.m + " · marco " + caso.p + " · salto " + caso.s;
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (b) { b.disabled = false; b.className = "opt"; });
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+    }
+    cont.querySelector(".ojo-opts").addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || respondida) return;
+      respondida = true;
+      var ok = b.getAttribute("data-a") === caso.r;
+      if (ok) aciertos++;
+      b.classList.add(ok ? "ok" : "mal");
+      if (!ok) cont.querySelector('[data-a="' + caso.r + '"]').classList.add("ok");
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (x) { x.disabled = true; });
+      cont.querySelector(".fb").innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No.</span> ') + porque(caso);
+      var sig = cont.querySelector(".sig");
+      sig.hidden = false;
+      if (ronda === 4) {
+        var aprobo = aciertos >= 4;
+        C.reto("ojo", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertos + " de 5" + (aprobo ? ". Aprobado." : ". Necesitas 4 para aprobar.");
+        sig.textContent = "Otra tanda";
+      } else sig.textContent = "Siguiente ronda";
+    });
+    cont.querySelector(".sig").addEventListener("click", function () { if (ronda === 4) nueva(); else { ronda++; mostrar(); } });
+    nueva();
+  })();
+
+  /* ---------------- reto: construir ---------------- */
+  (function () {
+    var cfg = { m: 3, p: 0, s: 1 };
+    var OBJ = [
+      { t: "Same: un mapa de 8 × 8, del mismo tamaño que la imagen.", ok: function (o) { return o === 8; } },
+      { t: "La mitad: un mapa de 4 × 4 usando salto 2.", ok: function (o, c) { return o === 4 && c.s === 2; } },
+      { t: "Más grande que la imagen: un mapa de 10 × 10.", ok: function (o) { return o === 10; } }
+    ];
+    var logrados = [false, false, false], avisado = false, ul = $("objetivos");
+    OBJ.forEach(function (o) { var li = document.createElement("li"); li.innerHTML = '<span class="m"></span><span>' + o.t + '</span>'; ul.appendChild(li); });
+    function pintar() {
+      var Xp = marco(CRUZ, cfg.p), o = tam(8, cfg.m, cfg.p, cfg.s), p = cfg.p;
+      grilla($("conIn"), Xp, { tipo: "gris", max: 9, cls: "chica", esPad: function (i, j) { return i < p || j < p || i >= p + 8 || j >= p + 8; },
+        clase: function (i, j) { return i < p || j < p || i >= p + 8 || j >= p + 8 ? "pad" : ""; }, ven: [0, 0, cfg.m] });
+      var Y = conv(CRUZ, unos(cfg.m), cfg.p, cfg.s);
+      $("conCap").textContent = "Mapa " + o + " × " + o;
+      grilla($("conOut"), Y, { tipo: "gris", max: 9 * cfg.m * cfg.m * 0.6, cls: "chica", fmt: function () { return ""; } });
+      OBJ.forEach(function (ob, i) { if (!logrados[i] && ob.ok(o, cfg)) logrados[i] = true; ul.children[i].classList.toggle("hecho", logrados[i]); });
+      if (!avisado && logrados.every(Boolean)) { avisado = true; C.reto("construir", true); }
+      botones($("conM"), [1, 3, 5], cfg.m, function (v) { cfg.m = v; pintar(); });
+      botones($("conP"), [0, 1, 2], cfg.p, function (v) { cfg.p = v; pintar(); });
+      botones($("conS"), [1, 2, 3], cfg.s, function (v) { cfg.s = v; pintar(); });
+    }
+    pintar();
+  })();
+
+  /* ---------------- reto: a mano (tamano) ---------------- */
+  (function () {
+    var D;
+    function generar() {
+      do {
+        D = { n: [10, 12, 15, 20, 28, 32, 37, 64][azar(0, 7)], m: [2, 3, 5, 7][azar(0, 3)], p: azar(0, 3), s: [1, 2, 2, 3, 4][azar(0, 4)] };
+        D.num = D.n + 2 * D.p - D.m; D.o = Math.floor(D.num / D.s) + 1;
+      } while (D.num < 0 || (D.s > 1 && D.num % D.s === 0 && Math.random() < 0.6));
+    }
+    generar();
+    B.numerico($("mano"), {
+      pregunta: function () { return "Entrada de <b>" + D.n + " × " + D.n + "</b>, núcleo de <b>" + D.m + " × " + D.m + "</b>, marco <b>" + D.p + "</b>, salto <b>" + D.s + "</b>. ¿Cuánto mide cada lado del mapa?"; },
+      respuesta: function () { return D.o; },
+      tolerancia: 0.001,
+      pistas: [
+        function () { return "Primero el numerador: $n + 2p - m = " + D.n + " + " + (2 * D.p) + " - " + D.m + " = " + D.num + "$."; },
+        function () { return "Divide entre el salto y toma la parte entera: $\\lfloor " + D.num + "/" + D.s + " \\rfloor = " + Math.floor(D.num / D.s) + "$."; },
+        "No olvides el +1."
+      ],
+      diagnostico: function (v) {
+        if (Math.abs(v - (Math.ceil(D.num / D.s) + 1)) < 0.001 && D.num % D.s) return "Redondeaste hacia arriba. La ventana que no cabe entera no se pone: parte entera hacia abajo.";
+        if (Math.abs(v - (D.o - 1)) < 0.001) return "Falta el +1: la primera posición, la 0, también cuenta.";
+        if (Math.abs(v - (Math.floor((D.n + D.p - D.m) / D.s) + 1)) < 0.001 && D.p) return "El marco va a los dos lados: suma $2p$, no $p$.";
+        if (Math.abs(v - (D.num / D.s + 1)) < 0.001) return "Te faltó la parte entera.";
+        return null;
+      },
+      explicacion: function () { return "$\\lfloor (" + D.n + " + " + (2 * D.p) + " - " + D.m + ")/" + D.s + " \\rfloor + 1 = " + Math.floor(D.num / D.s) + " + 1 = " + D.o + "$."; },
+      reintentable: true,
+      textoReintentar: "Otra capa",
+      antesDeReintentar: generar,
+      alResolver: function (ok) { C.reto("mano", ok); }
+    });
+  })();
+
+  /* ---------------- reto: a mano (pooling) ---------------- */
+  (function () {
+    var D;
+    function generar() {
+      var A = [0, 1, 2, 3].map(function () { return [0, 1, 2, 3].map(function () { return azar(0, 9); }); });
+      var qi = azar(0, 1), qj = azar(0, 1), modo = Math.random() < 0.5 ? "max" : "avg";
+      var z = [A[qi * 2][qj * 2], A[qi * 2][qj * 2 + 1], A[qi * 2 + 1][qj * 2], A[qi * 2 + 1][qj * 2 + 1]];
+      var r = modo === "max" ? Math.max.apply(null, z) : (z[0] + z[1] + z[2] + z[3]) / 4;
+      D = { A: A, qi: qi, qj: qj, modo: modo, z: z, r: r };
+      $("mano2Datos").innerHTML = '<table class="mini-tabla">' + A.map(function (row) { return "<tr>" + row.map(function (x) { return "<td>" + x + "</td>"; }).join("") + "</tr>"; }).join("") + "</table>";
+    }
+    var NOM = ["arriba a la izquierda", "arriba a la derecha", "abajo a la izquierda", "abajo a la derecha"];
+    generar();
+    B.numerico($("mano2"), {
+      pregunta: function () { return "¿Cuánto vale la celda <b>" + NOM[D.qi * 2 + D.qj] + "</b> del " + (D.modo === "max" ? "<b>max pooling</b>" : "<b>average pooling</b>") + "?"; },
+      respuesta: function () { return D.r; },
+      tolerancia: 0.001,
+      pistas: [
+        function () { return "Esa celda resume la zona de 2 × 2 " + NOM[D.qi * 2 + D.qj] + " del mapa."; },
+        function () { return "Los cuatro números de la zona: " + D.z.join(", ") + "."; }
+      ],
+      diagnostico: function (v) {
+        var mx = Math.max.apply(null, D.z), av = (D.z[0] + D.z[1] + D.z[2] + D.z[3]) / 4;
+        if (D.modo === "avg" && Math.abs(v - mx) < 0.001 && mx !== av) return "Ese es el máximo. Aquí se pide el promedio.";
+        if (D.modo === "max" && Math.abs(v - av) < 0.001 && mx !== av) return "Ese es el promedio. Aquí se pide el máximo.";
+        if (D.modo === "avg" && Math.abs(v - av * 4) < 0.001) return "Esa es la suma. Falta dividir entre 4.";
+        return null;
+      },
+      explicacion: function () { return "La zona es " + D.z.join(", ") + ". " + (D.modo === "max" ? "Su máximo es " + n(D.r) + "." : "Su promedio es " + (D.z[0] + D.z[1] + D.z[2] + D.z[3]) + "/4 = " + n(D.r) + "."); },
+      reintentable: true,
+      textoReintentar: "Otro mapa",
+      antesDeReintentar: generar,
+      alResolver: function (ok) { C.reto("mano2", ok); }
+    });
+  })();
+
+  /* ---------------- reto: cazar el error ---------------- */
+  B.cazarError($("error"), {
+    variantes: [
+      {
+        intro: "Tamaño del mapa para una imagen de 8 × 8, núcleo de 3 × 3, sin marco y salto 2:",
+        lineas: ["n + 2p - m = 8 + 0 - 3 = 5",
+          "5 / 2 = 2.5",
+          "2.5 \\text{ se redondea a } 3",
+          "o = 3 + 1 = 4"],
+        erronea: 2,
+        explicacion: "La fórmula usa la parte entera hacia abajo: $\\lfloor 2.5 \\rfloor = 2$, y $o = 3$. La cuarta ventana empezaría en la columna 7 y no cabe."
+      },
+      {
+        intro: "Marco same para una imagen de 32 × 32 con un núcleo de 5 × 5 y salto 1:",
+        lineas: ["\\text{el núcleo sobresale } 5 - 1 = 4 \\text{ celdas en total}",
+          "p = 4 \\text{ ceros a cada lado}",
+          "o = 32 + 2\\cdot 4 - 5 + 1 = 36"],
+        erronea: 1,
+        explicacion: "Los 4 de sobra se reparten entre los dos lados: $p = (5-1)/2 = 2$, y $o = 32 + 4 - 5 + 1 = 32$. Con $p = 4$ sale 36: eso es el modo full."
+      },
+      {
+        intro: "Parámetros de la red del cuaderno CNN02 de la UD5 (MNIST, 28 × 28 × 1):",
+        lineas: ["\\text{Conv2D}(32,\\ 5\\times 5):\\ 5\\cdot 5\\cdot 1\\cdot 32 + 32 = 832",
+          "\\text{MaxPooling2D}(2\\times 2):\\ 2\\cdot 2\\cdot 32 = 128",
+          "\\text{Conv2D}(64,\\ 5\\times 5):\\ 5\\cdot 5\\cdot 32\\cdot 64 + 64 = 51\\,264",
+          "\\text{Dense}(10) \\text{ sobre } 4\\cdot 4\\cdot 64 = 1024:\\ 1024\\cdot 10 + 10 = 10\\,250"],
+        erronea: 1,
+        explicacion: "El pooling no tiene parámetros: 0. El total del cuaderno es $832 + 0 + 51\\,264 + 0 + 10\\,250 = 62\\,346$."
+      }
+    ],
+    alResolver: function (ok) { C.reto("error", ok); }
+  });
+
+  /* ---------------- retos: propiedades ---------------- */
+  function prop(id, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple($(id), cfg);
+  }
+  prop("prop1", {
+    pregunta: "Cambias un max pooling de 2 × 2 por uno de 3 × 3. ¿Qué pasa con los parámetros de esa capa?",
+    opciones: ["Siguen en 0", "Pasan de 4 a 9 por canal", "Pasan de 5 a 10, contando el sesgo", "Depende del número de canales"],
+    correcta: 0,
+    pistas: [null, "Eso sería una convolución. El pooling no multiplica por pesos.", "El pooling tampoco tiene sesgo.", "Con 0 por canal, el total es 0 con cualquier número de canales."],
+    explicacion: "El pooling no aprende nada: con 2 × 2 o con 3 × 3 tiene 0 parámetros. Lo que cambia es el tamaño de salida, y con él los parámetros de las capas densas que vengan después."
+  });
+  prop("prop2", {
+    pregunta: "Quieres padding same con un núcleo de <b>4 × 4</b> y salto 1. ¿Cuántos ceros pones a cada lado?",
+    opciones: ["No hay un número entero que sirva: hace falta 1 de un lado y 2 del otro", "2 a cada lado", "1 a cada lado", "1.5 a cada lado"],
+    correcta: 0,
+    pistas: [null, "Con 2 a cada lado: $n + 4 - 4 + 1 = n + 1$. Sobra uno.", "Con 1 a cada lado: $n + 2 - 4 + 1 = n - 1$. Falta uno.", "No se puede poner medio cero."],
+    explicacion: "Hacen falta $m - 1 = 3$ ceros en total, y 3 no se reparte en dos partes iguales. Las librerías ponen 1 de un lado y 2 del otro. Por eso casi todos los núcleos son impares: 1, 3, 5, 7."
+  });
+  prop("prop3", {
+    pregunta: "Calculas un mapa con salto 1 y después te quedas con una fila de cada dos y una columna de cada dos. Comparado con calcular directamente con salto 2...",
+    opciones: ["Da exactamente lo mismo, pero con cuatro veces más cuentas", "Da lo mismo y con las mismas cuentas", "Da un mapa distinto", "Da lo mismo solo si hay marco"],
+    correcta: 0,
+    pistas: [null, "Con salto 1 calculas todas las ventanas, también las que vas a tirar.", "Las ventanas que pone el salto 2 son las ventanas 1, 3, 5... del salto 1.", "El marco no cambia qué ventanas pone cada salto."],
+    explicacion: "Las ventanas del salto 2 son un subconjunto de las del salto 1. El programa de la vida real lo comprueba: <code>conv2d(X, W, p=1)[::2, ::2]</code> es igual a <code>conv2d(X, W, p=1, s=2)</code>."
+  });
+  prop("prop4", {
+    pregunta: "Tres capas convolucionales de 3 × 3 seguidas, todas con salto 1 y sin pooling. ¿Qué campo receptivo tiene una celda de la tercera?",
+    opciones: ["7 × 7", "9 × 9", "27 × 27", "3 × 3"],
+    correcta: 0,
+    pistas: [null, "Cada capa agrega $m - 1 = 2$, no $m = 3$.", "No se multiplica: las ventanas vecinas se solapan.", "Eso es lo que ve la primera capa."],
+    explicacion: "$r = 1 + 2 + 2 + 2 = 7$. Tres capas de 3 × 3 ven lo mismo que una de 7 × 7, con 27 pesos por canal en lugar de 49."
+  });
+  prop("prop5", {
+    pregunta: "Un mapa que detecta bordes tiene, en una zona de 2 × 2, los valores 0, 0, 0 y 8. ¿Qué devuelven el max pooling y el average pooling?",
+    opciones: ["8 y 2", "8 y 8", "2 y 2", "0 y 2"],
+    correcta: 0,
+    pistas: [null, "El promedio reparte el 8 entre las cuatro celdas.", "El máximo no promedia: se queda con el valor más alto.", "El máximo de 0, 0, 0 y 8 no es 0."],
+    explicacion: "Máximo 8, promedio 8/4 = 2. El max pooling conserva la detección con toda su fuerza; el promedio la diluye. Por eso en las capas intermedias se usa casi siempre el máximo, y el promedio queda para el final (global average pooling)."
+  });
+
+  /* ---------------- formula de memoria ---------------- */
+  B.ordenar($("formula"), {
+    piezas: ["o", "=", "\\Big\\lfloor", "\\dfrac{n+2p-m}{s}", "\\Big\\rfloor", "+\\,1"],
+    distractores: ["\\Big\\lceil", "\\dfrac{n-2p+m}{s}", "-\\,1"],
+    soluciones: [[0, 1, 2, 3, 4, 5]],
+    explicacion: "Cuántos saltos de tamaño $s$ caben en el recorrido libre $n + 2p - m$, redondeado hacia abajo, más la primera posición. Con $s = 1$ y $p = 0$ vuelve a ser $n - m + 1$.",
+    alResolver: function (ok) { C.reto("formula", ok); }
+  });
+
+  /* ---------------- vida real ---------------- */
+  (function () {
+    var CODIGO = {
+      py: [
+        ["import", "import numpy as np"],
+        ["import", "from numpy.lib.stride_tricks import sliding_window_view"],
+        [null, ""],
+        [null, "# la imagen 6x6 y el filtro en X de la UD5"],
+        ["datos", "X = np.array([[ 18,  54,  51, 239, 244, 188],"],
+        ["datos", "              [ 55, 121,  75,  78,  95,  88],"],
+        ["datos", "              [ 35,  24, 204, 113, 109, 221],"],
+        ["datos", "              [  3, 154, 104, 235,  25, 130],"],
+        ["datos", "              [ 15, 253, 225, 159,  78, 233],"],
+        ["datos", "              [ 68,  85, 180, 214, 245,   0]])"],
+        ["filtro", "W = np.array([[1, 0, 1],"],
+        ["filtro", "              [0, 1, 0],"],
+        ["filtro", "              [1, 0, 1]])"],
+        [null, ""],
+        ["deftam", "def tam(n, m, p, s):"],
+        ["tamret", "    return (n + 2 * p - m) // s + 1          # // es la división entera"],
+        [null, ""],
+        ["defconv", "def conv2d(X, W, p=0, s=1):"],
+        ["pad", "    Xp = np.pad(X, p)                        # marco de p ceros"],
+        ["cm", "    m = W.shape[0]"],
+        ["co", "    o = tam(X.shape[0], m, p, s)"],
+        ["czeros", "    Y = np.zeros((o, o), dtype=int)"],
+        ["cfori", "    for i in range(o):"],
+        ["cforj", "        for j in range(o):"],
+        ["cven", "            ven = Xp[i*s : i*s + m, j*s : j*s + m]"],
+        ["casig", "            Y[i, j] = np.sum(ven * W)"],
+        ["cret", "    return Y"],
+        [null, ""],
+        ["defpool", "def pool2d(A, k=2, s=2, f=np.max):"],
+        ["po", "    o = tam(A.shape[0], k, 0, s)"],
+        ["pzeros", "    P = np.zeros((o, o))"],
+        ["pfori", "    for i in range(o):"],
+        ["pforj", "        for j in range(o):"],
+        ["pasig", "            P[i, j] = f(A[i*s : i*s + k, j*s : j*s + k])"],
+        ["pret", "    return P"],
+        [null, ""],
+        ["llamaZ", "Z = conv2d(X, W, p=1, s=2)                   # marco 1, salto 2"],
+        ["printZ", "print(Z)"],
+        ["llamaA", "A = conv2d(X, W)                             # el mapa 4x4 de la UD5"],
+        ["pmax", "print(pool2d(A, f=np.max))"],
+        ["pmean", "print(pool2d(A, f=np.mean))"],
+        [null, ""],
+        [null, "# comparar con versiones sin bucles"],
+        ["cmpZ", "print(np.array_equal(Z, conv2d(X, W, p=1)[::2, ::2]))"],
+        ["cmpV", "V = sliding_window_view(A, (2, 2))[::2, ::2]"],
+        ["cmpP", "print(np.array_equal(pool2d(A, f=np.max), V.max(axis=(2, 3))))"]
+      ],
+      r: [
+        [null, "# la imagen 6x6 y el filtro en X de la UD5"],
+        ["datos", "X <- matrix(c( 18,  54,  51, 239, 244, 188,"],
+        ["datos", "               55, 121,  75,  78,  95,  88,"],
+        ["datos", "               35,  24, 204, 113, 109, 221,"],
+        ["datos", "                3, 154, 104, 235,  25, 130,"],
+        ["datos", "               15, 253, 225, 159,  78, 233,"],
+        ["datos", "               68,  85, 180, 214, 245,   0), nrow = 6, byrow = TRUE)"],
+        ["filtro", "W <- matrix(c(1, 0, 1,"],
+        ["filtro", "              0, 1, 0,"],
+        ["filtro", "              1, 0, 1), nrow = 3, byrow = TRUE)"],
+        [null, ""],
+        ["deftam", "tam <- function(n, m, p, s) {"],
+        ["tamret", "  (n + 2 * p - m) %/% s + 1                 # %/% es la división entera"],
+        [null, "}"],
+        [null, ""],
+        ["defconv", "conv2d <- function(X, W, p = 0, s = 1) {"],
+        ["cm", "  n <- nrow(X); m <- nrow(W)"],
+        ["pad", "  Xp <- matrix(0, n + 2 * p, n + 2 * p)     # marco de p ceros"],
+        ["pad", "  Xp[(p + 1):(p + n), (p + 1):(p + n)] <- X"],
+        ["co", "  o <- tam(n, m, p, s)"],
+        ["czeros", "  Y <- matrix(0, o, o)"],
+        ["cfori", "  for (i in 1:o) {"],
+        ["cforj", "    for (j in 1:o) {"],
+        ["cven", "      ven <- Xp[(i - 1) * s + 1:m, (j - 1) * s + 1:m]"],
+        ["casig", "      Y[i, j] <- sum(ven * W)"],
+        [null, "    }"],
+        [null, "  }"],
+        ["cret", "  Y"],
+        [null, "}"],
+        [null, ""],
+        ["defpool", "pool2d <- function(A, k = 2, s = 2, f = max) {"],
+        ["po", "  o <- tam(nrow(A), k, 0, s)"],
+        ["pzeros", "  P <- matrix(0, o, o)"],
+        ["pfori", "  for (i in 1:o) {"],
+        ["pforj", "    for (j in 1:o) {"],
+        ["pasig", "      P[i, j] <- f(A[(i - 1) * s + 1:k, (j - 1) * s + 1:k])"],
+        [null, "    }"],
+        [null, "  }"],
+        ["pret", "  P"],
+        [null, "}"],
+        [null, ""],
+        ["llamaZ", "Z <- conv2d(X, W, p = 1, s = 2)              # marco 1, salto 2"],
+        ["printZ", "print(Z)"],
+        ["llamaA", "A <- conv2d(X, W)                            # el mapa 4x4 de la UD5"],
+        ["pmax", "print(pool2d(A, f = max))"],
+        ["pmean", "print(pool2d(A, f = mean))"],
+        [null, ""],
+        [null, "# comparar con versiones sin bucles"],
+        ["cmpZ", "print(all.equal(Z, conv2d(X, W, p = 1)[c(1, 3, 5), c(1, 3, 5)]))"],
+        ["cmpV", "impar <- c(1, 3); par <- c(2, 4)"],
+        ["cmpP", "print(all.equal(pool2d(A, f = max),"],
+        ["cmpP", "                pmax(A[impar, impar], A[impar, par], A[par, impar], A[par, par])))"]
+      ]
+    };
+    var SALIDA = {
+      py: [["[[139 250 410]", " [310 792 640]", " [254 913 657]]"], ["[[792. 856.]", " [913. 851.]]"], ["[[496.75 648.5 ]", " [701.75 743.  ]]"], ["True"], ["True"]],
+      r: [["     [,1] [,2] [,3]", "[1,]  139  250  410", "[2,]  310  792  640", "[3,]  254  913  657"], ["     [,1] [,2]", "[1,]  792  856", "[2,]  913  851"],
+        ["       [,1]  [,2]", "[1,] 496.75 648.5", "[2,] 701.75 743.0"], ["[1] TRUE"], ["[1] TRUE"]]
+    };
+    var XP = marco(UD5, 1), ZF = conv(UD5, EQUIS, 1, 2), PMAX = pool(MAPA4, 2, 2, "max"), PAVG = pool(MAPA4, 2, 2, "avg");
+
+    /* eventos: una foto del estado despues de cada linea ejecutada */
+    var EV = [];
+    (function () {
+      var fase = 1, Z = null, P = null, modo = null, salidas = 0, vista = "conv";
+      function foto(id, extra) {
+        EV.push(Object.assign({ id: id, fase: fase, vista: vista, Z: Z ? Z.map(function (r) { return r.slice(); }) : null,
+          P: P ? P.map(function (r) { return r.slice(); }) : null, modo: modo, salidas: salidas, i: null, j: null }, extra || {}));
+      }
+      foto("import"); foto("datos"); foto("filtro"); foto("deftam"); foto("defconv"); foto("defpool");
+      fase = 2;
+      foto("llamaZ", { llamada: true });
+      foto("pad", { marco: true });
+      foto("cm");
+      foto("co", { o: 3 });
+      Z = ceros(3, 3).map(function (r) { return r.map(function () { return null; }); });
+      foto("czeros");
+      for (var i = 0; i < 3; i++) {
+        foto("cfori", { i: i });
+        for (var j = 0; j < 3; j++) {
+          foto("cforj", { i: i, j: j });
+          foto("cven", { i: i, j: j, ven: true });
+          Z[i][j] = ZF[i][j];
+          foto("casig", { i: i, j: j, nuevo: true });
+        }
+      }
+      foto("cret");
+      salidas = 1;
+      foto("printZ");
+      fase = 3; vista = "pool";
+      foto("llamaA", { bloque: true });
+      ["max", "avg"].forEach(function (md) {
+        modo = md;
+        var lid = md === "max" ? "pmax" : "pmean";
+        P = null;
+        foto(lid, { llamada: true });
+        foto("po", { o: 2 });
+        P = [[null, null], [null, null]];
+        foto("pzeros");
+        for (var a = 0; a < 2; a++) {
+          foto("pfori", { i: a });
+          for (var b = 0; b < 2; b++) {
+            foto("pforj", { i: a, j: b });
+            P[a][b] = (md === "max" ? PMAX : PAVG)[a][b];
+            foto("pasig", { i: a, j: b, nuevo: true });
+          }
+        }
+        foto("pret");
+        salidas++;
+        foto(lid);
+      });
+      fase = 4;
+      salidas++;
+      foto("cmpZ", { cmp: true });
+      foto("cmpV", { cmp: true });
+      salidas++;
+      foto("cmpP", { cmp: true });
+    })();
+
+    function narrar(e, ctx) {
+      var py = ctx.lang() === "py", ix = ctx.ix;
+      switch (e.id) {
+        case "import": return py ? "Carga NumPy y <code>sliding_window_view</code>, que arma todas las ventanas de una matriz sin bucles." : "R no necesita librerías: las matrices vienen de serie.";
+        case "datos": return "La imagen de 6 × 6 de la UD5.";
+        case "filtro": return "El filtro en X de la UD5.";
+        case "deftam": return "Define la fórmula del tamaño de salida. " + (py ? "<code>//</code>" : "<code>%/%</code>") + " es la división entera: hace la parte entera hacia abajo sin escribirla.";
+        case "defconv": return "Define la convolución con marco <b>p</b> y salto <b>s</b>. Por defecto, sin marco y de a uno.";
+        case "defpool": return "Define el pooling: ventana de <b>k</b>, salto <b>s</b> y una función <b>f</b> que resume la zona (el máximo o la media).";
+        case "llamaZ": return "Llama a la convolución con <b>marco 1 y salto 2</b>.";
+        case "pad": return py ? "<code>np.pad(X, 1)</code> pone un marco de ceros: la imagen pasa de 6 × 6 a 8 × 8." : "Crea una matriz de ceros de 8 × 8 y copia la imagen en el centro: eso es el marco.";
+        case "cm": return "Tamaño del núcleo: <b>m = 3</b>.";
+        case "co": return "o = (6 + 2·1 − 3) " + (py ? "//" : "%/%") + " 2 + 1 = 5 " + (py ? "//" : "%/%") + " 2 + 1 = 2 + 1 = <b>3</b>. El mapa será de 3 × 3.";
+        case "czeros": return "Un mapa vacío de 3 × 3.";
+        case "cfori": return "Fila del mapa <b>i = " + ix(e.i) + "</b>.";
+        case "cforj": return "Columna del mapa <b>j = " + ix(e.j) + "</b>.";
+        case "cven":
+          var f0 = e.i * 2, c0 = e.j * 2;
+          return "La ventana empieza en la fila " + (py ? "i·s = " + f0 : "(i − 1)·s + 1 = " + (f0 + 1)) + " y la columna " + (py ? "j·s = " + c0 : "(j − 1)·s + 1 = " + (c0 + 1)) +
+            " de Xp. El salto está en esa multiplicación: cada vuelta corre la ventana <b>2</b> lugares." + (!py && e.i === 0 && e.j === 0 ? " Ojo: en R, <code>:</code> se calcula antes que <code>+</code>, así que <code>(i - 1) * s + 1:m</code> es el inicio más 1, 2, 3." : "");
+        case "casig": return "Suma de la ventana por el filtro: Z[" + ix(e.i) + ", " + ix(e.j) + "] = <b>" + ZF[e.i][e.j] + "</b>." + (e.i === 1 && e.j === 1 ? " Es el 792 del mapa de 4 × 4: esta ventana no toca el marco." : "");
+        case "cret": return "Devuelve el mapa de 3 × 3.";
+        case "printZ": return "Imprime Z. Las cuatro esquinas de abajo a la derecha, 792, 640, 913 y 657, ya las conoces: son ventanas que no tocan el marco.";
+        case "llamaA": return "El mapa de 4 × 4 de la UD5, sin marco y de a uno (las 16 ventanas de una vez; ya las viste en la página de convolución).";
+        case "pmax": return e.salidas > 1 && !e.llamada ? "Imprime el max pooling: <b>792, 856, 913, 851</b>, el de la teoría (p. 10) y la diapositiva 28." : "Llama al pooling con <b>f = máximo</b>.";
+        case "pmean": return e.salidas > 2 && !e.llamada ? "Imprime el average pooling: <b>496.75, 648.5, 701.75, 743</b>. El material no trae estos números." : "Llama al pooling con <b>f = media</b>.";
+        case "po": return "o = (4 + 0 − 2) " + (py ? "//" : "%/%") + " 2 + 1 = <b>2</b>. El pooling usa la misma fórmula, sin marco.";
+        case "pzeros": return "Un resultado vacío de 2 × 2.";
+        case "pfori": return "Fila <b>i = " + ix(e.i) + "</b> del resultado.";
+        case "pforj": return "Columna <b>j = " + ix(e.j) + "</b>: la zona de 2 × 2 que empieza en la fila " + ix(e.i * 2) + " y la columna " + ix(e.j * 2) + " de A.";
+        case "pasig": return (e.modo === "max" ? "Máximo" : "Media") + " de la zona: <b>" + n((e.modo === "max" ? PMAX : PAVG)[e.i][e.j]) + "</b>.";
+        case "pret": return "Devuelve el resultado de 2 × 2. Esta función no tiene ni un peso.";
+        case "cmpZ": return py ? "Calcula con salto 1 (mapa de 6 × 6) y se queda con una fila y una columna de cada dos, <code>[::2, ::2]</code>: <b>True</b>. Saltar de a dos es eso."
+          : "Calcula con salto 1 (6 × 6) y se queda con las filas y columnas 1, 3 y 5: <b>TRUE</b>. Saltar de a dos es eso.";
+        case "cmpV": return py ? "<code>sliding_window_view(A, (2, 2))</code> arma todas las ventanas de 2 × 2 de A, y <code>[::2, ::2]</code> se queda con las de salto 2: forma (2, 2, 2, 2)."
+          : "R no trae ventanas deslizantes. Para un pooling de 2 × 2 con salto 2 alcanza con separar filas y columnas impares y pares.";
+        case "cmpP": return py ? "El máximo de cada ventana, en los ejes 2 y 3, da lo mismo que los bucles: <b>True</b>."
+          : "<code>pmax</code> toma el máximo celda a celda de las cuatro submatrices (cada una tiene una celda de cada zona): <b>TRUE</b>.";
+      }
+      return "";
+    }
+    function visual(e, anterior, ctx) {
+      var vista = e ? e.vista : "conv";
+      if (vista === "conv") {
+        var conMarco = e && (e.marco || ["cm", "co", "czeros", "cfori", "cforj", "cven", "casig", "cret", "printZ"].indexOf(e.id) >= 0);
+        var ven = e && e.ven ? [e.i * 2, e.j * 2, 3] : e && e.id === "casig" ? [e.i * 2, e.j * 2, 3] : null;
+        $("vrCapA").textContent = conMarco ? "Xp (8 × 8, con marco)" : "X (6 × 6)";
+        var MA = conMarco ? XP : UD5;
+        grilla($("vrA"), MA, { tipo: "gris", max: 255, cls: "chica", ven: ven, fmt: function (v, i, j) { return conMarco && (i === 0 || j === 0 || i === 7 || j === 7) ? "0" : v; },
+          esPad: function (i, j) { return conMarco && (i === 0 || j === 0 || i === 7 || j === 7); },
+          clase: function (i, j) { return conMarco && (i === 0 || j === 0 || i === 7 || j === 7) ? "pad" : ""; } });
+        $("vrCapB").textContent = "W (3 × 3)";
+        grilla($("vrB"), EQUIS, { cls: "grande" });
+        $("vrCapC").textContent = "Z (3 × 3)";
+        var Zp = e && e.Z ? e.Z : [[null, null, null], [null, null, null], [null, null, null]];
+        grilla($("vrC"), Zp, { tipo: "gris", max: 913, cls: "", foco: e && e.i !== null ? [e.i, e.j] : null, llega: e && e.nuevo ? [e.i, e.j] : null });
+        $("vrCuenta").innerHTML = e && (e.ven || e.id === "casig") ? "ventana en filas " + ctx.ix(e.i * 2) + " a " + ctx.ix(e.i * 2 + 2) + ", columnas " + ctx.ix(e.j * 2) + " a " + ctx.ix(e.j * 2 + 2) + " de Xp" + (e.id === "casig" ? " → <b>" + ZF[e.i][e.j] + "</b>" : "")
+          : e && e.id === "co" ? "o = ⌊(6 + 2 − 3)/2⌋ + 1 = <b>3</b>" : "";
+      } else {
+        var zona = e && e.i !== null && e.j !== null && ["pforj", "pasig"].indexOf(e.id) >= 0 ? [e.i * 2, e.j * 2, 2] : null;
+        $("vrCapA").textContent = "A (4 × 4)";
+        grilla($("vrA"), MAPA4, { tipo: "tinte", tinte: tinteQ, ven: zona });
+        $("vrCapB").textContent = e && e.modo ? (e.modo === "max" ? "f = máximo" : "f = media") : "pooling";
+        var zv = zona ? [[MAPA4[zona[0]][zona[1]], MAPA4[zona[0]][zona[1] + 1]], [MAPA4[zona[0] + 1][zona[1]], MAPA4[zona[0] + 1][zona[1] + 1]]] : [[null, null], [null, null]];
+        grilla($("vrB"), zv, { cls: "chica", tipo: "tinte", tinte: function () { return zona ? tinteQ(zona[0], zona[1]) : ""; } });
+        $("vrCapC").textContent = e && e.modo === "avg" ? "average pooling (2 × 2)" : "max pooling (2 × 2)";
+        var Pp = e && e.P ? e.P : [[null, null], [null, null]];
+        grilla($("vrC"), Pp, { tipo: "tinte", tinte: function (i, j) { return tinteQ(i * 2, j * 2); }, cls: "grande", foco: e && e.i !== null ? [e.i, e.j] : null, llega: e && e.nuevo ? [e.i, e.j] : null });
+        $("vrCuenta").innerHTML = e && e.id === "pasig" ? (e.modo === "max" ? "máx(" : "media(") + zv[0].concat(zv[1]).join(", ") + ") = <b>" + n(Pp[e.i][e.j]) + "</b>" : e && e.cmp ? "comparación sin bucles" : "";
+      }
+      var sal = $("vrSalida"), bloques = SALIDA[ctx.lang()], k = e ? e.salidas : 0;
+      sal.hidden = k === 0;
+      sal.textContent = bloques.slice(0, k).map(function (b) { return b.join("\n"); }).join("\n");
+    }
+    B.vidaReal($("vidareal"), {
+      codigo: CODIGO,
+      eventos: EV,
+      narrar: narrar,
+      vars: function (e, ctx) {
+        var v = [], ix = ctx.ix;
+        if (e && e.vista === "conv" && e.fase === 2) v.push("<span>p = <b>1</b></span>", "<span>s = <b>2</b></span>");
+        if (e && e.vista === "pool" && e.modo) v.push("<span>k = <b>2</b></span>", "<span>s = <b>2</b></span>");
+        if (e && e.i !== null) v.push('<span class="vj">i = <b>' + ix(e.i) + '</b></span>');
+        if (e && e.j !== null) v.push('<span class="vk">j = <b>' + ix(e.j) + '</b></span>');
+        if (e && e.o) v.push("<span>o = <b>" + e.o + "</b></span>");
+        return v;
+      },
+      visual: visual,
+      demora: function (e) { return !e ? 600 : e.id === "cven" || e.id === "casig" || e.id === "pasig" ? 900 : e.id === "cfori" || e.id === "cforj" || e.id === "pfori" || e.id === "pforj" ? 450 : 1000; }
+    });
+
+    B.numerico(cuerpo("vrPred"), {
+      pregunta: "La llamada <code>conv2d(X, W, p=1, s=2)</code> sobre la imagen de 6 × 6 con el filtro de 3 × 3. ¿Cuántas veces se va a ejecutar la línea de la ventana, <code>ven = ...</code>?",
+      respuesta: 9,
+      tolerancia: 0,
+      pistas: ["Es una vez por celda del mapa. Primero calcula su tamaño con la fórmula.", "$\\lfloor (6 + 2 - 3)/2 \\rfloor + 1 = 3$. El mapa es de 3 × 3."],
+      diagnostico: function (v) {
+        if (v === 16) return "Ese es el mapa de 4 × 4, sin marco y de a uno. Aquí hay marco y salto 2.";
+        if (v === 36) return "Con marco 1 y salto 1 serían 6 × 6 = 36. El salto 2 deja una de cada dos por lado.";
+        if (v === 12.25 || v === 6.25) return "No hay ventanas a medias: la fórmula usa la parte entera.";
+        if (v === 3) return "Esas son las posiciones por fila. El mapa tiene filas y columnas.";
+        return null;
+      },
+      explicacion: "$\\lfloor 5/2 \\rfloor + 1 = 3$ por lado: <b>9</b> ventanas. Sin el salto serían 36. Ahora dale a reproducir y mira cómo salta la ventana de a dos sobre la imagen con marco.",
+      alResolver: function (ok) { C.reto("codigo1", ok); }
+    });
+    prop("codigo2", {
+      pregunta: "La función <code>conv2d</code> de Raschka (p. 461-462) recorre las filas con <code>for i in range(0, int((n_pad - m)/s) + 1, s)</code>. Con el ejemplo de su figura 14.6 (entrada de 3 × 3, marco 1, núcleo 3, <b>salto 2</b>), el libro dice que el resultado es de 2 × 2. ¿Qué devuelve su función?",
+      opciones: ["Una sola celda: [[4.6]]", "El 2 × 2 correcto: [[4.6, 1.6], [7.5, 2.9]]", "Un 3 × 3", "Un error de índice"],
+      correcta: 0,
+      pistas: [null, "Haz la cuenta del range: n_pad = 5, m = 3, s = 2. ¿Qué números produce range(0, 2, 2)?", "El range no llega a 3 posiciones ni con salto 1 en ese límite.", "No se sale de la matriz: se queda corto, no largo."],
+      explicacion: "Corrido en esta máquina: <code>[[4.6]]</code>. El límite <code>int((5 - 3)/2) + 1 = 2</code> ya es la <b>cantidad</b> de ventanas, pero el range lo usa como <b>posición</b> final y además avanza de a 2: <code>range(0, 2, 2)</code> solo da el 0. Con salto 1 no se nota, y por eso el ejemplo del libro (salto 1) sale bien. Lo correcto es <code>range(0, n_pad - m + 1, s)</code>, como en su <code>conv1d</code> de la p. 459, o recorrer <code>range(o)</code> y multiplicar por s, como el programa de arriba."
+    });
+    prop("codigo3", {
+      pregunta: "Escribes el tamaño con división normal: <code>o = (8 + 2*0 - 3) / 2 + 1</code>, que da <b>3.5</b>. ¿Qué pasa después con <code>np.zeros((o, o))</code> en Python y con <code>matrix(0, o, o)</code> en R?",
+      opciones: ["Python da un error (TypeError) y R hace en silencio una matriz de 3 × 3", "Los dos crean una matriz de 4 × 4", "Los dos dan un error", "Python crea 3 × 3 y R da un error"],
+      correcta: 0,
+      pistas: [null, "Ninguno de los dos redondea hacia arriba.", "R es más permisivo con los tamaños que no son enteros.", "Es al revés: NumPy exige enteros para las formas."],
+      explicacion: "Corrido en esta máquina: NumPy responde <code>TypeError: 'float' object cannot be interpreted as an integer</code>. R crea una matriz de 3 × 3 sin avisar, y <code>1:3.5</code> da 1, 2, 3: trunca. Aquí la suerte hace que el truncado coincida con la parte entera, pero el error queda escondido. Escribe siempre <code>//</code> en Python y <code>%/%</code> en R."
+    });
+  })();
+
+  /* ---------------- tarjetas ---------------- */
+  B.tarjetas($("tarjetas"), [
+    ["¿Cuánto mide el mapa de salida?", "$o = \\lfloor (n + 2p - m)/s \\rfloor + 1$: los saltos que caben en el recorrido libre, hacia abajo, más la primera posición."],
+    ["¿Qué marco da padding same con salto 1?", "$p = (m-1)/2$: 1 para núcleos de 3, 2 para núcleos de 5. Con núcleos pares no hay un $p$ entero."],
+    ["¿Qué son valid, same y full?", "Valid: sin marco, el mapa se achica. Same: el marco justo para conservar el tamaño. Full: $p = m - 1$, el mapa crece."],
+    ["¿Qué pasa si la división del salto no da entera?", "La última ventana que no cabe no se pone: parte entera hacia abajo, y los últimos píxeles no se miran."],
+    ["¿Cuántos parámetros tiene una capa de pooling?", "Cero. Reduce los parámetros de las capas que vienen después, no los suyos."],
+    ["¿Max o average pooling?", "Max conserva la detección más fuerte de la zona; average la promedia. Max en las capas intermedias, average global al final."],
+    ["¿Qué es la invariancia local del max pooling?", "Si un máximo se corre sin salir de su zona, el resultado no cambia. Si cruza la frontera, sí."],
+    ["¿Cómo crece el campo receptivo?", "$r \\leftarrow r + (m-1)J$, con $J$ el producto de los saltos anteriores. Dos capas de 3 × 3 ven 5 × 5."]
+  ]);
+
+  /* ---------------- conexiones ---------------- */
+  B.conexiones("stride-padding-pooling");
+})();
+</script>
+</body>
+</html>

@@ -54,3 +54,5 @@ Las fórmulas son imágenes o salen rotas en el texto extraído (subíndices sue
 - El libro llama "Maxima/Minima Problems" a la sección 4.7 en el índice y en la página, aunque el tema es más general (extremos locales, sillas y extremos absolutos).
 
 Tono: el mismo de Calculus Volume 1, con todos los pasos escritos y aplicaciones (ganancia de un fabricante, temperatura de la Tierra). Útil para ver gradiente y Lagrange con dibujos de curvas de nivel antes del tratamiento del máster.
+
+> Nota (2026-11-12): `~/brain/03-Matematicas` se reorganizó. Los libros enteros están en `03-Matematicas/Libros/` y los archivos por unidad quedaron directamente en la carpeta del nivel (sin la subcarpeta del libro). Las rutas vigentes están en `biblioteca/fuentes.js`; las páginas no cambian.

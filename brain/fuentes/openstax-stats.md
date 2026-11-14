@@ -162,3 +162,5 @@ Las fórmulas son imágenes: en el texto extraído salen vacías, así que hay q
 - Ex 6.3 y Ex 6.4/6.6 usan dos conjuntos de estaturas chilenas distintos (2009-2010: 170 cm; 1984-1985: 172.36 cm), con nombres muy parecidos.
 
 Tono: introductorio, sin demostraciones, con muchos ejemplos de la vida diaria y recetas para calculadora TI. Útil como versión amable antes del texto técnico.
+
+> Nota (2026-11-12): `~/brain/03-Matematicas` se reorganizó. Los libros enteros están en `03-Matematicas/Libros/` y los archivos por unidad quedaron directamente en la carpeta del nivel (sin la subcarpeta del libro). Las rutas vigentes están en `biblioteca/fuentes.js`; las páginas no cambian.

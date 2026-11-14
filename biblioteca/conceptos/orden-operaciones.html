@@ -1,0 +1,1508 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Orden de operaciones</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.esc-head .hint { font-size: 12.5px; color: var(--ink-2); }
+.zona[hidden] { display: none; }
+
+/* maquina de tocar operadores */
+.maq-fichas { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 6px 0 10px; min-height: 48px; }
+.tok { font-family: var(--f-mono); font-size: 17px; padding: 8px 10px; border-radius: 8px; min-width: 40px; text-align: center; }
+.tok.num { background: var(--surface-2); color: var(--ink); box-shadow: inset 0 0 0 1px var(--line); }
+.tok.num.nuevo { box-shadow: inset 0 0 0 2px var(--ok); }
+button.tok.op { border: 2px solid var(--accent); background: var(--accent-soft); color: var(--ink); cursor: pointer; }
+button.tok.op:disabled { border-color: var(--line); background: var(--surface); color: var(--ink-3); cursor: not-allowed; }
+.maq-hist { font-family: var(--f-mono); font-size: 13px; color: var(--ink-2); line-height: 1.8; min-height: 1.8em; overflow-wrap: anywhere; }
+.maq-hist b { color: var(--ink); font-weight: 600; }
+.maq-msg { font-size: 13.5px; color: var(--ink-2); min-height: 1.6em; margin: 4px 0 8px; overflow-wrap: anywhere; }
+.maq-msg b { font-family: var(--f-mono); color: var(--ink); }
+
+/* arbol */
+.sel-expr { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }
+.sel-expr button { font-family: var(--f-mono); font-size: 13px; }
+.arbol-caja { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 6px; }
+.arbol { width: 100%; height: auto; display: block; max-height: 340px; }
+.arbol .arista { stroke: var(--line); stroke-width: 1.6; }
+.arbol .arista.viva { stroke: var(--ink-3); }
+.arbol .nodo circle { fill: var(--surface); stroke: var(--ink-3); stroke-width: 1.6; }
+.arbol .nodo text { font: 500 13px var(--f-mono); fill: var(--ink); text-anchor: middle; dominant-baseline: central; }
+.arbol .nodo .mini { font-size: 10px; fill: var(--ink-3); }
+.arbol .nodo.hoja circle { fill: var(--surface-2); stroke: var(--line); }
+.arbol .nodo.ok-k circle { stroke: var(--k); stroke-width: 2.2; }
+.arbol .nodo.ok-j circle { stroke: var(--j); stroke-width: 2.2; }
+.arbol .nodo.ok-p circle { stroke: var(--ink); stroke-width: 2.2; }
+.arbol .nodo.ok-u circle { stroke: var(--ink-2); stroke-dasharray: 3 3; stroke-width: 2; }
+.arbol .nodo.ok-s circle { stroke: var(--k); stroke-dasharray: 5 2; stroke-width: 2.2; }
+.arbol .nodo.listo { cursor: pointer; }
+.arbol .nodo.listo circle { stroke: var(--accent); stroke-width: 3.2; fill: var(--accent-soft); }
+.arbol .nodo.hecho circle { fill: var(--ok-soft); }
+.arbol .nodo.ultimo circle { stroke: var(--ok); stroke-width: 3; }
+.arbol .nodo.raiz-oculta text { fill: var(--accent); }
+.arbol-ctl { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.arbol-lin { font-family: var(--f-mono); font-size: 13.5px; color: var(--ink-2); line-height: 1.8; overflow-wrap: anywhere; white-space: pre-wrap; }
+.arbol-lin b { color: var(--ink); font-weight: 600; }
+.arbol-msg { font-size: 13px; color: var(--ink-2); min-height: 1.4em; }
+.leyenda { font-size: 12px; color: var(--ink-2); margin: 8px 0 0; line-height: 1.6; }
+.leyenda .lk { color: var(--k); font-weight: 600; }
+.leyenda .lj { color: var(--j); font-weight: 600; }
+
+/* ticket del cafe */
+.ticket { font-family: var(--f-mono); font-size: 13px; border: 1px dashed var(--ink-3); border-radius: 8px; padding: 10px 12px; background: var(--surface-2); max-width: 300px; margin: 8px 0; }
+.ticket .fila { display: flex; justify-content: space-between; gap: 10px; }
+.ticket .tot { border-top: 1px dashed var(--ink-3); margin-top: 6px; padding-top: 6px; font-weight: 600; }
+
+/* niveles */
+.niveles { list-style: none; padding: 0; margin: 10px 0; display: grid; gap: 5px; }
+.niveles li { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 8px; align-items: center; font-size: 14px; }
+.niveles .nv { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-family: var(--f-mono); font-size: 12px; background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--line); }
+
+/* retos */
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.ojo-expr { display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; margin: 14px 0; }
+.objetivos { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.objetivos li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.objetivos .m { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.objetivos li.hecho { color: var(--ink); }
+.objetivos li.hecho .m { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 3px var(--surface); }
+.datos-mano { font-size: 18px; margin: 4px 0 12px; overflow-wrap: anywhere; }
+
+/* vida real */
+.vr-cinta { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 12px; }
+.vr-cinta span { font-family: var(--f-mono); font-size: 14px; padding: 5px 8px; border-radius: 6px; background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--line); }
+.vr-cinta span.leida { color: var(--ink-3); background: var(--surface); }
+.vr-cinta span.actual { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--accent); color: var(--ink); font-weight: 600; }
+.pilas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.pila { display: flex; flex-direction: column-reverse; gap: 4px; min-height: 150px; padding: 6px; border: 1px solid var(--line); border-top: 0; border-radius: 0 0 8px 8px; background: var(--surface); }
+.pila span { font-family: var(--f-mono); font-size: 14px; padding: 5px 8px; border-radius: 6px; text-align: center; }
+.pila.pn span { background: var(--j-soft); color: var(--j); box-shadow: inset 0 0 0 1px var(--j); }
+.pila.po span { background: var(--k-soft); color: var(--k); box-shadow: inset 0 0 0 1px var(--k); }
+.pila span.tope { font-weight: 600; box-shadow: inset 0 0 0 2px currentColor; }
+.pila .vacia { color: var(--ink-3); background: none !important; box-shadow: none !important; font-size: 12px; }
+.pila-tit { font-family: var(--f-mono); font-size: 11.5px; color: var(--ink-3); text-align: center; margin-bottom: 4px; }
+.vr-cuenta2 { font-family: var(--f-mono); font-size: 13.5px; color: var(--ink-2); margin: 10px 0; min-height: 1.6em; overflow-wrap: anywhere; }
+.vr-cuenta2 b { color: var(--ink); }
+.vr-salida { margin: 8px 0 0; padding: 10px 12px; border-radius: 8px; background: var(--surface-2); font-family: var(--f-mono); font-size: 12.5px; line-height: 1.6; min-height: 4.8em; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); }
+.vr-salida .nueva { color: var(--accent); font-weight: 600; }
+.vr-salida .vacia { color: var(--ink-3); }
+pre.salida-fija { white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--f-mono); font-size: 12.5px; background: var(--surface-2); padding: 8px 10px; border-radius: 8px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ Orden de operaciones</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Fundamentos · Aritmética · OpenStax Prealgebra, cap. 2 y Stitz-Zeager 0.2</p>
+    <h1>Orden de operaciones</h1>
+    <p class="lede">
+      Una cuenta escrita en una línea es una <b>instrucción</b>: dice qué operación hacer y en qué orden. Ese orden no se lee de izquierda a derecha:
+      se lee en un <b>árbol</b>, que se evalúa de abajo hacia arriba. Aquí vas a tocar operadores en el orden que creas, ver el árbol correcto,
+      mover paréntesis para cambiarle la forma, y leer con el mismo árbol la fórmula de la varianza y lo que hace Python o R con <code>-2**2</code>.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> Una calculadora vieja dice que 2 + 3 × 4 = 20; la del teléfono dice 14. ¿Cuál tiene razón, o las dos? Escribe qué crees y por qué.</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: creo que la del teléfono, porque..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>De una cuenta del café a la fórmula de la varianza</h2>
+      <p>Siete pasos. Cada uno termina con un chequeo que abre el siguiente. Equivocarte aquí no resta nada: es parte del método.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="Tu orden">
+          <span class="etapa">Paso 1</span>
+          <h3>Dos operaciones, una tiene que ir primero</h3>
+          <p>En el escenario está la cuenta <b>2 + 3 · 4</b>. Tiene una suma y una multiplicación, y no se pueden hacer las dos a la vez: alguna va primero.</p>
+          <p>Antes de tocar nada, responde. Después vas a poder tocar los operadores en el orden que quieras y ver qué sale con cada orden.</p>
+          <div class="check" id="chk1">
+            <p class="check-tit">Predice antes de seguir</p>
+            <div class="cuerpo"></div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Por qué un acuerdo">
+          <span class="etapa">Paso 2</span>
+          <h3>La convención copia cómo se escribe una cuenta de verdad</h3>
+          <p>En la cafetería pides un pastel (3.75) y tres cafés (2.50 cada uno). En el ticket, cada renglón es un <b>producto</b> y el total es la <b>suma</b> de los renglones. Escrito en una línea:</p>
+          <div class="fbloque"><div data-tex="3.75 + 3 \cdot 2.50" data-display></div><div class="vivo" id="vivo2"></div></div>
+          <p>Toca los operadores en los dos órdenes. Si sumas primero, sale <span data-tex="(3.75 + 3) \cdot 2.50"></span>: pagarías 2.50 por cada "unidad" de una mezcla de pastel y cafés, que no es nada. La regla "multiplicar antes de sumar" existe para que <b>una suma de productos se escriba sin paréntesis</b>, y casi todas las fórmulas son sumas de productos.</p>
+          <p>Stitz y Zeager lo muestran con la cuenta más chica posible, 1 + 2 · 3 = 7 contra (1 + 2) · 3 = 9
+            <cite class="cita" data-fuente="szp2" data-pag="2" data-pimp="19" data-seccion="0.2 Real Number Arithmetic, Distributive Property" data-que="Por qué 1 + 2·3 = 7 pero (1 + 2)·3 = 9, y cómo los paréntesis cambian lo que se agrupa; enseguida, la propiedad distributiva." data-cuando="Al terminar este paso"></cite>, y OpenStax arranca el tema con 4 + 3 · 7, donde "unos dicen 49 y otros 25", y fija la regla en un recuadro
+            <cite class="cita" data-fuente="prealg2" data-pag="11" data-pimp="105" data-seccion="2.1 Use the Order of Operations" data-que="La motivación (4 + 3·7: ¿49 o 25?) y el recuadro Order of Operations con sus cuatro niveles." data-cuando="Al terminar este paso"></cite>
+            <cite class="cita" data-fuente="prealg5" data-pag="40" data-pimp="406" data-seccion="5.3 Use the Order of Operations with Decimals" data-que="La misma regla con decimales: 7(18.3 − 21.7) = −23.8 y 2/3 de (8.3 − 3.8) = 3. Útil para cuentas tipo ticket." data-cuando="Si quieres practicar con precios"></cite>.</p>
+          <div class="cita" id="citaHipo" hidden></div>
+          <div class="check" id="chk2"><p class="check-tit">Antes de seguir</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="La jerarquía y el árbol">
+          <span class="etapa">Paso 3</span>
+          <h3>Cuatro niveles y un árbol que se evalúa de abajo hacia arriba</h3>
+          <p>El acuerdo completo tiene cuatro niveles. Se hace primero lo de arriba de la lista:</p>
+          <ol class="niveles">
+            <li><span class="nv">1</span><span><b>Agrupaciones</b>: paréntesis, corchetes, raya de fracción, raíz. Las de más adentro primero.</span></li>
+            <li><span class="nv">2</span><span><b>Potencias</b>.</span></li>
+            <li><span class="nv">3</span><span><b>Multiplicación y división</b>, con la <b>misma</b> prioridad: de izquierda a derecha.</span></li>
+            <li><span class="nv">4</span><span><b>Suma y resta</b>, con la misma prioridad: de izquierda a derecha.</span></li>
+          </ol>
+          <p>El escenario dibuja la cuenta como un <b>árbol</b>. Cada operación es un nodo y sus números cuelgan debajo. Un nodo solo se puede calcular cuando todo lo que cuelga de él ya es un número; por eso se evalúa de abajo hacia arriba, y la operación que se hace <b>al final</b> queda arriba, en la raíz. Toca los nodos marcados o usa el botón. Después compara <span data-tex="4 + 3 \cdot 7"></span> con <span data-tex="(4 + 3) \cdot 7"></span>: el paréntesis no agrega ninguna operación, <b>cambia la forma del árbol</b>.</p>
+          <p>OpenStax trae la mnemotecnia en inglés, PEMDAS, y advierte justo lo que más se olvida: "My Dear" van juntos, multiplicar no va siempre antes que dividir
+            <cite class="cita" data-fuente="prealg2" data-pag="12" data-pimp="106" data-seccion="2.1 Order of Operations, PEMDAS" data-que="La tabla Please Excuse My Dear Aunt Sally, por qué M y D (y A y S) tienen la misma prioridad, y el Example 2.8 a) 4 + 3·7 = 25." data-cuando="Al terminar este paso"></cite>
+            <cite class="cita" data-fuente="prealg2" data-pag="14" data-pimp="108" data-seccion="2.1 Order of Operations, Example 2.10" data-que="El Example 2.10, 18 ÷ 6 + 4(5 − 2) = 3 + 12 = 15: el mismo árbol del escenario, resuelto renglón por renglón." data-cuando="Después de evaluar ese árbol aquí"></cite>
+            <cite class="cita" data-fuente="prealg2" data-pag="13" data-pimp="107" data-seccion="2.1 Order of Operations, Examples 2.8 b) y 2.9" data-que="(4 + 3)·7 = 49, y el Example 2.9 a) con 18 ÷ 9·2 resuelto: por qué se divide primero." data-cuando="Después del chequeo de este paso"></cite>
+            <cite class="cita" data-fuente="prealg2" data-pag="15" data-pimp="109" data-seccion="2.1 Order of Operations, Example 2.11" data-que="Agrupaciones anidadas: 5 + 2³ + 3[6 − 3(4 − 2)] = 13, de adentro hacia afuera. Está también en el escenario." data-cuando="Cuando el árbol con corchetes te resulte natural"></cite>.</p>
+          <div class="check" id="chk3"><p class="check-tit">Antes de seguir</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Potencias y el menos">
+          <span class="etapa">Paso 4</span>
+          <h3>La potencia se pega solo a lo que tiene al lado</h3>
+          <p>La potencia está por encima de multiplicar: <span data-tex="2 + 3 \cdot 4^2 = 2 + 3 \cdot 16 = 50"></span>. En el árbol, el nodo de la potencia cuelga más abajo que el producto, así que se calcula antes.</p>
+          <p>Y hay un menos que no es una resta. En <span data-tex="5 - 3"></span> el menos une dos números (menos <b>binario</b>). En <span data-tex="-3"></span> se aplica a uno solo y significa "el opuesto de" (menos <b>unario</b>). En el árbol es un nodo con un solo hijo, de borde punteado. La convención lo pone <b>por debajo</b> de la potencia: el exponente se pega al número que tiene al lado, y el opuesto se toma después.</p>
+          <p>Stitz y Zeager lo ponen como advertencia junto a su recuadro del orden, y avisan además que su libro escribe los dos menos con el mismo signo
+            <cite class="cita" data-fuente="szp2" data-pag="10" data-pimp="27" data-seccion="0.2 Real Number Arithmetic, Order of Operations Agreement" data-que="El recuadro Order of Operations Agreement, el ejemplo 2 + 3·4² = 50 y la advertencia de que −3² = −9 pero (−3)² = 9." data-cuando="Después del chequeo de este paso"></cite>
+            <cite class="cita" data-fuente="szp2" data-pag="3" data-pimp="20" data-seccion="0.2 Real Number Arithmetic, Properties of Negatives" data-que="El menos binario contra el unario (5 − 3 = 5 + (−3)) y por qué en la calculadora −3 − 3 da −6." data-cuando="Si dudas de qué menos es cuál"></cite>
+            <cite class="cita" data-fuente="prealg3" data-pag="56" data-pimp="226" data-seccion="3.5 Exponents with negative bases, Example 3.52" data-que="(−2)⁴ = 16 porque la base es −2, y −2⁴ = −16 porque la base es 2 y el opuesto se toma al final, los dos en forma expandida." data-cuando="Al terminar este paso"></cite>. La página de <a href="variables-expresiones.html">Variables y expresiones</a> usa esto al sustituir un número negativo: por eso entra con paréntesis.</p>
+          <div class="check" id="chk4"><p class="check-tit">Antes de seguir</p><div class="cuerpo"></div></div>
+
+          <div class="destacado" id="destacado">
+            <p class="dest-tit">Un paso más allá</p>
+            <h4>¿Y una torre de potencias?</h4>
+            <p>La resta y la división, cuando se repiten, se hacen de izquierda a derecha: <span data-tex="8 - 3 - 2 = (8 - 3) - 2 = 3"></span>. Su árbol se inclina hacia la izquierda. Con <span data-tex="2^{3^2}"></span> no hay paréntesis y hay dos potencias seguidas. ¿Cuál se hace primero?</p>
+            <div class="check" id="chk4b"><p class="check-tit">Predice antes de seguir</p><div class="cuerpo"></div></div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Agrupadores escondidos">
+          <span class="etapa">Paso 5</span>
+          <h3>La raya de fracción y la raíz también son paréntesis</h3>
+          <p>En <span data-tex="\dfrac{6 + 2 \cdot 3}{5 - 1}"></span> no se ve ningún paréntesis, pero la raya agrupa todo lo de arriba y todo lo de abajo: primero se calcula el numerador (12), después el denominador (4), y al final se divide (3). En el árbol, la raya es el nodo de la raíz.</p>
+          <p>Cuando la misma fracción se pasa a una sola línea (en una calculadora, en Python o en R) hay que <b>escribir</b> esos paréntesis que la raya daba gratis: <code>(6 + 2*3) / (5 - 1)</code>. Sin ellos, <code>6 + 2*3 / 5 - 1</code> es otra cuenta, y el escenario te muestra cuál. Con la raíz pasa lo mismo: <span data-tex="\sqrt{25 + 144} = 13"></span>, pero <span data-tex="\sqrt{25} + \sqrt{144} = 17"></span>
+            <cite class="cita" data-fuente="prealg4" data-pag="46" data-pimp="298" data-seccion="4.5 Use the Order of Operations to Simplify Complex Fractions" data-que="El Example 4.48: con una raya de fracción se simplifica arriba y abajo por separado antes de dividir." data-cuando="Al terminar este paso"></cite>
+            <cite class="cita" data-fuente="prealg5" data-pag="82" data-pimp="448" data-seccion="5.7 Simplify Expressions with Square Roots" data-que="El radical como símbolo de agrupación y el Example 5.72: √25 + √144 = 17 contra √(25 + 144) = 13." data-cuando="Después de comparar los dos árboles de la raíz"></cite>
+            <cite class="cita" data-fuente="szp2" data-pag="11" data-pimp="28" data-seccion="0.2 Real Number Arithmetic, Example 0.2.2" data-que="Fracciones con potencias y paréntesis por todos lados: ((4 − 2)(2·4) − 4²)/(4 − 2)² = 0 y otra que da 15. Buen entrenamiento para leer el árbol sin dibujarlo." data-cuando="Cuando quieras practicar con cuentas largas"></cite>.</p>
+          <div class="check" id="chk5"><p class="check-tit">Antes de seguir</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Cuando no alcanza">
+          <span class="etapa">Paso 6</span>
+          <h3>La cuenta que se volvió famosa: 8 ÷ 2(2 + 2)</h3>
+          <p>Esta cuenta circula por internet y divide a la gente entre los que dicen 16 y los que dicen 1. El escenario dibuja los dos árboles.</p>
+          <p>Con el acuerdo estricto (multiplicación y división iguales, de izquierda a derecha), <span data-tex="2(2+2)"></span> es una multiplicación más: <span data-tex="(8 \div 2)(2 + 2) = 16"></span>. Pero muchos libros y revistas de física tratan la <b>multiplicación implícita</b> (un número pegado a un paréntesis, o <span data-tex="2x"></span>) como más fuerte que la división: <span data-tex="1/2x"></span> se lee <span data-tex="1/(2x)"></span>, no <span data-tex="x/2"></span>. Con esa lectura sale 1.</p>
+          <p>Las dos lecturas existen de verdad; el problema no es de cálculo sino de <b>escritura</b>. Nadie que escriba en serio pone <span data-tex="\div"></span> seguido de una multiplicación implícita: escribe una fracción o pone el paréntesis. OpenStax no discute esta ambigüedad (solo insiste en que multiplicación y división van de izquierda a derecha), y Python y R ni siquiera aceptan <code>2(2 + 2)</code>: lo vas a ver en la parte 2.</p>
+          <div class="check" id="chk6"><p class="check-tit">Antes de seguir</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Fórmulas de estadística">
+          <span class="etapa">Paso 7</span>
+          <h3>Leer la varianza con el árbol</h3>
+          <p>Tres mañanas, la cafetería vende 2, 4 y 6 pasteles (datos inventados). La media es <span data-tex="\bar{x} = 4"></span>. La <a href="varianza-desviacion.html">varianza muestral</a> es</p>
+          <div class="fbloque"><div data-tex="s^2 = \dfrac{\sum_{i=1}^{n} (x_i - \bar{x})^2}{n - 1}" data-display></div><div class="vivo" id="vivo7"></div></div>
+          <p>Leída con el árbol: la raíz es la raya (lo último que se hace es dividir). Arriba cuelga una suma, <span data-tex="\Sigma"></span>, con un hijo por dato. Cada hijo es un cuadrado, y dentro de cada cuadrado hay una resta. Abajo de la raya, <span data-tex="n - 1"></span>. Las restas se hacen primero, los cuadrados después, la suma después y la división al final: <span data-tex="(4 + 0 + 4)/2 = 4"></span>.</p>
+          <p>Al pasarla a código, cada agrupación invisible se vuelve un paréntesis: <code>sum((x - m)**2) / (len(x) - 1)</code>. Los dos errores clásicos son mover el cuadrado afuera de la suma y olvidar el paréntesis de <code>n - 1</code>. El escenario dibuja los tres árboles.</p>
+          <p>El mismo ejercicio sirve para cualquier fórmula del máster. La <a href="sigmoide.html">sigmoide</a> <span data-tex="\sigma(z) = \dfrac{1}{1 + e^{-z}}"></span> es una raya con un 1 arriba; abajo, una suma; dentro de la suma, una potencia; y en el exponente, un menos unario.</p>
+          <details class="profundizar">
+            <summary>Así guarda un lenguaje de programación el árbol</summary>
+            <div>
+              <p>Python y R no evalúan el texto que escribes: primero lo convierten en un árbol (el <b>árbol de sintaxis</b>) y recién después lo recorren de abajo hacia arriba. Puedes pedirles ese árbol. En Python, <code>ast.dump(ast.parse("2 + 3 * 4", mode="eval").body)</code> imprime (salida real):</p>
+              <pre class="salida-fija">BinOp(left=Constant(value=2), op=Add(), right=BinOp(left=Constant(value=3), op=Mult(), right=Constant(value=4)))</pre>
+              <p>La raíz es la suma (<code>Add</code>) y la multiplicación cuelga a la derecha. En R, <code>as.list(quote(2 + 3 * 4))</code> da tres piezas: la función <code>`+`</code>, el <code>2</code> y la llamada <code>3 * 4</code>, que es otro árbol. Para R, toda cuenta es una función con sus argumentos: <code>2 + 3 * 4</code> es <code>`+`(2, `*`(3, 4))</code>.</p>
+            </div>
+          </details>
+          <div class="check" id="chk7"><p class="check-tit">Antes de terminar</p><div class="cuerpo"></div></div>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+        </div>
+
+        <div class="zona" id="zonaMaq">
+          <h3 class="mini-tit">Tu orden: toca un operador</h3>
+          <div class="maq-fichas" id="maqFichas"></div>
+          <div class="maq-msg" id="maqMsg"></div>
+          <div class="maq-hist" id="maqHist"></div>
+          <div class="btn-row" style="margin:8px 0 12px"><button type="button" id="maqReset">Volver a empezar</button></div>
+          <div class="ticket" id="ticket" hidden>
+            <div class="fila"><span>1 pastel</span><span>3.75</span></div>
+            <div class="fila"><span>3 cafés · 2.50</span><span>7.50</span></div>
+            <div class="fila tot"><span>Total</span><span>11.25</span></div>
+          </div>
+        </div>
+
+        <div class="zona" id="zonaArbol">
+          <div class="sel-expr" id="selExpr" role="group" aria-label="Expresión"></div>
+          <div class="arbol-caja"><svg class="arbol" id="arbol" role="img" aria-label="Árbol de la expresión"></svg></div>
+          <div class="arbol-ctl">
+            <button type="button" class="primary" id="arbSig">Evaluar un nodo</button>
+            <button type="button" id="arbTodo">Evaluar todo</button>
+            <button type="button" class="ghost" id="arbReset">Reiniciar</button>
+          </div>
+          <div class="arbol-msg" id="arbMsg"></div>
+          <div class="arbol-lin" id="arbLin"></div>
+          <p class="leyenda">Borde <span class="lk">de este color</span>: suma y resta. Borde <span class="lj">de este otro</span>: multiplicación y división (también la raya). Negro: potencia. Punteado: un solo hijo (menos unario, raíz, cuadrado). Resaltado: listo para calcular.</p>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>¿Cómo sabe un programa que en <code>18 / 6 + 4 * ( 5 - 2 )</code> va primero la división? Un algoritmo clásico, el de <b>las dos pilas</b> (Edsger Dijkstra lo publicó en 1961 con el nombre de "patio de maniobras", <i>shunting yard</i>), lee la cuenta de izquierda a derecha una sola vez. Guarda los números en una pila y los operadores en otra, y cada vez que llega un operador más débil, calcula los que esperaban. Es la cuenta del Example 2.10 de OpenStax. Elige Python o R y dale a reproducir.</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir <span class="estado" data-reto="codigo1"></span></p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="true">Python</button>
+            <button type="button" data-lang="r" aria-pressed="false">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">1 · leer la cuenta</span><span data-f="2">2 · vaciar las pilas</span><span data-f="3">3 · comparar con el lenguaje</span>
+        </div>
+        <h3 class="mini-tit vr-tit">Las fichas, de izquierda a derecha</h3>
+        <div class="vr-cinta" id="vrCinta"></div>
+        <div class="pilas">
+          <div><div class="pila-tit">pila de números</div><div class="pila pn" id="vrPilaN"></div></div>
+          <div><div class="pila-tit">pila de operadores</div><div class="pila po" id="vrPilaO"></div></div>
+        </div>
+        <div class="vr-cuenta2" id="vrCuenta2"></div>
+        <h3 class="mini-tit vr-tit">Lo que imprime el programa</h3>
+        <div class="vr-salida" id="vrSalida"></div>
+      </div>
+    </div>
+
+    <p class="vr-nota">La salida de arriba es la real: el programa se corrió en Python 3.13 y en R 4.6.1 antes de escribir esta página, y se copió tal cual. No hay una función de librería que "aplique el orden de operaciones": lo hace el propio lenguaje cada vez que lee una línea. Por eso la comparación final es contra <code>eval</code> (Python) y <code>eval(parse(text = ...))</code> (R), que le pasan el mismo texto al lector del lenguaje. Fíjate en la diferencia de formato: Python imprime <code>15.0</code> porque <code>float("18")</code> es un número decimal; R imprime <code>15</code> porque no muestra el <code>.0</code>.</p>
+
+    <details class="profundizar">
+      <summary>Dos trampas de precedencia que solo tiene un lenguaje</summary>
+      <div>
+        <p><b>En R, el operador <code>:</code> va antes que la resta.</b> Con <code>n &lt;- 5</code>, <code>1:n-1</code> no es "de 1 a 4": es <code>(1:5) - 1</code>, que imprime <code>[1] 0 1 2 3 4</code>. Lo que querías es <code>1:(n-1)</code>, que imprime <code>[1] 1 2 3 4</code>. Y el menos unario va antes que los dos puntos: <code>-1:3</code> imprime <code>[1] -1  0  1  2  3</code>. Es un error frecuente en bucles de R.</p>
+        <p><b>En Python, <code>^</code> no es potencia.</b> Es el "o exclusivo" bit a bit: <code>print(2 ^ 3, 2 ** 3)</code> imprime <code>1 8</code>. Por eso el código de arriba trata <code>"^"</code> como un texto y lo traduce a <code>**</code> en <code>aplicar</code>. (Salidas reales de los dos lenguajes.)</p>
+      </div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Copiar la cuenta famosa</h3><span class="estado" data-reto="codigo2"></span></div>
+        <div id="codigo2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>La varianza sin un paréntesis</h3><span class="estado" data-reto="codigo3"></span></div>
+        <div id="codigo3"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: la biblioteca te avisa en el índice cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>¿Qué va primero?</h3><span class="estado" data-reto="ojo"></span></div>
+        <p class="desc">Cinco cuentas. Toca el operador que se calcula primero, sin hacer ninguna cuenta. Apruebas con 4 de 5.</p>
+        <div id="ojo"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Construir</span><h3>Tres órdenes, tres resultados</h3><span class="estado" data-reto="construir"></span></div>
+        <p class="desc">Toca los operadores de <b>2 + 3 · 4 − 1</b> en el orden que quieras. Cada orden equivale a poner paréntesis. Cumple los tres objetivos; se marcan solos.</p>
+        <div class="maq-fichas" id="conFichas"></div>
+        <div class="maq-msg" id="conMsg"></div>
+        <div class="maq-hist" id="conHist"></div>
+        <div class="btn-row" style="margin-top:8px"><button type="button" id="conReset">Volver a empezar</button></div>
+        <ul class="objetivos" id="objetivos"></ul>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>Una cuenta con los cuatro niveles</h3><span class="estado" data-reto="mano"></span></div>
+        <p class="desc">Hazla en papel, un nivel por renglón, antes de pedir pistas.</p>
+        <div class="datos-mano" id="manoDatos"></div>
+        <div id="mano"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>La raya como paréntesis</h3><span class="estado" data-reto="mano2"></span></div>
+        <p class="desc">Numerador y denominador por separado; la división, al final.</p>
+        <div class="datos-mano" id="mano2Datos"></div>
+        <div id="mano2"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Alguien se equivocó</h3><span class="estado" data-reto="error"></span></div>
+        <p class="desc">Una de las líneas tiene un error. Tócala.</p>
+        <div id="error"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>El mismo nivel</h3><span class="estado" data-reto="prop1"></span></div>
+        <div id="prop1"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Izquierda a derecha</h3><span class="estado" data-reto="prop2"></span></div>
+        <div id="prop2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>La raíz agrupa</h3><span class="estado" data-reto="prop3"></span></div>
+        <div id="prop3"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Por qué la torre baja por la derecha</h3><span class="estado" data-reto="prop4"></span></div>
+        <div id="prop4"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Recordar a la fuerza es lo que fija. Arma la jerarquía de memoria y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">De memoria</span><h3>Arma la jerarquía, de lo primero a lo último</h3><span class="estado" data-reto="formula"></span></div>
+        <p class="desc">Hay piezas de más que no pertenecen. No mires arriba.</p>
+        <div id="formula"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el libro</h2>
+      <p class="lecturas-intro">Ya lo construiste con las manos. Ahora ve a la versión del libro y comprueba que la reconoces. Este tema no está en el material del máster: lo dan por sabido, y cada fórmula de las asignaturas depende de él. OpenStax Prealgebra lo explica despacio en la sección 2.1 (no en el capítulo 1, como uno esperaría) y vuelve a él con enteros, fracciones, decimales y raíces; Stitz y Zeager lo condensan en una página. Los ejemplos que se citan aquí se recalcularon y están bien: 2.10 da 15, 2.11 da 13 y 2.12 da 10. Lo que ninguno de los dos discute es la ambigüedad de 8 ÷ 2(2 + 2).</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> Los precios de la cafetería (café 2.50, pastel 3.75, pastel a 2.25 el martes) y las ventas de 2, 4 y 6 pasteles son inventados,
+    elegidos para que las cuentas den limpias; es el ejemplo común de la ruta de aritmética. Las cuentas 4 + 3 · 7, 18 ÷ 6 + 4(5 − 2) y 5 + 2³ + 3[6 − 3(4 − 2)] son las de OpenStax,
+    y 2 + 3 · 4² y −3² las de Stitz y Zeager. Tu progreso se guarda solo en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+/*
+  Ejemplo comun de la ruta de aritmetica: "la tienda de cafe" (ver tipos-numeros.html).
+    cafe 2.50, pastel 3.75 (2.25 el martes con 40 % de descuento), galleta 1.25.
+  Esta pagina usa:
+    1 pastel + 3 cafes = 3.75 + 3 * 2.50 = 11.25   (de izquierda a derecha saldria (3.75 + 3) * 2.50 = 16.875)
+    martes: 2 cafes + 1 pastel = 2 * 2.50 + 2.25 = 7.25
+    pasteles vendidos tres mananas: 2, 4, 6 -> media 4, desvios -2, 0, 2, suma de cuadrados 8,
+      varianza muestral 8 / (3 - 1) = 4; con el error "/ n - 1": 8 / 3 - 1 = 1.6667; con "(suma)^2": 0.
+*/
+(function () {
+  "use strict";
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var RETOS = ["ojo", "construir", "mano", "mano2", "error", "prop1", "prop2", "prop3", "prop4", "formula", "codigo1", "codigo2", "codigo3"];
+  var C = B.concepto({ id: "orden-operaciones", retos: RETOS, pasos: 7 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  /* ---------------- utilidades ---------------- */
+  // numero corto: entero sin decimales; si no, hasta 3 decimales sin ceros de mas
+  function n(v) {
+    if (Math.abs(v - Math.round(v)) < 1e-9) return B.fmt(v, 0);
+    var s = B.fmt(v, 3);
+    return s.replace(/0+$/, "").replace(/\.$/, "");
+  }
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+  function on(id, ev, fn) { $(id).addEventListener(ev, fn); }
+  function azar(a, b) { return a + Math.floor(Math.random() * (b - a + 1)); }
+  function elegir(lista) { return lista[Math.floor(Math.random() * lista.length)]; }
+
+  /* ---------------- arboles de expresiones ---------------- */
+  // nodos: hoja {t:"n", v, txt}; binario {t:"b", op, h:[a, b]}; unario {t:"u", op, h:[a]}; suma n-aria {t:"s", h:[...]}
+  // op: "+", "−", "·", "÷", "imp" (multiplicacion implicita), "frac" (raya), "^", "neg", "cuad", "raiz"
+  function N(v, txt) { return { t: "n", v: v, txt: txt == null ? null : txt }; }
+  function O(op, a, b, par) { return { t: "b", op: op, h: [a, b], par: !!par }; }
+  function U(op, a, par) { return { t: "u", op: op, h: [a], par: !!par }; }
+  function S(h) { return { t: "s", op: "suma", h: h }; }
+  var PR = { "+": 1, "−": 1, "·": 2, "÷": 2, "imp": 2, "neg": 2.5, "^": 3, "cuad": 3 };
+  var ETQ = { "+": "+", "−": "−", "·": "·", "÷": "÷", "imp": "·", "frac": "—", "^": "^", "neg": "−", "cuad": "x²", "raiz": "√", "suma": "Σ" };
+  var CLASE = { "+": "ok-k", "−": "ok-k", "suma": "ok-s", "·": "ok-j", "÷": "ok-j", "imp": "ok-j", "frac": "ok-j", "^": "ok-p", "neg": "ok-u", "cuad": "ok-u", "raiz": "ok-u" };
+
+  function calc(nd) {
+    var v = nd.h ? nd.h.map(function (c) { return c.val; }) : [];
+    switch (nd.op) {
+      case "+": return v[0] + v[1];
+      case "−": return v[0] - v[1];
+      case "·": case "imp": return v[0] * v[1];
+      case "÷": case "frac": return v[0] / v[1];
+      case "^": return Math.pow(v[0], v[1]);
+      case "neg": return -v[0];
+      case "cuad": return v[0] * v[0];
+      case "raiz": return Math.sqrt(v[0]);
+      case "suma": return v.reduce(function (a, b) { return a + b; }, 0);
+    }
+    return NaN;
+  }
+  function precDe(nd) {
+    if (nd.val !== null && nd.val !== undefined) return nd.val < 0 ? 2.5 : 9;
+    if (nd.t === "n") return 9;
+    if (nd.op === "frac" || nd.op === "raiz" || nd.op === "suma") return 9;
+    return PR[nd.op];
+  }
+  // escritura en una linea, con los parentesis justos (y los que el autor puso: par)
+  function lin(nd) {
+    if (nd.val !== null && nd.val !== undefined && nd.t !== "n") return n(nd.val);
+    if (nd.t === "n") return nd.txt != null ? nd.txt : n(nd.v);
+    var s;
+    if (nd.t === "s") s = "[" + nd.h.map(function (c) { return precDe(c) < 2 ? "(" + lin(c) + ")" : lin(c); }).join(" + ") + "]";
+    else if (nd.op === "neg") { var a0 = nd.h[0]; s = "−" + (precDe(a0) < 3 || (a0.par && a0.val == null) || (a0.t !== "n" && a0.val != null) ? "(" + lin(a0) + ")" : lin(a0)); }
+    else if (nd.op === "cuad") { s = (precDe(nd.h[0]) < 9 ? "(" + lin(nd.h[0]) + ")" : lin(nd.h[0])) + "²"; }
+    else if (nd.op === "raiz") { s = "√" + (nd.h[0].t === "n" || nd.h[0].val != null ? lin(nd.h[0]) : "(" + lin(nd.h[0]) + ")"); }
+    else {
+      var a = nd.h[0], b = nd.h[1], pa = precDe(a), pb = precDe(b);
+      var L = lin(a), R = lin(b);
+      if (nd.op === "frac") {
+        s = (pa < 9 ? "(" + L + ")" : L) + " / " + (pb < 9 ? "(" + R + ")" : R);
+      } else {
+        var p = PR[nd.op];
+        var envL = (a.par && a.val == null) || pa < p || (nd.op === "^" && pa <= 3);
+        var envR = (b.par && b.val == null) || pb < p || (pb === p && nd.op !== "^") || (nd.op === "^" && pb === 2.5);
+        if (envL) L = "(" + L + ")";
+        if (nd.op === "imp") s = L + "(" + lin(b).replace(/^\((.*)\)$/, "$1") + ")";
+        else {
+          if (envR) R = "(" + R + ")";
+          s = nd.op === "^" ? L + "^" + R : L + " " + nd.op + " " + R;
+        }
+      }
+    }
+    return s;
+  }
+
+  var NS = "http://www.w3.org/2000/svg";
+  function nodo(tag, at, padre, txt) {
+    var e = document.createElementNS(NS, tag);
+    for (var k in at) e.setAttribute(k, at[k]);
+    if (txt != null) e.textContent = txt;
+    padre.appendChild(e);
+    return e;
+  }
+
+  var arbol = (function () {
+    var svg = $("arbol"), raiz = null, lista = [], hist = [], ultimo = null, ocultarRaiz = false;
+    function indexar(nd, prof) {
+      nd.prof = prof; nd.i = lista.length; lista.push(nd);
+      nd.val = nd.t === "n" ? nd.v : null;
+      if (nd.h) nd.h.forEach(function (c) { indexar(c, prof + 1); });
+    }
+    function ubicar() {
+      var hoja = 0;
+      (function rec(nd) {
+        if (!nd.h) { nd.x = hoja++; return; }
+        nd.h.forEach(rec);
+        nd.x = (nd.h[0].x + nd.h[nd.h.length - 1].x) / 2;
+      })(raiz);
+      return hoja;
+    }
+    function listo(nd) { return nd.val === null && nd.h.every(function (c) { return c.val !== null; }); }
+    function buscar(nd) {
+      if (nd.val !== null) return null;
+      for (var k = 0; k < nd.h.length; k++) { var r = buscar(nd.h[k]); if (r) return r; }
+      return listo(nd) ? nd : null;
+    }
+    function pintar() {
+      var hojas = ubicar(), prof = 0;
+      lista.forEach(function (nd) { prof = Math.max(prof, nd.prof); });
+      var dx = 50, dy = 60, m = 30;
+      var W = Math.max(hojas - 1, 2) * dx + 2 * m + 20, H = prof * dy + 2 * m;
+      var off = (W - (hojas - 1) * dx) / 2;
+      svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+      svg.innerHTML = "";
+      function X(nd) { return off + nd.x * dx; }
+      function Y(nd) { return m + nd.prof * dy; }
+      lista.forEach(function (nd) {
+        if (!nd.h) return;
+        nd.h.forEach(function (c) { nodo("line", { x1: X(nd), y1: Y(nd), x2: X(c), y2: Y(c), "class": "arista" + (nd.val === null ? " viva" : "") }, svg); });
+      });
+      lista.forEach(function (nd) {
+        var cls = "nodo" + (nd.t === "n" ? " hoja" : " " + CLASE[nd.op]);
+        var esListo = nd.t !== "n" && listo(nd);
+        var oculto = ocultarRaiz && nd === raiz;
+        if (esListo && !oculto) cls += " listo";
+        if (nd.t !== "n" && nd.val !== null) cls += " hecho";
+        if (nd === ultimo) cls += " ultimo";
+        var g = nodo("g", { "class": cls, "data-i": nd.i }, svg);
+        nodo("circle", { cx: X(nd), cy: Y(nd), r: 18 }, g);
+        var texto;
+        if (nd.t === "n") texto = nd.txt != null ? nd.txt : n(nd.v);
+        else if (nd.val !== null) texto = n(nd.val);
+        else texto = oculto ? "?" : ETQ[nd.op];
+        var t = nodo("text", { x: X(nd), y: Y(nd) }, g, texto);
+        if (texto.length > 4) t.setAttribute("style", "font-size:10.5px");
+        if (nd.t !== "n" && nd.val !== null) nodo("text", { x: X(nd) + 22, y: Y(nd) - 16, "class": "mini" }, g, ETQ[nd.op]);
+      });
+      $("arbLin").innerHTML = hist.map(function (h, k) {
+        var txt = (k === 0 ? "" : "= ") + h;
+        return k === hist.length - 1 && k > 0 ? "<b>" + txt + "</b>" : txt;
+      }).join("\n");
+      var fin = raiz.val !== null;
+      $("arbSig").disabled = fin || ocultarRaiz;
+      $("arbTodo").disabled = fin || ocultarRaiz;
+    }
+    function evaluar(nd) {
+      nd.val = calc(nd);
+      ultimo = nd;
+      hist.push(lin(raiz));
+      $("arbMsg").textContent = raiz.val !== null ? "Llegaste a la raíz: esa es la última operación." : "";
+      pintar();
+    }
+    svg.addEventListener("click", function (e) {
+      var g = e.target.closest("g.nodo");
+      if (!g || !raiz) return;
+      var nd = lista[+g.getAttribute("data-i")];
+      if (nd.t === "n" || nd.val !== null) return;
+      if (ocultarRaiz) { $("arbMsg").textContent = "Este árbol se abre al resolver el chequeo."; return; }
+      if (!listo(nd)) { $("arbMsg").textContent = "Ese nodo todavía no: le faltan números abajo. Empieza por los de abajo."; return; }
+      evaluar(nd);
+    });
+    on("arbSig", "click", function () { var nd = buscar(raiz); if (nd) evaluar(nd); });
+    on("arbTodo", "click", function () { var nd; while ((nd = buscar(raiz))) { nd.val = calc(nd); ultimo = nd; hist.push(lin(raiz)); } $("arbMsg").textContent = "Cada renglón de abajo es un nodo calculado."; pintar(); });
+    on("arbReset", "click", function () { if (fabrica) poner(fabrica, ocultarRaiz); });
+    var fabrica = null;
+    function poner(fab, ocultar) {
+      fabrica = fab; raiz = fab(); lista = []; ultimo = null; ocultarRaiz = !!ocultar;
+      indexar(raiz, 0);
+      hist = [lin(raiz)];
+      $("arbMsg").textContent = "";
+      pintar();
+    }
+    return { poner: poner };
+  })();
+
+  /* ---------------- maquina de tocar operadores ---------------- */
+  // fichas: {k:"n", v, s} numero; {k:"o", op} operador binario; {k:"u"} menos unario
+  function Maquina(ids, inicial, cfg) {
+    var items, hist, ult;
+    function reset() { items = inicial.map(function (f) { return Object.assign({}, f); }); hist = []; ult = -1; pintar(); if (cfg.alCambiar) cfg.alCambiar(null); }
+    function pintar() {
+      var bloq = cfg.bloqueado && cfg.bloqueado();
+      $(ids.fichas).innerHTML = items.map(function (f, i) {
+        if (f.k === "n") return '<span class="tok num' + (i === ult ? " nuevo" : "") + '">' + f.s + '</span>';
+        return '<button type="button" class="tok op" data-i="' + i + '"' + (bloq ? " disabled" : "") + '>' + (f.k === "u" ? "−" : f.op) + '</button>';
+      }).join("");
+      $(ids.hist).innerHTML = hist.join("<br>");
+      if (bloq) $(ids.msg).innerHTML = cfg.textoBloqueo || "Primero responde el chequeo.";
+      else if (items.length === 1) {
+        var s = items[0].s.replace(/^\((.*)\)$/, "$1");
+        $(ids.msg).innerHTML = "Con tu orden sale <b>" + n(items[0].v) + "</b>. Escrito con paréntesis: <b>" + s + "</b>.";
+      } else $(ids.msg).innerHTML = hist.length ? "Sigue: toca el próximo operador." : "Toca el operador que harías primero.";
+    }
+    function opera(op, a, b) { return op === "+" ? a + b : op === "−" ? a - b : op === "·" ? a * b : op === "÷" ? a / b : Math.pow(a, b); }
+    $(ids.fichas).addEventListener("click", function (e) {
+      var b = e.target.closest("button.tok");
+      if (!b || (cfg.bloqueado && cfg.bloqueado())) return;
+      var i = +b.getAttribute("data-i"), f = items[i];
+      if (f.k === "o") {
+        var A = items[i - 1], Bn = items[i + 1];
+        if (!A || !Bn || A.k !== "n" || Bn.k !== "n") { $(ids.msg).textContent = "Ese operador todavía no tiene un número a cada lado."; return; }
+        var r = opera(f.op, A.v, Bn.v);
+        hist.push(A.s.replace(/^\((.*)\)$/, "$1") + " " + f.op + " " + Bn.s.replace(/^\((.*)\)$/, "$1") + " = <b>" + n(r) + "</b>");
+        items.splice(i - 1, 3, { k: "n", v: r, s: "(" + A.s + " " + f.op + " " + Bn.s + ")" });
+        ult = i - 1;
+      } else {
+        var C1 = items[i + 1];
+        if (!C1 || C1.k !== "n") { $(ids.msg).textContent = "El menos de adelante necesita un número a su derecha."; return; }
+        hist.push("el opuesto de " + C1.s + " = <b>" + n(-C1.v) + "</b>");
+        items.splice(i, 2, { k: "n", v: -C1.v, s: "(−" + C1.s + ")" });
+        ult = i;
+      }
+      pintar();
+      if (cfg.alCambiar) cfg.alCambiar(items.length === 1 ? items[0] : null);
+    });
+    $(ids.reset).addEventListener("click", reset);
+    reset();
+    return { reset: reset, pintar: pintar, poner: function (nuevas) { inicial = nuevas; reset(); } };
+  }
+  function F(s) {
+    return s.split(" ").map(function (t) {
+      if (t === "u") return { k: "u" };
+      if (/^[+−·÷^]$/.test(t)) return { k: "o", op: t };
+      return { k: "n", v: parseFloat(t), s: t };
+    });
+  }
+
+  /* ---------------- expresiones de cada paso ---------------- */
+  var est = { paso: 0, p1: false, chk4: false, chk4b: false, chk7: false, sel: {} };
+  var EXPR = [
+    [{ nom: "2 + 3 · 4", f: function () { return O("+", N(2), O("·", N(3), N(4))); }, oculta: function () { return !est.p1; } }],
+    [{ nom: "3.75 + 3 · 2.50", f: function () { return O("+", N(3.75, "3.75"), O("·", N(3), N(2.5, "2.50"))); } },
+     { nom: "(3.75 + 3) · 2.50", f: function () { return O("·", O("+", N(3.75, "3.75"), N(3), true), N(2.5, "2.50")); } }],
+    [{ nom: "4 + 3 · 7", f: function () { return O("+", N(4), O("·", N(3), N(7))); } },
+     { nom: "(4 + 3) · 7", f: function () { return O("·", O("+", N(4), N(3), true), N(7)); } },
+     { nom: "18 ÷ 6 + 4(5 − 2)", f: function () { return O("+", O("÷", N(18), N(6)), O("imp", N(4), O("−", N(5), N(2), true))); } },
+     { nom: "5 + 2³ + 3[6 − 3(4 − 2)]", f: function () { return O("+", O("+", N(5), O("^", N(2), N(3))), O("imp", N(3), O("−", N(6), O("imp", N(3), O("−", N(4), N(2), true)), true))); } }],
+    [{ nom: "2 + 3 · 4²", f: function () { return O("+", N(2), O("·", N(3), O("^", N(4), N(2)))); } },
+     { nom: "(−3)²", f: function () { return O("^", U("neg", N(3), true), N(2)); } },
+     { nom: "−3²", f: function () { return U("neg", O("^", N(3), N(2))); }, bloq: function () { return !est.chk4; } },
+     { nom: "8 − 3 − 2", f: function () { return O("−", O("−", N(8), N(3)), N(2)); } },
+     { nom: "2^3^2", f: function () { return O("^", N(2), O("^", N(3), N(2))); }, bloq: function () { return !est.chk4b; } },
+     { nom: "(2^3)^2", f: function () { return O("^", O("^", N(2), N(3), true), N(2)); }, bloq: function () { return !est.chk4b; } }],
+    [{ nom: "(6 + 2·3) / (5 − 1)", f: function () { return O("frac", O("+", N(6), O("·", N(2), N(3))), O("−", N(5), N(1))); } },
+     { nom: "6 + 2·3 ÷ 5 − 1", f: function () { return O("−", O("+", N(6), O("÷", O("·", N(2), N(3)), N(5))), N(1)); } },
+     { nom: "√(25 + 144)", f: function () { return U("raiz", O("+", N(25), N(144))); } },
+     { nom: "√25 + √144", f: function () { return O("+", U("raiz", N(25)), U("raiz", N(144))); } }],
+    [{ nom: "estricta: (8 ÷ 2)(2 + 2)", f: function () { return O("imp", O("÷", N(8), N(2)), O("+", N(2), N(2), true)); } },
+     { nom: "implícita fuerte: 8 ÷ [2(2 + 2)]", f: function () { return O("÷", N(8), O("imp", N(2), O("+", N(2), N(2), true), true)); } }],
+    [{ nom: "s² correcta", f: varianza },
+     { nom: "(Σ(x − x̄))²", f: function () { return U("cuad", S([O("−", N(2), N(4)), O("−", N(4), N(4)), O("−", N(6), N(4))])); } },
+     { nom: "Σ(x − x̄)² / n − 1", f: function () { return O("−", O("÷", S(sumandos()), N(3)), N(1)); }, bloq: function () { return !est.chk7; } }]
+  ];
+  function sumandos() { return [2, 4, 6].map(function (x) { return U("cuad", O("−", N(x), N(4))); }); }
+  function varianza() { return O("frac", S(sumandos()), O("−", N(3), N(1))); }
+
+  function pintarSelector() {
+    var lista = EXPR[est.paso];
+    var actual = est.sel[est.paso] || 0;
+    if (lista[actual] && lista[actual].bloq && lista[actual].bloq()) actual = 0;
+    est.sel[est.paso] = actual;
+    $("selExpr").innerHTML = lista.length < 2 ? "" : lista.map(function (x, k) {
+      if (x.bloq && x.bloq()) return "";
+      return '<button type="button" data-k="' + k + '"' + (k === actual ? ' class="on"' : "") + ">" + x.nom + "</button>";
+    }).join("");
+    var e = lista[actual];
+    arbol.poner(e.f, e.oculta && e.oculta());
+  }
+  on("selExpr", "click", function (e) {
+    var b = e.target.closest("button[data-k]");
+    if (!b) return;
+    est.sel[est.paso] = +b.getAttribute("data-k");
+    pintarSelector();
+  });
+
+  var maq = Maquina({ fichas: "maqFichas", msg: "maqMsg", hist: "maqHist", reset: "maqReset" }, F("2 + 3 · 4"), {
+    bloqueado: function () { return est.paso === 0 && !est.p1; },
+    textoBloqueo: "Los operadores se abren cuando respondas el chequeo del paso 1.",
+    alCambiar: function (fin) {
+      if (est.paso === 1) {
+        $("vivo2").textContent = fin ? "Con tu orden: " + n(fin.v) + (Math.abs(fin.v - 11.25) < 1e-9 ? ", lo que dice el ticket." : ", que no es lo que dice el ticket.") : "Toca los operadores en el escenario.";
+      }
+    }
+  });
+
+  var HINTS = [
+    "Responde el chequeo; después toca los operadores",
+    "Toca en los dos órdenes y compara con el ticket",
+    "Toca un nodo resaltado o pulsa Evaluar",
+    "Compara los árboles; dos se abren con los chequeos",
+    "La raya es la raíz del árbol",
+    "Los dos árboles de la misma escritura",
+    "Tres escrituras de la varianza"
+  ];
+  function entrar(i) {
+    est.paso = i;
+    $("escHint").textContent = HINTS[i];
+    $("zonaMaq").hidden = i > 1;
+    $("ticket").hidden = i !== 1;
+    $("zonaArbol").hidden = i === 0 && !est.p1;
+    if (i <= 1) maq.poner(F(i === 0 ? "2 + 3 · 4" : "3.75 + 3 · 2.50"));
+    pintarSelector();
+    if (i === 6) $("vivo7").textContent = "Con 2, 4 y 6: desvíos −2, 0, 2; cuadrados 4, 0, 4; suma 8; 8 / (3 − 1) = 4.";
+  }
+
+  /* ---------------- chequeos de cada paso ---------------- */
+  B.opcionMultiple(cuerpo("chk1"), {
+    pregunta: "¿Cuánto vale $2 + 3 \\cdot 4$?",
+    opciones: ["$14$", "$20$", "Las dos, $14$ y $20$, según quién la lea", "$24$"],
+    correcta: 0,
+    pistas: [null,
+      "20 es lo que sale si haces las cuentas en el orden en que aparecen: $2 + 3 = 5$ y luego $5 \\cdot 4$. Así leen algunas calculadoras viejas. ¿Así lo lee un libro?",
+      "Para esta cuenta hay un acuerdo que comparten todos los libros y todos los lenguajes. En el paso 6 vas a ver una cuenta donde el acuerdo sí deja dudas; esta no es una de ellas.",
+      "24 sería $2 \\cdot 3 \\cdot 4$. Aquí hay una sola multiplicación."],
+    explicacion: "<b>14</b>: primero $3 \\cdot 4 = 12$, después $2 + 12$. La multiplicación va antes que la suma. Ahora el escenario se abre: toca los operadores en los dos órdenes y mira el árbol que aparece abajo.",
+    alResolver: function () {
+      est.p1 = true;
+      if (est.paso === 0) entrar(0);
+      pasos.completar(0);
+    }
+  });
+
+  B.opcionMultiple(cuerpo("chk2"), {
+    pregunta: "El martes el pastel cuesta 2.25. ¿Cuál de estas escrituras da la cuenta de <b>dos cafés y un pastel</b> (7.25) leída con la convención?",
+    opciones: ["$2.25 + 2 \\cdot 2.50$", "$2.50 + 2.25 \\cdot 2$", "$(2.25 + 2) \\cdot 2.50$", "$2 \\cdot (2.50 + 2.25)$"],
+    correcta: 0,
+    mezclar: true,
+    pistas: [null,
+      "Con la convención, el $2$ multiplica al $2.25$: serían un café y dos pasteles (7.00).",
+      "El paréntesis obliga a sumar el precio del pastel con la cantidad de cafés. Eso no es ningún renglón del ticket.",
+      "Esa es la cuenta de dos cafés y <b>dos</b> pasteles: el 2 multiplica a todo el paréntesis."],
+    explicacion: "Cada renglón del ticket es un producto, $2 \\cdot 2.50 = 5$, y la suma junta renglones: $2.25 + 5 = 7.25$. Sin paréntesis, porque la multiplicación ya va primero.",
+    alResolver: function () { pasos.completar(1); }
+  });
+
+  B.numerico(cuerpo("chk3"), {
+    pregunta: "¿Cuánto vale $18 \\div 9 \\cdot 2$?",
+    respuesta: 4,
+    tolerancia: 0.001,
+    pistas: ["División y multiplicación están en el mismo nivel. ¿Cuál aparece primero, leyendo de izquierda a derecha?", "Primero $18 \\div 9$."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 1) < 0.001) return "Multiplicaste primero: $9 \\cdot 2 = 18$ y $18 \\div 18 = 1$. Pero multiplicar no va antes que dividir; tienen el mismo nivel y se va de izquierda a derecha.";
+      if (Math.abs(v - 36) < 0.001) return "Eso es $18 \\cdot 2$: falta la división.";
+      return null;
+    },
+    explicacion: "$18 \\div 9 = 2$ y $2 \\cdot 2 = 4$. Es el Example 2.9 a) de OpenStax: «dividir primero porque va a la izquierda». En el árbol, el nodo de la división cuelga bajo el de la multiplicación.",
+    alResolver: function () { pasos.completar(2); }
+  });
+
+  B.opcionMultiple(cuerpo("chk4"), {
+    pregunta: "¿Cuánto vale $-3^2$ (sin paréntesis)?",
+    opciones: ["$-9$", "$9$", "$-6$", "$6$"],
+    correcta: 0,
+    mezclar: true,
+    pistas: [null,
+      "9 sería $(-3)^2$: ahí el paréntesis dice que la base es $-3$. Sin paréntesis, el exponente se pega solo al número que tiene al lado.",
+      "$3^2$ no es $3 \\cdot 2$: es $3 \\cdot 3$.",
+      "El cuadrado no es multiplicar por 2. Y el signo, ¿se eleva o se pone después?"],
+    explicacion: "$-3^2 = -(3^2) = -9$: la base es 3, y el opuesto se toma al final. En el escenario ya está el árbol de $-3^2$: el menos unario queda <b>arriba</b> de la potencia.",
+    alResolver: function () { est.chk4 = true; if (est.paso === 3) pintarSelector(); cerrarPaso4(); }
+  });
+  B.numerico(cuerpo("chk4b"), {
+    pregunta: "¿Cuánto vale $2^{3^2}$? (En Python se escribe <code>2**3**2</code> y en R <code>2^3^2</code>.)",
+    respuesta: 512,
+    tolerancia: 0.001,
+    pistas: ["Las dos lecturas posibles son $(2^3)^2$ y $2^{(3^2)}$. Escrita como torre, ¿qué número está en el exponente del 2?", "En la torre, el exponente del 2 es todo $3^2 = 9$."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 64) < 0.001) return "Eso es $(2^3)^2 = 8^2$: hiciste de izquierda a derecha, como con la resta. Mira la torre: el 2 tiene encima un $3^2$ entero.";
+      if (Math.abs(v - 36) < 0.001) return "Eso es $(2 \\cdot 3)^2$. Las dos operaciones son potencias.";
+      return null;
+    },
+    explicacion: "$2^{3^2} = 2^9 = 512$. La potencia es la excepción: se agrupa <b>de derecha a izquierda</b>, desde lo más alto de la torre. Su árbol se inclina a la derecha. Python y R hacen lo mismo (lo vas a ver impreso en la parte 2: <code>512</code>). La razón: $(2^3)^2$ ya se puede escribir como $2^{6}$, así que la lectura útil de la torre es la otra. Los dos árboles ya están en el escenario.",
+    alResolver: function () { est.chk4b = true; if (est.paso === 3) pintarSelector(); cerrarPaso4(); }
+  });
+  function cerrarPaso4() { if (est.chk4 && est.chk4b) pasos.completar(3); }
+
+  B.numerico(cuerpo("chk5"), {
+    pregunta: "¿Cuánto vale $\\dfrac{10 + 2 \\cdot 4}{7 - 4}$?",
+    respuesta: 6,
+    tolerancia: 0.001,
+    pistas: ["Arriba: $2 \\cdot 4$ primero, después la suma.", "Arriba da 18 y abajo da 3."],
+    diagnostico: function (v) {
+      if (Math.abs(v - (10 + 8 / 7 - 4)) < 0.01) return "Eso es lo que da escrita en una línea sin paréntesis: $10 + 2 \\cdot 4 \\div 7 - 4$. La raya agrupa arriba y abajo.";
+      if (Math.abs(v - 16) < 0.001) return "Sumaste antes de multiplicar arriba: $(10 + 2) \\cdot 4 = 48$, y $48 / 3 = 16$.";
+      if (Math.abs(v - 18) < 0.001) return "Ese es solo el numerador. Falta dividir por $7 - 4$.";
+      return null;
+    },
+    explicacion: "Numerador $10 + 8 = 18$, denominador $3$, y al final $18 / 3 = 6$. En una línea: <code>(10 + 2*4) / (7 - 4)</code>.",
+    alResolver: function () { pasos.completar(4); }
+  });
+
+  B.opcionMultiple(cuerpo("chk6"), {
+    pregunta: "Te encuentras $8 \\div 2(2 + 2)$ en un enunciado. ¿Qué es lo más sensato?",
+    opciones: [
+      "Notar que la escritura es ambigua y elegir una forma explícita: $(8 \\div 2)(2 + 2) = 16$ o $\\dfrac{8}{2(2 + 2)} = 1$",
+      "Responder 16 sin dudar: el acuerdo estricto no deja margen",
+      "Responder 1 sin dudar: lo pegado a un paréntesis va siempre primero",
+      "Decir que no tiene ningún valor posible"
+    ],
+    correcta: 0,
+    mezclar: true,
+    pistas: [null,
+      "Con el acuerdo estricto sale 16, sí. Pero muchos textos de ciencias usan otra costumbre con la multiplicación implícita. ¿Quién escribió el enunciado?",
+      "Esa costumbre existe, pero no es universal: el acuerdo de los libros de preálgebra no la tiene.",
+      "Tiene dos valores posibles, uno por lectura. El problema es elegir, no calcular."],
+    explicacion: "Las dos lecturas son defendibles y dan árboles distintos. Lo sensato es reescribir sin ambigüedad (una fracción o un paréntesis), y en tus propias fórmulas no escribir nunca $\\div$ seguido de una multiplicación implícita.",
+    alResolver: function () { pasos.completar(5); }
+  });
+
+  B.numerico(cuerpo("chk7"), {
+    pregunta: "Con los datos 2, 4, 6 (media 4, suma de cuadrados 8, $n = 3$) alguien escribe <code>sum((x - m)**2) / n - 1</code>. ¿Qué número sale? (Dos decimales.)",
+    respuesta: 8 / 3 - 1,
+    tolerancia: 0.01,
+    pistas: ["Sin paréntesis, la división va antes que la resta: $8 / 3$ primero.", "$8 / 3 \\approx 2.67$, y después se resta 1."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 4) < 0.01) return "4 es la varianza correcta, con <code>(n - 1)</code>. Sin paréntesis, el lenguaje divide entre 3 y después resta 1.";
+      if (Math.abs(v - 8 / 3) < 0.01) return "Eso es $8/3$: falta restar el 1, que quedó afuera.";
+      if (Math.abs(v - 7) < 0.01) return "Eso es $8 - 1$: la división va antes que la resta.";
+      return null;
+    },
+    explicacion: "$8/3 - 1 \\approx 1.67$. Un error de un paréntesis cambia la varianza de 4 a 1.67 sin ningún mensaje de error. El tercer árbol ya está en el escenario.",
+    alResolver: function () { est.chk7 = true; if (est.paso === 6) pintarSelector(); pasos.completar(6); }
+  });
+
+  var pasos = B.pasos($("recorrido"), {
+    concepto: C,
+    alEntrar: entrar,
+    alTerminar: function () { location.hash = "retos"; }
+  });
+  if (pasos.hecho(0)) est.p1 = true;
+  if (pasos.hecho(3)) { est.chk4 = est.chk4b = true; }
+  if (pasos.hecho(6)) est.chk7 = true;
+  entrar(pasos.actual());
+
+  /* ---------------- hipotesis inicial ---------------- */
+  (function () {
+    var ta = $("hipotesis"), t = null;
+    ta.value = B.nota("orden-operaciones", "hipotesis");
+    function cita() {
+      var v = ta.value.trim(), el = $("citaHipo");
+      el.hidden = !v;
+      if (v) { el.textContent = ""; el.appendChild(document.createTextNode("Al principio escribiste: «" + v + "». Las dos calculadoras hacen bien su cuenta; lo que cambia es el acuerdo que siguen. La del teléfono sigue el de los libros, y ese acuerdo existe por la razón de este paso.")); }
+    }
+    cita();
+    ta.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { B.nota("orden-operaciones", "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; cita(); }, 500);
+    });
+  })();
+
+  /* ---------------- marcadores de estado de retos ---------------- */
+  function pintarEstados() {
+    [].forEach.call(document.querySelectorAll("[data-reto]"), function (el) {
+      var ok = C.retoOk(el.getAttribute("data-reto"));
+      el.textContent = ok ? "resuelto" : "pendiente";
+      el.classList.toggle("ok", ok);
+    });
+  }
+  C.alCambiar(pintarEstados);
+
+  /* ---------------- reto: ojo clinico ---------------- */
+  var PRJ = { "+": 1, "−": 1, "·": 2, "÷": 2, "^": 3 };
+  // indice (en la lista de fichas) del operador que la convencion calcula primero
+  function primero(fichas, par) {
+    if (par) return par[0] + 1;
+    var ops = [];
+    fichas.forEach(function (f, i) { if (i % 2 === 1) ops.push(i); });
+    var max = Math.max.apply(null, ops.map(function (i) { return PRJ[fichas[i]]; }));
+    var cand = ops.filter(function (i) { return PRJ[fichas[i]] === max; });
+    var k = cand[0];
+    if (fichas[k] === "^") { while (fichas[k + 2] === "^") k += 2; }
+    return k;
+  }
+  (function () {
+    var cont = $("ojo");
+    cont.innerHTML = '<div class="ronda"></div><div class="ojo-expr"></div><div class="fb" aria-live="polite"></div>' +
+      '<div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    var rondas, ronda, aciertos, respondida;
+    var TIPOS = [
+      function () { return { f: [azar(2, 9), elegir(["+", "−"]), azar(2, 9), elegir(["·", "÷"]), azar(2, 9)], par: null }; },
+      function () { return { f: [azar(12, 30), "÷", azar(2, 6), "·", azar(2, 5)], par: null }; },
+      function () { return { f: [azar(2, 9), "·", azar(2, 9), "^", 2, "+", azar(1, 9)], par: null }; },
+      function () { return { f: [2, "^", 3, "^", 2], par: null }; },
+      function () { return { f: [azar(2, 9), "·", azar(2, 9), "+", azar(2, 9)], par: [2, 4] }; },
+      function () { return { f: [azar(10, 20), "−", azar(2, 5), "−", azar(1, 4), "+", azar(1, 9)], par: null }; },
+      function () { return { f: [azar(2, 9), "+", azar(2, 9), "÷", azar(2, 9), "·", azar(2, 9)], par: null }; }
+    ];
+    function nueva() {
+      rondas = B.mezclar(TIPOS.slice()).slice(0, 5).map(function (t) { return t(); });
+      ronda = 0; aciertos = 0;
+      mostrar();
+    }
+    function mostrar() {
+      respondida = false;
+      var r = rondas[ronda];
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 5 · aciertos " + aciertos;
+      cont.querySelector(".ojo-expr").innerHTML = r.f.map(function (t, i) {
+        var abre = r.par && i === r.par[0] ? "(" : "", cierra = r.par && i === r.par[1] ? ")" : "";
+        if (i % 2 === 0) return '<span class="tok num">' + abre + t + cierra + '</span>';
+        return '<button type="button" class="tok op" data-i="' + i + '">' + t + '</button>';
+      }).join("");
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+    }
+    cont.querySelector(".ojo-expr").addEventListener("click", function (e) {
+      var b = e.target.closest("button.tok");
+      if (!b || respondida) return;
+      respondida = true;
+      var r = rondas[ronda], bien = primero(r.f, r.par), i = +b.getAttribute("data-i"), ok = i === bien;
+      if (ok) aciertos++;
+      [].forEach.call(cont.querySelectorAll(".ojo-expr button"), function (x) {
+        x.disabled = true;
+        var k = +x.getAttribute("data-i");
+        if (k === bien) x.style.boxShadow = "0 0 0 3px var(--ok)";
+        else if (k === i) x.style.boxShadow = "0 0 0 3px var(--bad)";
+      });
+      var op = r.f[bien], porque;
+      if (r.par) porque = "El paréntesis manda: lo de adentro va primero, aunque sea una suma.";
+      else if (op === "^" && r.f[bien - 2] === "^") porque = "Dos potencias seguidas: se empieza por la de arriba de la torre, la de la derecha.";
+      else if (op === "^") porque = "La potencia está por encima de todo lo demás que hay aquí.";
+      else if (op === "·" || op === "÷") porque = "Multiplicación y división tienen el mismo nivel: gana la que está más a la izquierda.";
+      else porque = "Solo hay sumas y restas: de izquierda a derecha.";
+      cont.querySelector(".fb").innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No.</span> ') + porque;
+      var sig = cont.querySelector(".sig");
+      sig.hidden = false;
+      if (ronda === 4) {
+        var aprobo = aciertos >= 4;
+        C.reto("ojo", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertos + " de 5" + (aprobo ? ". Aprobado." : ". Necesitas 4 para aprobar.");
+        sig.textContent = "Otra tanda";
+      } else sig.textContent = "Siguiente ronda";
+    });
+    cont.querySelector(".sig").addEventListener("click", function () { if (ronda === 4) nueva(); else { ronda++; mostrar(); } });
+    nueva();
+  })();
+
+  /* ---------------- reto: construir con la maquina ---------------- */
+  (function () {
+    var OBJ = [
+      { t: "Obtén el valor que da la convención.", v: 13 },
+      { t: "Obtén el valor más grande que se puede obtener cambiando el orden.", v: 19 },
+      { t: "Obtén el valor más chico que se puede obtener cambiando el orden.", v: 11 }
+    ];
+    var logrados = [false, false, false], avisado = false, ul = $("objetivos");
+    OBJ.forEach(function (o) { var li = document.createElement("li"); li.innerHTML = '<span class="m"></span><span>' + o.t + '</span>'; ul.appendChild(li); });
+    Maquina({ fichas: "conFichas", msg: "conMsg", hist: "conHist", reset: "conReset" }, F("2 + 3 · 4 − 1"), {
+      alCambiar: function (fin) {
+        if (!fin) return;
+        OBJ.forEach(function (o, i) { if (Math.abs(fin.v - o.v) < 1e-9) logrados[i] = true; ul.children[i].classList.toggle("hecho", logrados[i]); });
+        if (!avisado && logrados.every(Boolean)) {
+          avisado = true;
+          C.reto("construir", true);
+          $("conMsg").innerHTML += " Los tres objetivos listos: 13, 19 y 11. Con tres operadores hay seis órdenes, pero solo cuatro resultados distintos (también sale 15).";
+        }
+      }
+    });
+  })();
+
+  /* ---------------- reto: a mano, cuatro niveles ---------------- */
+  (function () {
+    var D;
+    function generar() {
+      var a = azar(2, 9), b = azar(2, 4), c = azar(2, 4), e = elegir([2, 3, 4]), k = azar(2, 6);
+      D = { a: a, b: b, c: c, d: e * k, e: e, k: k, v: a + b * c * c - k };
+      $("manoDatos").innerHTML = B.conTex("$" + a + " + " + b + " \\cdot " + c + "^2 - " + D.d + " \\div " + e + "$");
+    }
+    B.numerico($("mano"), {
+      pregunta: "¿Cuánto vale?",
+      respuesta: function () { return D.v; },
+      tolerancia: 0.001,
+      pistas: [
+        function () { return "Nivel de las potencias: $" + D.c + "^2 = " + D.c * D.c + "$."; },
+        function () { return "Nivel de multiplicar y dividir: $" + D.b + " \\cdot " + D.c * D.c + " = " + D.b * D.c * D.c + "$ y $" + D.d + " \\div " + D.e + " = " + D.k + "$."; },
+        function () { return "Queda $" + D.a + " + " + D.b * D.c * D.c + " - " + D.k + "$, de izquierda a derecha."; }
+      ],
+      diagnostico: function (v) {
+        if (Math.abs(v - (D.a + D.b * D.b * D.c * D.c - D.k)) < 0.001) return "Elevaste también el coeficiente: $" + D.b + " \\cdot " + D.c + "^2$ no es $(" + D.b + " \\cdot " + D.c + ")^2$.";
+        if (Math.abs(v - ((D.a + D.b) * D.c * D.c - D.k)) < 0.001) return "Sumaste $" + D.a + " + " + D.b + "$ antes de multiplicar.";
+        if (Math.abs(v - (D.a + D.b * D.c * 2 - D.k)) < 0.001) return "Un cuadrado no es multiplicar por 2: $" + D.c + "^2 = " + D.c + " \\cdot " + D.c + "$.";
+        return null;
+      },
+      explicacion: function () { return D.a + " + " + D.b * D.c * D.c + " − " + D.k + " = <b>" + D.v + "</b>."; },
+      reintentable: true,
+      textoReintentar: "Otra cuenta",
+      antesDeReintentar: generar,
+      alResolver: function (ok) { C.reto("mano", ok); }
+    });
+    generar();
+  })();
+
+  /* ---------------- reto: a mano, la raya ---------------- */
+  (function () {
+    var D;
+    function generar() {
+      var den, q, b, c, a, d, e;
+      do {
+        den = elegir([2, 3, 4]); q = azar(2, 6); b = azar(2, 4); c = azar(2, 5);
+        a = q * den - b * c;
+      } while (a < 1);
+      e = azar(1, 5); d = den + e;
+      D = { a: a, b: b, c: c, d: d, e: e, q: q, linea: a + b * c / d - e };
+      $("mano2Datos").innerHTML = B.conTex("$\\dfrac{" + a + " + " + b + " \\cdot " + c + "}{" + d + " - " + e + "}$");
+    }
+    B.numerico($("mano2"), {
+      pregunta: "¿Cuánto vale la fracción?",
+      respuesta: function () { return D.q; },
+      tolerancia: 0.001,
+      pistas: [
+        function () { return "Numerador: $" + D.b + " \\cdot " + D.c + " = " + D.b * D.c + "$, más " + D.a + "."; },
+        function () { return "Numerador $" + (D.a + D.b * D.c) + "$, denominador $" + (D.d - D.e) + "$."; }
+      ],
+      diagnostico: function (v) {
+        if (Math.abs(v - D.linea) < 0.01) return "Eso es la cuenta en una línea sin paréntesis, $" + D.a + " + " + D.b + " \\cdot " + D.c + " \\div " + D.d + " - " + D.e + "$. La raya agrupa.";
+        if (Math.abs(v - (D.a + D.b) * D.c / (D.d - D.e)) < 0.01) return "Arriba sumaste antes de multiplicar.";
+        return null;
+      },
+      explicacion: function () { return (D.a + D.b * D.c) + " / " + (D.d - D.e) + " = <b>" + D.q + "</b>. En código: <code>(" + D.a + " + " + D.b + "*" + D.c + ") / (" + D.d + " - " + D.e + ")</code>."; },
+      reintentable: true,
+      textoReintentar: "Otra fracción",
+      antesDeReintentar: generar,
+      alResolver: function (ok) { C.reto("mano2", ok); }
+    });
+    generar();
+  })();
+
+  /* ---------------- reto: cazar el error ---------------- */
+  B.cazarError($("error"), {
+    variantes: [
+      {
+        intro: "Simplificar $20 - 4 \\cdot 3 + 2$:",
+        lineas: ["20 - 4 \\cdot 3 + 2", "= 20 - 12 + 2", "= 20 - 14", "= 6"],
+        erronea: 2,
+        explicacion: "Sumó $12 + 2$ antes de restar. Suma y resta tienen el mismo nivel: de izquierda a derecha, $20 - 12 = 8$ y $8 + 2 = 10$."
+      },
+      {
+        intro: "Simplificar $-2^4 + 3$:",
+        lineas: ["-2^4 + 3", "= 16 + 3", "= 19"],
+        erronea: 1,
+        explicacion: "Sin paréntesis la base es 2, no $-2$: $-2^4 = -(2^4) = -16$, y $-16 + 3 = -13$. Es el Example 3.52 de OpenStax."
+      },
+      {
+        intro: "Simplificar $24 \\div 4 \\cdot 2$:",
+        lineas: ["24 \\div 4 \\cdot 2", "= 24 \\div 8", "= 3"],
+        erronea: 1,
+        explicacion: "Multiplicó primero. División y multiplicación van de izquierda a derecha: $24 \\div 4 = 6$ y $6 \\cdot 2 = 12$."
+      }
+    ],
+    alResolver: function (ok) { C.reto("error", ok); }
+  });
+
+  /* ---------------- retos: propiedades ---------------- */
+  function prop(id, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple($(id), cfg);
+  }
+  prop("prop1", {
+    pregunta: "¿Por qué la multiplicación y la división están en el <b>mismo</b> nivel?",
+    opciones: [
+      "Porque dividir es multiplicar por el inverso: $a \\div b = a \\cdot \\tfrac{1}{b}$, así que son la misma operación",
+      "Porque es más fácil de recordar con PEMDAS",
+      "No lo están: la multiplicación va primero porque la M aparece antes que la D",
+      "Porque dan el mismo resultado en cualquier orden"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "La mnemotecnia se adaptó a la regla, no al revés. ¿Qué tienen en común las dos operaciones?",
+      "Ese es justo el error que OpenStax quiere evitar: con $18 \\div 9 \\cdot 2$ multiplicar primero da 1 y lo correcto es 4.",
+      "$18 \\div 9 \\cdot 2$ da 4 o 1 según el orden: no da lo mismo."],
+    explicacion: "Stitz y Zeager definen la división como $a \\div b = a \\cdot (1/b)$ y la resta como $a - b = a + (-b)$. Vistas así, una cuenta con solo multiplicaciones y divisiones es un producto, y en un producto el orden no importa. Lo mismo pasa con sumas y restas."
+  });
+  prop("prop2", {
+    pregunta: "¿Qué árbol tiene $10 - 4 - 3$ con la convención?",
+    opciones: [
+      "Una resta en la raíz con $10 - 4$ colgando a la izquierda: da 3",
+      "Una resta en la raíz con $4 - 3$ colgando a la derecha: da 9",
+      "Un solo nodo con tres hijos, porque la resta es asociativa",
+      "No se puede dibujar sin paréntesis"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "Eso sería $10 - (4 - 3)$. Sin paréntesis, ¿por dónde se empieza?",
+      "La resta no es asociativa: $(10 - 4) - 3 = 3$ y $10 - (4 - 3) = 9$. Por eso necesita una regla.",
+      "Sí se puede: la regla de izquierda a derecha dice cuál de los dos árboles es."],
+    explicacion: "De izquierda a derecha: $(10 - 4) - 3 = 3$. Los árboles de la resta y la división se inclinan a la izquierda; el de la potencia, a la derecha."
+  });
+  prop("prop3", {
+    pregunta: "¿Cuánto vale $\\sqrt{9 + 16}$?",
+    opciones: ["$5$", "$7$", "$25$", "$\\sqrt{9} + 16 = 19$"],
+    correcta: 0,
+    pistas: [null,
+      "7 sería $\\sqrt{9} + \\sqrt{16}$. La raíz no se reparte sobre una suma.",
+      "25 es lo de adentro. Falta sacar la raíz.",
+      "La barra de la raíz cubre todo el $9 + 16$: agrupa como un paréntesis."],
+    explicacion: "La raíz agrupa: primero $9 + 16 = 25$ y después $\\sqrt{25} = 5$. Stitz y Zeager usan este mismo ejemplo para avisar que $\\sqrt{9 + 16} \\ne \\sqrt{9} + \\sqrt{16}$."
+  });
+  prop("prop4", {
+    pregunta: "¿Por qué $a^{b^c}$ se lee $a^{(b^c)}$ y no $(a^b)^c$?",
+    opciones: [
+      "Porque $(a^b)^c$ ya se escribe más corto como $a^{bc}$; la torre se reserva para la otra lectura",
+      "Porque las potencias siempre se hacen de izquierda a derecha",
+      "Porque las dos lecturas dan lo mismo",
+      "Por una limitación de las calculadoras"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "Justo al revés: es la excepción a la regla de izquierda a derecha.",
+      "$2^{3^2} = 512$ y $(2^3)^2 = 64$.",
+      "Es una convención de la notación matemática, y los lenguajes la copian."],
+    explicacion: "Con la potencia de potencia, $(a^b)^c = a^{bc}$, así que esa lectura no necesita la torre. La torre se lee desde arriba: $2^{3^2} = 2^9$. Python (<code>**</code>) y R (<code>^</code>) lo respetan."
+  });
+
+  /* ---------------- formula de memoria ---------------- */
+  B.ordenar($("formula"), {
+    piezas: ["(\\;)\\;[\\;]\\;\\text{raya}", "a^n", "\\times\\;\\div\\;\\to", "+\\;-\\;\\to"],
+    distractores: ["\\times\\text{ antes que }\\div", "+\\text{ antes que }\\times", "\\sqrt{\\;}\\text{ al final}"],
+    soluciones: [[0, 1, 2, 3]],
+    explicacion: "Agrupaciones, potencias, multiplicación y división (las dos juntas, de izquierda a derecha) y al final suma y resta (también de izquierda a derecha). La flecha recuerda la dirección; la única que va al revés es una torre de potencias.",
+    alResolver: function (ok) { C.reto("formula", ok); }
+  });
+
+  /* ---------------- vida real: el algoritmo de las dos pilas ---------------- */
+  (function () {
+    var CODIGO = {
+      py: [
+        ["prec", "PREC = {\"+\": 1, \"-\": 1, \"*\": 2, \"/\": 2, \"^\": 3}"],
+        ["der", "DER = {\"^\"}                       # la potencia agrupa a la derecha"],
+        [null, ""],
+        [null, "def aplicar(nums, ops):"],
+        [null, "    op = ops.pop()"],
+        [null, "    b = nums.pop()"],
+        [null, "    a = nums.pop()"],
+        [null, "    if op == \"+\": nums.append(a + b)"],
+        [null, "    elif op == \"-\": nums.append(a - b)"],
+        [null, "    elif op == \"*\": nums.append(a * b)"],
+        [null, "    elif op == \"/\": nums.append(a / b)"],
+        [null, "    else: nums.append(a ** b)"],
+        [null, ""],
+        [null, "def evaluar(fichas):"],
+        ["pilas", "    nums, ops = [], []            # las dos pilas"],
+        ["for", "    for f in fichas:"],
+        ["abre", "        if f == \"(\":"],
+        ["abre", "            ops.append(f)"],
+        ["cierra", "        elif f == \")\":"],
+        ["cierra", "            while ops[-1] != \"(\":"],
+        ["ap_cierra", "                aplicar(nums, ops)"],
+        ["quita", "            ops.pop()"],
+        ["esop", "        elif f in PREC:"],
+        ["mientras", "            while (ops and ops[-1] != \"(\" and"],
+        ["mientras", "                   (PREC[ops[-1]] > PREC[f] or"],
+        ["mientras", "                    (PREC[ops[-1]] == PREC[f] and f not in DER))):"],
+        ["ap_op", "                aplicar(nums, ops)"],
+        ["pushop", "            ops.append(f)"],
+        ["num", "        else:"],
+        ["num", "            nums.append(float(f))"],
+        ["vaciar", "    while ops:"],
+        ["ap_fin", "        aplicar(nums, ops)"],
+        ["devolver", "    return nums[0]"],
+        [null, ""],
+        ["fichas", "fichas = \"18 / 6 + 4 * ( 5 - 2 )\".split()"],
+        ["llamada", "print(evaluar(fichas))"],
+        ["eval", "print(eval(\"18 / 6 + 4 * (5 - 2)\"))"],
+        ["asoc", "print(evaluar(\"2 ^ 3 ^ 2\".split()), 2 ** 3 ** 2, (2 ** 3) ** 2)"],
+        ["menos", "print(-2 ** 2, (-2) ** 2)"]
+      ],
+      r: [
+        ["prec", "PREC <- c(\"+\" = 1, \"-\" = 1, \"*\" = 2, \"/\" = 2, \"^\" = 3)"],
+        ["der", "DER <- c(\"^\")                       # la potencia agrupa a la derecha"],
+        [null, ""],
+        [null, "evaluar <- function(fichas) {"],
+        ["pilas", "  nums <- c(); ops <- c()           # las dos pilas"],
+        [null, "  aplicar <- function() {"],
+        [null, "    op <- ops[length(ops)]; ops <<- ops[-length(ops)]"],
+        [null, "    b <- nums[length(nums)]; a <- nums[length(nums) - 1]"],
+        [null, "    nums <<- nums[seq_len(length(nums) - 2)]"],
+        [null, "    nums <<- c(nums, switch(op, \"+\" = a + b, \"-\" = a - b,"],
+        [null, "                            \"*\" = a * b, \"/\" = a / b, \"^\" = a ^ b))"],
+        [null, "  }"],
+        ["for", "  for (f in fichas) {"],
+        ["abre", "    if (f == \"(\") {"],
+        ["abre", "      ops <- c(ops, f)"],
+        ["cierra", "    } else if (f == \")\") {"],
+        ["cierra", "      while (ops[length(ops)] != \"(\") {"],
+        ["ap_cierra", "        aplicar()"],
+        [null, "      }"],
+        ["quita", "      ops <- ops[-length(ops)]"],
+        ["esop", "    } else if (f %in% names(PREC)) {"],
+        ["mientras", "      while (length(ops) > 0 && ops[length(ops)] != \"(\" &&"],
+        ["mientras", "             (PREC[ops[length(ops)]] > PREC[f] ||"],
+        ["mientras", "              (PREC[ops[length(ops)]] == PREC[f] && !(f %in% DER)))) {"],
+        ["ap_op", "        aplicar()"],
+        [null, "      }"],
+        ["pushop", "      ops <- c(ops, f)"],
+        ["num", "    } else {"],
+        ["num", "      nums <- c(nums, as.numeric(f))"],
+        [null, "    }"],
+        [null, "  }"],
+        ["vaciar", "  while (length(ops) > 0) {"],
+        ["ap_fin", "    aplicar()"],
+        [null, "  }"],
+        ["devolver", "  nums[1]"],
+        [null, "}"],
+        [null, ""],
+        ["fichas", "fichas <- strsplit(\"18 / 6 + 4 * ( 5 - 2 )\", \" \")[[1]]"],
+        ["llamada", "print(evaluar(fichas))"],
+        ["eval", "print(eval(parse(text = \"18 / 6 + 4 * (5 - 2)\")))"],
+        ["asoc", "print(c(evaluar(strsplit(\"2 ^ 3 ^ 2\", \" \")[[1]]), 2^3^2, (2^3)^2))"],
+        ["menos", "print(c(-2^2, (-2)^2))"]
+      ]
+    };
+    var SALIDA = {
+      llamada: { py: "15.0", r: "[1] 15" },
+      eval: { py: "15.0", r: "[1] 15" },
+      asoc: { py: "512.0 512 64", r: "[1] 512 512  64" },
+      menos: { py: "-4 4", r: "[1] -4  4" }
+    };
+    var FICHAS = "18 / 6 + 4 * ( 5 - 2 )".split(" ");
+    var PRECV = { "+": 1, "-": 1, "*": 2, "/": 2, "^": 3 };
+
+    var EV = [];
+    (function () {
+      var nums = [], ops = [], pos = -1, fase = 0, veces = 0;
+      function foto(id, extra) {
+        EV.push(Object.assign({ id: id, fase: fase, nums: nums.slice(), ops: ops.slice(), pos: pos, veces: veces, ap: null, cond: null }, extra || {}));
+      }
+      function aplicar(id) {
+        var op = ops.pop(), b = nums.pop(), a = nums.pop();
+        var r = op === "+" ? a + b : op === "-" ? a - b : op === "*" ? a * b : op === "/" ? a / b : Math.pow(a, b);
+        nums.push(r);
+        veces++;
+        foto(id, { ap: [a, op, b, r] });
+      }
+      function tope() { return ops[ops.length - 1]; }
+      foto("prec"); foto("der"); foto("fichas"); foto("llamada");
+      fase = 1;
+      foto("pilas");
+      FICHAS.forEach(function (f, i) {
+        pos = i;
+        foto("for");
+        if (f === "(") { ops.push(f); foto("abre"); }
+        else if (f === ")") {
+          foto("cierra");
+          while (tope() !== "(") aplicar("ap_cierra");
+          ops.pop(); foto("quita");
+        } else if (PRECV[f]) {
+          foto("esop");
+          while (true) {
+            var t = tope();
+            var c = ops.length > 0 && t !== "(" && (PRECV[t] > PRECV[f] || (PRECV[t] === PRECV[f] && f !== "^"));
+            foto("mientras", { cond: c });
+            if (!c) break;
+            aplicar("ap_op");
+          }
+          ops.push(f); foto("pushop");
+        } else { nums.push(parseFloat(f)); foto("num"); }
+      });
+      pos = FICHAS.length;
+      fase = 2;
+      while (true) {
+        foto("vaciar", { cond: ops.length > 0 });
+        if (!ops.length) break;
+        aplicar("ap_fin");
+      }
+      foto("devolver");
+      fase = 3;
+      foto("llamada", { sale: SALIDA.llamada });
+      foto("eval", { sale: SALIDA.eval });
+      foto("asoc", { sale: SALIDA.asoc });
+      foto("menos", { sale: SALIDA.menos, fin: true });
+    })();
+
+    function vPy(v) { return Number.isInteger(v) ? v + ".0" : String(v); }
+    function pilaN(e, lang) {
+      if (!e.nums.length) return lang === "py" ? "[]" : "NULL";
+      return lang === "py" ? "[" + e.nums.map(vPy).join(", ") + "]" : "c(" + e.nums.join(", ") + ")";
+    }
+    function pilaO(e, lang) {
+      if (!e.ops.length) return lang === "py" ? "[]" : "NULL";
+      return lang === "py" ? "[" + e.ops.map(function (o) { return "'" + o + "'"; }).join(", ") + "]" : "c(" + e.ops.map(function (o) { return '"' + o + '"'; }).join(", ") + ")";
+    }
+    function narrar(e, ctx) {
+      var py = ctx.lang() === "py", f = e.pos >= 0 && e.pos < FICHAS.length ? FICHAS[e.pos] : null, t = e.ops[e.ops.length - 1];
+      switch (e.id) {
+        case "prec": return "Una tabla con el nivel de cada operador: suma y resta 1, multiplicación y división 2, potencia 3. Es la jerarquía del paso 3, escrita como números.";
+        case "der": return "La lista de operadores que agrupan a la derecha: solo la potencia (el destacado del paso 4).";
+        case "fichas": return py ? "Parte el texto en fichas por los espacios: <code>.split()</code>. Hay 11 fichas." : "Parte el texto en fichas por los espacios: <code>strsplit</code>. Hay 11 fichas.";
+        case "llamada": return e.sale ? "Imprime lo que devolvió <code>evaluar</code>: <b>" + e.sale[ctx.lang()] + "</b>. Es el 15 del Example 2.10." : "Llama a <code>evaluar</code> con las fichas. Todo lo que sigue pasa adentro de esa función.";
+        case "pilas": return py ? "Dos pilas vacías: una para números y otra para operadores. Una pila es una lista donde solo se mete y se saca por arriba." : "Dos pilas vacías. En R, <code>c()</code> es <code>NULL</code>: un vector sin nada.";
+        case "for": return "Lee la ficha " + ctx.ix(e.pos) + ": <b>" + f + "</b>.";
+        case "num": return "Es un número: va a la pila de números.";
+        case "abre": return "Un paréntesis que abre va a la pila de operadores. Funciona como una pared: nada de lo que esté debajo se calcula hasta que se cierre.";
+        case "cierra": return "Un paréntesis que cierra: hay que calcular todo lo que quedó encima del que abre.";
+        case "ap_cierra": return "Calcula lo de adentro: " + n(e.ap[0]) + " " + e.ap[1] + " " + n(e.ap[2]) + " = <b>" + n(e.ap[3]) + "</b>.";
+        case "quita": return "Saca el paréntesis que abre: el grupo ya es un solo número.";
+        case "esop": return "Es un operador. Antes de guardarlo, mira si arriba de la pila hay uno que deba calcularse antes.";
+        case "mientras":
+          if (!e.cond) return !e.ops.length ? "La pila de operadores está vacía: no hay nada que calcular antes." :
+            t === "(" ? "Arriba hay un paréntesis que abre: la pared. No se calcula nada todavía." :
+            "Arriba está <b>" + t + "</b>, de nivel " + PRECV[t] + ", y llega <b>" + f + "</b>, de nivel " + PRECV[f] + ". " + (PRECV[t] < PRECV[f] ? "El que llega es más fuerte: espera." : "") ;
+          return "Arriba está <b>" + t + "</b> (nivel " + PRECV[t] + ") y llega <b>" + f + "</b> (nivel " + PRECV[f] + "). " +
+            (PRECV[t] > PRECV[f] ? "El de arriba es más fuerte: se calcula ya." : "Mismo nivel y no es potencia: el de la izquierda va primero, se calcula ya.");
+        case "ap_op": return "Calcula: " + n(e.ap[0]) + " " + e.ap[1] + " " + n(e.ap[2]) + " = <b>" + n(e.ap[3]) + "</b>, y el resultado vuelve a la pila de números.";
+        case "pushop": return "Guarda <b>" + f + "</b> en la pila de operadores, a esperar.";
+        case "vaciar": return e.cond ? "Se acabaron las fichas, pero quedan operadores esperando. Se calculan de arriba hacia abajo." : "La pila de operadores quedó vacía.";
+        case "ap_fin": return "Calcula: " + n(e.ap[0]) + " " + e.ap[1] + " " + n(e.ap[2]) + " = <b>" + n(e.ap[3]) + "</b>.";
+        case "devolver": return "Queda un solo número en la pila: el resultado. " + (py ? "<code>nums[0]</code>" : "<code>nums[1]</code>: en R se cuenta desde 1") + ".";
+        case "eval": return py ? "<code>eval</code> le pasa el mismo texto a Python: <b>15.0</b>. Coincide." : "<code>eval(parse(text = ...))</code> le pasa el mismo texto a R: <b>[1] 15</b>. Coincide.";
+        case "asoc": return "La torre de potencias, en el algoritmo y en el lenguaje: <b>512</b> las dos veces, porque la potencia agrupa a la derecha. Con paréntesis a la izquierda da 64." + (py ? " (El algoritmo imprime 512.0 porque usa <code>float</code>.)" : "");
+        case "menos": return "La trampa del paso 4: " + (py ? "<code>-2 ** 2</code>" : "<code>-2^2</code>") + " da <b>−4</b>, porque la potencia va antes que el menos unario. Con paréntesis da 4.";
+      }
+      return "";
+    }
+    function visual(e) {
+      var lang = vr ? vr.lang() : "py";
+      $("vrCinta").innerHTML = FICHAS.map(function (f, i) {
+        var c = !e || e.pos < 0 ? "" : i < e.pos ? "leida" : i === e.pos ? "actual" : "";
+        return '<span class="' + c + '">' + f + '</span>';
+      }).join("");
+      function pila(lista, numerica) {
+        if (!e || !lista.length) return '<span class="vacia">vacía</span>';
+        return lista.map(function (v, k) { return '<span' + (k === lista.length - 1 ? ' class="tope"' : "") + '>' + (numerica ? n(v) : v) + '</span>'; }).join("");
+      }
+      $("vrPilaN").innerHTML = pila(e ? e.nums : [], true);
+      $("vrPilaO").innerHTML = pila(e ? e.ops : [], false);
+      $("vrCuenta2").innerHTML = !e ? "" : e.ap ? "aplicar: " + n(e.ap[0]) + " " + e.ap[1] + " " + n(e.ap[2]) + " = <b>" + n(e.ap[3]) + "</b> &nbsp;(van " + e.veces + ")" :
+        "llamadas a aplicar hasta ahora: <b>" + e.veces + "</b>";
+      var lineas = [], hasta = e ? EV.indexOf(e) : -1;
+      for (var k = 0; k <= hasta; k++) if (EV[k].sale) lineas.push([EV[k].sale[lang], k === hasta]);
+      $("vrSalida").innerHTML = lineas.length ? lineas.map(function (l) { return '<span' + (l[1] ? ' class="nueva"' : "") + '>' + l[0] + '</span>'; }).join("\n")
+        : '<span class="vacia">Todavía no se imprimió nada.</span>';
+    }
+    var vr = null;
+    vr = B.vidaReal($("vidareal"), {
+      codigo: CODIGO,
+      eventos: EV,
+      narrar: narrar,
+      vars: function (e, ctx) {
+        var v = [];
+        if (!e || e.fase === 0) return v;
+        var lang = ctx.lang();
+        if (e.pos >= 0 && e.pos < FICHAS.length) v.push('<span class="vj">f = <b>"' + FICHAS[e.pos] + '"</b></span>');
+        v.push('<span>nums = <b>' + pilaN(e, lang) + '</b></span>');
+        v.push('<span class="vk">ops = <b>' + pilaO(e, lang) + '</b></span>');
+        return v;
+      },
+      visual: visual,
+      demora: function (e) { return !e ? 600 : e.id === "for" ? 600 : e.ap ? 1300 : e.id === "mientras" ? 1100 : 850; }
+    });
+    $("vrLang").addEventListener("click", function () { setTimeout(function () { visual(vr.idx() >= 0 ? EV[vr.idx()] : null); }, 0); });
+
+    /* prediccion y trampas reales */
+    B.numerico(cuerpo("vrPred"), {
+      pregunta: "Mientras evalúa <code>18 / 6 + 4 * ( 5 - 2 )</code>, ¿cuántas veces llama el programa a <code>aplicar</code>?",
+      respuesta: 4,
+      tolerancia: 0.001,
+      pistas: ["Cada llamada calcula una sola operación entre dos números.", "Cuenta los operadores: los paréntesis no son una operación."],
+      diagnostico: function (v) {
+        if (Math.abs(v - 6) < 0.001) return "Contaste también los dos paréntesis. Ellos no se calculan: solo cambian cuándo se calcula lo de adentro.";
+        if (Math.abs(v - 11) < 0.001) return "Esas son las fichas. <code>aplicar</code> solo corre para operadores.";
+        if (Math.abs(v - 3) < 0.001) return "Te falta una. Cuenta /, +, * y -.";
+        return null;
+      },
+      explicacion: "<b>4</b>: una por operador, igual que los nodos internos del árbol. Lo que cambia la jerarquía es <b>cuándo</b> corre cada una. Dale a reproducir: el contador de abajo de las pilas las cuenta.",
+      alResolver: function (ok) { C.reto("codigo1", ok); }
+    });
+    prop("codigo2", {
+      pregunta: "Copias la cuenta famosa tal cual en Python: <code>print(8 / 2(2 + 2))</code>. ¿Qué pasa?",
+      opciones: [
+        "Error: <code>TypeError: 'int' object is not callable</code>",
+        "Imprime <code>16.0</code>",
+        "Imprime <code>1.0</code>",
+        "Imprime <code>16.0</code> con un aviso"
+      ],
+      correcta: 0,
+      pistas: [null,
+        "16.0 es lo que da <code>8 / 2 * (2 + 2)</code>, con el asterisco escrito.",
+        "Para Python un número pegado a un paréntesis no es una multiplicación.",
+        "Sí sale un aviso, pero después viene algo peor: no imprime ningún número."],
+      explicacion: "Para Python, <code>2(...)</code> es \"llamar a 2 como si fuera una función\", y un número no se puede llamar. La salida real empieza con <code>SyntaxWarning: 'int' object is not callable; perhaps you missed a comma?</code> y termina en <code>TypeError</code>. R dice <code>Error: attempt to apply non-function</code>, por la misma razón. Los lenguajes no tienen multiplicación implícita: te obligan a elegir <code>8 / 2 * (2 + 2)</code> (que da 16) u <code>8 / (2 * (2 + 2))</code> (que da 1)."
+    });
+    prop("codigo3", {
+      pregunta: "Con <code>x = np.array([2, 4, 6])</code> y <code>m = x.mean()</code>, escribes <code>print(sum((x - m)**2) / len(x) - 1)</code>. ¿Qué imprime?",
+      opciones: ["<code>1.6666666666666665</code>", "<code>4.0</code>", "<code>2.6666666666666665</code>", "<code>0.0</code>"],
+      correcta: 0,
+      pistas: [null,
+        "4.0 sale con <code>/ (len(x) - 1)</code>. Aquí falta ese paréntesis.",
+        "Eso es $8/3$. ¿Y el <code>- 1</code>?",
+        "0.0 sale con <code>sum(x - m)**2</code>, el otro error clásico."],
+      explicacion: "Se divide antes de restar: $8/3 - 1$, que en coma flotante se imprime <code>1.6666666666666665</code> (salida real; R imprime <code>[1] 1.666667</code>). Lo correcto, <code>sum((x - m)**2) / (len(x) - 1)</code>, da <code>4.0</code>, igual que <code>np.var(x, ddof=1)</code> y <code>var(x)</code> en R."
+    });
+  })();
+
+  /* ---------------- tarjetas ---------------- */
+  B.tarjetas($("tarjetas"), [
+    ["¿Cuáles son los cuatro niveles del orden de operaciones?", "Agrupaciones; potencias; multiplicación y división; suma y resta. Los dos últimos, de izquierda a derecha."],
+    ["¿Cuánto vale $18 \\div 9 \\cdot 2$?", "4. División y multiplicación tienen el mismo nivel: gana la de la izquierda."],
+    ["¿$-3^2$ o $(-3)^2$: cuál da $-9$?", "$-3^2 = -(3^2) = -9$. La potencia va antes que el menos unario. $(-3)^2 = 9$."],
+    ["¿Cuánto vale $2^{3^2}$?", "$2^9 = 512$. Las potencias en torre se agrupan de derecha a izquierda."],
+    ["¿Qué hace la raya de una fracción al pasarla a una línea?", "Se convierte en dos paréntesis: $\\tfrac{a + b}{c - d}$ es <code>(a + b) / (c - d)</code>."],
+    ["¿Por qué $8 \\div 2(2 + 2)$ es ambigua?", "Con el acuerdo estricto da 16; si la multiplicación implícita va primero, da 1. Se reescribe para que no haya duda."],
+    ["¿Dónde está la raíz del árbol de una expresión?", "En la operación que se hace al final. El árbol se evalúa de abajo hacia arriba."],
+    ["¿Qué error da <code>sum((x - m)**2) / n - 1</code>?", "Divide entre $n$ y después resta 1. Falta el paréntesis de <code>(n - 1)</code>."]
+  ]);
+
+  /* ---------------- conexiones ---------------- */
+  B.conexiones("orden-operaciones");
+})();
+</script>
+</body>
+</html>

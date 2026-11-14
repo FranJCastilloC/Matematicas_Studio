@@ -1,0 +1,1751 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Red multicapa y propagación hacia adelante</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+@media (min-width: 981px) { .escenario { max-height: calc(100vh - 80px); overflow-y: auto; } }
+
+/* ---------- diagrama de la red ---------- */
+.red-svg { width: 100%; height: auto; display: block; }
+.red-svg .ar { stroke-linecap: round; fill: none; }
+.red-svg .ar.pos { stroke: var(--pos); }
+.red-svg .ar.neg { stroke: var(--neg); }
+.red-svg .ar.n1 { stroke: var(--j); }
+.red-svg .ar.n2 { stroke: var(--k); }
+.red-svg .ar.sal { stroke: var(--accent); }
+.red-svg .ar.cero { stroke-dasharray: 3 4; }
+.red-svg .ar.tenue { stroke-opacity: .22; }
+.red-svg .ar.pulso1 { animation: pulso .5s ease-out both; }
+.red-svg .ar.pulso2 { animation: pulso .5s ease-out .35s both; }
+@keyframes pulso { from { stroke-opacity: .15; } to { stroke-opacity: 1; } }
+.red-svg .nd { fill: var(--surface); stroke: var(--ink-3); stroke-width: 1.6; }
+.red-svg .nd.n1 { stroke: var(--j); stroke-width: 2.4; }
+.red-svg .nd.n2 { stroke: var(--k); stroke-width: 2.4; }
+.red-svg .nd.sal { stroke: var(--accent); stroke-width: 2.4; }
+.red-svg .t { font: 12px var(--f-mono); fill: var(--ink); text-anchor: middle; dominant-baseline: central; }
+.red-svg .t.ch { font-size: 10.5px; fill: var(--ink-2); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+.red-svg .t.oc { fill: var(--accent); font-weight: 600; }
+.red-svg .t.lab { font: 11.5px var(--f-body); fill: var(--ink-2); }
+.red-svg .t.cap { font: 11px var(--f-body); fill: var(--ink-3); }
+.red-svg .t.peso { font-size: 10.5px; paint-order: stroke; stroke: var(--surface); stroke-width: 3.5px; }
+.red-svg .t.peso.pos { fill: var(--pos); }
+.red-svg .t.peso.neg { fill: var(--neg); }
+.red-svg .t.peso.n1 { fill: var(--j); }
+.red-svg .t.peso.n2 { fill: var(--k); }
+.red-svg .t.peso.sal { fill: var(--accent); }
+
+/* ---------- matrices en HTML ---------- */
+.panel { margin-top: 10px; display: grid; gap: 10px; }
+.mfila { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font-family: var(--f-mono); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.mt { display: inline-flex; flex-direction: column; align-items: center; gap: 3px; }
+.mt-b { display: inline-grid; gap: 2px 8px; padding: 3px 7px; border-left: 1.5px solid var(--ink-2); border-right: 1.5px solid var(--ink-2); border-radius: 5px; }
+.mt-b span { text-align: right; padding: 0 1px; }
+.mt-b .n1 { color: var(--j); font-weight: 500; }
+.mt-b .n2 { color: var(--k); font-weight: 500; }
+.mt-b .sal { color: var(--accent); font-weight: 500; }
+.mt-b .sel { background: var(--accent-soft); border-radius: 3px; }
+.mt-b .oc { color: var(--accent); font-weight: 600; }
+.mt-b [data-fila] { cursor: pointer; }
+.mt-f { font-size: 10.5px; color: var(--ink-3); }
+.mt-n { font-size: 10.5px; color: var(--ink-2); margin-top: -2px; }
+.mt-op { color: var(--ink-2); font-size: 14px; }
+.cuenta-n { font-family: var(--f-mono); font-size: 12.5px; line-height: 1.7; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.cuenta-n.n1 { color: var(--j); }
+.cuenta-n.n2 { color: var(--k); }
+.cuenta-n b { font-weight: 600; }
+
+/* ---------- controles ---------- */
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.esc-head .hint { font-size: 12.5px; color: var(--ink-2); }
+.esc-fila { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; margin-top: 10px; }
+.esc-fila .seg-lab { margin-left: 0; }
+.sliders { display: grid; gap: 10px; margin-top: 12px; }
+.sl-grupo { display: grid; gap: 4px; padding-left: 9px; border-left: 3px solid var(--line); }
+.sl-grupo.g-n1 { border-left-color: var(--j); }
+.sl-grupo.g-n2 { border-left-color: var(--k); }
+.sl-grupo.g-sal { border-left-color: var(--accent); }
+.sl-tit { font-size: 12px; color: var(--ink-3); }
+.sl-grupo label { display: grid; grid-template-columns: 30px minmax(0, 1fr) 44px; align-items: center; gap: 8px; font-family: var(--f-mono); font-size: 12.5px; color: var(--ink-2); }
+.sl-grupo input[type=range] { width: 100%; }
+.sl-grupo b { font-weight: 500; color: var(--ink); text-align: right; font-variant-numeric: tabular-nums; }
+.sliders.bloq { opacity: .45; }
+.lectura-esc { font-family: var(--f-mono); font-size: 12.5px; color: var(--ink-2); margin-top: 10px; min-height: 1.4em; line-height: 1.7; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.lectura-esc b { color: var(--ink); font-weight: 500; }
+.lectura-esc b.si { color: var(--ok); }
+.lectura-esc b.no { color: var(--bad); }
+
+/* ---------- plano que se dobla ---------- */
+.plano-svg { width: 100%; max-width: 420px; height: auto; display: block; margin: 6px auto 0; user-select: none; -webkit-user-select: none; }
+.plano-svg .marco { fill: none; stroke: var(--line); }
+.plano-svg .tick { font: 10px var(--f-mono); fill: var(--ink-3); }
+.plano-svg .tickl { stroke: var(--line-soft); }
+.plano-svg .eje-tit { font: 11.5px var(--f-body); fill: var(--ink-2); }
+.plano-svg .c1 { fill: var(--pos); }
+.plano-svg .c0 { fill: var(--neg); }
+.plano-svg .gl { fill: none; stroke: var(--ink-3); stroke-width: .6; stroke-opacity: .55; }
+.plano-svg .gl.u { stroke: var(--ink); stroke-width: 1.6; stroke-opacity: .9; }
+.plano-svg .frontera { stroke: var(--accent); stroke-width: 2.4; stroke-dasharray: 7 4; }
+.plano-svg .p1 { fill: var(--pos); stroke: var(--surface); stroke-width: 2; }
+.plano-svg .p0 { fill: var(--surface); stroke: var(--neg); stroke-width: 3; }
+.plano-svg .plab { font: 10px var(--f-mono); fill: var(--ink-2); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+.morf { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; margin-top: 8px; }
+.morf input { width: 100%; }
+.morf .marcas { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--ink-3); }
+.leyenda { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: var(--ink-2); margin-top: 6px; }
+.leyenda i { display: inline-block; width: 10px; height: 10px; vertical-align: -1px; margin-right: 5px; border-radius: 50%; }
+.leyenda i.si { background: var(--pos); }
+.leyenda i.no { border: 2.5px solid var(--neg); width: 9px; height: 9px; }
+.leyenda i.rs { background: color-mix(in oklab, var(--pos) 35%, transparent); border-radius: 2px; }
+.leyenda i.rn { background: color-mix(in oklab, var(--neg) 30%, transparent); border-radius: 2px; }
+.leyenda i.fr { border-radius: 0; height: 0; width: 14px; border-top: 2.5px dashed var(--accent); vertical-align: 3px; }
+
+/* ---------- parametros ---------- */
+.capas-ed { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; font-family: var(--f-mono); font-size: 12.5px; }
+.capas-ed input { width: 64px; font: 13px var(--f-mono); padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); }
+.capas-ed .flecha { color: var(--ink-3); }
+.param-svg { width: 100%; height: auto; display: block; margin-top: 8px; }
+.param-svg .nd { fill: var(--surface); stroke: var(--ink-3); stroke-width: 1.4; }
+.param-svg .ar { stroke: var(--ink-3); stroke-opacity: .25; }
+.param-svg .t { font: 10.5px var(--f-mono); fill: var(--ink-2); text-anchor: middle; }
+.tabla { width: 100%; border-collapse: collapse; font-family: var(--f-mono); font-size: 12px; font-variant-numeric: tabular-nums; margin-top: 8px; }
+.tabla th { font-weight: 500; color: var(--ink-3); font-size: 11px; text-align: right; padding: 4px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.tabla td { text-align: right; padding: 3px 6px; border-bottom: 1px solid var(--line-soft); color: var(--ink-2); white-space: nowrap; }
+.tabla td:first-child, .tabla th:first-child { text-align: left; }
+.tabla tr.total td { color: var(--ink); font-weight: 600; border-bottom: none; }
+.tabla td.cur { background: var(--accent-soft); color: var(--ink); font-weight: 600; }
+.tabla td.in { color: var(--ink); }
+.tabla td.vacia { color: var(--ink-3); }
+
+/* ---------- textos ---------- */
+.tras[hidden] { display: none; }
+.guia { width: 100%; border-collapse: collapse; font-size: 13.5px; margin: 8px 0 12px; }
+.guia th, .guia td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+.guia th { font-weight: 500; color: var(--ink-3); font-size: 12px; }
+
+/* ---------- retos ---------- */
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.ojo-q { margin: 8px 0 0; font-size: 14px; }
+.ojo-opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
+.ojo-opts .opt { text-align: center; font-family: var(--f-mono); }
+.objetivos { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.objetivos li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.objetivos .m { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.objetivos li.hecho { color: var(--ink); }
+.objetivos li.hecho .m { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 3px var(--surface); }
+.datos-mano { border-collapse: collapse; font-family: var(--f-mono); font-size: 13.5px; margin: 4px 0 12px; }
+.datos-mano th, .datos-mano td { padding: 4px 10px; border: 1px solid var(--line); text-align: center; white-space: nowrap; }
+.datos-mano th { color: var(--ink-3); font-weight: 500; font-size: 12px; }
+
+/* ---------- vida real ---------- */
+.consola { margin-top: 10px; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); font-family: var(--f-mono); font-size: 12px; color: var(--ink-2); white-space: pre-wrap; overflow-wrap: anywhere; min-height: 2.4em; }
+.consola .nueva { color: var(--ink); font-weight: 600; }
+.consola .vacia { color: var(--ink-3); }
+pre.codigo-bloque { margin: 8px 0; padding: 10px 12px; background: var(--surface-2); border-radius: 8px; font-family: var(--f-mono); font-size: 12.5px; white-space: pre-wrap; overflow-wrap: anywhere; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ Red multicapa y propagación hacia adelante</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Aprendizaje automático · Redes neuronales · SM142004 UD4 y Nield cap. 7</p>
+    <h1>Red multicapa y propagación hacia adelante</h1>
+    <p class="lede">
+      Una neurona hace un producto punto. Varias neuronas en fila forman una capa, y una capa se escribe como <b>una matriz por un vector</b>.
+      Pon dos capas una detrás de otra, con una curva en medio, y tienes una red multicapa: una composición de funciones que se evalúa
+      de izquierda a derecha. Aquí la vas a ver como matrices con su forma, como un lote entero a la vez y, sobre todo, como algo que
+      <b>dobla el plano</b> hasta que el XOR queda separado por una recta.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> Una red recibe dos números, los pasa por una capa de dos neuronas y devuelve un solo número. Si tuvieras que escribirla como una sola fórmula, ¿cómo se vería? Y la capa del medio, ¿qué crees que les hace a los datos? Escríbelo como te salga.</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: creo que la capa del medio..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>De un producto punto a un plano doblado</h2>
+      <p>Ocho pasos. Cada uno termina con un chequeo que abre el siguiente. Equivocarte aquí no resta nada: es parte del método.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="Fluir">
+          <span class="etapa">Paso 1</span>
+          <h3>Dos números entran, uno sale</h3>
+          <p>En el escenario está la red de juguete de esta ruta: dos entradas a la izquierda, dos neuronas en el medio y una a la derecha. Cada línea lleva un <b>peso</b> (el número escrito sobre ella) y cada neurona un <b>sesgo</b> (el número debajo). Los números viajan de izquierda a derecha: cada neurona del medio mezcla las dos entradas, pasa el resultado por una curva y se lo entrega a la de la derecha.</p>
+          <p>Arriba eliges la entrada. Empieza con (1, 0): la entrada de arriba, <span data-tex="x_1"></span>, vale 1, y la de abajo, <span data-tex="x_2"></span>, vale 0. El número grande dentro de cada neurona es lo que entrega.</p>
+          <p>La UD6 de Matemáticas lo cuenta igual, en palabras: en cada capa, suma ponderada y activación, y el resultado pasa a la siguiente <cite class="cita" data-fuente="ud6" data-pag="9" data-seccion="3.2 Funcionamiento" data-que="Capas de entrada, ocultas y de salida con el ejemplo de Iris (4 entradas, 3 salidas), y la propagación hacia adelante descrita en palabras, sin notación matricial." data-cuando="Al terminar este paso"></cite>. Esta página le pone las matrices.</p>
+          <div class="check" id="chk1">
+            <p class="check-tit">Predice antes de tocar</p>
+            <div class="cuerpo"></div>
+          </div>
+          <p class="tras tras-chk1" hidden>Ahora muévelo tú: los deslizadores se abrieron. Con (1, 0), los dos pesos que salen de <span data-tex="x_2"></span> no mueven nada. Cambia la entrada a (1, 1) y mira cómo despiertan.</p>
+        </section>
+
+        <section class="paso card" data-titulo="Una neurona">
+          <span class="etapa">Paso 2</span>
+          <h3>Una neurona es un producto punto</h3>
+          <p>Mira solo la neurona de arriba, en azul. Recibe <span data-tex="x_1"></span> por su peso 0.5 y <span data-tex="x_2"></span> por su peso −0.5, suma, y agrega su sesgo 0. Esos dos pesos forman un vector, <span data-tex="\mathbf{w}=(0.5,\,-0.5)"></span>, y la entrada otro, <span data-tex="\mathbf{x}=(x_1,\,x_2)"></span>. Multiplicar componente a componente y sumar es el <b>producto punto</b>:</p>
+          <div class="fbloque">
+            <div data-tex="z = \mathbf{w}\cdot\mathbf{x} + b = w_1x_1 + w_2x_2 + b" data-display></div>
+            <div class="vivo" id="vivo2"></div>
+          </div>
+          <p>La neurona de abajo, en verde, hace lo mismo con su propio vector, (0.3, 0.8), y su sesgo −0.2. Cada neurona tiene su vector de pesos y su sesgo: eso es todo lo que las distingue. En el diagrama, por ahora, cada neurona muestra su <span data-tex="z"></span>, la suma antes de la curva.</p>
+          <p>La teoría de la UD4 llama a este viaje de los números <i>forward propagation</i>, y dibuja la neurona con la suma <span data-tex="\sum_i x_iw_i"></span>, pero la fórmula de al lado dice <span data-tex="a_i=g(w_ix_i+b_i)"></span>, sin sumatorio <cite class="cita" data-fuente="dl4" data-pag="13" data-seccion="Multilayer feed-forward" data-que="La neurona en un círculo, la fórmula sin sumatorio, el nombre forward propagation y la figura de una red 3-4-4-2 que vas a contar en el paso 8." data-cuando="Al terminar este paso"></cite>. Lo correcto es un solo sesgo por neurona y la suma de todos los productos: <span data-tex="a=g\left(\sum_i w_ix_i+b\right)"></span>.</p>
+          <div class="check" id="chk2"><p class="check-tit">Calcula con lo que ves</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Una capa">
+          <span class="etapa">Paso 3</span>
+          <h3>Una capa es una matriz por un vector</h3>
+          <p>Pon los dos vectores de pesos uno encima del otro, cada uno como una fila. Eso es la matriz <span data-tex="W_1"></span>, y las dos sumas del paso anterior salen de una sola vez como la matriz por el vector:</p>
+          <div class="fbloque">
+            <div data-tex="W_1\mathbf{x} = \begin{pmatrix} w_{11} & w_{12}\\ w_{21} & w_{22}\end{pmatrix}\begin{pmatrix}x_1\\ x_2\end{pmatrix} = \begin{pmatrix} w_{11}x_1 + w_{12}x_2 \\ w_{21}x_1 + w_{22}x_2\end{pmatrix}" data-display></div>
+          </div>
+          <p>Para leerla: <b>cada fila de <span data-tex="W_1"></span> por la columna <span data-tex="\mathbf{x}"></span></b>, una fila por neurona. Y la regla de las formas: <span data-tex="(2\times 2)(2\times 1) = 2\times 1"></span>. Los dos números de adentro tienen que coincidir (son las entradas) y los de afuera dan la forma del resultado (una componente por neurona). El escenario escribe la forma debajo de cada matriz.</p>
+          <p>Nield lo dice con todas las letras: cada nodo es una fila, hay tantas filas como nodos y cada columna es un peso <cite class="cita" data-fuente="nield7" data-pag="20" data-seccion="Example 7-4: matrices de pesos y sesgos" data-que="Su capa oculta de 3 neuronas como matriz de 3 × 3, una fila por nodo, y los sesgos como vector de 3 × 1; la explicación empieza en la página anterior y sigue con la Figure 7-9. Nield usa la misma convención que esta página." data-cuando="Al terminar este paso"></cite>.
+          Después hace la cuenta con números, y la cuenta está bien, pero el vector que multiplica en su Figure 7-10 no es un color: son los tres pesos de su capa de salida, copiados por error <cite class="cita" data-fuente="nield7" data-pag="23" data-seccion="Figure 7-10" data-que="La multiplicación W_hidden X + B_hidden con todos los decimales. La X que usa son los pesos de W_output, no un color de fondo (por 255 no da enteros)." data-cuando="Cuando quieras ver la cuenta con tres neuronas"></cite>.</p>
+          <p>Una matriz por un vector es una transformación: lleva cada punto del plano a otro punto. Lo viste en <a href="matriz-transformacion.html">La matriz como transformación</a>. En el paso 7 vas a ver qué le hace esta <span data-tex="W_1"></span> al plano entero.</p>
+          <div class="check" id="chk3"><p class="check-tit">Elige con las formas</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Activar">
+          <span class="etapa">Paso 4</span>
+          <h3>Sumar el sesgo y doblar</h3>
+          <p>A <span data-tex="W_1\mathbf{x}"></span> le falta el sesgo de cada neurona. Los sesgos también forman un vector, uno por neurona, que se suma componente a componente. Después cada componente pasa por la sigmoide, cada una por su lado:</p>
+          <div class="fbloque">
+            <div data-tex="\mathbf{z}_1 = W_1\mathbf{x} + \mathbf{b}_1 \qquad \mathbf{a}_1 = \sigma(\mathbf{z}_1) = \begin{pmatrix}\sigma(z_{1})\\ \sigma(z_{2})\end{pmatrix}" data-display></div>
+            <div class="vivo" id="vivo4"></div>
+          </div>
+          <p>La sigmoide se aplica <b>elemento a elemento</b>: no mezcla las neuronas, cada una dobla su propio número. Por qué hace falta esa curva (sin ella, dos capas valen lo mismo que una) está en <a href="activaciones.html">Funciones de activación</a>. Aquí importa la forma: <span data-tex="\mathbf{z}_1"></span> y <span data-tex="\mathbf{a}_1"></span> son los dos de <span data-tex="2\times 1"></span>, una componente por neurona. Desde ahora el número grande de cada neurona es su <span data-tex="a"></span>, y su <span data-tex="z"></span> va arriba, en chico.</p>
+          <div class="check" id="chk4"><p class="check-tit">Calcula antes de mirar</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Dos capas">
+          <span class="etapa">Paso 5</span>
+          <h3>Apilar: la salida de una capa es la entrada de la otra</h3>
+          <p>La neurona de la derecha no ve <span data-tex="\mathbf{x}"></span>: ve <span data-tex="\mathbf{a}_1"></span>. Para ella, lo que entrega la capa oculta son sus entradas. Hace exactamente lo mismo que las otras, con su propia matriz <span data-tex="W_2"></span> de forma <span data-tex="1\times 2"></span> (una neurona, dos entradas) y su sesgo <span data-tex="b_2"></span>:</p>
+          <div class="fbloque">
+            <div data-tex="z_2 = W_2\,\mathbf{a}_1 + b_2 \qquad \hat{y} = \sigma(z_2)" data-display></div>
+            <div class="vivo" id="vivo5"></div>
+          </div>
+          <p>Mete una capa dentro de la otra y la red entera queda como <b>una composición de funciones</b>, con formas <span data-tex="2 \to 2 \to 1"></span>:</p>
+          <div class="fbloque"><div data-tex="\hat{y} = \sigma\big(W_2\,\sigma(W_1\mathbf{x} + \mathbf{b}_1) + b_2\big)" data-display></div></div>
+          <p>Eso es la propagación hacia adelante: evaluar la composición de adentro hacia afuera, que en el dibujo es de izquierda a derecha. Brasil escribe su red de abejas y flores exactamente así, como una función dentro de otra <cite class="cita" data-fuente="brasil5v2" data-pag="41" data-pimp="239" data-seccion="5.1.8, pesos, producto punto y notación (ec. 5.52)" data-que="La red escrita como composición de funciones (ec. 5.52), con W(1) y W(2) y el producto punto de cada neurona." data-cuando="Al terminar este paso"></cite>, y Raschka la resume en cuatro ecuaciones, dos por capa <cite class="cita" data-fuente="raschka11" data-pag="29" data-pimp="363" data-seccion="Training neural networks via backpropagation" data-que="Las cuatro ecuaciones de la pasada hacia adelante: Z^(h), A^(h), Z^(out) y A^(out), escritas para un lote." data-cuando="Después del paso 6, cuando ya conozcas la versión por lotes"></cite>.</p>
+          <div class="check" id="chk5"><p class="check-tit">Calcula con lo que ves</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Lote">
+          <span class="etapa">Paso 6</span>
+          <h3>Un lote entero de una vez</h3>
+          <p>Hasta ahora pasaba un ejemplo a la vez. Las cuatro esquinas del XOR, una por fila, forman una matriz <span data-tex="X"></span> de <span data-tex="4\times 2"></span>: un <b>lote</b>. En lugar de cuatro pasadas, una sola cuenta:</p>
+          <div class="fbloque">
+            <div data-tex="\underbrace{Z_1}_{4\times 2} = \underbrace{X}_{4\times 2}\,\underbrace{W_1^\top}_{2\times 2} + \mathbf{b}_1 \qquad A_1 = \sigma(Z_1) \qquad \underbrace{\hat{Y}}_{4\times 1} = \sigma\big(A_1\underbrace{W_2^\top}_{2\times 1} + b_2\big)" data-display></div>
+          </div>
+          <p>¿Por qué la traspuesta? Cada fila de <span data-tex="X"></span> es un ejemplo y cada fila de <span data-tex="W_1"></span> una neurona. El producto punto de un ejemplo con una neurona es fila con fila, y para escribirlo como fila por columna hay que voltear <span data-tex="W_1"></span>. El resultado tiene <b>una fila por ejemplo y una columna por neurona</b>. El sesgo sigue siendo uno por neurona y se suma igual a cada fila (NumPy lo copia solo; se llama <i>broadcasting</i>). Toca una fila en el escenario para seguirla en el diagrama.</p>
+          <p>Raschka escribe la capa justo así y da la forma de cada matriz <cite class="cita" data-fuente="raschka11" data-pag="8" data-pimp="342" data-seccion="Activating a neural network via forward propagation" data-que="La capa para un ejemplo y para n ejemplos, con la dimensión de cada matriz. Su W^(h) es d × m, una fila por neurona, y se usa traspuesta como aquí." data-cuando="Al terminar este paso"></cite>. Con una errata: dice que se multiplica "la transpuesta de W^(out) por A^(h)", pero el orden es <span data-tex="A^{(h)}W^{(out)\top}"></span>; al revés las formas no cuadran. En Keras el lote aparece como <code>None</code> en las formas, por ejemplo <code>(None, 10)</code>: la red no depende de cuántos ejemplos le pases.</p>
+          <div class="check" id="chk6"><p class="check-tit">Elige con las formas</p><div class="cuerpo"></div></div>
+
+          <div class="destacado" id="destacado">
+            <p class="dest-tit">Una trampa muy común</p>
+            <h4>¿Una fila por neurona, o una columna?</h4>
+            <p>Esta página, Nield y PyTorch guardan <span data-tex="W"></span> con una fila por neurona: forma (salida, entrada), y calculan <span data-tex="XW^\top"></span>. Keras y scikit-learn la guardan al revés, (entrada, salida), y calculan <span data-tex="XW"></span> sin trasponer. Es la misma capa escrita de dos maneras, y mezclarlas es uno de los errores más comunes.</p>
+            <p>Brasil cae justo aquí: su cuenta a mano usa una convención y sus tablas posteriores (5.11 a 5.13) usan la otra, así que esos números no salen de la fórmula del texto <cite class="cita" data-fuente="brasil5v2" data-pag="42" data-pimp="240" data-seccion="5.1.8, la pasada hacia adelante a mano (tablas 5.8 y 5.9)" data-que="La pasada hacia adelante a mano de su red de abejas (tablas 5.8 y 5.9). Fíjate en qué peso multiplica a qué entrada: más adelante sus tablas usan la convención traspuesta." data-cuando="Después de este recuadro"></cite>.</p>
+            <div class="check" id="chk6b"><p class="check-tit">Predice antes de seguir</p><div class="cuerpo"></div></div>
+            <div class="tras tras-chk6b" hidden>
+              <table class="guia">
+                <thead><tr><th>Dónde</th><th>Forma de los pesos</th><th>Cuenta</th></tr></thead>
+                <tbody>
+                  <tr><td>Esta página, Nield, Raschka</td><td>(salida, entrada)</td><td><span data-tex="XW^\top + \mathbf{b}"></span> o <span data-tex="W\mathbf{x} + \mathbf{b}"></span></td></tr>
+                  <tr><td>PyTorch <code>nn.Linear</code></td><td>(salida, entrada)</td><td><span data-tex="XW^\top + \mathbf{b}"></span></td></tr>
+                  <tr><td>Keras <code>Dense</code> (kernel)</td><td>(entrada, salida)</td><td><span data-tex="XW + \mathbf{b}"></span></td></tr>
+                  <tr><td>scikit-learn <code>coefs_</code></td><td>(entrada, salida)</td><td><span data-tex="XW + \mathbf{b}"></span></td></tr>
+                  <tr><td>R <code>nnet</code></td><td>un vector: por neurona, su sesgo y después sus pesos</td><td>lo arma por dentro</td></tr>
+                </tbody>
+              </table>
+              <p>Con una matriz cuadrada como esta <span data-tex="W_1"></span>, cargarla sin trasponer no da ningún error: da otros números. Lo vas a ver en la vida real.</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="El plano">
+          <span class="etapa">Paso 7</span>
+          <h3>Lo que hace la capa oculta: mover el plano entero</h3>
+          <p>Cambia la pregunta. En lugar de seguir un número, sigue <b>todo el plano</b>. El escenario dibuja una cuadrícula sobre las entradas, con el cuadrado de las cuatro esquinas del XOR remarcado, y pinta cada celda según lo que dice la red: teal si <span data-tex="\hat{y} &gt; 0.5"></span>, coral si no.</p>
+          <p>El deslizador lleva cada punto <span data-tex="\mathbf{x}"></span> a su lugar en la capa oculta en dos tramos. Primero <span data-tex="W_1\mathbf{x} + \mathbf{b}_1"></span>, que es lineal: la cuadrícula se estira, gira o se aplasta, pero las rectas siguen rectas. Después la sigmoide, que <b>dobla</b>: las rectas se curvan y todo cae dentro del cuadrado de 0 a 1. Al final estás en el plano <span data-tex="(a_1, a_2)"></span>, donde la neurona de salida traza su frontera: una recta, la punteada.</p>
+          <p>Con los pesos de juguete, mira el final: (0, 1) y (1, 0) quedan cruzados con (0, 0) y (1, 1). Ninguna recta los separa todavía. La teoría de la UD4 dice que la capa oculta es la que modela las no linealidades <cite class="cita" data-fuente="dl4" data-pag="14" data-seccion="Multilayer feed-forward" data-que="La capa oculta modela las no linealidades, la de salida da un valor o probabilidades según su activación, y la figura que tacha las conexiones hacia atrás: una red feed-forward no tiene ciclos." data-cuando="Al terminar este paso"></cite>, pero en ninguna parte muestra cómo una capa oculta resuelve el XOR. Aquí lo vas a ver.</p>
+          <div class="check" id="chk7"><p class="check-tit">Predice antes de tocar el botón</p><div class="cuerpo"></div></div>
+          <div class="tras tras-chk7" hidden>
+            <p>Con esos pesos, <span data-tex="a_1 = \sigma(5x_1 + 5x_2 - 2.5)"></span> es un OR suave y <span data-tex="a_2 = \sigma(5x_1 + 5x_2 - 7.5)"></span> un AND suave: las mismas dos neuronas del paso 8 de <a href="perceptron.html">Neurona, perceptrón y XOR</a>, con sigmoide en vez de escalón. Mueve el deslizador despacio. En el tramo lineal las dos filas de <span data-tex="W_1"></span> son iguales, así que el plano entero se aplasta sobre una recta. La sigmoide dobla esa recta en una curva, y las dos esquinas del medio quedan en el codo, lejos de la línea que une las otras dos. Ahí la recta de salida alcanza.</p>
+            <p>Ahora vuelve el deslizador al principio: en el plano original la zona teal es una franja. <b>Una sola recta en el plano oculto se ve en el original como dos fronteras.</b> En general son curvas; aquí salen dos rectas paralelas porque las dos neuronas solo miran <span data-tex="x_1 + x_2"></span>. Encontrar estos pesos sin saberlos de antemano es el trabajo de la retropropagación, en la página de Retropropagación.</p>
+          </div>
+          <div class="cita" id="citaHipo" hidden></div>
+        </section>
+
+        <section class="paso card" data-titulo="Parámetros">
+          <span class="etapa">Paso 8</span>
+          <h3>Cuántos números aprende una red</h3>
+          <p>Cada capa densa tiene un peso por cada par (entrada, neurona) y un sesgo por neurona. La red de juguete: <span data-tex="2\cdot 2 + 2 = 6"></span> en la capa oculta y <span data-tex="2\cdot 1 + 1 = 3"></span> en la de salida, <b>9 parámetros</b>. Son los nueve deslizadores.</p>
+          <div class="fbloque"><div data-tex="\text{parámetros} = \sum_{\text{capas}} \big(n_{\text{entrada}}\cdot n_{\text{salida}} + n_{\text{salida}}\big)" data-display></div></div>
+          <p>La red de Iris de la UD6, 4-10-3, se dibuja con 70 flechas <cite class="cita" data-fuente="ud6" data-pag="13" data-seccion="Figura Estructura de la Red Neuronal" data-que="La figura de la red 4-10-3 dibujada como grafo, completamente conectada: 40 + 30 = 70 aristas, una por peso. Los sesgos no se dibujan." data-cuando="Al terminar este paso"></cite>: son los 70 pesos, y con los 13 sesgos, que no se dibujan, la red tiene 83 parámetros. Las diapositivas de la UD4 traen dos <code>model.summary()</code> de Keras con los parámetros de cada capa; todos salen de esta fórmula <cite class="cita" data-fuente="dl4diapo" data-pag="47" data-seccion="GAN" data-que="Los resúmenes de Keras del generador y el discriminador: cada capa Dense con su forma (con el lote fijo en 32) y su número de parámetros. Comprueba dos con la fórmula." data-cuando="Al terminar este paso"></cite>.</p>
+          <p>Un descuido real del cuaderno DL03 de la UD4: la celda "equivalente" se ejecutó además de la primera sobre el mismo modelo, y la red entrenada quedó con las capas duplicadas. Su resumen muestra ocho capas y 622 parámetros, con una capa de 20 que recibe la salida de una sola neurona. La red que quería construir, 13-10-10-10-1, tiene 371. Contar parámetros sirve para cazar justo esto. Raschka arma su red de dígitos, 784-50-10, con una línea <cite class="cita" data-fuente="raschka11" data-pag="17" data-pimp="351" data-seccion="Implementing a multilayer perceptron" data-que="NeuralNetMLP(num_features=28*28, num_hidden=50, num_classes=10) y la figura de la arquitectura. Calcula sus parámetros con la fórmula antes de mirar el escenario." data-cuando="Después del chequeo"></cite>.</p>
+          <div class="check" id="chk8"><p class="check-tit">Calcula</p><div class="cuerpo"></div></div>
+          <p class="tras tras-chk8" hidden>El editor del escenario se abrió. Prueba la red de Raschka: 39 760 parámetros, casi todos en la primera capa, porque cada uno de los 784 píxeles se conecta con cada una de las 50 neuronas. Y compara las dos versiones del cuaderno DL03.</p>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+        </div>
+        <div class="esc-fila" id="filaEntrada">
+          <span class="seg-lab">Entrada</span>
+          <div class="seg" id="segEntrada" role="group" aria-label="Entrada de la red"></div>
+        </div>
+        <svg id="red" class="red-svg" role="img" aria-label="La red 2-2-1 con sus pesos, sesgos y valores"></svg>
+        <div class="panel" id="panel"></div>
+
+        <div id="planoBox" hidden>
+          <svg id="plano" class="plano-svg" role="img" aria-label="El plano de entrada y su imagen en la capa oculta"></svg>
+          <div class="morf">
+            <input type="range" id="rT" min="0" max="2" step="0.02" value="0" aria-label="De la entrada a la capa oculta">
+            <div class="marcas"><span>entrada</span><span>W₁x + b₁</span><span>capa oculta</span></div>
+          </div>
+          <div class="esc-fila">
+            <button type="button" class="primary" id="btnAnimar">Animar</button>
+            <button type="button" id="btnJuguete">Pesos de juguete</button>
+            <button type="button" id="btnResolver" disabled>Pesos que resuelven el XOR</button>
+          </div>
+          <div class="leyenda">
+            <span><i class="si"></i>XOR = 1</span><span><i class="no"></i>XOR = 0</span>
+            <span><i class="rs"></i>la red dice 1</span><span><i class="rn"></i>la red dice 0</span><span><i class="fr"></i>frontera de la salida</span>
+          </div>
+          <div class="lectura-esc" id="lecturaPlano"></div>
+        </div>
+
+        <div id="paramBox" hidden>
+          <div class="esc-fila"><div class="seg" id="presets" role="group" aria-label="Redes de ejemplo"></div></div>
+          <div class="capas-ed" id="capasEd"></div>
+          <svg id="paramSvg" class="param-svg" role="img" aria-label="Las capas de la red"></svg>
+          <div class="tabla-wrap" id="paramTabla"></div>
+        </div>
+
+        <div class="sliders" id="sliders"></div>
+        <div class="esc-fila" id="filaReset"><button type="button" class="ghost" id="btnReset">Volver a los pesos de juguete</button></div>
+        <div class="lectura-esc" id="lectura"></div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>La pasada hacia adelante de la red de juguete sobre las cuatro esquinas del XOR: primero con tres bucles anidados, después con dos productos de matrices, y al final contra la librería, con los mismos nueve pesos cargados a mano en <code>MLPClassifier</code> (Python) y en <code>nnet</code> (R). Son los números del paso 6.</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir <span class="estado" data-reto="codigo1"></span></p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="true">Python</button>
+            <button type="button" data-lang="r" aria-pressed="false">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">1 · con bucles</span><span data-f="2">2 · con matrices</span><span data-f="3">3 · contra la librería</span>
+        </div>
+        <h3 class="mini-tit vr-tit" id="vrTablaTit">El lote, fila por fila</h3>
+        <div class="tabla-wrap"><table class="tabla" id="vrTabla"></table></div>
+        <div class="vr-cuenta" id="vrCuenta"></div>
+        <h3 class="mini-tit vr-tit">Lo que imprime</h3>
+        <div class="consola" id="vrConsola"></div>
+      </div>
+    </div>
+
+    <p class="vr-nota">En la práctica nadie escribe los bucles: <code>sigmoide(X @ W1.T + b1)</code> es la capa entera, y en R <code>sigmoide(X %*% t(W1) + B1)</code>. scikit-learn guarda los pesos de <code>MLPClassifier</code> en <code>coefs_</code> e <code>intercepts_</code>, como muestra Nield al final de su capítulo <cite class="cita" data-fuente="nield7" data-pag="34" data-seccion="Example 7-13: MLPClassifier" data-que="MLPClassifier con una capa oculta de 3 neuronas y ReLU sobre sus colores, y los atributos coefs_ e intercepts_ donde quedan los pesos aprendidos." data-cuando="Después de reproducir el programa hasta el final"></cite>. Raschka escribe la misma pasada dentro de su clase <code>NeuralNetMLP</code>, con la forma de cada resultado en un comentario <cite class="cita" data-fuente="raschka11" data-pag="14" data-pimp="348" data-seccion="Implementing a multilayer perceptron" data-que="El método forward: z_h = np.dot(x, self.weight_h.T) + self.bias_h, con [n_examples, n_hidden] y [n_examples, n_classes] comentados, y los pesos iniciales al azar." data-cuando="Después de reproducir el programa hasta el final"></cite>. En R, <code>nnet</code> no recibe matrices sino un solo vector <code>Wts</code>, ordenado neurona por neurona; con <code>maxit = 0</code> no entrena y solo hace la pasada hacia adelante. Python y R imprimen las mismas cuatro probabilidades.</p>
+
+    <details class="profundizar">
+      <summary>La misma red en PyTorch y Keras (no se corrió: no están instalados en esta máquina)</summary>
+      <div>
+        <pre class="codigo-bloque">import torch
+capa1 = torch.nn.Linear(2, 2)       # capa1.weight tiene forma (2, 2): (salida, entrada), como W1
+capa2 = torch.nn.Linear(2, 1)       # capa2.weight: (1, 2), como W2
+red = torch.nn.Sequential(capa1, torch.nn.Sigmoid(), capa2, torch.nn.Sigmoid())
+with torch.no_grad():
+    capa1.weight.copy_(torch.tensor(W1))   # sin trasponer
+    capa1.bias.copy_(torch.tensor(b1))
+red(torch.tensor(X, dtype=torch.float32))  # forma (4, 1)
+
+import keras
+red = keras.Sequential([keras.Input(shape=(2,)),
+                        keras.layers.Dense(2, activation="sigmoid"),
+                        keras.layers.Dense(1, activation="sigmoid")])
+red.layers[0].set_weights([W1.T, b1])     # el kernel es (entrada, salida): hay que trasponer
+red.summary()                             # Dense (None, 2) 6 parámetros, Dense (None, 1) 3</pre>
+        <p>Las dos escriben lo mismo que el programa de arriba. Lo único que cambia es dónde guardan cada número: PyTorch como esta página, Keras traspuesto. El <code>None</code> del resumen es el tamaño del lote, que la red no fija.</p>
+      </div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Sin trasponer y sin aviso</h3><span class="estado" data-reto="codigo2"></span></div>
+        <div id="codigo2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>El sesgo que R recicla</h3><span class="estado" data-reto="codigo3"></span></div>
+        <div id="codigo3"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: la biblioteca te avisa en el índice cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>¿Qué forma tiene?</h3><span class="estado" data-reto="ojo"></span></div>
+        <p class="desc">Cinco redes al azar. Decide la forma de la matriz que se pide sin hacer cuentas, solo con la regla de las formas. Apruebas con 4 de 5.</p>
+        <div id="ojo"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Construir</span><h3>Dobla el plano tú</h3><span class="estado" data-reto="construir"></span></div>
+        <p class="desc">Mueve los nueve parámetros hasta cumplir los tres objetivos. Arranca en los pesos de juguete; no uses los del paso 7 de memoria, búscalos.</p>
+        <div class="esc-fila"><span class="seg-lab">Ver</span><div class="seg" id="kVista" role="group" aria-label="Plano que se ve"></div></div>
+        <svg id="kPlano" class="plano-svg" role="img" aria-label="Plano para construir"></svg>
+        <div class="sliders" id="kSliders"></div>
+        <div class="lectura-esc" id="kVivo"></div>
+        <ul class="objetivos" id="objetivos"></ul>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>Una pasada con lápiz</h3><span class="estado" data-reto="mano"></span></div>
+        <p class="desc">Una red 2-2-1 con ReLU en la capa oculta y la identidad en la salida, números enteros. Haz la pasada hacia adelante en papel antes de pedir pistas.</p>
+        <div id="manoDatos"></div>
+        <div id="mano"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Alguien se equivocó</h3><span class="estado" data-reto="error"></span></div>
+        <p class="desc">Una de las líneas tiene un error. Tócala.</p>
+        <div id="error"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>El orden de los factores</h3><span class="estado" data-reto="prop1"></span></div>
+        <div id="prop1"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Un ejemplo más</h3><span class="estado" data-reto="prop2"></span></div>
+        <div id="prop2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Keras y PyTorch</h3><span class="estado" data-reto="prop3"></span></div>
+        <div id="prop3"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Lo que la logística no tiene</h3><span class="estado" data-reto="prop4"></span></div>
+        <div id="prop4"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Neuronas gemelas</h3><span class="estado" data-reto="prop5"></span></div>
+        <div id="prop5"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Recordar a la fuerza es lo que fija. Arma la fórmula de una capa para un lote y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Fórmula de memoria</span><h3>Una capa para todo el lote</h3><span class="estado" data-reto="formula"></span></div>
+        <p class="desc">La salida de la capa <span data-tex="l"></span> a partir de la anterior, con una fila por ejemplo y los pesos guardados una fila por neurona. Hay piezas de más que no pertenecen. No mires arriba.</p>
+        <div id="formula"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el libro</h2>
+      <p class="lecturas-intro">Ya viste la red como diagrama, como matrices y como un plano que se dobla. Ahora ve a la versión técnica y comprueba que la reconoces. Ojo con la convención de cada libro: Nield y Raschka guardan una fila por neurona, como aquí. La UD4 no escribe la forma matricial por capas. Si abres la biblioteca con doble clic, el enlace abre el PDF en esa página.</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> Las cuatro esquinas son la tabla del XOR, sin nada inventado. Los pesos de la red de juguete son los de toda la
+    ruta de redes neuronales (ver Neurona, perceptrón y XOR), elegidos a mano para que las cuentas den limpias, y los que resuelven el XOR
+    (filas (5, 5), sesgos −2.5 y −7.5, salida (10, −10) y −5) también son inventados. Los tamaños de las redes del paso 8 son los del material
+    citado. Las redes del ojo clínico y del reto a mano se generan al azar. Tu progreso se guarda en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+/*
+  Ejemplo comun de la ruta de redes neuronales: la red de juguete 2-2-1 de perceptron.html
+  (W1 = [[0.5, -0.5], [0.3, 0.8]] filas = neuronas, b1 = [0, -0.2], W2 = [1, -1], b2 = 0.1, sigmoide en las dos capas).
+  Esta pagina la pasa por el lote de las cuatro esquinas del XOR (calculado con python3 y Rscript):
+    X W1^T + b1 = [[0, -0.2], [-0.5, 0.6], [0.5, 0.1], [0, 0.9]]
+    A1 = [[0.5, 0.4502], [0.3775, 0.6457], [0.6225, 0.5250], [0.5, 0.7109]]
+    salida = (0.5374, 0.4581, 0.5492, 0.4723); 9 parametros.
+  En el plano oculto los pesos de juguete no separan el XOR (los dos segmentos se cruzan).
+  Pesos que lo resuelven (OR y AND suaves): W1 = [[5, 5], [5, 5]], b1 = [-2.5, -7.5], W2 = [10, -10], b2 = -5
+    A1 = [[0.0759, 0.0006], [0.9241, 0.0759], [0.9241, 0.0759], [0.9994, 0.9241]], salida = (0.0141, 0.9702, 0.9702, 0.0141).
+  Trampas: coefs_ = [W1, W2.T] sin trasponer W1 da (0.5374, 0.5072, 0.5964, 0.5659) sin error;
+  en R, X %*% t(W1) + b1 recicla b1 por columnas y da (0.525, 0.4467, 0.5369, 0.4599) sin error.
+*/
+(function () {
+  "use strict";
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var RETOS = ["ojo", "construir", "mano", "error", "prop1", "prop2", "prop3", "prop4", "prop5", "formula", "codigo1", "codigo2", "codigo3"];
+  var C = B.concepto({ id: "red-multicapa", retos: RETOS, pasos: 8 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  /* ---------------- utilidades ---------------- */
+  var f = B.fmt;
+  function n(v) {
+    if (Math.abs(v - Math.round(v)) < 1e-9) return f(Math.round(v), 0);
+    if (Math.abs(v * 10 - Math.round(v * 10)) < 1e-9) return f(v, 1);
+    return f(v, 2);
+  }
+  function par(v) { return v < 0 ? "(" + n(v) + ")" : n(v); }
+  function tx(v) { return n(v).replace("−", "-"); }
+  function sig(z) { return 1 / (1 + Math.exp(-z)); }
+  function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+  var PUNTOS = [[0, 0], [0, 1], [1, 0], [1, 1]], XOR = [0, 1, 1, 0];
+  function esq(p) { return "(" + p[0] + ", " + p[1] + ")"; }
+  var JUGUETE = { W1: [[0.5, -0.5], [0.3, 0.8]], b1: [0, -0.2], W2: [1, -1], b2: 0.1 };
+  var RESUELVE = { W1: [[5, 5], [5, 5]], b1: [-2.5, -7.5], W2: [10, -10], b2: -5 };
+  function copiar(p) { return { W1: [p.W1[0].slice(), p.W1[1].slice()], b1: p.b1.slice(), W2: p.W2.slice(), b2: p.b2 }; }
+  function adelante(p, x) {
+    var z1 = [0, 1].map(function (j) { return p.W1[j][0] * x[0] + p.W1[j][1] * x[1] + p.b1[j]; });
+    var a1 = z1.map(sig);
+    var z2 = p.W2[0] * a1[0] + p.W2[1] * a1[1] + p.b2;
+    return { z1: z1, a1: a1, z2: z2, y: sig(z2) };
+  }
+  // las cuatro esquinas en el plano oculto: una recta separa las clases si los dos segmentos no se tocan
+  function orient(a, b, c) { return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]); }
+  function enSeg(a, b, c) { return Math.min(a[0], b[0]) - 1e-9 <= c[0] && c[0] <= Math.max(a[0], b[0]) + 1e-9 && Math.min(a[1], b[1]) - 1e-9 <= c[1] && c[1] <= Math.max(a[1], b[1]) + 1e-9; }
+  function seCortan(p1, p2, p3, p4) {
+    var e = 1e-10;
+    var d1 = orient(p3, p4, p1), d2 = orient(p3, p4, p2), d3 = orient(p1, p2, p3), d4 = orient(p1, p2, p4);
+    if (((d1 > e && d2 < -e) || (d1 < -e && d2 > e)) && ((d3 > e && d4 < -e) || (d3 < -e && d4 > e))) return true;
+    if (Math.abs(d1) <= e && enSeg(p3, p4, p1)) return true;
+    if (Math.abs(d2) <= e && enSeg(p3, p4, p2)) return true;
+    if (Math.abs(d3) <= e && enSeg(p1, p2, p3)) return true;
+    if (Math.abs(d4) <= e && enSeg(p1, p2, p4)) return true;
+    return false;
+  }
+  function separable(p) {
+    var a = PUNTOS.map(function (q) { return adelante(p, q).a1; });
+    return !seCortan(a[0], a[3], a[1], a[2]);
+  }
+  function aciertos(p) {
+    var k = 0;
+    PUNTOS.forEach(function (q, i) { if ((adelante(p, q).y > 0.5 ? 1 : 0) === XOR[i]) k++; });
+    return k;
+  }
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+  function mostrarTras(cls) { [].forEach.call(document.querySelectorAll("." + cls), function (e) { e.hidden = false; }); }
+
+  /* ---------------- los nueve deslizadores ---------------- */
+  var KEYS = [
+    { lab: "w₁₁", g: function (p) { return p.W1[0][0]; }, s: function (p, v) { p.W1[0][0] = v; } },
+    { lab: "w₁₂", g: function (p) { return p.W1[0][1]; }, s: function (p, v) { p.W1[0][1] = v; } },
+    { lab: "b", g: function (p) { return p.b1[0]; }, s: function (p, v) { p.b1[0] = v; } },
+    { lab: "w₂₁", g: function (p) { return p.W1[1][0]; }, s: function (p, v) { p.W1[1][0] = v; } },
+    { lab: "w₂₂", g: function (p) { return p.W1[1][1]; }, s: function (p, v) { p.W1[1][1] = v; } },
+    { lab: "b", g: function (p) { return p.b1[1]; }, s: function (p, v) { p.b1[1] = v; } },
+    { lab: "w₁", g: function (p) { return p.W2[0]; }, s: function (p, v) { p.W2[0] = v; } },
+    { lab: "w₂", g: function (p) { return p.W2[1]; }, s: function (p, v) { p.W2[1] = v; } },
+    { lab: "b₂", g: function (p) { return p.b2; }, s: function (p, v) { p.b2 = v; } }
+  ];
+  function crearSliders(cont, getP, min, max, paso, alCambiar) {
+    var grupos = [["Neurona de arriba: fila 1 de W₁ y su sesgo", "g-n1", [0, 1, 2]], ["Neurona de abajo: fila 2 de W₁ y su sesgo", "g-n2", [3, 4, 5]], ["Salida: W₂ y b₂", "g-sal", [6, 7, 8]]];
+    cont.innerHTML = grupos.map(function (g) {
+      return '<div class="sl-grupo ' + g[1] + '"><span class="sl-tit">' + g[0] + '</span>' + g[2].map(function (i) {
+        return '<label><span>' + KEYS[i].lab + '</span><input type="range" min="' + min + '" max="' + max + '" step="' + paso + '" data-i="' + i + '" aria-label="' + g[0] + ', ' + KEYS[i].lab + '"><b></b></label>';
+      }).join("") + '</div>';
+    }).join("");
+    var inputs = [].slice.call(cont.querySelectorAll("input"));
+    function sync() {
+      inputs.forEach(function (inp) {
+        var i = +inp.getAttribute("data-i"), v = KEYS[i].g(getP());
+        inp.value = v;
+        inp.parentNode.querySelector("b").textContent = n(v);
+      });
+    }
+    cont.addEventListener("input", function (e) {
+      var inp = e.target.closest("input");
+      if (!inp) return;
+      var i = +inp.getAttribute("data-i"), v = Math.round(+inp.value * 100) / 100;
+      KEYS[i].s(getP(), v);
+      inp.parentNode.querySelector("b").textContent = n(v);
+      alCambiar();
+    });
+    sync();
+    return {
+      sync: sync,
+      bloquear: function (si) { cont.classList.toggle("bloq", si); inputs.forEach(function (x) { x.disabled = si; }); }
+    };
+  }
+
+  /* ---------------- plano que se dobla ---------------- */
+  var NS_DOM = 16, D0 = -0.5, D1 = 1.5;
+  function lineal(p, x) { return [p.W1[0][0] * x[0] + p.W1[0][1] * x[1] + p.b1[0], p.W1[1][0] * x[0] + p.W1[1][1] * x[1] + p.b1[1]]; }
+  function mover(p, x, T) {
+    if (T <= 0) return [x[0], x[1]];
+    var l = lineal(p, x);
+    if (T <= 1) return [x[0] + T * (l[0] - x[0]), x[1] + T * (l[1] - x[1])];
+    var u = Math.min(1, T - 1);
+    return [l[0] + u * (sig(l[0]) - l[0]), l[1] + u * (sig(l[1]) - l[1])];
+  }
+  function pasoBonito(span) {
+    var c = [0.1, 0.25, 0.5, 1, 2, 2.5, 5, 10, 20, 25, 50];
+    for (var i = 0; i < c.length; i++) if (span / c[i] <= 6) return c[i];
+    return 100;
+  }
+  function crearPlano(svg) {
+    var W = 320, H = 320, PAD = 32;
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    function dibujar(p, T, op) {
+      op = op || {};
+      var V = [], i, k;
+      for (i = 0; i <= NS_DOM; i++) {
+        V.push([]);
+        for (k = 0; k <= NS_DOM; k++) V[i].push(mover(p, [D0 + (D1 - D0) * k / NS_DOM, D0 + (D1 - D0) * i / NS_DOM], T));
+      }
+      var pts = PUNTOS.map(function (q) { return mover(p, q, T); });
+      var x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+      function caja(q) { x0 = Math.min(x0, q[0]); x1 = Math.max(x1, q[0]); y0 = Math.min(y0, q[1]); y1 = Math.max(y1, q[1]); }
+      V.forEach(function (fila) { fila.forEach(caja); });
+      var span = Math.max(x1 - x0, y1 - y0, 0.6) * 1.1, cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+      var vx0 = cx - span / 2, vy0 = cy - span / 2, vx1 = vx0 + span, vy1 = vy0 + span;
+      function sx(v) { return PAD + (v - vx0) / span * (W - 2 * PAD); }
+      function sy(v) { return H - PAD - (v - vy0) / span * (H - 2 * PAD); }
+      function pt(q) { return sx(q[0]).toFixed(1) + "," + sy(q[1]).toFixed(1); }
+      var h = '<rect class="marco" x="' + PAD + '" y="' + PAD + '" width="' + (W - 2 * PAD) + '" height="' + (H - 2 * PAD) + '"/>';
+      var st = pasoBonito(span), t;
+      for (t = Math.ceil(vx0 / st) * st; t <= vx1 + 1e-9; t += st) {
+        h += '<line class="tickl" x1="' + sx(t).toFixed(1) + '" y1="' + PAD + '" x2="' + sx(t).toFixed(1) + '" y2="' + (H - PAD) + '"/>';
+        h += '<text class="tick" x="' + sx(t).toFixed(1) + '" y="' + (H - PAD + 13) + '" text-anchor="middle">' + n(Math.abs(t) < 1e-9 ? 0 : t) + '</text>';
+      }
+      for (t = Math.ceil(vy0 / st) * st; t <= vy1 + 1e-9; t += st) {
+        h += '<line class="tickl" x1="' + PAD + '" y1="' + sy(t).toFixed(1) + '" x2="' + (W - PAD) + '" y2="' + sy(t).toFixed(1) + '"/>';
+        h += '<text class="tick" x="' + (PAD - 5) + '" y="' + (sy(t) + 3).toFixed(1) + '" text-anchor="end">' + n(Math.abs(t) < 1e-9 ? 0 : t) + '</text>';
+      }
+      var ej = T < 0.5 ? ["x₁", "x₂"] : T < 1.5 ? ["z₁ (neurona de arriba)", "z₂ (neurona de abajo)"] : ["a₁ (neurona de arriba)", "a₂ (neurona de abajo)"];
+      h += '<text class="eje-tit" x="' + (W - PAD) + '" y="' + (H - 4) + '" text-anchor="end">' + ej[0] + '</text>';
+      h += '<text class="eje-tit" x="' + (PAD - 26) + '" y="' + (PAD - 10) + '">' + ej[1] + '</text>';
+      // celdas pintadas por la salida de la red
+      var dc = (D1 - D0) / NS_DOM;
+      for (i = 0; i < NS_DOM; i++) for (k = 0; k < NS_DOM; k++) {
+        var y = adelante(p, [D0 + (k + 0.5) * dc, D0 + (i + 0.5) * dc]).y, uno = y > 0.5;
+        var op2 = (0.06 + 0.32 * Math.min(1, Math.abs(y - 0.5) * 4)).toFixed(3);
+        h += '<polygon class="' + (uno ? "c1" : "c0") + '" fill-opacity="' + op2 + '" points="' + pt(V[i][k]) + " " + pt(V[i][k + 1]) + " " + pt(V[i + 1][k + 1]) + " " + pt(V[i + 1][k]) + '"/>';
+      }
+      // cuadricula: el cuadrado unidad remarcado
+      var iu = [Math.round((0 - D0) / dc), Math.round((1 - D0) / dc)];
+      for (i = 0; i <= NS_DOM; i += 2) {
+        var u = iu.indexOf(i) >= 0 ? " u" : "";
+        h += '<polyline class="gl' + u + '" points="' + V[i].map(pt).join(" ") + '"/>';
+        h += '<polyline class="gl' + u + '" points="' + V.map(function (fila) { return pt(fila[i]); }).join(" ") + '"/>';
+      }
+      // frontera de la salida en el plano oculto
+      if (T >= 1.999 && (Math.abs(p.W2[0]) > 1e-9 || Math.abs(p.W2[1]) > 1e-9)) {
+        var c = [], a = p.W2[0], bb = p.W2[1], cc = p.b2;
+        if (Math.abs(bb) > 1e-9) { [vx0, vx1].forEach(function (xx) { var yy = -(a * xx + cc) / bb; if (yy >= vy0 - 1e-9 && yy <= vy1 + 1e-9) c.push([xx, yy]); }); }
+        if (Math.abs(a) > 1e-9) { [vy0, vy1].forEach(function (yy) { var xx = -(bb * yy + cc) / a; if (xx >= vx0 - 1e-9 && xx <= vx1 + 1e-9) c.push([xx, yy]); }); }
+        if (c.length >= 2) h += '<line class="frontera" x1="' + sx(c[0][0]).toFixed(1) + '" y1="' + sy(c[0][1]).toFixed(1) + '" x2="' + sx(c[c.length - 1][0]).toFixed(1) + '" y2="' + sy(c[c.length - 1][1]).toFixed(1) + '"/>';
+      }
+      // las cuatro esquinas
+      pts.forEach(function (q, j) {
+        var X = sx(q[0]), Y = sy(q[1]);
+        h += '<circle class="' + (XOR[j] ? "p1" : "p0") + '" cx="' + X.toFixed(1) + '" cy="' + Y.toFixed(1) + '" r="' + (XOR[j] ? 7 : 6) + '"/>';
+        if (!op.sinRotulos) h += '<text class="plab" x="' + (X + 9).toFixed(1) + '" y="' + (Y - 8 - (j === 2 ? 10 : 0)).toFixed(1) + '">' + esq(PUNTOS[j]) + '</text>';
+      });
+      svg.innerHTML = h;
+    }
+    return { dibujar: dibujar };
+  }
+
+  /* ---------------- estado del recorrido ---------------- */
+  var est = {
+    paso: 0, p: copiar(JUGUETE), xi: 2, T: 0, pulso: false,
+    chk1: false, chk2: false, chk4: false, chk5: false, chk6: false, chk6b: false, chk7: false, chk8: false
+  };
+  var MODOS = ["flujo", "neurona", "capa", "activar", "apilar", "lote", "plano", "param"];
+  function modo() { return MODOS[est.paso]; }
+  // lo que un chequeo pide no se muestra hasta resolverlo
+  function oculto(clave) {
+    var m = modo();
+    if (m === "neurona" && !est.chk2 && clave === "z_n2") return true;
+    if (m === "activar" && !est.chk4 && clave === "a_n1") return true;
+    if (m === "apilar" && !est.chk5 && (clave === "z2" || clave === "y")) return true;
+    return false;
+  }
+  function v3(v, clave) { return clave && oculto(clave) ? "?" : f(v, 3); }
+
+  /* ---------------- diagrama de la red ---------------- */
+  var IN = [[44, 72], [44, 178]], HID = [[188, 72], [188, 178]], OUT = [326, 125];
+  function dibujarRed() {
+    var p = est.p, x = PUNTOS[est.xi], r = adelante(p, x), m = modo(), h = "";
+    var verZ = m === "neurona" || m === "capa";
+    function borde(a, b, ra, rb) {
+      var dx = b[0] - a[0], dy = b[1] - a[1], L = Math.sqrt(dx * dx + dy * dy);
+      return [a[0] + dx / L * ra, a[1] + dy / L * ra, b[0] - dx / L * rb, b[1] - dy / L * rb];
+    }
+    var j, k, w, cls, e, pl = est.pulso;
+    for (j = 0; j < 2; j++) for (k = 0; k < 2; k++) {
+      w = p.W1[j][k];
+      cls = m === "flujo" ? (w >= 0 ? "pos" : "neg") : (j === 0 ? "n1" : "n2");
+      if (Math.abs(w) < 1e-9) cls += " cero";
+      if (m === "flujo" && x[k] === 0 && est.chk1) cls += " tenue";
+      e = borde(IN[k], HID[j], 19, 25);
+      h += '<line class="ar ' + cls + (pl ? " pulso1" : "") + '" stroke-width="' + (1.2 + Math.min(Math.abs(w), 4) * 1.1).toFixed(2) + '" x1="' + e[0] + '" y1="' + e[1] + '" x2="' + e[2] + '" y2="' + e[3] + '"/>';
+    }
+    for (j = 0; j < 2; j++) {
+      w = p.W2[j];
+      cls = m === "flujo" ? (w >= 0 ? "pos" : "neg") : "sal";
+      if (Math.abs(w) < 1e-9) cls += " cero";
+      e = borde(HID[j], OUT, 25, 25);
+      h += '<line class="ar ' + cls + (pl ? " pulso2" : "") + '" stroke-width="' + (1.2 + Math.min(Math.abs(w), 4) * 1.1).toFixed(2) + '" x1="' + e[0] + '" y1="' + e[1] + '" x2="' + e[2] + '" y2="' + e[3] + '"/>';
+    }
+    // rotulos de los pesos, cerca del origen de cada linea
+    for (j = 0; j < 2; j++) for (k = 0; k < 2; k++) {
+      w = p.W1[j][k];
+      cls = m === "flujo" ? (w >= 0 ? "pos" : "neg") : (j === 0 ? "n1" : "n2");
+      var tx0 = IN[k][0] + (HID[j][0] - IN[k][0]) * 0.36, ty0 = IN[k][1] + (HID[j][1] - IN[k][1]) * 0.36 + (j === k ? -9 : 0);
+      h += '<text class="t peso ' + cls + '" x="' + tx0.toFixed(1) + '" y="' + ty0.toFixed(1) + '">' + n(w) + '</text>';
+    }
+    for (j = 0; j < 2; j++) {
+      w = p.W2[j];
+      cls = m === "flujo" ? (w >= 0 ? "pos" : "neg") : "sal";
+      var mx = (HID[j][0] + OUT[0]) / 2, my = (HID[j][1] + OUT[1]) / 2 + (j === 0 ? -10 : 10);
+      h += '<text class="t peso ' + cls + '" x="' + mx.toFixed(1) + '" y="' + my.toFixed(1) + '">' + n(w) + '</text>';
+    }
+    // nodos de entrada
+    for (k = 0; k < 2; k++) {
+      h += '<circle class="nd" cx="' + IN[k][0] + '" cy="' + IN[k][1] + '" r="19"/>';
+      h += '<text class="t" x="' + IN[k][0] + '" y="' + IN[k][1] + '">' + x[k] + '</text>';
+      h += '<text class="t lab" x="' + IN[k][0] + '" y="' + (IN[k][1] - 30) + '">' + (k ? "x₂" : "x₁") + '</text>';
+    }
+    // capa oculta
+    for (j = 0; j < 2; j++) {
+      var c = HID[j], cj = j ? "n2" : "n1";
+      h += '<circle class="nd ' + cj + '" cx="' + c[0] + '" cy="' + c[1] + '" r="25"/>';
+      var claveZ = j ? "z_n2" : "z_n1", claveA = j ? "a_n2" : "a_n1";
+      if (verZ) {
+        h += '<text class="t' + (oculto(claveZ) ? " oc" : "") + '" x="' + c[0] + '" y="' + c[1] + '">' + v3(r.z1[j], claveZ) + '</text>';
+      } else {
+        h += '<text class="t' + (oculto(claveA) ? " oc" : "") + '" x="' + c[0] + '" y="' + c[1] + '">' + v3(r.a1[j], claveA) + '</text>';
+        if (m !== "flujo") h += '<text class="t ch" x="' + (c[0] + 4) + '" y="' + (c[1] - 34) + '">z = ' + f(r.z1[j], 3) + '</text>';
+      }
+      h += '<text class="t ch" x="' + c[0] + '" y="' + (c[1] + 36) + '">b = ' + n(p.b1[j]) + '</text>';
+    }
+    // salida
+    h += '<circle class="nd sal" cx="' + OUT[0] + '" cy="' + OUT[1] + '" r="25"/>';
+    var ocY = oculto("y");
+    h += '<text class="t' + (ocY ? " oc" : "") + '" x="' + OUT[0] + '" y="' + OUT[1] + '">' + (verZ ? "" : v3(r.y, "y")) + '</text>';
+    if (!verZ && m !== "flujo") h += '<text class="t ch' + (oculto("z2") ? " oc" : "") + '" x="' + OUT[0] + '" y="' + (OUT[1] - 34) + '">z = ' + v3(r.z2, "z2") + '</text>';
+    h += '<text class="t ch" x="' + OUT[0] + '" y="' + (OUT[1] + 36) + '">b = ' + n(p.b2) + '</text>';
+    h += '<text class="t lab" x="' + OUT[0] + '" y="' + (OUT[1] - 52) + '">ŷ</text>';
+    // rotulos de las capas
+    h += '<text class="t cap" x="44" y="246">entrada · 2</text><text class="t cap" x="188" y="246">capa oculta · 2</text><text class="t cap" x="326" y="246">salida · 1</text>';
+    $("red").setAttribute("viewBox", "0 0 370 256");
+    $("red").innerHTML = h;
+    est.pulso = false;
+  }
+
+  /* ---------------- matrices con su forma ---------------- */
+  function M(filas, forma, clase, nombre) {
+    var cols = filas[0].length, h = '<span class="mt">' + (nombre ? '<span class="mt-n">' + nombre + '</span>' : "") +
+      '<span class="mt-b" style="grid-template-columns:repeat(' + cols + ', auto)">';
+    filas.forEach(function (fila, i) {
+      fila.forEach(function (v, k) {
+        var c = clase ? clase(i, k, v) : "";
+        h += '<span' + (c ? ' class="' + c + '"' : "") + '>' + v + '</span>';
+      });
+    });
+    return h + '</span><span class="mt-f">' + forma + '</span></span>';
+  }
+  function op(s) { return '<span class="mt-op">' + s + '</span>'; }
+  function filaW(i) { return i === 0 ? "n1" : "n2"; }
+  function dibujarPanel() {
+    var m = modo(), p = est.p, x = PUNTOS[est.xi], r = adelante(p, x), h = "";
+    var W1 = p.W1.map(function (fl) { return fl.map(n); });
+    var xs = [[String(x[0])], [String(x[1])]];
+    if (m === "flujo" || m === "plano" || m === "param") { $("panel").innerHTML = ""; return; }
+    if (m === "neurona") {
+      h += '<div class="cuenta-n n1">neurona de arriba: (' + n(p.W1[0][0]) + ', ' + n(p.W1[0][1]) + ') · (' + x[0] + ', ' + x[1] + ') + ' + par(p.b1[0]) +
+        ' = ' + n(p.W1[0][0]) + ' × ' + x[0] + ' + ' + par(p.W1[0][1]) + ' × ' + x[1] + ' + ' + par(p.b1[0]) + ' = <b>' + f(r.z1[0], 3) + '</b></div>';
+      h += '<div class="cuenta-n n2">neurona de abajo: (' + n(p.W1[1][0]) + ', ' + n(p.W1[1][1]) + ') · (' + x[0] + ', ' + x[1] + ') + ' + par(p.b1[1]) +
+        (oculto("z_n2") ? ' = <b>?</b>' : ' = ' + n(p.W1[1][0]) + ' × ' + x[0] + ' + ' + par(p.W1[1][1]) + ' × ' + x[1] + ' + ' + par(p.b1[1]) + ' = <b>' + f(r.z1[1], 3) + '</b>') + '</div>';
+      $("panel").innerHTML = h;
+      return;
+    }
+    var wx = [[f(r.z1[0] - p.b1[0], 3)], [f(r.z1[1] - p.b1[1], 3)]];
+    var cW = function (i) { return filaW(i); };
+    if (m === "capa") {
+      h += '<div class="mfila">' + M(W1, "2 × 2", cW, "W₁") + M(xs, "2 × 1", null, "x") + op("=") + M(wx, "2 × 1", cW, "W₁x") + '</div>';
+      $("panel").innerHTML = h;
+      return;
+    }
+    var b1 = [[n(p.b1[0])], [n(p.b1[1])]], z1 = [[f(r.z1[0], 3)], [f(r.z1[1], 3)]];
+    var a1 = [[v3(r.a1[0], "a_n1")], [v3(r.a1[1], "a_n2")]];
+    var cA = function (i, k, v) { return filaW(i) + (v === "?" ? " oc" : ""); };
+    if (m === "activar" || m === "apilar") {
+      h += '<div class="mfila">' + M(W1, "2 × 2", cW, "W₁") + M(xs, "2 × 1", null, "x") + op("+") + M(b1, "2 × 1", cW, "b₁") + op("=") +
+        M(z1, "2 × 1", cW, "z₁") + op("→ σ →") + M(a1, "2 × 1", cA, "a₁") + '</div>';
+      if (m === "apilar") {
+        var oz = oculto("z2");
+        h += '<div class="mfila">' + M([[n(p.W2[0]), n(p.W2[1])]], "1 × 2", function () { return "sal"; }, "W₂") + M([[f(r.a1[0], 3)], [f(r.a1[1], 3)]], "2 × 1", cW, "a₁") + op("+") +
+          M([[n(p.b2)]], "1 × 1", function () { return "sal"; }, "b₂") + op("=") + M([[oz ? "?" : f(r.z2, 3)]], "1 × 1", function () { return oz ? "oc" : "sal"; }, "z₂") + op("→ σ →") +
+          M([[oz ? "?" : f(r.y, 3)]], "1 × 1", function () { return oz ? "oc" : "sal"; }, "ŷ") + '</div>';
+      }
+      $("panel").innerHTML = h;
+      return;
+    }
+    if (m === "lote") {
+      var R = PUNTOS.map(function (q) { return adelante(p, q); });
+      var sel = function (i) { return i === est.xi ? "sel" : ""; };
+      var X = PUNTOS.map(function (q) { return [String(q[0]), String(q[1])]; });
+      var Wt = [[n(p.W1[0][0]), n(p.W1[1][0])], [n(p.W1[0][1]), n(p.W1[1][1])]];
+      var colN = function (i, k) { return filaW(k); };
+      var Z = R.map(function (rr) { return [f(rr.z1[0], 3), f(rr.z1[1], 3)]; });
+      var A = R.map(function (rr) { return [f(rr.a1[0], 3), f(rr.a1[1], 3)]; });
+      var Y = R.map(function (rr) { return [f(rr.y, 3)]; });
+      var cSel = function (i, k) { return filaW(k) + (i === est.xi ? " sel" : ""); };
+      h += '<div class="mfila">' + M(X, "4 × 2", sel, "X") + M(Wt, "2 × 2", colN, "W₁ᵀ") + op("+") + M([[n(p.b1[0]), n(p.b1[1])]], "1 × 2, a cada fila", colN, "b₁") + op("=") +
+        M(Z, "4 × 2", cSel, "Z₁") + '</div>';
+      h += '<div class="mfila">' + op("σ →") + M(A, "4 × 2", cSel, "A₁") + M([[n(p.W2[0])], [n(p.W2[1])]], "2 × 1", function () { return "sal"; }, "W₂ᵀ") + op("+ " + n(p.b2) + " → σ →") +
+        M(Y, "4 × 1", function (i) { return "sal" + (i === est.xi ? " sel" : ""); }, "Ŷ") + '</div>';
+      $("panel").innerHTML = h;
+      // tocar una fila la sigue en el diagrama
+      [].forEach.call($("panel").querySelectorAll(".mt-b"), function (b) {
+        var hijos = [].slice.call(b.children), cols = (b.style.gridTemplateColumns.match(/repeat\((\d+)/) || [0, 1])[1];
+        if (hijos.length === 4 * cols) hijos.forEach(function (s, idx) { s.setAttribute("data-fila", Math.floor(idx / cols)); });
+      });
+    }
+  }
+  $("panel").addEventListener("click", function (e) {
+    var s = e.target.closest("[data-fila]");
+    if (!s) return;
+    est.xi = +s.getAttribute("data-fila");
+    est.pulso = true;
+    pintarEntrada();
+    render();
+  });
+
+  /* ---------------- entrada ---------------- */
+  (function () {
+    var seg = $("segEntrada");
+    PUNTOS.forEach(function (q, i) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.textContent = esq(q);
+      b.setAttribute("data-i", i);
+      b.addEventListener("click", function () { est.xi = i; est.pulso = true; pintarEntrada(); render(); });
+      seg.appendChild(b);
+    });
+  })();
+  function pintarEntrada() {
+    [].forEach.call($("segEntrada").children, function (b) { b.setAttribute("aria-pressed", +b.getAttribute("data-i") === est.xi ? "true" : "false"); });
+  }
+
+  /* ---------------- plano del paso 7 ---------------- */
+  var plano = crearPlano($("plano"));
+  function dibujarPlano() {
+    plano.dibujar(est.p, est.T);
+    var sep = separable(est.p), ac = aciertos(est.p);
+    var tramo = est.T < 0.02 ? "el plano de las entradas" : est.T < 0.98 ? "camino de W₁x + b₁" : est.T < 1.02 ? "W₁x + b₁: el tramo lineal" : est.T < 1.98 ? "la sigmoide doblando" : "el plano oculto (a₁, a₂)";
+    $("lecturaPlano").innerHTML = "Estás viendo: <b>" + tramo + "</b>.<br>En el plano oculto, ¿una recta separa las clases? <b class=\"" + (sep ? "si" : "no") + "\">" + (sep ? "sí" : "no") +
+      "</b>. La red acierta <b>" + ac + " de 4</b> esquinas.";
+  }
+  $("rT").addEventListener("input", function () { est.T = +this.value; dibujarPlano(); });
+  var animando = null;
+  $("btnAnimar").addEventListener("click", function () {
+    if (animando) cancelAnimationFrame(animando);
+    var t0 = null, desde = est.T >= 1.99 ? 0 : est.T;
+    function cuadro(ts) {
+      if (t0 === null) t0 = ts;
+      est.T = Math.min(2, desde + (ts - t0) / 1400);
+      $("rT").value = est.T;
+      dibujarPlano();
+      if (est.T < 2) animando = requestAnimationFrame(cuadro); else animando = null;
+    }
+    animando = requestAnimationFrame(cuadro);
+  });
+  $("btnJuguete").addEventListener("click", function () { est.p = copiar(JUGUETE); sl.sync(); render(); });
+  $("btnResolver").addEventListener("click", function () { est.p = copiar(RESUELVE); sl.sync(); render(); });
+  $("btnReset").addEventListener("click", function () { est.p = copiar(JUGUETE); sl.sync(); render(); });
+
+  /* ---------------- parametros del paso 8 ---------------- */
+  var PRESETS = [
+    ["Juguete", [2, 2, 1]], ["UD4, figura", [3, 4, 4, 2]], ["Iris (UD6)", [4, 10, 3]], ["Raschka MNIST", [784, 50, 10]],
+    ["DL03", [13, 10, 10, 10, 1]], ["DL03 duplicada", [13, 10, 10, 10, 1, 10, 10, 10, 1]]
+  ];
+  var capas = [2, 2, 1];
+  function contar(cs) { var t = 0; for (var i = 1; i < cs.length; i++) t += cs[i - 1] * cs[i] + cs[i]; return t; }
+  function miles(v) { return String(v).replace(/\B(?=(\d{3})+(?!\d))/g, " "); }
+  (function () {
+    var seg = $("presets");
+    PRESETS.forEach(function (pr, i) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.textContent = pr[0];
+      b.setAttribute("data-i", i);
+      b.addEventListener("click", function () { capas = pr[1].slice(); dibujarParams(true); });
+      seg.appendChild(b);
+    });
+    $("capasEd").addEventListener("change", function (e) {
+      var inp = e.target.closest("input");
+      if (!inp) return;
+      var v = Math.max(1, Math.min(4096, Math.round(+inp.value) || 1));
+      capas[+inp.getAttribute("data-i")] = v;
+      dibujarParams(true);
+    });
+    $("capasEd").addEventListener("click", function (e) {
+      var b = e.target.closest("button");
+      if (!b) return;
+      if (b.getAttribute("data-a") === "mas" && capas.length < 9) capas.splice(capas.length - 1, 0, 4);
+      if (b.getAttribute("data-a") === "menos" && capas.length > 2) capas.splice(capas.length - 2, 1);
+      dibujarParams(true);
+    });
+  })();
+  function dibujarParams(editado) {
+    var abierto = est.chk8;
+    [].forEach.call($("presets").children, function (b) {
+      var pr = PRESETS[+b.getAttribute("data-i")];
+      b.disabled = !abierto;
+      b.setAttribute("aria-pressed", pr[1].join("-") === capas.join("-") ? "true" : "false");
+    });
+    $("capasEd").innerHTML = capas.map(function (c, i) {
+      return '<input type="number" min="1" max="4096" value="' + c + '" data-i="' + i + '" aria-label="Neuronas de la capa ' + (i + 1) + '"' + (abierto ? "" : " disabled") + '>';
+    }).join('<span class="flecha">→</span>') +
+      ' <button type="button" class="ghost" data-a="mas"' + (abierto ? "" : " disabled") + '>+ capa</button><button type="button" class="ghost" data-a="menos"' + (abierto ? "" : " disabled") + '>− capa</button>';
+    // dibujo de las capas (hasta 7 nodos por capa)
+    var Wd = 340, Hd = 170, L = capas.length, h = "", pos = [];
+    capas.forEach(function (c, i) {
+      var x = L === 1 ? Wd / 2 : 24 + i * (Wd - 48) / (L - 1), dib = Math.min(c, 7), ys = [];
+      for (var k = 0; k < dib; k++) ys.push(18 + (dib === 1 ? (Hd - 50) / 2 : k * (Hd - 50) / (dib - 1)));
+      pos.push({ x: x, ys: ys, c: c });
+    });
+    for (var i = 1; i < L; i++) pos[i - 1].ys.forEach(function (y0) { pos[i].ys.forEach(function (y1) { h += '<line class="ar" x1="' + pos[i - 1].x + '" y1="' + y0 + '" x2="' + pos[i].x + '" y2="' + y1 + '"/>'; }); });
+    pos.forEach(function (q) {
+      q.ys.forEach(function (y, k) {
+        if (q.c > 7 && k === 5) h += '<text class="t" x="' + q.x + '" y="' + (y + 4) + '">⋮</text>';
+        else h += '<circle class="nd" cx="' + q.x + '" cy="' + y + '" r="6"/>';
+      });
+      h += '<text class="t" x="' + q.x + '" y="' + (Hd - 8) + '">' + miles(q.c) + '</text>';
+    });
+    $("paramSvg").setAttribute("viewBox", "0 0 " + Wd + " " + Hd);
+    $("paramSvg").innerHTML = h;
+    var t = '<table class="tabla"><thead><tr><th>capa</th><th>pesos</th><th>sesgos</th><th>parámetros</th></tr></thead><tbody>';
+    for (i = 1; i < L; i++) t += '<tr><td>' + capas[i - 1] + ' → ' + capas[i] + '</td><td>' + capas[i - 1] + ' · ' + capas[i] + ' = ' + miles(capas[i - 1] * capas[i]) + '</td><td>' + capas[i] + '</td><td>' + miles(capas[i - 1] * capas[i] + capas[i]) + '</td></tr>';
+    t += '<tr class="total"><td>total</td><td></td><td></td><td>' + miles(contar(capas)) + '</td></tr></tbody></table>';
+    $("paramTabla").innerHTML = t;
+    if (editado) $("lectura").innerHTML = "Red " + capas.join("-") + ": <b>" + miles(contar(capas)) + "</b> parámetros.";
+  }
+
+  /* ---------------- render y pasos ---------------- */
+  var sl = crearSliders($("sliders"), function () { return est.p; }, -10, 10, 0.1, function () { render(); });
+  var HINTS = [
+    function () { return est.chk1 ? "Cambia la entrada o mueve un peso: la salida se recalcula sola." : "Responde la predicción para abrir los deslizadores."; },
+    function () { return "Azul: la neurona de arriba y su fila de pesos. Verde: la de abajo. Cada neurona muestra su z."; },
+    function () { return "Debajo de cada matriz está su forma: filas × columnas."; },
+    function () { return "Cada neurona suma su sesgo y pasa por la sigmoide por separado."; },
+    function () { return "Lo que entrega la capa oculta es la entrada de la neurona de salida."; },
+    function () { return "Las cuatro esquinas a la vez. Toca una fila de cualquier matriz para seguirla en el diagrama."; },
+    function () { return "Mueve el deslizador de abajo del plano, o dale a Animar."; },
+    function () { return est.chk8 ? "Elige una red o escribe cuántas neuronas tiene cada capa." : "Responde el chequeo para abrir el editor."; }
+  ];
+  function render() {
+    var m = modo();
+    $("escHint").textContent = HINTS[est.paso]();
+    var esRed = m !== "plano" && m !== "param";
+    $("filaEntrada").hidden = !esRed;
+    $("red").style.display = esRed ? "" : "none";
+    $("panel").hidden = !esRed;
+    $("planoBox").hidden = m !== "plano";
+    $("paramBox").hidden = m !== "param";
+    $("sliders").hidden = m === "param";
+    $("filaReset").hidden = m === "param" || m === "plano";
+    sl.bloquear(m === "flujo" && !est.chk1);
+    if (esRed) {
+      dibujarRed();
+      dibujarPanel();
+      var r = adelante(est.p, PUNTOS[est.xi]);
+      $("lectura").innerHTML = "Entrada <b>" + esq(PUNTOS[est.xi]) + "</b>: la red entrega ŷ = <b>" + v3(r.y, "y") + "</b>" +
+        (oculto("y") ? "." : (r.y > 0.5 ? ", más cerca de 1." : ", más cerca de 0.")) + " El XOR pide " + XOR[est.xi] + ".";
+    } else if (m === "plano") {
+      $("lectura").innerHTML = "";
+      dibujarPlano();
+    } else {
+      $("lectura").innerHTML = est.chk8 ? "Red " + capas.join("-") + ": <b>" + miles(contar(capas)) + "</b> parámetros." : "Red de juguete 2-2-1: <b>9</b> parámetros, los nueve deslizadores.";
+      dibujarParams(false);
+    }
+    vivos();
+  }
+  function vivos() {
+    var p = est.p, x = PUNTOS[est.xi], r = adelante(p, x);
+    $("vivo2").innerHTML = "con x = " + esq(x) + ", neurona de arriba: z = " + n(p.W1[0][0]) + " × " + x[0] + " + " + par(p.W1[0][1]) + " × " + x[1] + " + " + par(p.b1[0]) + " = " + f(r.z1[0], 3);
+    $("vivo4").innerHTML = "con x = " + esq(x) + ": z₁ = (" + f(r.z1[0], 3) + ", " + f(r.z1[1], 3) + ")  →  a₁ = (" + v3(r.a1[0], est.paso === 3 ? "a_n1" : null) + ", " + f(r.a1[1], 3) + ")";
+    $("vivo5").innerHTML = "con x = " + esq(x) + ": z₂ = " + n(p.W2[0]) + " × " + f(r.a1[0], 3) + " + " + par(p.W2[1]) + " × " + f(r.a1[1], 3) + " + " + par(p.b2) + " = " +
+      v3(r.z2, est.paso === 4 ? "z2" : null) + "  →  ŷ = " + v3(r.y, est.paso === 4 ? "y" : null);
+  }
+  function entrar(i) {
+    est.paso = i;
+    if (i === 6) { est.T = 0; $("rT").value = 0; }
+    est.pulso = i === 0;
+    render();
+  }
+
+  /* ---------------- chequeos ---------------- */
+  var pasos;
+  B.opcionMultiple(cuerpo("chk1"), {
+    pregunta: "Con la entrada (1, 0), si mueves los dos pesos que salen de la entrada de abajo, $x_2$, ¿qué le pasa a la salida?",
+    opciones: ["No cambia nada", "Sube", "Baja", "Depende de cuál de los dos muevas"],
+    correcta: 0,
+    pistas: [null, "¿Cuánto vale $x_2$? Lo que viaja por esas líneas es $x_2$ multiplicado por su peso.", "¿Cuánto vale $x_2$? Lo que viaja por esas líneas es $x_2$ multiplicado por su peso.",
+      "Los dos pesos multiplican al mismo número. ¿Cuál es?"],
+    explicacion: "$x_2 = 0$, y 0 por cualquier peso es 0: esas líneas no llevan nada (ahora se ven tenues). Es la idea de toda la página: cada peso multiplica a una entrada, y cada neurona suma esos productos.",
+    alResolver: function () { est.chk1 = true; mostrarTras("tras-chk1"); if (est.paso === 0) render(); pasos.completar(0); }
+  });
+  B.numerico(cuerpo("chk2"), {
+    pregunta: function () { return "Ahora la neurona de abajo, con la entrada (1, 1) y los pesos que tienes en los deslizadores (fila 2: " + n(est.p.W1[1][0]) + " y " + n(est.p.W1[1][1]) + ", sesgo " + n(est.p.b1[1]) + "). ¿Cuánto vale su $z$?"; },
+    respuesta: function () { return est.p.W1[1][0] + est.p.W1[1][1] + est.p.b1[1]; },
+    tolerancia: 0.01,
+    pistas: ["Con la entrada (1, 1), cada producto es el peso mismo.", function () { return "Es $" + tx(est.p.W1[1][0]) + " \\cdot 1 + " + tx(est.p.W1[1][1]) + " \\cdot 1 + (" + tx(est.p.b1[1]) + ")$."; }],
+    diagnostico: function (v) {
+      var p = est.p;
+      if (Math.abs(v - (p.W1[1][0] + p.W1[1][1])) < 0.01 && Math.abs(p.b1[1]) > 0.01) return "Te faltó el sesgo: se suma siempre.";
+      if (Math.abs(v - (p.W1[0][0] + p.W1[0][1] + p.b1[0])) < 0.01) return "Esa es la neurona de arriba. La de abajo usa la fila 2.";
+      return null;
+    },
+    explicacion: function () { var p = est.p, z = p.W1[1][0] + p.W1[1][1] + p.b1[1]; return "$" + tx(p.W1[1][0]) + " + " + tx(p.W1[1][1]) + " + (" + tx(p.b1[1]) + ") = " + tx(z) + "$. Con los pesos de juguete, 0.3 + 0.8 − 0.2 = 0.9. Elige (1, 1) arriba y compruébalo."; },
+    alResolver: function () { est.chk2 = true; if (est.paso === 1) render(); pasos.completar(1); }
+  });
+  B.opcionMultiple(cuerpo("chk3"), {
+    pregunta: "Una capa de <b>3 neuronas</b> recibe <b>2 entradas</b>. Con una fila por neurona, ¿qué forma tiene su matriz de pesos?",
+    opciones: ["$3\\times 2$", "$2\\times 3$", "$3\\times 3$", "$2\\times 2$"],
+    correcta: 0,
+    pistas: [null, "Eso sería una columna por neurona. Aquí cada neurona es una fila.", "¿Cuántos pesos tiene cada neurona? Uno por entrada.", "Hay 3 neuronas: ¿cuántas filas?"],
+    explicacion: "Una fila por neurona (3) y una columna por entrada (2): $3\\times 2$. Por un vector de $2\\times 1$ da $3\\times 1$, un número por neurona.",
+    alResolver: function () { pasos.completar(2); }
+  });
+  B.numerico(cuerpo("chk4"), {
+    pregunta: function () { return "Elige la entrada (0, 0). Antes de mirar, ¿cuánto vale $a$ en la neurona de arriba? (Su sesgo ahora es " + n(est.p.b1[0]) + ".)"; },
+    respuesta: function () { return sig(est.p.b1[0]); },
+    tolerancia: 0.01,
+    pistas: ["Con (0, 0), $W_1\\mathbf{x}$ es el vector cero: solo queda el sesgo.", function () { return "Entonces $z = " + tx(est.p.b1[0]) + "$ y $a = \\sigma(" + tx(est.p.b1[0]) + ")$." + (Math.abs(est.p.b1[0]) < 1e-9 ? " ¿Cuánto vale la sigmoide en 0?" : ""); }],
+    diagnostico: function (v) { if (Math.abs(v - est.p.b1[0]) < 0.01 && Math.abs(sig(est.p.b1[0]) - est.p.b1[0]) > 0.01) return "Ese es $z$. Falta pasarlo por la sigmoide."; return null; },
+    explicacion: function () { return "$z = " + tx(est.p.b1[0]) + "$ y $a = \\sigma(" + tx(est.p.b1[0]) + ") = " + f(sig(est.p.b1[0]), 3) + "$. Con la entrada en cero, una neurona entrega la sigmoide de su sesgo: con sesgo 0, justo 0.5."; },
+    alResolver: function () { est.chk4 = true; if (est.paso === 3) render(); pasos.completar(3); }
+  });
+  B.numerico(cuerpo("chk5"), {
+    pregunta: function () { var r = adelante(est.p, PUNTOS[est.xi]); return "Con la entrada elegida, " + esq(PUNTOS[est.xi]) + ", la capa oculta entrega $\\mathbf{a}_1 = (" + f(r.a1[0], 3) + ",\\ " + f(r.a1[1], 3) + ")$. Con $W_2 = (" + tx(est.p.W2[0]) + ", " + tx(est.p.W2[1]) + ")$ y $b_2 = " + tx(est.p.b2) + "$, ¿cuánto vale $z_2$?"; },
+    respuesta: function () { return adelante(est.p, PUNTOS[est.xi]).z2; },
+    tolerancia: 0.01,
+    pistas: ["Es un producto punto más un sesgo, igual que en el paso 2, pero las entradas ahora son las componentes de $\\mathbf{a}_1$.",
+      function () { var r = adelante(est.p, PUNTOS[est.xi]); return "$" + tx(est.p.W2[0]) + " \\cdot " + f(r.a1[0], 3) + " + (" + tx(est.p.W2[1]) + ") \\cdot " + f(r.a1[1], 3) + " + (" + tx(est.p.b2) + ")$"; }],
+    diagnostico: function (v) {
+      var r = adelante(est.p, PUNTOS[est.xi]);
+      if (Math.abs(v - (est.p.W2[0] * r.a1[0] + est.p.W2[1] * r.a1[1])) < 0.01 && Math.abs(est.p.b2) > 0.01) return "Te faltó el sesgo $b_2$.";
+      if (Math.abs(v - r.y) < 0.01) return "Ese ya es $\\hat{y}$, después de la sigmoide. Se pide $z_2$, antes.";
+      return null;
+    },
+    explicacion: function () { var r = adelante(est.p, PUNTOS[est.xi]); return "$z_2 = " + f(r.z2, 3) + "$ y $\\hat{y} = \\sigma(z_2) = " + f(r.y, 3) + "$. Con los pesos de juguete y (1, 0): $0.622 - 0.525 + 0.1 = 0.197$ y $\\hat{y} = 0.549$, el número que ya conoces de las otras páginas de la ruta."; },
+    alResolver: function () { est.chk5 = true; if (est.paso === 4) render(); pasos.completar(4); }
+  });
+  function cerrarPaso6() { if (est.chk6 && est.chk6b) pasos.completar(5); }
+  B.opcionMultiple(cuerpo("chk6"), {
+    pregunta: "El cuaderno DL03 de la UD4 entrena con lotes de <b>50</b> casas de Boston, <b>13</b> variables cada una, y su primera capa es <code>Dense(10)</code>. Para un lote, ¿qué forma tiene $Z_1$?",
+    opciones: ["$50\\times 10$", "$10\\times 50$", "$50\\times 13$", "$13\\times 10$"],
+    correcta: 0,
+    pistas: [null, "Las filas de $Z_1$ son lo mismo que las filas de $X$. ¿Qué es cada fila de $X$?", "Esa es la forma de $X$. La capa cambia cuántas columnas hay.", "Esa es la forma de los pesos en Keras, no la del resultado."],
+    explicacion: "$X$ es $50\\times 13$, $W_1^\\top$ es $13\\times 10$, y $(50\\times 13)(13\\times 10) = 50\\times 10$: una fila por casa, una columna por neurona. Keras escribe esa forma como <code>(None, 10)</code>.",
+    alResolver: function () { est.chk6 = true; cerrarPaso6(); }
+  });
+  B.opcionMultiple(cuerpo("chk6b"), {
+    pregunta: "Cargas la red de juguete en <code>MLPClassifier</code> de scikit-learn, que guarda los pesos como (entrada, salida). ¿Qué tiene que quedar en <code>coefs_[0]</code>?",
+    opciones: ["<code>[[0.5, 0.3], [-0.5, 0.8]]</code>", "<code>[[0.5, -0.5], [0.3, 0.8]]</code>", "<code>[0.5, -0.5, 0.3, 0.8]</code>", "Da igual: scikit-learn la traspone sola si hace falta"],
+    correcta: 0,
+    pistas: [null, "Esa es $W_1$ tal como la escribe esta página, una fila por neurona. scikit-learn quiere una fila por entrada.", "scikit-learn guarda una matriz por capa, no un vector.", "No puede saberlo: una matriz de $2\\times 2$ cuadra de las dos maneras."],
+    explicacion: "Una fila por entrada: la traspuesta, <code>W1.T</code>. La primera fila, (0.5, 0.3), son los pesos que salen de $x_1$ hacia cada neurona.",
+    alResolver: function () { est.chk6b = true; mostrarTras("tras-chk6b"); cerrarPaso6(); }
+  });
+  B.opcionMultiple(cuerpo("chk7"), {
+    pregunta: "El botón va a poner <b>las dos filas de $W_1$ iguales, (5, 5)</b>, con sesgos −2.5 y −7.5. Antes de tocarlo: en el plano oculto, ¿dónde caen (0, 1) y (1, 0)?",
+    opciones: ["Exactamente en el mismo punto", "En dos puntos simétricos respecto a la diagonal", "Donde ya estaban", "En las esquinas (0, 0) y (1, 1)"],
+    correcta: 0,
+    pistas: [null, "Las dos neuronas multiplican $x_1$ y $x_2$ por el mismo 5. ¿Qué número ven, en realidad?", "La capa oculta cambia todo punto: la sigmoide lo lleva dentro del cuadrado de 0 a 1.", "Haz la cuenta de la neurona de arriba: $\\sigma(5 + 0 - 2.5)$. ¿Da cerca de 0?"],
+    explicacion: "Con filas (5, 5) cada neurona solo ve $x_1 + x_2$, y para (0, 1) y (1, 0) esa suma vale 1. Las dos caen en $(\\sigma(2.5), \\sigma(-2.5)) = (0.924, 0.076)$. <b>Ahora toca el botón</b> y dale a Animar.",
+    alResolver: function () { est.chk7 = true; $("btnResolver").disabled = false; mostrarTras("tras-chk7"); pasos.completar(6); }
+  });
+  B.numerico(cuerpo("chk8"), {
+    pregunta: "La figura de red de la UD4 es 3-4-4-2: 3 entradas, dos capas ocultas de 4 neuronas y 2 salidas. ¿Cuántos parámetros tiene?",
+    respuesta: 46,
+    tolerancia: 0,
+    pistas: ["Son tres capas de pesos: 3 → 4, 4 → 4 y 4 → 2. Cuenta cada una por separado.", "3 → 4: $3\\cdot 4 + 4 = 16$. Sigue con las otras dos."],
+    diagnostico: function (v) {
+      if (v === 36) return "Contaste solo los pesos (12 + 16 + 8). Falta un sesgo por neurona: 10 más.";
+      if (v === 49) return "Sumaste sesgos también para la capa de entrada. La entrada no tiene sesgos: solo las neuronas que calculan.";
+      return null;
+    },
+    explicacion: "$3\\cdot4+4 = 16$, $4\\cdot4+4 = 20$ y $4\\cdot2+2 = 10$: <b>46</b>. El editor del escenario ya está abierto.",
+    alResolver: function () { est.chk8 = true; mostrarTras("tras-chk8"); capas = [3, 4, 4, 2]; if (est.paso === 7) render(); pasos.completar(7); }
+  });
+
+  pasos = B.pasos($("recorrido"), {
+    concepto: C,
+    alEntrar: entrar,
+    alTerminar: function () { location.hash = "retos"; }
+  });
+  // lo que ya resolvio en otra visita
+  if (pasos.hecho(0)) { est.chk1 = true; mostrarTras("tras-chk1"); }
+  if (pasos.hecho(1)) est.chk2 = true;
+  if (pasos.hecho(3)) est.chk4 = true;
+  if (pasos.hecho(4)) est.chk5 = true;
+  if (pasos.hecho(5)) { est.chk6 = est.chk6b = true; mostrarTras("tras-chk6b"); }
+  if (pasos.hecho(6)) { est.chk7 = true; $("btnResolver").disabled = false; mostrarTras("tras-chk7"); }
+  if (pasos.hecho(7)) { est.chk8 = true; mostrarTras("tras-chk8"); }
+  pintarEntrada();
+  entrar(0);
+
+  /* ---------------- hipotesis inicial ---------------- */
+  (function () {
+    var ta = $("hipotesis"), t = null;
+    ta.value = B.nota("red-multicapa", "hipotesis");
+    function cita() {
+      var v = ta.value.trim(), el = $("citaHipo");
+      el.hidden = !v;
+      if (v) { el.textContent = ""; el.appendChild(document.createTextNode("Al principio escribiste: «" + v + "». ¿Tu fórmula tenía una función dentro de otra? ¿Imaginabas que la capa del medio mueve el plano entero hasta que una recta alcanza?")); }
+    }
+    cita();
+    ta.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { B.nota("red-multicapa", "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; cita(); }, 500);
+    });
+  })();
+
+  /* ---------------- marcadores de estado de retos ---------------- */
+  function pintarEstados() {
+    [].forEach.call(document.querySelectorAll("[data-reto]"), function (el) {
+      var ok = C.retoOk(el.getAttribute("data-reto"));
+      el.textContent = ok ? "resuelto" : "pendiente";
+      el.classList.toggle("ok", ok);
+    });
+  }
+  C.alCambiar(pintarEstados);
+
+  /* ---------------- reto: ojo clinico ---------------- */
+  (function () {
+    var cont = $("ojo");
+    cont.innerHTML = '<div class="ronda"></div><p class="ojo-q"></p><div class="ojo-opts"></div>' +
+      '<div class="fb" aria-live="polite"></div><div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    function azar(a) { return a[Math.floor(Math.random() * a.length)]; }
+    function forma(a, b) { return b == null ? a + " (un vector)" : a + " × " + b; }
+    var ronda, aciertos, respondida, actual;
+    function generar() {
+      var N = azar([1, 4, 32, 50, 100, 256]), d = azar([2, 3, 4, 13, 30, 784]), h = azar([2, 3, 10, 50, 128].filter(function (v) { return v !== d; }));
+      var t = azar([1, 3, 10].filter(function (v) { return v !== h; }));
+      var P = [
+        ["los pesos $W_1$ de la capa oculta, guardados con una fila por neurona (como Nield o PyTorch)", forma(h, d)],
+        ["$Z_1 = XW_1^\\top + \\mathbf{b}_1$ para el lote", forma(N, h)],
+        ["el sesgo $\\mathbf{b}_1$ de la capa oculta", forma(h)],
+        ["$A_1$, lo que entrega la capa oculta para el lote", forma(N, h)],
+        ["los pesos $W_2$ de la capa de salida, una fila por neurona", forma(t, h)],
+        ["la salida $\\hat{Y}$ del lote", forma(N, t)],
+        ["el kernel de la primera capa <code>Dense</code> en Keras", forma(d, h)],
+        ["<code>coefs_[1]</code> de <code>MLPClassifier</code>", forma(h, t)]
+      ];
+      var q = azar(P), pool = [forma(N, d), forma(d, h), forma(h, d), forma(N, h), forma(h, N), forma(N, t), forma(t, h), forma(h, t), forma(h), forma(N)];
+      var opts = [q[1]];
+      B.mezclar(pool).forEach(function (s) { if (opts.length < 4 && opts.indexOf(s) < 0) opts.push(s); });
+      return { texto: "Red " + d + "-" + h + "-" + t + " y un lote de " + N + " ejemplo" + (N > 1 ? "s" : "") + ". ¿Qué forma tiene " + q[0] + "?", ok: q[1], opts: B.mezclar(opts), N: N, d: d, h: h, t: t };
+    }
+    function nueva() { ronda = 0; aciertos = 0; mostrar(); }
+    function mostrar() {
+      respondida = false;
+      actual = generar();
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 5 · aciertos " + aciertos;
+      cont.querySelector(".ojo-q").innerHTML = B.conTex(actual.texto);
+      cont.querySelector(".ojo-opts").innerHTML = actual.opts.map(function (o) { return '<button type="button" class="opt" data-v="' + esc(o) + '">' + esc(o) + '</button>'; }).join("");
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+    }
+    cont.querySelector(".ojo-opts").addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || respondida) return;
+      respondida = true;
+      var ok = b.getAttribute("data-v") === actual.ok;
+      if (ok) aciertos++;
+      b.classList.add(ok ? "ok" : "mal");
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (x) { x.disabled = true; if (x.getAttribute("data-v") === actual.ok) x.classList.add("ok"); });
+      cont.querySelector(".fb").innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No.</span> ') +
+        "Las reglas: los pesos con una fila por neurona son (neuronas × entradas), en Keras y scikit-learn al revés; lo que sale de una capa tiene una fila por ejemplo y una columna por neurona; y hay un sesgo por neurona. Aquí: " + actual.ok + ".";
+      var sig2 = cont.querySelector(".sig");
+      sig2.hidden = false;
+      if (ronda === 4) {
+        var aprobo = aciertos >= 4;
+        C.reto("ojo", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertos + " de 5" + (aprobo ? ". Aprobado." : ". Necesitas 4 para aprobar.");
+        sig2.textContent = "Otra tanda";
+      } else sig2.textContent = "Siguiente ronda";
+    });
+    cont.querySelector(".sig").addEventListener("click", function () { if (ronda === 4) nueva(); else { ronda++; mostrar(); } });
+    nueva();
+  })();
+
+  /* ---------------- reto: construir ---------------- */
+  (function () {
+    var kp = copiar(JUGUETE), vista = 2, avisado = false, logrados = [false, false, false];
+    var OBJ = [
+      ["En el plano oculto, una recta separa las dos clases.", function () { return separable(kp); }],
+      ["La red acierta las cuatro esquinas: ŷ > 0.5 donde el XOR vale 1 y ŷ < 0.5 donde vale 0.", function () { return aciertos(kp) === 4; }],
+      ["Con seguridad: las cuatro salidas a menos de 0.1 de lo que pide el XOR.", function () { return PUNTOS.every(function (q, i) { return Math.abs(adelante(kp, q).y - XOR[i]) < 0.1; }); }]
+    ];
+    var ul = $("objetivos");
+    OBJ.forEach(function (o) { var li = document.createElement("li"); li.innerHTML = '<span class="m"></span><span>' + o[0] + '</span>'; ul.appendChild(li); });
+    var pk = crearPlano($("kPlano"));
+    var seg = $("kVista");
+    [["Entrada", 0], ["Capa oculta", 2]].forEach(function (o) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.textContent = o[0];
+      b.setAttribute("aria-pressed", o[1] === vista ? "true" : "false");
+      b.addEventListener("click", function () { vista = o[1]; [].forEach.call(seg.children, function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); }); pintar(); });
+      seg.appendChild(b);
+    });
+    function pintar() {
+      pk.dibujar(kp, vista);
+      var ys = PUNTOS.map(function (q) { return f(adelante(kp, q).y, 2); });
+      $("kVivo").innerHTML = "ŷ en (0,0), (0,1), (1,0), (1,1): <b>" + ys.join(", ") + "</b> · pide 0, 1, 1, 0";
+      OBJ.forEach(function (o, i) { if (!logrados[i] && o[1]()) logrados[i] = true; ul.children[i].classList.toggle("hecho", logrados[i]); });
+      if (!avisado && logrados.every(Boolean)) { avisado = true; C.reto("construir", true); }
+    }
+    crearSliders($("kSliders"), function () { return kp; }, -10, 10, 0.5, pintar);
+    pintar();
+  })();
+
+  /* ---------------- reto: a mano ---------------- */
+  (function () {
+    var D;
+    function azar(a) { return a[Math.floor(Math.random() * a.length)]; }
+    function relu(v) { return Math.max(0, v); }
+    function parT(v) { return v < 0 ? "(" + tx(v) + ")" : tx(v); }
+    function generar() {
+      for (var t = 0; t < 500; t++) {
+        var x = [azar([1, 2, 3, -1]), azar([1, 2, -1, -2])];
+        var W = [[azar([-2, -1, 1, 2]), azar([-2, -1, 1, 2])], [azar([-2, -1, 1, 2]), azar([-2, -1, 1, 2])]];
+        var b = [azar([-1, 0, 1]), azar([-1, 0, 1])], v = [azar([-2, -1, 1, 2]), azar([-2, -1, 1, 2])], c = azar([-1, 0, 1]);
+        var z = [W[0][0] * x[0] + W[0][1] * x[1] + b[0], W[1][0] * x[0] + W[1][1] * x[1] + b[1]];
+        if (!((z[0] > 0 && z[1] < 0) || (z[0] < 0 && z[1] > 0))) continue;
+        var a = z.map(relu), y = v[0] * a[0] + v[1] * a[1] + c;
+        var sinRelu = v[0] * z[0] + v[1] * z[1] + c;
+        var zc = [W[0][0] * x[0] + W[1][0] * x[1] + b[0], W[0][1] * x[0] + W[1][1] * x[1] + b[1]], colY = v[0] * relu(zc[0]) + v[1] * relu(zc[1]) + c;
+        if (sinRelu === y || colY === y) continue;
+        D = { x: x, W: W, b: b, v: v, c: c, z: z, a: a, y: y, sinRelu: sinRelu, colY: colY };
+        break;
+      }
+      $("manoDatos").innerHTML = '<table class="datos-mano"><tr><th>x</th><th>W₁ (fila = neurona)</th><th>b₁</th><th>W₂</th><th>b₂</th></tr>' +
+        '<tr><td>(' + D.x.join(", ") + ')</td><td>[' + n(D.W[0][0]) + ', ' + n(D.W[0][1]) + ']<br>[' + n(D.W[1][0]) + ', ' + n(D.W[1][1]) + ']</td><td>(' + n(D.b[0]) + ', ' + n(D.b[1]) + ')</td><td>(' + n(D.v[0]) + ', ' + n(D.v[1]) + ')</td><td>' + n(D.c) + '</td></tr></table>';
+    }
+    generar();
+    B.numerico($("mano"), {
+      pregunta: "Capa oculta con ReLU, salida sin activación: $\\hat{y} = W_2\\,\\mathrm{ReLU}(W_1\\mathbf{x} + \\mathbf{b}_1) + b_2$. ¿Cuánto vale $\\hat{y}$?",
+      respuesta: function () { return D.y; },
+      tolerancia: 0.001,
+      pistas: [
+        function () { return "Fila por columna: $\\mathbf{z}_1 = (" + D.W[0][0] + "\\cdot" + parT(D.x[0]) + " + " + parT(D.W[0][1]) + "\\cdot" + parT(D.x[1]) + " + " + parT(D.b[0]) + ",\\ \\ " + D.W[1][0] + "\\cdot" + parT(D.x[0]) + " + " + parT(D.W[1][1]) + "\\cdot" + parT(D.x[1]) + " + " + parT(D.b[1]) + ") = (" + D.z[0] + ", " + D.z[1] + ")$."; },
+        function () { return "ReLU apaga lo negativo: $\\mathbf{a}_1 = (" + D.a[0] + ", " + D.a[1] + ")$."; },
+        function () { return "$\\hat{y} = " + D.v[0] + "\\cdot" + D.a[0] + " + " + parT(D.v[1]) + "\\cdot" + D.a[1] + " + " + parT(D.c) + "$."; }
+      ],
+      diagnostico: function (v) {
+        if (Math.abs(v - D.sinRelu) < 0.001) return "Olvidaste la ReLU: la neurona con $z$ negativo se apaga y entrega 0.";
+        if (Math.abs(v - D.colY) < 0.001) return "Usaste las columnas de $W_1$. Cada neurona es una fila.";
+        return null;
+      },
+      explicacion: function () { return "$\\mathbf{z}_1 = (" + D.z[0] + ", " + D.z[1] + ")$, $\\mathbf{a}_1 = (" + D.a[0] + ", " + D.a[1] + ")$ y $\\hat{y} = " + D.v[0] + "\\cdot" + D.a[0] + " + " + parT(D.v[1]) + "\\cdot" + D.a[1] + " + " + parT(D.c) + " = " + D.y + "$."; },
+      reintentable: true,
+      antesDeReintentar: generar,
+      alResolver: function (ok) { C.reto("mano", ok); }
+    });
+  })();
+
+  /* ---------------- reto: cazar el error ---------------- */
+  B.cazarError($("error"), {
+    variantes: [
+      {
+        intro: "La red de juguete con la entrada $\\mathbf{x} = (1, 0)$.",
+        lineas: [
+          "W_1 = \\begin{pmatrix}0.5 & -0.5\\\\ 0.3 & 0.8\\end{pmatrix},\\quad \\mathbf{b}_1 = (0,\\ -0.2)",
+          "W_1\\mathbf{x} = (0.5\\cdot 1 + 0.3\\cdot 0,\\ \\ -0.5\\cdot 1 + 0.8\\cdot 0) = (0.5,\\ -0.5)",
+          "\\mathbf{z}_1 = W_1\\mathbf{x} + \\mathbf{b}_1 = (0.5,\\ -0.7)",
+          "\\mathbf{a}_1 = \\sigma(\\mathbf{z}_1) = (0.6225,\\ 0.3318)",
+          "z_2 = 1\\cdot 0.6225 - 1\\cdot 0.3318 + 0.1 = 0.3907"
+        ],
+        erronea: 1,
+        explicacion: "Multiplicó cada <b>columna</b> de $W_1$ por $\\mathbf{x}$: eso es $W_1^\\top\\mathbf{x}$. Cada neurona es una fila: $(0.5\\cdot 1 + (-0.5)\\cdot 0,\\ 0.3\\cdot 1 + 0.8\\cdot 0) = (0.5,\\ 0.3)$, y entonces $\\mathbf{z}_1 = (0.5,\\ 0.1)$. Las líneas siguientes están bien hechas sobre el número equivocado."
+      },
+      {
+        intro: "La red 784-50-10 de Raschka recibe un lote de 32 imágenes.",
+        lineas: [
+          "X:\\ 32\\times 784",
+          "W^{(h)}:\\ 50\\times 784\\quad\\text{(una fila por neurona)}",
+          "Z^{(h)} = X\\,W^{(h)\\top}:\\ (32\\times 784)(784\\times 50) = 32\\times 50",
+          "\\mathbf{b}^{(h)}:\\ 32\\times 50,\\ \\text{un sesgo por ejemplo y por neurona}",
+          "Z^{(out)} = A^{(h)}W^{(out)\\top} + \\mathbf{b}^{(out)}:\\ 32\\times 10"
+        ],
+        erronea: 3,
+        explicacion: "Hay un sesgo por neurona, no por ejemplo: $\\mathbf{b}^{(h)}$ tiene 50 números y se suma igual a las 32 filas. Si dependiera del ejemplo, la red no sabría qué sesgo usar con una imagen nueva ni con un lote de otro tamaño. Los parámetros de la red no cambian con el lote: 39 760."
+      },
+      {
+        intro: "La red de la UD6 para Iris: 4 entradas, 10 neuronas ocultas y 3 salidas. Contamos sus parámetros.",
+        lineas: [
+          "\\text{capa oculta: } 4\\cdot 10 = 40\\ \\text{pesos}",
+          "\\text{sus sesgos: } 4",
+          "\\text{capa de salida: } 10\\cdot 3 = 30\\ \\text{pesos}",
+          "\\text{sus sesgos: } 3",
+          "\\text{total: } 40 + 4 + 30 + 3 = 77"
+        ],
+        erronea: 1,
+        explicacion: "Un sesgo por <b>neurona</b> de la capa, no por entrada: la capa oculta tiene 10. El total es $40 + 10 + 30 + 3 = 83$. La figura de la UD6 dibuja las 70 flechas (los pesos) y ningún sesgo."
+      }
+    ],
+    alResolver: function (ok) { C.reto("error", ok); }
+  });
+
+  /* ---------------- retos de propiedades ---------------- */
+  function prop(id, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple($(id), cfg);
+  }
+  prop("prop1", {
+    pregunta: "Tienes un lote $X$ de forma $N\\times d$ y la matriz $W_1$ de forma $h\\times d$, una fila por neurona. ¿Qué cuenta da la capa oculta para todo el lote?",
+    opciones: ["$XW_1^\\top + \\mathbf{b}_1$, de forma $N\\times h$", "$W_1X + \\mathbf{b}_1$", "$XW_1 + \\mathbf{b}_1$", "$W_1^\\top X + \\mathbf{b}_1$"],
+    correcta: 0,
+    pistas: [null, "Mira las formas: $(h\\times d)(N\\times d)$. ¿Coinciden los dos números del medio?", "$(N\\times d)(h\\times d)$: el del medio es $d$ contra $h$. Solo cuadraría si $h = d$, y aun así usaría columnas en lugar de neuronas.", "$(d\\times h)(N\\times d)$: el del medio es $h$ contra $N$."],
+    explicacion: "$(N\\times d)(d\\times h) = N\\times h$: una fila por ejemplo, una columna por neurona. Cada entrada del resultado es el producto punto de un ejemplo con una neurona. Es la forma que escribe Raschka."
+  });
+  prop("prop2", {
+    pregunta: "Pasas de un lote de 4 ejemplos a uno de 5. ¿Qué cambia?",
+    opciones: ["$X$, $Z_1$, $A_1$ y $\\hat{Y}$ ganan una fila; los pesos y los sesgos quedan igual", "$W_1$ gana una fila", "$W_1$ gana una columna", "Los sesgos pasan a ser 5 por capa"],
+    correcta: 0,
+    pistas: [null, "Una fila de $W_1$ es una neurona. ¿Agregaste una neurona?", "Una columna de $W_1$ es una entrada, una variable. ¿Agregaste una variable?", "Hay un sesgo por neurona, no por ejemplo."],
+    explicacion: "La red es la misma para cualquier tamaño de lote. Por eso Keras escribe las formas como <code>(None, 10)</code>, con el lote sin fijar. Solo crecen las matrices que tienen una fila por ejemplo."
+  });
+  prop("prop3", {
+    pregunta: "Una capa densa de 10 neuronas recibe 13 variables, como la primera capa del cuaderno DL03. ¿Qué forma tienen sus pesos en Keras (<code>kernel</code>) y en PyTorch (<code>weight</code>)?",
+    opciones: ["Keras $(13, 10)$; PyTorch $(10, 13)$", "Las dos $(10, 13)$", "Las dos $(13, 10)$", "Keras $(10, 13)$; PyTorch $(13, 10)$"],
+    correcta: 0,
+    pistas: [null, "Keras calcula $XW$ sin trasponer. ¿Qué forma necesita $W$ para que $(N\\times 13)\\,W$ cuadre?", "PyTorch guarda una fila por neurona, como Nield, y calcula $XW^\\top$.", "Al revés: Keras multiplica $X$ por su kernel tal cual, así que su primera dimensión son las entradas."],
+    explicacion: "Keras guarda (entrada, salida) y calcula $XW + \\mathbf{b}$; PyTorch guarda (salida, entrada) y calcula $XW^\\top + \\mathbf{b}$. Son la misma capa, con $13\\cdot 10 + 10 = 140$ parámetros: el primer número del resumen de DL03."
+  });
+  prop("prop4", {
+    pregunta: "La regresión logística también termina en una sigmoide, y no puede con el XOR. ¿Qué tiene la red 2-2-1 que la logística no tiene?",
+    opciones: ["Una capa que lleva los puntos a un plano nuevo, donde una recta sí los separa", "Una sigmoide más fuerte en la salida", "Más datos de entrenamiento", "Más parámetros, aunque las capas fueran lineales"],
+    correcta: 0,
+    pistas: [null, "La neurona de salida de la red es la misma sigmoide de la logística, aplicada a otra cosa. ¿A qué?", "Las dos ven los mismos cuatro puntos.", "Sin curva entre capas, $W_2(W_1\\mathbf{x}+\\mathbf{b}_1)+\\mathbf{b}_2$ es otra capa lineal: sigue dando una recta."],
+    explicacion: "La neurona de salida es una regresión logística, pero sobre $(a_1, a_2)$ en lugar de $(x_1, x_2)$. La capa oculta, con su curva, mueve los puntos; en el plano nuevo la frontera recta alcanza. Vista en el plano original, esa recta se vuelve una frontera que se dobla."
+  });
+  prop("prop5", {
+    pregunta: "Pones las dos filas de $W_1$ iguales <b>y</b> los dos sesgos iguales. ¿Qué hace la capa oculta con el plano?",
+    opciones: ["Lo aplasta sobre la diagonal $a_1 = a_2$, y el XOR ya no se puede separar", "Lo deja como estaba", "Lo gira un cuarto de vuelta", "Separa mejor el XOR, porque las dos neuronas se refuerzan"],
+    correcta: 0,
+    pistas: [null, "Si las dos neuronas hacen exactamente la misma cuenta, ¿pueden entregar números distintos?", "Girar el plano requiere que las dos neuronas miren direcciones distintas.", "Pruébalo en el escenario del paso 7 con los deslizadores: filas iguales y sesgos iguales. ¿Dónde caen los cuatro puntos?"],
+    explicacion: "Las dos neuronas calculan lo mismo, así que $a_1 = a_2$ para todo punto: el plano entero cae sobre la diagonal. La salida entonces depende de un solo número, $\\mathbf{w}\\cdot\\mathbf{x}$, y el XOR no se separa con un umbral sobre eso. Los pesos del paso 7 tienen filas iguales pero <b>sesgos distintos</b>: esa diferencia es la que dobla la línea en una curva."
+  });
+
+  /* ---------------- formula de memoria ---------------- */
+  B.ordenar($("formula"), {
+    piezas: ["A^{(l)}", "=", "f\\big(", "A^{(l-1)}", "W^{(l)\\top}", "+", "\\mathbf{b}^{(l)}", "\\big)"],
+    distractores: ["W^{(l)}", "A^{(l+1)}", "\\textstyle\\sum_i", "\\cdot N"],
+    soluciones: [[0, 1, 2, 3, 4, 5, 6, 7]],
+    explicacion: "Lo que entrega la capa anterior (una fila por ejemplo) por los pesos traspuestos (una columna por neurona), más el sesgo copiado en cada fila, y la activación elemento a elemento. Con $A^{(0)} = X$, aplicarla capa por capa es la propagación hacia adelante.",
+    alResolver: function (ok) { C.reto("formula", ok); }
+  });
+
+  /* ---------------- vida real ---------------- */
+  (function () {
+    var CODIGO = {
+      py: [
+        [null, "import warnings"],
+        [null, "import numpy as np"],
+        [null, "from sklearn.neural_network import MLPClassifier"],
+        [null, "warnings.filterwarnings(\"ignore\")        # fit con max_iter=1 avisa que no convergió"],
+        [null, ""],
+        ["def", "def sigmoide(z):"],
+        ["def", "    return 1 / (1 + np.exp(-z))"],
+        [null, ""],
+        [null, "# las cuatro esquinas del XOR, una por fila: el lote X es 4 x 2"],
+        ["datos", "X = np.array([[0.0, 0.0], [0.0, 1.0], [1.0, 0.0], [1.0, 1.0]])"],
+        ["datos", "y = np.array([0, 1, 1, 0])"],
+        [null, ""],
+        [null, "# la red de juguete: W1 es 2 x 2 (fila = neurona oculta), W2 es 1 x 2"],
+        ["pesos", "W1 = np.array([[0.5, -0.5], [0.3, 0.8]])"],
+        ["pesos", "b1 = np.array([0.0, -0.2])"],
+        ["pesos", "W2 = np.array([[1.0, -1.0]])"],
+        ["pesos", "b2 = np.array([0.1])"],
+        [null, ""],
+        ["yhat0", "y_hat = np.zeros(4)"],
+        ["for_n", "for n in range(4):                       # cada ejemplo del lote"],
+        ["a1_0", "    a1 = np.zeros(2)"],
+        [null, "    for j in range(2):                   # cada neurona oculta"],
+        ["z_ini", "        z = b1[j]"],
+        [null, "        for k in range(2):               # cada entrada"],
+        ["z_acc", "            z = z + W1[j, k] * X[n, k]"],
+        ["a_j", "        a1[j] = sigmoide(z)"],
+        ["z2_ini", "    z2 = b2[0]                           # la neurona de salida"],
+        [null, "    for j in range(2):"],
+        ["z2_acc", "        z2 = z2 + W2[0, j] * a1[j]"],
+        ["yhat_n", "    y_hat[n] = sigmoide(z2)"],
+        ["print1", "print(\"bucles:  \", np.round(y_hat, 4))"],
+        [null, ""],
+        [null, "# lo mismo con matrices: (4 x 2)(2 x 2) -> 4 x 2, luego (4 x 2)(2 x 1) -> 4 x 1"],
+        ["mat_a1", "A1 = sigmoide(X @ W1.T + b1)             # b1 se suma a cada fila"],
+        ["mat_y", "Y = sigmoide(A1 @ W2.T + b2)"],
+        ["print2", "print(\"matrices:\", np.round(Y.ravel(), 4), \"forma\", Y.shape)"],
+        [null, ""],
+        [null, "# scikit-learn guarda cada W como entrada x salida: hay que trasponer"],
+        ["sk", "red = MLPClassifier(hidden_layer_sizes=(2,), activation=\"logistic\", max_iter=1)"],
+        ["sk", "red.fit(X, y)                            # solo para crear la red"],
+        ["sk", "red.coefs_ = [W1.T, W2.T]"],
+        ["sk", "red.intercepts_ = [b1, b2]"],
+        ["sk_print", "print(\"sklearn: \", np.round(red.predict_proba(X)[:, 1], 4))"],
+        ["params", "print(\"parámetros:\", sum(W.size + b.size for W, b in zip(red.coefs_, red.intercepts_)))"]
+      ],
+      r: [
+        [null, "library(nnet)"],
+        ["def", "sigmoide <- function(z) 1 / (1 + exp(-z))"],
+        [null, ""],
+        [null, "# las cuatro esquinas del XOR, una por fila: el lote X es 4 x 2"],
+        ["datos", "X <- matrix(c(0, 0, 0, 1, 1, 0, 1, 1), ncol = 2, byrow = TRUE)"],
+        ["datos", "y <- c(0, 1, 1, 0)"],
+        [null, ""],
+        [null, "# la red de juguete: W1 es 2 x 2 (fila = neurona oculta), W2 es 1 x 2"],
+        ["pesos", "W1 <- matrix(c(0.5, -0.5, 0.3, 0.8), nrow = 2, byrow = TRUE)"],
+        ["pesos", "b1 <- c(0, -0.2)"],
+        ["pesos", "W2 <- matrix(c(1, -1), nrow = 1)"],
+        ["pesos", "b2 <- 0.1"],
+        [null, ""],
+        ["yhat0", "y_hat <- numeric(4)"],
+        ["for_n", "for (n in 1:4) {                         # cada ejemplo del lote"],
+        ["a1_0", "  a1 <- numeric(2)"],
+        [null, "  for (j in 1:2) {                       # cada neurona oculta"],
+        ["z_ini", "    z <- b1[j]"],
+        [null, "    for (k in 1:2) {                     # cada entrada"],
+        ["z_acc", "      z <- z + W1[j, k] * X[n, k]"],
+        [null, "    }"],
+        ["a_j", "    a1[j] <- sigmoide(z)"],
+        [null, "  }"],
+        ["z2_ini", "  z2 <- b2                               # la neurona de salida"],
+        [null, "  for (j in 1:2) {"],
+        ["z2_acc", "    z2 <- z2 + W2[1, j] * a1[j]"],
+        [null, "  }"],
+        ["yhat_n", "  y_hat[n] <- sigmoide(z2)"],
+        [null, "}"],
+        ["print1", "cat(\"bucles:  \", round(y_hat, 4), \"\\n\")"],
+        [null, ""],
+        [null, "# lo mismo con matrices: (4 x 2)(2 x 2) -> 4 x 2, luego (4 x 2)(2 x 1) -> 4 x 1"],
+        ["mat_a1", "B1 <- matrix(b1, nrow = 4, ncol = 2, byrow = TRUE)   # b1 copiado en cada fila"],
+        ["mat_a1", "A1 <- sigmoide(X %*% t(W1) + B1)"],
+        ["mat_y", "Y <- sigmoide(A1 %*% t(W2) + b2)"],
+        ["print2", "cat(\"matrices:\", round(Y, 4), \"forma\", dim(Y), \"\\n\")"],
+        [null, ""],
+        [null, "# nnet guarda los pesos por neurona: primero su sesgo, después sus entradas"],
+        ["sk", "Wts <- c(b1[1], W1[1, ], b1[2], W1[2, ], b2, W2[1, ])"],
+        ["sk", "red <- nnet(X, y, size = 2, Wts = Wts, maxit = 0, trace = FALSE)"],
+        ["sk_print", "cat(\"nnet:    \", round(as.vector(predict(red, X)), 4), \"\\n\")"],
+        ["params", "cat(\"parámetros:\", length(red$wts), \"\\n\")"]
+      ]
+    };
+    // salida real de python3 y Rscript, caracter por caracter (R deja un espacio antes del salto de linea)
+    var SALIDA = {
+      py: ["bucles:   [0.5374 0.4581 0.5492 0.4723]", "matrices: [0.5374 0.4581 0.5492 0.4723] forma (4, 1)", "sklearn:  [0.5374 0.4581 0.5492 0.4723]", "parámetros: 9"],
+      r: ["bucles:   0.5374 0.4581 0.5492 0.4723 ", "matrices: 0.5374 0.4581 0.5492 0.4723 forma 4 1 ", "nnet:     0.5374 0.4581 0.5492 0.4723 ", "parámetros: 9 "]
+    };
+    var P = JUGUETE;
+    /* eventos: una foto por linea ejecutada */
+    var EV = [];
+    (function () {
+      var fase = 1, sal = 0, cuenta = 0, tA = [[null, null], [null, null], [null, null], [null, null]], tY = [null, null, null, null], matriz = false;
+      function foto(id, x) {
+        EV.push(Object.assign({ id: id, fase: fase, sal: sal, cuenta: cuenta, tA: tA.map(function (r) { return r.slice(); }), tY: tY.slice(), matriz: matriz,
+          n: null, j: null, k: null, z: null, z2: null, aj: null, y: null }, x || {}));
+      }
+      foto("def"); foto("datos"); foto("pesos"); foto("yhat0");
+      for (var nn = 0; nn < 4; nn++) {
+        var x = PUNTOS[nn];
+        foto("for_n", { n: nn });
+        foto("a1_0", { n: nn });
+        var a1 = [0, 0];
+        for (var j = 0; j < 2; j++) {
+          var z = P.b1[j];
+          foto("z_ini", { n: nn, j: j, z: z });
+          for (var k = 0; k < 2; k++) {
+            var antes = z;
+            z = z + P.W1[j][k] * x[k];
+            cuenta++;
+            foto("z_acc", { n: nn, j: j, k: k, z: z, antes: antes });
+          }
+          a1[j] = sig(z);
+          tA[nn][j] = a1[j];
+          foto("a_j", { n: nn, j: j, z: z, aj: a1[j] });
+        }
+        var z2 = P.b2;
+        foto("z2_ini", { n: nn, z2: z2 });
+        for (j = 0; j < 2; j++) {
+          var antes2 = z2;
+          z2 = z2 + P.W2[j] * a1[j];
+          foto("z2_acc", { n: nn, j: j, z2: z2, antes: antes2, aj: a1[j] });
+        }
+        tY[nn] = sig(z2);
+        foto("yhat_n", { n: nn, z2: z2, y: tY[nn] });
+      }
+      sal++; foto("print1", { nueva: true });
+      fase = 2; matriz = true;
+      tA = [[null, null], [null, null], [null, null], [null, null]]; tY = [null, null, null, null];
+      PUNTOS.forEach(function (q, i) { var r = adelante(P, q); tA[i] = r.a1.slice(); });
+      foto("mat_a1");
+      PUNTOS.forEach(function (q, i) { tY[i] = adelante(P, q).y; });
+      foto("mat_y");
+      sal++; foto("print2", { nueva: true });
+      fase = 3;
+      foto("sk");
+      sal++; foto("sk_print", { nueva: true });
+      sal++; foto("params", { nueva: true, fin: true });
+    })();
+
+    function narrar(e, ctx) {
+      var py = ctx.lang() === "py", ix = ctx.ix;
+      switch (e.id) {
+        case "def": return py ? "Carga NumPy y el clasificador de scikit-learn, apaga el aviso de que <code>fit</code> no convergió (no lo vamos a dejar entrenar) y define la sigmoide." : "Carga <b>nnet</b>, el paquete de redes de R, y define la sigmoide.";
+        case "datos": return "El lote: las cuatro esquinas del XOR, una por fila. <b>X</b> es de 4 × 2. <b>y</b> es lo que pide el XOR; solo lo usa la librería.";
+        case "pesos": return "Los nueve números de la red de juguete. <b>W1</b> tiene una fila por neurona oculta, como en el recorrido; <b>W2</b> es una matriz de 1 × 2.";
+        case "yhat0": return "Un lugar vacío para las cuatro salidas, una por ejemplo.";
+        case "for_n": return "Ejemplo <b>n = " + ix(e.n) + "</b>: la esquina " + esq(PUNTOS[e.n]) + ", la fila " + ix(e.n) + " de X." + (py ? " En Python las filas se cuentan desde 0." : " En R se cuentan desde 1.");
+        case "a1_0": return "Un vector vacío para lo que entregan las dos neuronas ocultas con este ejemplo.";
+        case "z_ini": return "Neurona oculta <b>j = " + ix(e.j) + "</b> (la de " + (e.j ? "abajo" : "arriba") + "): la suma arranca en su sesgo, <b>" + n(P.b1[e.j]) + "</b>.";
+        case "z_acc": return "Suma la entrada <b>k = " + ix(e.k) + "</b> por su peso: " + f(e.antes, 3) + " + " + par(P.W1[e.j][e.k]) + " × " + PUNTOS[e.n][e.k] + " = <b>" + f(e.z, 3) + "</b>." + (PUNTOS[e.n][e.k] === 0 ? " La entrada vale 0: no cambia nada." : "");
+        case "a_j": return "Termina el producto punto de la fila " + ix(e.j) + " de W1 con el ejemplo: z = " + f(e.z, 3) + ", y la sigmoide lo dobla: <b>" + f(e.aj, 4) + "</b>.";
+        case "z2_ini": return "La neurona de salida arranca en su sesgo, <b>" + n(P.b2) + "</b>. Sus entradas son las dos componentes de a1.";
+        case "z2_acc": return "Suma " + par(P.W2[e.j]) + " × " + f(e.aj, 4) + ": " + f(e.antes, 4) + " → <b>" + f(e.z2, 4) + "</b>.";
+        case "yhat_n": return "La sigmoide de " + f(e.z2, 4) + " da <b>" + f(e.y, 4) + "</b>: la salida del ejemplo " + ix(e.n) + ". El XOR pedía " + XOR[e.n] + ".";
+        case "print1": return "Imprime las cuatro salidas. La línea de la suma corrió <b>" + e.cuenta + "</b> veces: 4 ejemplos × 2 neuronas × 2 entradas.";
+        case "mat_a1": return "Lo mismo sin bucles: <b>X " + (py ? "@ W1.T" : "%*% t(W1)") + "</b> es (4 × 2)(2 × 2) = 4 × 2, una fila por ejemplo y una columna por neurona. " +
+          (py ? "NumPy suma b1 a cada fila solo (broadcasting)." : "R no copia el sesgo por filas: por eso se arma <b>B1</b>, una matriz de 4 × 2 con b1 en cada fila.") + " Las ocho activaciones de una vez.";
+        case "mat_y": return "La capa de salida: (4 × 2)(2 × 1) = 4 × 1, más b2 y la sigmoide. Las cuatro salidas de una vez.";
+        case "print2": return "Los mismos cuatro números, y la forma: <b>4 × 1</b>, una fila por ejemplo.";
+        case "sk": return py ? "Crea un <b>MLPClassifier</b> con 2 neuronas ocultas y sigmoide, lo ajusta una sola vez solo para que exista, y le carga los pesos a mano. Ojo: <b>coefs_</b> guarda cada matriz como entrada × salida, así que van traspuestas."
+          : "<b>nnet</b> recibe los pesos en un solo vector, neurona por neurona: sesgo de la neurona 1 y sus dos pesos, lo mismo para la 2, y al final el sesgo y los dos pesos de la salida. Con <b>maxit = 0</b> no entrena nada.";
+        case "sk_print": return py ? "La probabilidad de la clase 1 según scikit-learn: la misma de los bucles. La columna [:, 1] es la segunda de predict_proba." : "La salida de nnet: la misma de los bucles.";
+        case "params": return "La librería cuenta <b>9</b> parámetros: 4 + 2 en la capa oculta y 2 + 1 en la salida, como en el paso 8.";
+      }
+      return "";
+    }
+    function visual(e, anterior, ctx) {
+      var lang = ctx.lang(), h = '<thead><tr><th>n</th><th>x₁</th><th>x₂</th><th>a₁ (arriba)</th><th>a₁ (abajo)</th><th>ŷ</th></tr></thead><tbody>';
+      PUNTOS.forEach(function (q, i) {
+        var curN = e && e.n === i;
+        function celda(v, act, d) { return '<td class="' + (act ? "cur" : v === null ? "vacia" : "") + '">' + (v === null ? "·" : f(v, d)) + '</td>'; }
+        h += '<tr><td>' + ctx.ix(i) + '</td>' +
+          '<td class="' + (curN && e.id === "z_acc" && e.k === 0 ? "cur" : curN ? "in" : "") + '">' + q[0] + '</td>' +
+          '<td class="' + (curN && e.id === "z_acc" && e.k === 1 ? "cur" : curN ? "in" : "") + '">' + q[1] + '</td>' +
+          celda(e ? e.tA[i][0] : null, curN && (e.id === "a_j" && e.j === 0), 4) +
+          celda(e ? e.tA[i][1] : null, curN && (e.id === "a_j" && e.j === 1), 4) +
+          celda(e ? e.tY[i] : null, curN && e.id === "yhat_n", 4) + '</tr>';
+      });
+      $("vrTabla").innerHTML = h + '</tbody>';
+      $("vrTablaTit").textContent = e && e.matriz ? "El lote, de una vez: A1 es 4 × 2 y Y es 4 × 1" : "El lote, fila por fila";
+      var cu = "";
+      if (e) {
+        var W1n = lang === "py" ? "W1[" + ctx.ix(e.j) + ", " + ctx.ix(e.k) + "]" : "W1[" + ctx.ix(e.j) + ", " + ctx.ix(e.k) + "]";
+        if (e.id === "z_acc") cu = "z = " + f(e.antes, 3) + " + " + W1n + " × X[" + ctx.ix(e.n) + ", " + ctx.ix(e.k) + "] = " + f(e.antes, 3) + " + " + par(P.W1[e.j][e.k]) + " × " + PUNTOS[e.n][e.k] + " = " + f(e.z, 3);
+        else if (e.id === "z_ini") cu = "z = b1[" + ctx.ix(e.j) + "] = " + n(P.b1[e.j]);
+        else if (e.id === "a_j") cu = "a1[" + ctx.ix(e.j) + "] = sigmoide(" + f(e.z, 3) + ") = " + f(e.aj, 4);
+        else if (e.id === "z2_acc") cu = "z2 = " + f(e.antes, 4) + " + " + par(P.W2[e.j]) + " × " + f(e.aj, 4) + " = " + f(e.z2, 4);
+        else if (e.id === "yhat_n") cu = "y_hat[" + ctx.ix(e.n) + "] = sigmoide(" + f(e.z2, 4) + ") = " + f(e.y, 4);
+        else if (e.id === "mat_a1") cu = "(4 × 2)(2 × 2) + b1 → 4 × 2";
+        else if (e.id === "mat_y") cu = "(4 × 2)(2 × 1) + b2 → 4 × 1";
+      }
+      $("vrCuenta").textContent = cu;
+      var lineas = SALIDA[lang].slice(0, e ? e.sal : 0);
+      $("vrConsola").innerHTML = lineas.length ? lineas.map(function (l, k) {
+        return '<span class="' + (e && e.nueva && k === lineas.length - 1 ? "nueva" : "") + '">' + ctx.esc(l) + '</span>';
+      }).join("\n") : '<span class="vacia">Todavía no imprimió nada.</span>';
+    }
+    B.vidaReal($("vidareal"), {
+      codigo: CODIGO,
+      eventos: EV,
+      narrar: narrar,
+      vars: function (e, ctx) {
+        var v = [];
+        if (!e) return v;
+        if (e.n !== null) v.push('<span>n = <b>' + ctx.ix(e.n) + '</b></span>');
+        if (e.j !== null) v.push('<span class="' + (e.id === "z2_acc" ? "" : e.j ? "vk" : "vj") + '">j = <b>' + ctx.ix(e.j) + '</b></span>');
+        if (e.k !== null) v.push('<span>k = <b>' + ctx.ix(e.k) + '</b></span>');
+        if (e.z !== null) v.push('<span>z = <b>' + f(e.z, 3) + '</b></span>');
+        if (e.z2 !== null) v.push('<span>z2 = <b>' + f(e.z2, 4) + '</b></span>');
+        v.push('<span>la suma corrió <b>' + e.cuenta + '</b> veces</span>');
+        return v;
+      },
+      visual: visual,
+      demora: function (e) { return !e ? 600 : e.id === "z_acc" ? 520 : e.id === "z_ini" || e.id === "z2_acc" || e.id === "a1_0" ? 420 : e.id === "for_n" ? 700 : e.id.indexOf("print") === 0 || e.id === "sk_print" || e.id === "params" ? 1300 : 900; }
+    });
+
+    B.numerico(cuerpo("vrPred"), {
+      pregunta: "Antes de reproducir: ¿cuántas veces se ejecuta la línea de la suma, <code>z = z + W1[j, k] * X[n, k]</code>, en todo el programa?",
+      respuesta: 16,
+      tolerancia: 0,
+      pistas: ["Son tres bucles, uno dentro de otro. ¿Cuántas vueltas da cada uno?", "4 ejemplos, y para cada uno 2 neuronas, y para cada neurona 2 entradas."],
+      diagnostico: function (v) {
+        if (v === 8) return "Contaste ejemplos por neuronas. Cada neurona suma una vez por cada entrada.";
+        if (v === 4) return "Esas son las vueltas del bucle de afuera. Hay dos bucles más adentro.";
+        if (v === 20 || v === 24) return "La neurona de salida tiene su propia línea de suma, con z2. Cuenta solo la de z.";
+        return null;
+      },
+      explicacion: "$4 \\cdot 2 \\cdot 2 = 16$: una multiplicación por cada número de $X W_1^\\top$ que se suma, igual a la cantidad de productos de la multiplicación de matrices. Ahora dale a reproducir y mira el contador.",
+      alResolver: function (ok) { C.reto("codigo1", ok); }
+    });
+    prop("codigo2", {
+      pregunta: "En el programa de Python cambias <code>red.coefs_ = [W1.T, W2.T]</code> por <code>red.coefs_ = [W1, W2.T]</code>, sin trasponer W1. ¿Qué pasa?",
+      opciones: [
+        "No da ningún error: imprime 0.5374, 0.5072, 0.5964 y 0.5659, otra red",
+        "Lanza un error de dimensiones",
+        "Da lo mismo, porque scikit-learn traspone sola la matriz",
+        "Da lo mismo, porque W1 es simétrica"
+      ],
+      correcta: 0,
+      pistas: [null, "W1 es de 2 × 2. ¿Hay alguna forma en que (4 × 2)(2 × 2) no cuadre?", "scikit-learn no puede saber cuál convención usaste: una matriz cuadrada cuadra de las dos maneras.", "Mira W1: arriba a la derecha −0.5, abajo a la izquierda 0.3. ¿Es simétrica?"],
+      explicacion: "Con W1 cuadrada, las formas cuadran igual y nada avisa: la red usa las columnas como neuronas y da otras probabilidades (lo comprobamos corriéndolo). Solo la primera esquina, (0, 0), coincide, porque ahí solo cuentan los sesgos. Si hubieras olvidado trasponer W2, que es de 1 × 2, sí habría saltado un error. Las matrices cuadradas son las que esconden esta trampa."
+    });
+    prop("codigo3", {
+      pregunta: "En el programa de R escribes <code>A1 &lt;- sigmoide(X %*% t(W1) + b1)</code>, sumando el vector <code>b1</code> en lugar de la matriz <code>B1</code>. ¿Qué pasa?",
+      opciones: [
+        "No da error: R recicla b1 bajando por las columnas, varias filas reciben el sesgo cambiado y la salida da 0.525, 0.4467, 0.5369, 0.4599",
+        "Funciona igual que NumPy: suma b1 a cada fila",
+        "Lanza un error porque las formas no coinciden",
+        "Suma b1 solo a la primera fila"
+      ],
+      correcta: 0,
+      pistas: [null, "R guarda las matrices por columnas y recicla los vectores cortos en ese orden: 0, −0.2, 0, −0.2, ... bajando por la primera columna.", "R solo avisa si el largo de la matriz no es múltiplo del largo del vector. 8 es múltiplo de 2.", "R recicla el vector hasta completar los 8 números de la matriz."],
+      explicacion: "R recorre la matriz de 4 × 2 por columnas y repite (0, −0.2) hasta llenarla: la primera columna recibe 0, −0.2, 0, −0.2 y la segunda igual. Así la neurona de arriba gana un sesgo −0.2 en las filas 2 y 4, y la de abajo pierde el suyo en las filas 1 y 3. Sin error ni aviso (lo comprobamos con Rscript). NumPy, en cambio, alinea por la última dimensión y suma b1 a cada fila. Por eso el programa arma <code>B1</code> con <code>byrow = TRUE</code>, o se puede usar <code>sweep(X %*% t(W1), 2, b1, \"+\")</code>."
+    });
+  })();
+
+  /* ---------------- tarjetas ---------------- */
+  B.tarjetas($("tarjetas"), [
+    ["¿Qué calcula una neurona de una capa?", "El producto punto de su fila de pesos con la entrada, más su sesgo, pasado por la activación: $a = f(\\mathbf{w}\\cdot\\mathbf{x} + b)$."],
+    ["Una capa escrita con matrices", "$\\mathbf{a} = f(W\\mathbf{x} + \\mathbf{b})$: una fila de $W$ por neurona, una columna por entrada, un sesgo por neurona."],
+    ["Forma de $W$ con $d$ entradas y $h$ neuronas", "$h\\times d$ si cada fila es una neurona (Nield, Raschka, PyTorch); $d\\times h$ en Keras y scikit-learn."],
+    ["Una capa para un lote $X$ de $N\\times d$", "$Z = XW^\\top + \\mathbf{b}$, de $N\\times h$: una fila por ejemplo, una columna por neurona, el sesgo copiado en cada fila."],
+    ["¿Cuántos parámetros tiene una capa densa?", "$n_{\\text{entrada}}\\cdot n_{\\text{salida}} + n_{\\text{salida}}$. La 2-2-1 tiene 9; la 784-50-10, 39 760."],
+    ["¿Qué es la propagación hacia adelante?", "Evaluar la red capa por capa, de la entrada a la salida, sin ciclos: $\\hat{y} = \\sigma(W_2\\,\\sigma(W_1\\mathbf{x}+\\mathbf{b}_1)+b_2)$."],
+    ["¿Qué hace la capa oculta con los datos?", "Los lleva a un plano nuevo: la parte lineal estira, gira o aplasta; la activación dobla. Ahí una recta puede separar lo que antes no."],
+    ["¿Por qué el XOR necesita una capa oculta?", "La salida es una frontera recta. Sobre $(x_1, x_2)$ no alcanza; sobre $(a_1, a_2)$, después de doblar el plano, sí."]
+  ]);
+
+  /* ---------------- conexiones ---------------- */
+  B.conexiones("red-multicapa");
+})();
+</script>
+</body>
+</html>

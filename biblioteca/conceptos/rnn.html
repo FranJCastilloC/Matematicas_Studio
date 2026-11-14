@@ -1,0 +1,1607 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RNN y estado oculto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+/* naranja: la senal que viaja hacia atras en el tiempo (como en retropropagacion.html y gradiente-desvanece.html) */
+:root { --atras: #c2610c; --atras-soft: #fbecdc; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --atras: #f2a15c; --atras-soft: #33230f; } }
+:root[data-theme="dark"] { --atras: #f2a15c; --atras-soft: #33230f; }
+@media (min-width: 981px) { .escenario { max-height: calc(100vh - 80px); overflow-y: auto; } }
+
+.rnn-svg { width: 100%; height: auto; display: block; }
+.rnn-svg .celda { fill: var(--surface); stroke: var(--j); stroke-width: 1.6; }
+.rnn-svg .celda.sin { stroke: var(--ink-3); stroke-dasharray: 4 3; }
+.rnn-svg .h0 { fill: var(--surface); stroke: var(--ink-3); stroke-width: 1.2; }
+.rnn-svg .cero { fill: var(--cell-zero); }
+.rnn-svg .pos { fill: var(--pos); }
+.rnn-svg .neg { fill: var(--neg); }
+.rnn-svg .marco { fill: none; stroke: var(--line); stroke-width: 1; }
+.rnn-svg .ar { stroke: var(--ink-3); stroke-width: 1.4; fill: none; }
+.rnn-svg .ar.rec { stroke: var(--j); }
+.rnn-svg .ar.atras { stroke: var(--atras); stroke-width: 1.6; stroke-dasharray: 5 3; }
+.rnn-svg .punta { fill: var(--ink-3); }
+.rnn-svg .punta.rec { fill: var(--j); }
+.rnn-svg .punta.atras { fill: var(--atras); }
+.rnn-svg .ficha { fill: var(--surface-2); stroke: var(--line); }
+.rnn-svg .t { font: 10px var(--f-mono); fill: var(--ink); text-anchor: middle; dominant-baseline: central; }
+.rnn-svg .t.letra { font: 600 14px var(--f-mono); }
+.rnn-svg .t.w { fill: var(--ink-2); font-size: 9.5px; }
+.rnn-svg .t.w.rec { fill: var(--j); }
+.rnn-svg .t.num { font-size: 8.6px; fill: var(--ink-2); }
+.rnn-svg .t.lab { font: 10px var(--f-body); fill: var(--ink-3); }
+.rnn-svg .t.oc { fill: var(--accent); font-weight: 600; font-size: 12px; }
+.rnn-svg .t.bien { fill: var(--ok); font-weight: 600; }
+.rnn-svg .t.mal { fill: var(--bad); font-weight: 600; }
+.rnn-svg .t.obj { fill: var(--accent); font-weight: 600; }
+.rnn-svg .t.bw { fill: var(--atras); font-weight: 600; font-size: 9px; }
+.rnn-svg .barra { fill: var(--ink-3); opacity: .45; }
+.rnn-svg .barra.pred { fill: var(--j); opacity: 1; }
+.rnn-svg .barra.atras { fill: var(--atras); opacity: 1; }
+.rnn-svg .barra.fant { fill: none; stroke: var(--accent); stroke-dasharray: 3 3; opacity: 1; }
+.rnn-svg .oh { fill: var(--surface-2); stroke: var(--line); }
+.rnn-svg .oh.on { fill: var(--accent); stroke: var(--accent); }
+.rnn-svg .base { stroke: var(--line); }
+
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.esc-head .hint { font-size: 12.5px; color: var(--ink-2); }
+.esc-fila { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; margin-top: 8px; }
+.esc-fila .seg-lab { margin-left: 0; }
+.esc-fila input[type=text] { width: 9.5em; font: 14px var(--f-mono); padding: 5px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); }
+.esc-fila input[type=range] { flex: 1 1 120px; min-width: 100px; }
+.panel { margin-top: 10px; display: grid; gap: 8px; }
+.lectura-esc { font-family: var(--f-mono); font-size: 12.5px; color: var(--ink-2); line-height: 1.7; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.lectura-esc b { color: var(--ink); font-weight: 500; }
+.lectura-esc .fw { color: var(--j); font-weight: 600; }
+.lectura-esc .bw { color: var(--atras); font-weight: 600; }
+.lectura-esc .oc { color: var(--accent); font-weight: 600; }
+.lectura-esc .si { color: var(--ok); font-weight: 600; }
+.lectura-esc .no { color: var(--bad); font-weight: 600; }
+.aviso-pal { font-size: 12px; color: var(--bad); min-height: 1em; }
+.tras[hidden] { display: none; }
+pre.codigo-bloque { margin: 8px 0; padding: 10px 12px; background: var(--surface-2); border-radius: 8px; font-family: var(--f-mono); font-size: 12.5px; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.mats { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: flex-start; }
+.mat { font-family: var(--f-mono); font-size: 11.5px; color: var(--ink-2); }
+.mat .nom { display: block; font-size: 11px; color: var(--ink-3); margin-bottom: 2px; }
+.mat table { border-collapse: collapse; }
+.mat td { padding: 1px 5px; text-align: right; border-left: 1px solid var(--line-soft); font-variant-numeric: tabular-nums; }
+.mat td:first-child { border-left: none; }
+.mat td.rec { color: var(--j); font-weight: 600; }
+
+.tabla { width: 100%; border-collapse: collapse; font-family: var(--f-mono); font-size: 12px; font-variant-numeric: tabular-nums; margin-top: 6px; }
+.tabla th { font-weight: 500; color: var(--ink-3); font-size: 11px; text-align: right; padding: 4px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.tabla td { text-align: right; padding: 3px 6px; border-bottom: 1px solid var(--line-soft); color: var(--ink-2); white-space: nowrap; }
+.tabla td:first-child, .tabla th:first-child { text-align: left; }
+.tabla td.cur { background: var(--accent-soft); color: var(--ink); font-weight: 600; }
+.tabla td.vacia { color: var(--ink-3); }
+.tabla td.si { color: var(--ok); font-weight: 600; }
+.tabla td.no { color: var(--bad); font-weight: 600; }
+.tabla-wrap { overflow-x: auto; }
+.hv { display: inline-block; min-width: 3.6em; padding: 0 3px; border-radius: 3px; text-align: right; }
+
+.formas { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; font-family: var(--f-mono); font-size: 12px; color: var(--ink-2); align-items: center; }
+.formas b { color: var(--ink); font-weight: 500; }
+.formas .k { color: var(--ink-3); }
+
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.ojo-q { margin: 8px 0 0; font-size: 14px; }
+.ojo-dato { font-family: var(--f-mono); font-size: 20px; letter-spacing: .25em; margin-top: 8px; overflow-wrap: anywhere; }
+.ojo-opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
+.ojo-opts .opt { text-align: center; }
+.objetivos { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.objetivos li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.objetivos .m { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.objetivos li.hecho { color: var(--ink); }
+.objetivos li.hecho .m { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 3px var(--surface); }
+.rejilla { display: inline-grid; grid-template-columns: repeat(3, 44px); gap: 4px; margin: 8px 0; }
+.rejilla button { font: 14px var(--f-mono); padding: 6px 0; min-width: 0; }
+.rejilla button.no0 { border-color: var(--j); color: var(--j); font-weight: 600; }
+.k-pred { font-family: var(--f-mono); font-size: 13px; line-height: 1.9; overflow-wrap: anywhere; }
+.k-pred .si { color: var(--ok); font-weight: 600; }
+.k-pred .no { color: var(--bad); font-weight: 600; }
+.datos-mano { border-collapse: collapse; font-family: var(--f-mono); font-size: 13px; margin: 4px 0 12px; }
+.datos-mano th, .datos-mano td { padding: 4px 8px; border: 1px solid var(--line); text-align: center; white-space: nowrap; }
+.datos-mano th { color: var(--ink-3); font-weight: 500; font-size: 11.5px; }
+
+.consola { margin-top: 10px; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); font-family: var(--f-mono); font-size: 12px; color: var(--ink-2); white-space: pre-wrap; overflow-wrap: anywhere; min-height: 2.4em; }
+.consola .nueva { color: var(--ink); font-weight: 600; }
+.consola .vacia { color: var(--ink-3); }
+.vr-cuenta { font-family: var(--f-mono); font-size: 12px; color: var(--ink-2); margin-top: 8px; min-height: 1.4em; overflow-wrap: anywhere; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ RNN y estado oculto</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Aprendizaje automático · Redes neuronales · SM142004 UD4, Raschka cap. 15</p>
+    <h1>RNN y estado oculto</h1>
+    <p class="lede">
+      Las redes que viste hasta ahora reciben una entrada y entregan una salida, sin recordar nada de la anterior. Un texto, una
+      melodía o una serie de temperaturas no se entienden así: lo que viene depende de lo que ya pasó. Una red recurrente lee la
+      secuencia de a un paso y arrastra un vector, el <b>estado oculto</b>, que resume lo leído. Aquí lo vas a ver moverse letra
+      por letra en una red de juguete con todos sus pesos escritos a mano.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> Una red lee una palabra letra por letra y, después de cada letra, tiene que adivinar la siguiente. ¿Qué tendría que guardar entre una letra y la otra? ¿Cómo guardarías eso con números?</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: creo que tendría que guardar..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>De una red sin memoria a la retropropagación en el tiempo</h2>
+      <p>Siete pasos. Cada uno termina con un chequeo que abre el siguiente. Equivocarte aquí no resta nada: es parte del método.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="Sin memoria">
+          <span class="etapa">Paso 1</span>
+          <h3>Adivinar la letra siguiente</h3>
+          <p>La palabra es <b>olla</b>. Una red la lee de a una letra y, después de cada una, tiene que decir cuál viene: después de la <b>o</b> viene una <b>l</b>; después de esa <b>l</b>, otra <b>l</b>; después de la segunda <b>l</b>, una <b>a</b>. Tres predicciones.</p>
+          <p>Ahora imagina que la red es como las de <a href="red-multicapa.html">Red multicapa</a>: recibe la letra actual, hace sus cuentas y responde. No guarda nada de una letra a la otra. Antes de mirar el escenario, decide qué tan bien le puede ir.</p>
+          <p>Raschka lo dice al empezar el capítulo de redes recurrentes: los perceptrones multicapa y las redes convolucionales suponen que cada ejemplo es independiente del anterior, y por eso no tienen memoria <cite class="cita" data-fuente="raschka15" data-pag="3" data-pimp="501" data-seccion="Representing sequences" data-que="La notación de secuencias x(1), ..., x(T) con la Figure 15.1, y la frase clave: MLP y CNN suponen ejemplos independientes; la RNN recuerda información del pasado." data-cuando="Al terminar este paso"></cite>.</p>
+          <div class="check" id="chk1"><p class="check-tit">Predice antes de mirar</p><div class="cuerpo"></div></div>
+          <div class="tras tras-chk1" hidden>
+            <p>Las dos <b>l</b> son la misma entrada y piden respuestas distintas. Lo que las distingue no está en la letra actual: está en lo que vino antes. En el escenario, compara la red sin memoria con la recurrente: la flecha azul que va de una copia a la siguiente es la memoria.</p>
+            <p>Un detalle del material: el ejemplo de la UD4 usa la palabra <b>hola</b>, donde ninguna letra se repite. Una red sin memoria podría aprenderla entera (h da o, o da l, l da a). El ejemplo original de Karpathy, del que sale la figura, usa <b>hello</b>, con la doble l justamente por esto.</p>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Secuencia">
+          <span class="etapa">Paso 2</span>
+          <h3>Una secuencia de vectores</h3>
+          <p>Antes de calcular nada, la palabra tiene que volverse números. Con un vocabulario de cuatro letras, <b>h, o, l, a</b>, cada letra es un vector de cuatro posiciones con un solo 1: la <b>o</b> es (0, 1, 0, 0) y la <b>l</b> es (0, 0, 1, 0). Es la codificación <b>one-hot</b>, la misma que usa el ejemplo de la UD4, con el mismo vocabulario <cite class="cita" data-fuente="dl4" data-pag="33" data-seccion="Ejemplo de RNN: modelo de lenguaje" data-que="El vocabulario de cuatro letras h, o, l, a, la codificación one-hot de 4 componentes y la idea del modelo de lenguaje: predecir la letra siguiente." data-cuando="Al terminar este paso"></cite>.</p>
+          <p>En el escenario, debajo de cada letra que entra, está su vector. La red recibe tres vectores <b>en orden</b>: o, l, l (la última letra solo se predice). El orden es parte del dato. Con las mismas letras, "olla" y "lalo" son secuencias distintas; en una tabla de datos como las de regresión, en cambio, desordenar las filas no cambia nada. Raschka lo pone como el punto de partida: con datos secuenciales, el orden importa <cite class="cita" data-fuente="raschka15" data-pag="2" data-pimp="500" data-seccion="Modeling sequential data – order matters" data-que="El supuesto de ejemplos independientes (Iris) contra datos donde el orden importa, como el precio de una acción; y la diferencia entre secuencia y serie de tiempo." data-cuando="Al terminar este paso"></cite>.</p>
+          <div class="check" id="chk2"><p class="check-tit">Elige con una razón</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="La ecuación">
+          <span class="etapa">Paso 3</span>
+          <h3>El estado oculto: lo que la red arrastra</h3>
+          <p>La red guarda un vector de tres números, el <b>estado oculto</b> <span data-tex="h_t"></span>. Empieza en cero, <span data-tex="h_0 = (0, 0, 0)"></span>: la memoria vacía. En cada paso mezcla la letra nueva con el estado anterior y pasa la suma por una tanh:</p>
+          <div class="fbloque">
+            <div data-tex="h_t = \tanh\big(\,W_{xh}\,x_t \;+\; W_{hh}\,h_{t-1} \;+\; b_h\,\big)" data-display></div>
+            <div class="vivo" id="vivo3"></div>
+          </div>
+          <p><span data-tex="W_{xh}"></span> (3 × 4) lleva la letra al estado; como <span data-tex="x_t"></span> es one-hot, el producto solo elige una columna. <span data-tex="W_{hh}"></span> (3 × 3) es la memoria: lleva el estado anterior al nuevo, y es lo único que distingue esta red de una sin memoria. Los colores de las celdas del escenario son los tres números del estado: verde azulado si son positivos, coral si son negativos, más intensos cuanto más cerca de ±1. Usa <b>Leer la letra siguiente</b>.</p>
+          <p>La UD4 escribe esta ecuación sin el sesgo, <span data-tex="h_t = \tanh(w_{hh}h_{t-1} + w_{xh}x_t)"></span>, y en la página siguiente dice que <span data-tex="h_0"></span> se inicializa generalmente en ceros <cite class="cita" data-fuente="dl4" data-pag="28" data-seccion="Recurrencia y Vanilla RNN" data-que="La recurrencia h_t = f_W(h_{t−1}, x_t) con la misma función y los mismos pesos en cada paso, y la Vanilla RNN al pie de la página, sin sesgo. El cuaderno Demo 1 de la misma unidad sí lleva el sesgo bh." data-cuando="Al terminar este paso"></cite>. La UD6 de Matemáticas la escribe completa, con <span data-tex="b_h"></span> y con la softmax en la salida <cite class="cita" data-fuente="ud6" data-pag="18" data-seccion="3.3.2 RNN: fórmulas" data-que="h_t = f(W_xh x_t + W_hh h_{t−1} + b_h) e y_t = g(W_hy h_t + b_y) con g la softmax; menciona el desvanecimiento del gradiente y nombra LSTM y GRU." data-cuando="Al terminar este paso"></cite>, y Raschka igual, en la página donde están todas las ecuaciones de la RNN <cite class="cita" data-fuente="raschka15" data-pag="7" data-pimp="505" data-seccion="Computing activations in an RNN" data-que="z_h = W_xh x + W_hh h + b_h, h = σ_h(z_h), la forma concatenada [W_xh; W_hh] y la salida o = σ_o(W_ho h + b_o). Las dimensiones solo están en los cuadritos de la Figure 15.6." data-cuando="Después del chequeo"></cite>.</p>
+          <div class="check" id="chk3"><p class="check-tit">Calcula con los números del escenario</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Desenrollar">
+          <span class="etapa">Paso 4</span>
+          <h3>Desenrollar: una sola celda, copiada en el tiempo</h3>
+          <p>El escenario dibuja tres cajas, pero es <b>una sola celda</b> usada tres veces. Cada copia usa exactamente las mismas <span data-tex="W_{xh}"></span>, <span data-tex="W_{hh}"></span> y <span data-tex="b_h"></span>: lo único que cambia de una copia a la siguiente es la letra que entra y el estado que llega. Dibujarla así, una copia por paso, se llama <b>desenrollar</b> la red. La UD4 lo dibuja con un solo bloque <span data-tex="W"></span> conectado a todas las copias <cite class="cita" data-fuente="dl4" data-pag="30" data-seccion="Red desplegada y pesos compartidos" data-que="La red desplegada h_0, ..., h_t con un único bloque W para todas las copias, y la frase de la retropropagación en el tiempo: el gradiente de W es la suma de los gradientes de cada instante." data-cuando="Al terminar este paso"></cite>.</p>
+          <p>Escribe otra palabra con las letras h, o, l, a: aparecen más copias, y los pesos del panel no cambian. Por eso una RNN puede leer secuencias de cualquier largo con un número fijo de parámetros.</p>
+          <div class="check" id="chk4"><p class="check-tit">Predice antes de contar</p><div class="cuerpo"></div></div>
+
+          <div class="destacado">
+            <p class="dest-tit">Una confusión muy común</p>
+            <h4>Tres copias, ¿son tres capas?</h4>
+            <p>El dibujo desenrollado se parece mucho a una red de tres capas puesta de costado. Antes de seguir, decide si lo es.</p>
+            <div class="check" id="chk4b"><p class="check-tit">Predice antes de seguir</p><div class="cuerpo"></div></div>
+            <div class="tras tras-chk4b" hidden>
+              <p>No lo es. En una red de tres capas, cada capa tiene sus propios pesos y la señal pasa una vez por cada una. Aquí hay <b>una</b> capa recurrente usada tres veces: el número de pasos lo decide el largo de la palabra, no la arquitectura. Una RNN de <b>dos capas</b> es otra cosa: en cada paso hay dos celdas apiladas, la segunda recibe el estado de la primera, y cada una tiene sus propios pesos. Raschka dibuja las dos versiones, plegadas y desplegadas <cite class="cita" data-fuente="raschka15" data-pag="6" data-pimp="504" data-seccion="Hidden recurrence: single-layer and multilayer RNN" data-que="Las matrices W_xh, W_hh y W_ho, que no dependen de t; el estado inicial en ceros; y la RNN de dos capas, donde la segunda capa recibe la salida de la primera en el mismo paso (Figure 15.4 y 15.5)." data-cuando="Ahora"></cite>. La profundidad en el tiempo sí tiene algo de las capas: el gradiente tiene que cruzar las tres copias de vuelta. Eso es el paso 7.</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Salidas">
+          <span class="etapa">Paso 5</span>
+          <h3>Una predicción en cada paso, o una al final</h3>
+          <p>Para adivinar la letra siguiente, cada estado pasa por una capa de salida que da una puntuación por letra, y la softmax las vuelve probabilidades:</p>
+          <div class="fbloque">
+            <div data-tex="y_t = W_{hy}\,h_t + b_y \qquad\quad p_t = \mathrm{softmax}(y_t) \qquad\quad L = \sum_{t} -\ln p_t(\text{letra correcta})" data-display></div>
+            <div class="vivo" id="vivo5"></div>
+          </div>
+          <p>Arriba de cada copia están las cuatro probabilidades; en azul, la letra que la red elige, y en violeta, la que de verdad sigue. La pérdida de la palabra suma la de cada paso, como dibuja la UD4 con <span data-tex="L_1, L_2, \ldots"></span> que se suman en <span data-tex="L"></span> <cite class="cita" data-fuente="dl4" data-pag="31" data-seccion="Pérdida total y gradiente en el tiempo" data-que="La figura con salidas y_1, y_2, y_t, pérdidas L_1, L_2, L_t que se suman en L, y el gradiente que fluye desde L a cada instante (caso N a N)." data-cuando="Al terminar este paso"></cite>. Ojo: la UD4 escribe la salida como <span data-tex="y_t = w_{hy}h_t"></span>, sin sesgo y sin softmax.</p>
+          <p>Predecir en cada paso es la configuración <b>muchos a muchos</b>. A veces solo importa la última salida: para decidir si una reseña es positiva, la red lee todo y se usa el estado final. Eso es <b>muchos a uno</b>; prueba el botón del escenario. Hay también <b>uno a muchos</b> (una imagen que genera una frase) y el codificador-decodificador de la traducción; las cuatro están en la Figure 15.2 de Raschka, en la misma página que se citó en el paso 1.</p>
+          <div class="check" id="chk5"><p class="check-tit">Elige con una razón</p><div class="cuerpo"></div></div>
+
+          <div class="destacado">
+            <p class="dest-tit">El ejemplo del material, revisado</p>
+            <h4>La figura "hola" de la UD4: ¿qué letra predice de verdad?</h4>
+            <p>La UD4 dibuja una red ya entrenada (vocabulario h, o, l, a; estado de tres números) que lee H, O, L. Para la primera entrada, <b>h</b>, la letra correcta es la <b>o</b>, marcada en negrita con puntuación 1.0. Las cuatro puntuaciones, en el orden h, o, l, a, son <b>(0.3, 1.0, 0.5, 1.2)</b> <cite class="cita" data-fuente="dl4" data-pag="34" data-seccion="Ejemplo RNN: modelo de lenguaje 'hola'" data-que="La figura completa: entradas one-hot de H, O, L, estados ocultos de tres números y las puntuaciones de cada paso con flechas x Wxh, x Whh, x Why. Mira la primera columna con lo que sabes ahora." data-cuando="Ahora, para el chequeo"></cite>. Las diapositivas la construyen columna a columna con los mismos números <cite class="cita" data-fuente="lstm4" data-pag="24" data-seccion="Ejemplo 'hola'" data-que="El vocabulario [h, o, l, a], las ecuaciones de h_t e y_t con los pesos en colores y la misma figura. Las diapositivas 25 a 27 la arman de a una columna." data-cuando="Después del chequeo"></cite>.</p>
+            <div class="check" id="chk5b"><p class="check-tit">Decide antes de seguir</p><div class="cuerpo"></div></div>
+            <div class="tras tras-chk5b" hidden>
+              <p>Gana la <b>a</b>, con 1.2. Con la softmax, <span data-tex="p(o) = e^{1.0}/(e^{0.3}+e^{1.0}+e^{0.5}+e^{1.2}) = 0.301"></span> y <span data-tex="p(a) = 0.367"></span>. En las otras dos columnas la correcta sí es la mayor (1.9 para la l y 2.2 para la a). La figura viene de la de Karpathy, que ilustra una red <b>en entrenamiento</b>: ahí tiene sentido que todavía falle. El texto de la UD4 dice que la red ya está entrenada y devuelve la O, y eso es lo que no cuadra. Tu red de juguete, con <span data-tex="b_y"></span> incluido, sí acierta las tres de "hola".</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Formas">
+          <span class="etapa">Paso 6</span>
+          <h3>Formas: lote × tiempo × características</h3>
+          <p>En la práctica no se lee una palabra sino un <b>lote</b>. Las entradas forman un tensor de tres ejes, como en <a href="tensores.html">Tensores y producto externo</a>: (lote, pasos de tiempo, características). "olla" y "hola" juntas, sin la última letra, son un tensor (2, 3, 4). En cada paso la red toma la rebanada <span data-tex="X_{:,t,:}"></span>, de forma (2, 4), y actualiza los dos estados a la vez con productos de matrices: es la versión matricial del programa de la vida real. La UD6 de Matemáticas arma justo ese tensor en su ejemplo "hello world", con forma (m, n, len(chars)) <cite class="cita" data-fuente="ud6" data-pag="20" data-seccion="RNN: secuencias, índices y one-hot" data-que="Las secuencias de 3 caracteres pasadas a índices y a one-hot de 8 posiciones, y la forma (m, n, len(chars)) del tensor de entrada. Tiene el texto de la forma duplicado al pegarlo." data-cuando="Al terminar este paso"></cite>.</p>
+          <p>Las formas de los pesos dependen de la librería. PyTorch guarda <span data-tex="W_{xh}"></span> como (oculto, entrada), igual que esta página, y le pone <b>dos</b> sesgos a la celda; Keras guarda el <code>kernel</code> traspuesto, (entrada, oculto), y un solo sesgo. Raschka muestra las formas de <code>nn.RNN(5, 2)</code>: <code>weight_ih_l0</code> [2, 5], <code>weight_hh_l0</code> [2, 2] y dos sesgos de 2 <cite class="cita" data-fuente="raschka15" data-pag="10" data-pimp="508" data-seccion="Hidden recurrence versus output recurrence: nn.RNN" data-que="nn.RNN(input_size=5, hidden_size=2, batch_first=True), las formas de sus pesos y sus dos sesgos, y la entrada (batch_size, sequence_length, 5). Al lado, el forward a mano contra nn.RNN." data-cuando="Al terminar este paso"></cite>. Dos detalles del libro: en la página 504 dice que más adelante hay que poner <code>return_sequences=True</code>, que es un parámetro de Keras (en PyTorch, <code>nn.RNN</code> siempre devuelve la secuencia entera); y en la 505 escribe <span data-tex="[W_{xh};\,W_{hh}]"></span> con punto y coma, que suele querer decir "apilar", cuando en su Figure 15.6 los bloques van lado a lado.</p>
+          <div class="check" id="chk6"><p class="check-tit">Calcula</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Hacia atrás">
+          <span class="etapa">Paso 7</span>
+          <h3>Retropropagación en el tiempo</h3>
+          <p>Para entrenar, la pérdida se deriva respecto de los pesos. Como <span data-tex="W_{hh}"></span> se usó en cada paso, su gradiente es una <b>suma</b>: un sumando por cada paso, igual que en <a href="retropropagacion.html">Retropropagación</a> un peso usado dos veces recibe dos culpas. Y la señal de error viaja de la última copia a la primera, cruzando cada paso al revés. Al cruzar el paso <span data-tex="t"></span> se multiplica por</p>
+          <div class="fbloque">
+            <div data-tex="\frac{\partial h_t}{\partial h_{t-1}} = \mathrm{diag}\big(1 - h_t^{2}\big)\,W_{hh} \qquad\qquad \frac{\partial h_T}{\partial h_k} = \prod_{t=k+1}^{T} \mathrm{diag}\big(1 - h_t^{2}\big)\,W_{hh}" data-display></div>
+            <div class="vivo" id="vivo7"></div>
+          </div>
+          <p>Es la cadena de <a href="gradiente-desvanece.html">El gradiente que se desvanece</a>, ahora en el tiempo y con el mismo <span data-tex="W_{hh}"></span> en cada eslabón. En el escenario, las barras naranjas son cuánto le importa a la <b>última</b> predicción cada estado anterior. Raschka escribe la suma y el producto en un recuadro <cite class="cita" data-fuente="raschka15" data-pag="8" data-pimp="506" data-seccion="Recuadro: Training RNNs using backpropagation through time" data-que="L = Σ L(t), la derivada de L(t) respecto de W_hh con la suma sobre k, y ∂h(t)/∂h(k) como producto de t − k factores. En la página 510 lo resume como w^(t−k): le falta la derivada de la tanh, el 1 − h² de esta página." data-cuando="Al terminar este paso"></cite>; la UD4 lo dice en prosa: el gradiente de <span data-tex="W"></span> es la suma de los gradientes de cada instante.</p>
+          <p>Con secuencias largas se recorta: la UD4 nombra la "truncated backpropagation through time" en el ejemplo "hola", donde con cuatro letras no hay nada que truncar; tiene sentido en textos largos, como en el cuaderno Demo 1, que retropropaga de a 25 caracteres y además recorta cada gradiente a [−5, 5].</p>
+          <div class="check" id="chk7"><p class="check-tit">Predice antes de ver las barras</p><div class="cuerpo"></div></div>
+          <div class="tras tras-chk7" hidden>
+            <p>Mira el panel: con "olla", el sumando del primer paso es <b>cero</b>, porque multiplica por <span data-tex="h_0 = 0"></span>. Y escribe <b>ollllllllla</b> en el escenario: a la última predicción, el estado <span data-tex="h_1"></span> le importa unas seiscientas veces menos que <span data-tex="h_{10}"></span>. Esta red no puede aprender a usar algo que leyó hace diez letras. Para eso existen las compuertas de <b>LSTM y GRU</b>.</p>
+          </div>
+          <div class="cita" id="citaHipo" hidden></div>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+        </div>
+        <div class="esc-fila" id="filaMem">
+          <span class="seg-lab">Red</span>
+          <div class="seg" id="segMem" role="group" aria-label="Con o sin memoria"></div>
+        </div>
+        <div class="esc-fila" id="filaPal">
+          <span class="seg-lab">Palabra</span>
+          <div class="seg" id="segPal" role="group" aria-label="Palabras de ejemplo"></div>
+          <input type="text" id="txtPal" maxlength="12" aria-label="Escribe una palabra con h, o, l, a" placeholder="h, o, l, a">
+        </div>
+        <div class="aviso-pal" id="avisoPal"></div>
+        <div class="esc-fila" id="filaT">
+          <button type="button" class="primary" id="btnLeer">Leer la letra siguiente</button>
+          <button type="button" class="ghost" id="btnVaciar">Volver a empezar</button>
+        </div>
+        <div class="esc-fila" id="filaConf">
+          <span class="seg-lab">Salidas</span>
+          <div class="seg" id="segConf" role="group" aria-label="Configuración"></div>
+        </div>
+        <svg id="esc" class="rnn-svg" role="img" aria-label="La red recurrente desenrollada letra por letra"></svg>
+        <div class="panel" id="panel"></div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>El programa escribe la red de juguete con sus pesos, lee "olla" con un bucle sobre el tiempo, imprime el estado y la letra que predice en cada paso, y suma la pérdida. Después hace lo mismo con un lote de dos palabras a la vez, como tensor (lote, tiempo, letras), y comprueba que el estado final de "olla" es el mismo.</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir <span class="estado" data-reto="codigo1"></span></p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="true">Python</button>
+            <button type="button" data-lang="r" aria-pressed="false">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">1 · pesos</span><span data-f="2">2 · bucle en el tiempo</span><span data-f="3">3 · lote como tensor</span>
+        </div>
+        <h3 class="mini-tit vr-tit">Paso a paso con "olla"</h3>
+        <div class="tabla-wrap"><table class="tabla" id="vrTabla"></table></div>
+        <div class="vr-cuenta" id="vrCuenta"></div>
+        <h3 class="mini-tit vr-tit">El lote: dos palabras a la vez</h3>
+        <div class="tabla-wrap"><table class="tabla" id="vrLote"></table></div>
+        <h3 class="mini-tit vr-tit">Lo que imprime</h3>
+        <div class="consola" id="vrConsola"></div>
+      </div>
+    </div>
+
+    <p class="vr-nota">Ni scikit-learn ni R base traen una capa recurrente (en esta máquina no hay PyTorch ni Keras), así que el programa se compara contra su propia versión matricial: el lote de dos palabras procesado con productos de matrices da el mismo estado final que el bucle. Python y R imprimen lo mismo; R cuenta los pasos desde 1. La red no está entrenada: los pesos son enteros elegidos a mano para que acierte "olla" y "hola".</p>
+
+    <details class="profundizar">
+      <summary>La retropropagación en el tiempo escrita a mano, contra diferencias finitas y contra el cuaderno Demo 1 (se corrió en Python y R)</summary>
+      <div>
+        <p>La pasada hacia atrás de "olla", paso por paso desde el último. Cada paso suma su parte al gradiente de <span data-tex="W_{hh}"></span>, y la señal que pasa al paso anterior se multiplica por <span data-tex="W_{hh}^{\top}"></span> después de cruzar la tanh. Python:</p>
+        <pre class="codigo-bloque">import numpy as np
+
+letras = ["h", "o", "l", "a"]
+Wxh = np.array([[1, -1, 0, 0], [1, 0, -1, 0], [1, 0, 0, 0]])
+Whh = np.array([[0, -1, 0], [0, 0, -1], [0, 1, 0]])
+bh = np.array([0, 0, 1])
+Why = np.array([[0, 0, 0], [1, 1, 1], [-2, 0, 1], [1, -1, -2]])
+by = np.array([-1, 0, 1, 0])
+palabra = "olla"
+
+def one_hot(c):
+    x = np.zeros(4)
+    x[letras.index(c)] = 1
+    return x
+
+def perdida(Whh):
+    h, L = np.zeros(3), 0.0
+    for t in range(len(palabra) - 1):
+        h = np.tanh(Wxh @ one_hot(palabra[t]) + Whh @ h + bh)
+        y = Why @ h + by
+        L -= y[letras.index(palabra[t + 1])] - np.log(np.sum(np.exp(y)))
+    return L
+
+hs, ps = [np.zeros(3)], []                        # hacia adelante, guardando cada estado
+for t in range(len(palabra) - 1):
+    hs.append(np.tanh(Wxh @ one_hot(palabra[t]) + Whh @ hs[-1] + bh))
+    y = Why @ hs[-1] + by
+    ps.append(np.exp(y) / np.sum(np.exp(y)))
+
+dWhh, dnext = np.zeros((3, 3)), np.zeros(3)       # hacia atrás en el tiempo
+for t in reversed(range(len(palabra) - 1)):
+    dy = ps[t].copy()
+    dy[letras.index(palabra[t + 1])] -= 1         # softmax con entropía cruzada: p - y
+    dh = Why.T @ dy + dnext                       # lo que llega de la salida y del futuro
+    dz = (1 - hs[t + 1] ** 2) * dh                # cruzar la tanh
+    sumando = np.outer(dz, hs[t])                 # la parte de W_hh que toca a este paso
+    dWhh += sumando
+    dnext = Whh.T @ dz                            # al paso anterior, por W_hh traspuesta
+    print("paso", t, "tamaño del sumando:", f"{np.linalg.norm(sumando):.4f}")
+
+for fila in dWhh:
+    print("dWhh:", " ".join(f"{v:.4f}" for v in fila))
+eps, num = 1e-6, np.zeros((3, 3))
+for i in range(3):
+    for j in range(3):
+        M, m = Whh.astype(float), Whh.astype(float)
+        M[i, j] += eps
+        m[i, j] -= eps
+        num[i, j] = (perdida(M) - perdida(m)) / (2 * eps)
+print("diferencias finitas coinciden:", np.allclose(dWhh, num, atol=1e-7))</pre>
+        <pre class="codigo-bloque" id="salBpttPy"></pre>
+        <p>R (los pasos se cuentan desde 1, y <code>hs[[t + 1]]</code> es <span data-tex="h_t"></span>):</p>
+        <pre class="codigo-bloque">letras &lt;- c("h", "o", "l", "a")
+Wxh &lt;- matrix(c(1, -1, 0, 0,  1, 0, -1, 0,  1, 0, 0, 0), 3, 4, byrow = TRUE)
+Whh &lt;- matrix(c(0, -1, 0,  0, 0, -1,  0, 1, 0), 3, 3, byrow = TRUE)
+bh &lt;- c(0, 0, 1)
+Why &lt;- matrix(c(0, 0, 0,  1, 1, 1,  -2, 0, 1,  1, -1, -2), 4, 3, byrow = TRUE)
+by &lt;- c(-1, 0, 1, 0)
+palabra &lt;- strsplit("olla", "")[[1]]
+n &lt;- length(palabra) - 1
+
+one_hot &lt;- function(c) { x &lt;- numeric(4); x[match(c, letras)] &lt;- 1; x }
+
+perdida &lt;- function(Whh) {
+  h &lt;- numeric(3); L &lt;- 0
+  for (t in 1:n) {
+    h &lt;- as.vector(tanh(Wxh %*% one_hot(palabra[t]) + Whh %*% h + bh))
+    y &lt;- as.vector(Why %*% h + by)
+    L &lt;- L - (y[match(palabra[t + 1], letras)] - log(sum(exp(y))))
+  }
+  L
+}
+
+hs &lt;- list(numeric(3)); ps &lt;- list()              # hacia adelante; hs[[t + 1]] es h_t
+for (t in 1:n) {
+  hs[[t + 1]] &lt;- as.vector(tanh(Wxh %*% one_hot(palabra[t]) + Whh %*% hs[[t]] + bh))
+  y &lt;- as.vector(Why %*% hs[[t + 1]] + by)
+  ps[[t]] &lt;- exp(y) / sum(exp(y))
+}
+
+dWhh &lt;- matrix(0, 3, 3); dnext &lt;- numeric(3)      # hacia atrás en el tiempo
+for (t in n:1) {
+  dy &lt;- ps[[t]]
+  k &lt;- match(palabra[t + 1], letras)
+  dy[k] &lt;- dy[k] - 1                              # softmax con entropía cruzada: p - y
+  dh &lt;- as.vector(t(Why) %*% dy) + dnext          # lo que llega de la salida y del futuro
+  dz &lt;- (1 - hs[[t + 1]]^2) * dh                  # cruzar la tanh
+  sumando &lt;- outer(dz, hs[[t]])                   # la parte de W_hh que toca a este paso
+  dWhh &lt;- dWhh + sumando
+  dnext &lt;- as.vector(t(Whh) %*% dz)               # al paso anterior, por W_hh traspuesta
+  cat("paso", t, "tamaño del sumando:", sprintf("%.4f", sqrt(sum(sumando^2))), "\n")
+}
+
+for (i in 1:3) cat("dWhh:", sprintf("%.4f", dWhh[i, ]), "\n")
+eps &lt;- 1e-6; num &lt;- matrix(0, 3, 3)
+for (i in 1:3) for (j in 1:3) {
+  M &lt;- Whh; M[i, j] &lt;- M[i, j] + eps
+  m &lt;- Whh; m[i, j] &lt;- m[i, j] - eps
+  num[i, j] &lt;- (perdida(M) - perdida(m)) / (2 * eps)
+}
+cat("diferencias finitas coinciden:", isTRUE(all.equal(dWhh, num, tolerance = 1e-7)), "\n")</pre>
+        <pre class="codigo-bloque" id="salBpttR"></pre>
+        <p>El sumando del primer paso es cero porque multiplica por <span data-tex="h_0 = 0"></span>. Y la comprobación con el material: el cuaderno <b>LSTM - Demo 1 - RNN con Numpy</b> de la UD4 es el min-char-rnn de Karpathy, con la misma ecuación (<code>hs[t] = np.tanh(np.dot(Wxh, xs[t]) + np.dot(Whh, hs[t-1]) + bh)</code>) y la misma retropropagación en el tiempo escrita a mano. Se corrió su función <code>lossFun</code> con estos mismos pesos, las entradas o, l, l y los objetivos l, l, a: devuelve la pérdida <b>0.6510</b>, la misma <code>dWhh</code> hasta el cuarto decimal y el estado final (0.7365, −0.9427, 0.0573). Su recorte a [−5, 5] no toca nada aquí: ningún gradiente pasa de 1.</p>
+      </div>
+    </details>
+
+    <details class="profundizar">
+      <summary>La misma capa en PyTorch y Keras (no se corrió: no están instalados en esta máquina)</summary>
+      <div>
+        <pre class="codigo-bloque">import torch
+rnn = torch.nn.RNN(input_size=4, hidden_size=3, batch_first=True)   # tanh por defecto
+with torch.no_grad():
+    rnn.weight_ih_l0.copy_(torch.tensor(Wxh, dtype=torch.float32))   # (3, 4): igual que aquí
+    rnn.weight_hh_l0.copy_(torch.tensor(Whh, dtype=torch.float32))   # (3, 3)
+    rnn.bias_ih_l0.copy_(torch.tensor(bh, dtype=torch.float32))
+    rnn.bias_hh_l0.zero_()                                           # el segundo sesgo de PyTorch
+salidas, h_final = rnn(torch.tensor(X, dtype=torch.float32))         # X de forma (2, 3, 4)
+# salidas: (2, 3, 3), todos los estados; h_final: (1, 2, 3) = (capas, lote, oculto)
+
+import tensorflow as tf
+capa = tf.keras.layers.SimpleRNN(3, return_sequences=True)
+capa.build((None, 3, 4))
+capa.set_weights([Wxh.T, Whh.T, bh])      # Keras guarda kernel (4, 3) y recurrent_kernel traspuestos</pre>
+        <p>En PyTorch, <code>nn.RNN(4, 3)</code> tiene <span data-tex="3\cdot4 + 3\cdot3 + 3 + 3 = 27"></span> parámetros; en Keras, <code>SimpleRNN(3)</code> sobre 4 entradas tiene 24, porque usa un solo sesgo. Ninguna de las dos incluye la capa de salida <span data-tex="W_{hy}"></span>: esa es una <code>nn.Linear(3, 4)</code> o una <code>Dense(4)</code> aparte. Sin <code>batch_first=True</code>, PyTorch espera la entrada como (tiempo, lote, características).</p>
+      </div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Copiar los pesos a Keras</h3><span class="estado" data-reto="codigo2"></span></div>
+        <div id="codigo2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>El vocabulario del cuaderno Demo 1</h3><span class="estado" data-reto="codigo3"></span></div>
+        <div id="codigo3"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: la biblioteca te avisa en el índice cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>¿Hace falta memoria?</h3><span class="estado" data-reto="ojo"></span></div>
+        <p class="desc">Cinco palabras al azar con las letras h, o, l, a. Hay que predecir cada letra a partir de la anterior. Decide, sin calcular, si una red sin memoria podría acertar todas. Apruebas con 4 de 5.</p>
+        <div id="ojo"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Construir</span><h3>Escribe la memoria a mano</h3><span class="estado" data-reto="construir"></span></div>
+        <p class="desc">Los demás pesos son los de la página; <span data-tex="W_{hh}"></span> empieza en cero. Toca cada casilla para cambiarla entre −1, 0 y 1, y mira cómo cambian las predicciones. Cumple los tres objetivos; no hace falta que sea a la vez.</p>
+        <div class="rejilla" id="kRejilla" role="group" aria-label="Matriz W_hh del reto"></div>
+        <div class="k-pred" id="kPred"></div>
+        <ul class="objetivos" id="objetivos"></ul>
+        <div class="btn-row" style="margin-top:8px"><button type="button" class="ghost" id="kPista">Una pista</button></div>
+        <div class="lectura-esc" id="kPistaTxt"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>Un paso con lápiz</h3><span class="estado" data-reto="mano"></span></div>
+        <p class="desc">Los pesos de la página: <span data-tex="W_{xh} = \begin{pmatrix}1&-1&0&0\\1&0&-1&0\\1&0&0&0\end{pmatrix}"></span> (columnas h, o, l, a), <span data-tex="W_{hh} = \begin{pmatrix}0&-1&0\\0&0&-1\\0&1&0\end{pmatrix}"></span>, <span data-tex="b_h = (0, 0, 1)"></span>. Calcula <span data-tex="z_t = W_{xh}\,x_t + W_{hh}\,h_{t-1} + b_h"></span> antes de la tanh.</p>
+        <div id="manoDatos"></div>
+        <div id="mano"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Alguien se equivocó</h3><span class="estado" data-reto="error"></span></div>
+        <p class="desc">Una de las líneas tiene un error. Tócala.</p>
+        <div id="error"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Lo que cambia en cada paso</h3><span class="estado" data-reto="prop1"></span></div>
+        <div id="prop1"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Un sumando que vale cero</h3><span class="estado" data-reto="prop2"></span></div>
+        <div id="prop2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Por qué tanh</h3><span class="estado" data-reto="prop3"></span></div>
+        <div id="prop3"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>El punto y coma de Raschka</h3><span class="estado" data-reto="prop4"></span></div>
+        <div id="prop4"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Recordar a la fuerza es lo que fija. Arma la ecuación del estado oculto y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Fórmula de memoria</span><h3>El estado nuevo</h3><span class="estado" data-reto="formula"></span></div>
+        <p class="desc">Hay piezas de más que no pertenecen. No mires arriba.</p>
+        <div id="formula"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el libro</h2>
+      <p class="lecturas-intro">Ya viste el estado moverse letra por letra, la celda copiada en el tiempo y la señal que vuelve. Ahora ve a la versión técnica y reconócela. La UD4 tiene las ecuaciones sin sesgos y el ejemplo "hola" con la primera columna que no cuadra; la UD6 de Matemáticas las escribe completas; Raschka pone todo junto en la página 505 y las formas reales de PyTorch en la 508. Si abres la biblioteca con doble clic, el enlace abre el PDF en esa página.</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> La red de juguete (vocabulario h, o, l, a, estado de tres números) y sus pesos enteros son inventados:
+    se eligieron a mano para que acierte todas las letras de "olla" y de "hola", sin entrenarla. Con otras palabras se equivoca
+    seguido, y está bien: no se diseñó para ellas. Las puntuaciones (0.3, 1.0, 0.5, 1.2) son las de la figura de la UD4. Todas las
+    cifras se calcularon con python3 y Rscript, y el cuaderno Demo 1 de la UD4 se corrió con los mismos pesos. Las palabras del ojo
+    clínico y los estados del reto a mano se generan al azar. Tu progreso se guarda en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+/*
+  EJEMPLO COMUN DE LA PARTE RECURRENTE DE LA RUTA DE REDES (lo deja esta pagina, la primera; "LSTM y GRU" lo reutiliza).
+  Calculado con python3 y Rscript; el cuaderno Demo 1 de la UD4 (lossFun) da lo mismo.
+
+  Vocabulario (el de la UD4): letras = [h, o, l, a], one-hot de 4. Estado oculto de 3 numeros, h0 = (0, 0, 0).
+    h_t = tanh(Wxh x_t + Whh h_(t-1) + bh)      y_t = Why h_t + by      p_t = softmax(y_t)
+  Pesos escritos a mano (enteros, sin entrenar):
+    Wxh = [[1, -1, 0, 0], [1, 0, -1, 0], [1, 0, 0, 0]]     (3 x 4, columnas h, o, l, a)
+    Whh = [[0, -1, 0], [0, 0, -1], [0, 1, 0]]              (3 x 3)
+    bh  = [0, 0, 1]
+    Why = [[0, 0, 0], [1, 1, 1], [-2, 0, 1], [1, -1, -2]]  (4 x 3, filas h, o, l, a)
+    by  = [-1, 0, 1, 0]
+  Parametros: 12 + 9 + 3 + 12 + 4 = 40 (la capa recurrente sola: 24, como SimpleRNN(3) de Keras; nn.RNN(4, 3) de PyTorch: 27).
+
+  "olla" (entra o, l, l; objetivos l, l, a), acierta las tres:
+    t=1 o: z = (-1, 0, 1)            h1 = (-0.7616, 0.0000, 0.7616)   p = (0.0131, 0.0355, 0.9478, 0.0036) -> l
+    t=2 l: z = (0, -1.7616, 1)       h2 = (0.0000, -0.9427, 0.7616)   p = (0.0485, 0.1100, 0.7677, 0.0738) -> l
+    t=3 l: z = (0.9427, -1.7616, 0.0573) h3 = (0.7365, -0.9427, 0.0573) p = (0.0552, 0.1292, 0.0989, 0.7167) -> a
+    perdida total 0.6510
+  "hola" (entra h, o, l; objetivos o, l, a), acierta las tres:
+    h1 = (0.7616, 0.7616, 0.9640)  h2 = (-0.9427, -0.7461, 0.9427)  h3 = (0.6328, -0.9597, 0.2486); p de la correcta 0.8533, 0.9794, 0.5678; perdida 0.7453
+  Sin memoria (Whh = 0): "olla" -> l, l, l y "hola" -> o, l, l (falla la ultima en las dos). Con Whh traspuesta, lo mismo.
+  Lote (2, 3, 4) con "olla" y "hola": estados finales iguales a los del bucle.
+  BPTT de "olla" (perdida total): sumandos de dWhh por paso, de t = 3 a t = 1: tamano 0.9811, 0.7227, 0 (h0 = 0).
+    dWhh = [[-0.4939, 0.1518, 0.3712], [-0.0839, -0.0433, 0.1189], [0.1010, -0.7466, 0.5022]] (diferencias finitas y Demo 1 coinciden)
+  Senal de la ultima prediccion hacia atras (norma): "olla" h1..h3 = 0.1079, 0.9542, 0.9620;
+    "ollllllllla" h1 = 0.0024 contra h10 = 1.4263 (unas 600 veces menos).
+  Figura "hola" de la UD4 (A p.34, C pp.24-27): entrada h, puntuaciones (0.3, 1.0, 0.5, 1.2) en [h, o, l, a]:
+    gana la a; softmax p(o) = 0.301, p(a) = 0.367.
+*/
+(function () {
+  "use strict";
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var RETOS = ["ojo", "construir", "mano", "error", "prop1", "prop2", "prop3", "prop4", "formula", "codigo1", "codigo2", "codigo3"];
+  var C = B.concepto({ id: "rnn", retos: RETOS, pasos: 7 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  /* ---------------- la red de juguete ---------------- */
+  var f = B.fmt;
+  var LET = ["h", "o", "l", "a"];
+  var P = {
+    Wxh: [[1, -1, 0, 0], [1, 0, -1, 0], [1, 0, 0, 0]],
+    Whh: [[0, -1, 0], [0, 0, -1], [0, 1, 0]],
+    bh: [0, 0, 1],
+    Why: [[0, 0, 0], [1, 1, 1], [-2, 0, 1], [1, -1, -2]],
+    by: [-1, 0, 1, 0]
+  };
+  var CERO3 = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+  function mv(M, v) { return M.map(function (fila) { var s = 0; for (var j = 0; j < v.length; j++) s += fila[j] * v[j]; return s; }); }
+  function mtv(M, v) { var out = []; for (var j = 0; j < M[0].length; j++) { var s = 0; for (var i = 0; i < M.length; i++) s += M[i][j] * v[i]; out.push(s); } return out; }
+  function suma(a, b) { return a.map(function (v, i) { return v + b[i]; }); }
+  function norma(v) { return Math.sqrt(v.reduce(function (s, x) { return s + x * x; }, 0)); }
+  function softmax(y) { var m = Math.max.apply(null, y), e = y.map(function (v) { return Math.exp(v - m); }), s = e.reduce(function (a, b) { return a + b; }, 0); return e.map(function (v) { return v / s; }); }
+  function argmax(v) { var k = 0; for (var i = 1; i < v.length; i++) if (v[i] > v[k]) k = i; return k; }
+
+  // indices matematicos: h[0] = h0, y para t = 1..T: x[t] (indice de la letra), z[t], h[t], y[t], p[t], obj[t], pred[t]
+  function correr(pal, Whh) {
+    Whh = Whh || P.Whh;
+    var T = pal.length - 1, r = { pal: pal, T: T, x: [null], z: [null], h: [[0, 0, 0]], y: [null], p: [null], obj: [null], pred: [null], perd: [null], L: 0 };
+    for (var t = 1; t <= T; t++) {
+      var k = LET.indexOf(pal[t - 1]);
+      var col = P.Wxh.map(function (fila) { return fila[k]; });
+      var rec = mv(Whh, r.h[t - 1]);
+      var z = suma(suma(col, rec), P.bh);
+      var h = z.map(Math.tanh);
+      var y = suma(mv(P.Why, h), P.by);
+      var p = softmax(y), o = LET.indexOf(pal[t]);
+      r.x.push(k); r.z.push(z); r.h.push(h); r.y.push(y); r.p.push(p); r.obj.push(o); r.pred.push(argmax(p));
+      r.perd.push(-Math.log(p[o])); r.L += -Math.log(p[o]);
+      r["col" + t] = col; r["rec" + t] = rec;
+    }
+    // hacia atras en el tiempo (perdida total): sumandos de dWhh
+    var dnext = [0, 0, 0], sum = [null], dW = CERO3.map(function (q) { return q.slice(); });
+    for (t = T; t >= 1; t--) {
+      var dy = r.p[t].slice(); dy[r.obj[t]] -= 1;
+      var dh = suma(mtv(P.Why, dy), dnext);
+      var dz = dh.map(function (v, i) { return (1 - r.h[t][i] * r.h[t][i]) * v; });
+      var s2 = 0;
+      for (var i = 0; i < 3; i++) for (var j = 0; j < 3; j++) { var q = dz[i] * r.h[t - 1][j]; dW[i][j] += q; s2 += q * q; }
+      sum[t] = Math.sqrt(s2);
+      dnext = mtv(Whh, dz);
+    }
+    r.sum = sum; r.dW = dW;
+    // senal de la ultima prediccion hacia cada estado
+    var dyT = r.p[T].slice(); dyT[r.obj[T]] -= 1;
+    var g = mtv(P.Why, dyT), gs = [];
+    gs[T] = norma(g);
+    for (t = T; t >= 2; t--) {
+      g = mtv(Whh, g.map(function (v, i) { return (1 - r.h[t][i] * r.h[t][i]) * v; }));
+      gs[t - 1] = norma(g);
+    }
+    r.g = gs;
+    return r;
+  }
+  function aciertos(r) { var n = 0; for (var t = 1; t <= r.T; t++) if (r.pred[t] === r.obj[t]) n++; return n; }
+
+  /* ---------------- dibujo ---------------- */
+  function v3(v) { return "(" + v.map(function (x) { return f(x, 4); }).join(", ") + ")"; }
+  function v3c(v) { return "(" + v.map(function (x) { return Number.isInteger(x) ? f(x, 0) : f(x, 4); }).join(", ") + ")"; }
+  function celdas(cx, cy, s, h, ocultar, numeros, vertical) {
+    var g = numeros ? 9 : 2, o = "", x0 = cx - 1.5 * s - g, y0 = cy - 1.5 * s - g;
+    for (var i = 0; i < 3; i++) {
+      var x = vertical ? cx - s / 2 : x0 + i * (s + g), y = vertical ? y0 + i * (s + g) : cy - s / 2;
+      var caja = ' x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + s.toFixed(1) + '" height="' + s.toFixed(1) + '" rx="3"/>';
+      o += '<rect class="cero"' + caja;
+      if (ocultar) { o += '<text class="t oc" x="' + (x + s / 2).toFixed(1) + '" y="' + (y + s / 2).toFixed(1) + '">?</text>'; continue; }
+      var v = h[i];
+      if (Math.abs(v) > 1e-9) o += '<rect class="' + (v > 0 ? "pos" : "neg") + '" fill-opacity="' + Math.min(1, Math.abs(v)).toFixed(3) + '"' + caja;
+      o += '<rect class="marco"' + caja;
+      if (numeros) o += '<text class="t num" x="' + (x + s / 2).toFixed(1) + '" y="' + (y + s + 9).toFixed(1) + '">' + f(v, 2) + '</text>';
+    }
+    return o;
+  }
+  function flecha(x1, y1, x2, y2, cls) {
+    var a = Math.atan2(y2 - y1, x2 - x1), L = 6;
+    var p1 = [x2 - L * Math.cos(a - 0.45), y2 - L * Math.sin(a - 0.45)], p2 = [x2 - L * Math.cos(a + 0.45), y2 - L * Math.sin(a + 0.45)];
+    return '<line class="ar ' + (cls || "") + '" x1="' + x1.toFixed(1) + '" y1="' + y1.toFixed(1) + '" x2="' + x2.toFixed(1) + '" y2="' + y2.toFixed(1) + '"/>' +
+      '<path class="punta ' + (cls || "") + '" d="M' + x2.toFixed(1) + ',' + y2.toFixed(1) + ' L' + p1[0].toFixed(1) + ',' + p1[1].toFixed(1) + ' L' + p2[0].toFixed(1) + ',' + p2[1].toFixed(1) + 'Z"/>';
+  }
+  // o: r, tVis, salida, onehot, atras, sinMem, unoFinal, formas, ocultarH(t), ocultarAtras, incognita (paso 1)
+  function dibujar(svg, o) {
+    var r = o.r, T = r.T, W = 460;
+    var top = o.salida ? 0 : -96;
+    var Y = { barTop: 18, barBot: 74, let: 84, dice: 98, celdaTop: 118, celdaBot: 176, tile: 200, oh: 232 };
+    Object.keys(Y).forEach(function (k) { Y[k] += top; });
+    var extra = o.onehot ? 66 : o.atras ? 84 : 0;
+    var Hh = Y.tile + 30 + extra;
+    var x0 = 74, colW = (W - x0 - 6) / T, cw = Math.min(colW - (colW > 60 ? 16 : 8), 100), s = Math.max(5, Math.min(22, (cw - 8) / 3));
+    var roomy = colW >= 90, cy = (Y.celdaTop + Y.celdaBot) / 2 - (roomy ? 4 : 0);
+    function cx(t) { return x0 + colW * (t - 0.5); }
+    var out = "";
+    // h0
+    var s0 = 12;
+    out += '<rect class="h0" x="6" y="' + (cy - s0 / 2 - 8) + '" width="' + (3 * s0 + 14) + '" height="' + (s0 + 16) + '" rx="6"/>';
+    out += celdas(13 + 1.5 * s0 + 2, cy, s0, [0, 0, 0], false, false);
+    out += '<text class="t lab" x="' + (13 + 1.5 * s0 + 2) + '" y="' + (cy + s0 / 2 + 16) + '">h₀</text>';
+    for (var t = 1; t <= T; t++) {
+      var c = cx(t), vis = t <= o.tVis;
+      // entrada
+      out += '<rect class="ficha" x="' + (c - 13) + '" y="' + Y.tile + '" width="26" height="26" rx="5"/><text class="t letra" x="' + c + '" y="' + (Y.tile + 13) + '">' + r.pal[t - 1] + '</text>';
+      if (roomy) out += '<text class="t lab" x="' + (c + 26) + '" y="' + (Y.tile + 13) + '">t = ' + t + '</text>';
+      out += flecha(c, Y.tile - 2, c, Y.celdaBot + 3, "");
+      if (roomy || t === 1) out += '<text class="t w" x="' + (c + 16) + '" y="' + ((Y.tile + Y.celdaBot) / 2) + '">Wxh</text>';
+      // celda
+      out += '<rect class="celda' + (o.sinMem ? " sin" : "") + '" x="' + (c - cw / 2).toFixed(1) + '" y="' + Y.celdaTop + '" width="' + cw.toFixed(1) + '" height="' + (Y.celdaBot - Y.celdaTop) + '" rx="8"/>';
+      if (roomy) out += '<text class="t lab" x="' + (c - cw / 2 + 8).toFixed(1) + '" y="' + (Y.celdaTop - 8) + '">h' + String.fromCharCode(8320 + t) + '</text>';
+      if (o.incognita || !vis) out += '<text class="t oc" x="' + c + '" y="' + cy + '">?</text>';
+      else out += celdas(c, cy, roomy ? s : Math.min(14, cw - 8), r.h[t], o.ocultarH && o.ocultarH(t), roomy, !roomy);
+      // recurrencia
+      if (!o.sinMem && !o.incognita) {
+        var xa = t === 1 ? 6 + 3 * 12 + 14 : cx(t - 1) + cw / 2, xb = c - cw / 2;
+        out += flecha(xa + 1, cy, xb - 1, cy, "rec");
+        if (roomy || t === 1) out += '<text class="t w rec" x="' + ((xa + xb) / 2) + '" y="' + (cy - 9) + '">Whh</text>';
+      }
+      if (o.formas && t === 1) out += '<text class="t w" x="' + (c + 28) + '" y="' + ((Y.tile + Y.celdaBot) / 2 + 11) + '">3 × 4</text>';
+      if (o.formas && t === 2) out += '<text class="t w rec" x="' + ((cx(1) + cw / 2 + c - cw / 2) / 2) + '" y="' + (cy + 11) + '">3×3</text>';
+      // one-hot
+      if (o.onehot) {
+        for (var q = 0; q < 4; q++) {
+          var yy = Y.oh + q * 13;
+          out += '<rect class="oh' + (q === r.x[t] ? " on" : "") + '" x="' + (c - 6) + '" y="' + yy + '" width="12" height="11" rx="2"/>';
+          out += '<text class="t num" x="' + (c + 14) + '" y="' + (yy + 5.5) + '">' + (q === r.x[t] ? "1" : "0") + '</text>';
+          if (t === 1) out += '<text class="t lab" x="' + (c - 16) + '" y="' + (yy + 5.5) + '">' + LET[q] + '</text>';
+        }
+      }
+      // salida
+      var conSal = o.salida && vis && !o.incognita && (!o.unoFinal || t === T);
+      if (conSal) {
+        out += flecha(c, Y.celdaTop - 2, c, Y.dice + 8, "");
+        if (roomy) out += '<text class="t w" x="' + (c + 16) + '" y="' + (Y.celdaTop - 10) + '">Why</text>';
+        var bw = Math.max(5, Math.min(14, (cw - 10) / 4)), gap = Math.max(1.5, bw * 0.25), x1 = c - 2 * bw - 1.5 * gap;
+        for (q = 0; q < 4; q++) {
+          var xb2 = x1 + q * (bw + gap), hb = r.p[t][q] * (Y.barBot - Y.barTop);
+          out += '<rect class="barra' + (q === r.pred[t] ? " pred" : "") + '" x="' + xb2.toFixed(1) + '" y="' + (Y.barBot - hb).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + Math.max(0.8, hb).toFixed(1) + '"/>';
+          out += '<text class="t ' + (q === r.obj[t] ? "obj" : "lab") + '" x="' + (xb2 + bw / 2).toFixed(1) + '" y="' + Y.let + '">' + LET[q] + '</text>';
+          if (roomy && q === r.pred[t]) out += '<text class="t num" x="' + (xb2 + bw / 2).toFixed(1) + '" y="' + (Y.barBot - hb - 7).toFixed(1) + '">' + f(r.p[t][q], 2) + '</text>';
+        }
+        out += '<line class="base" x1="' + (x1 - 2).toFixed(1) + '" x2="' + (x1 + 4 * bw + 3 * gap + 2).toFixed(1) + '" y1="' + Y.barBot + '" y2="' + Y.barBot + '"/>';
+        var okp = r.pred[t] === r.obj[t];
+        out += '<text class="t ' + (okp ? "bien" : "mal") + '" x="' + c + '" y="' + Y.dice + '">' + (roomy ? "dice " + LET[r.pred[t]] + (okp ? ", bien" : ", mal") : LET[r.pred[t]]) + '</text>';
+      }
+      // hacia atras
+      if (o.atras) {
+        var maxg = Math.max.apply(null, r.g.filter(function (v) { return v != null; })) || 1;
+        var yb0 = Y.tile + 36, ybb = yb0 + 52, gh = (r.g[t] / maxg) * 46;
+        if (o.ocultarAtras && t < T) {
+          out += '<rect class="barra fant" x="' + (c - 9) + '" y="' + (ybb - 26) + '" width="18" height="26"/><text class="t oc" x="' + c + '" y="' + (ybb - 34) + '">?</text>';
+        } else {
+          out += '<rect class="barra atras" x="' + (c - 9) + '" y="' + (ybb - gh).toFixed(1) + '" width="18" height="' + Math.max(0.8, gh).toFixed(1) + '"/>';
+          if (roomy || T <= 6) out += '<text class="t bw" x="' + c + '" y="' + (ybb - gh - 7).toFixed(1) + '">' + corto(r.g[t]) + '</text>';
+        }
+        out += '<line class="base" x1="' + (c - 14) + '" x2="' + (c + 14) + '" y1="' + ybb + '" y2="' + ybb + '"/>';
+        if (t > 1) out += flecha(c - cw / 2 - 1, cy + 14, cx(t - 1) + cw / 2 + 1, cy + 14, "atras");
+      }
+    }
+    if (o.atras) out += '<text class="t lab" x="6" y="' + (Y.tile + 102) + '" style="text-anchor:start">en naranja: cuánto le importa cada estado a la última predicción</text>';
+    svg.setAttribute("viewBox", "0 0 " + W + " " + Hh);
+    svg.innerHTML = out;
+  }
+  function corto(v) {
+    var a = Math.abs(v);
+    if (a === 0) return "0";
+    if (a >= 0.01 && a < 1000) { var d = a >= 100 ? 0 : a >= 10 ? 1 : a >= 1 ? 2 : 3; return (v < 0 ? "−" : "") + (+a.toFixed(d)).toString(); }
+    var m = v.toExponential(1).split("e");
+    return m[0].replace("-", "−") + "e" + m[1].replace("+", "").replace("-", "−");
+  }
+  function matHtml(nom, M, cls) {
+    var filas = (M[0] && M[0].length != null) ? M : M.map(function (v) { return [v]; });
+    return '<div class="mat"><span class="nom">' + nom + '</span><table>' + filas.map(function (fl) {
+      return '<tr>' + fl.map(function (v) { return '<td class="' + (cls || "") + '">' + f(v, 0) + '</td>'; }).join("") + '</tr>';
+    }).join("") + '</table></div>';
+  }
+
+  /* ---------------- estado del recorrido ---------------- */
+  var est = {
+    paso: 0, pal: "olla", tVis: 3, sinMem: false, unoFinal: false,
+    chk1: false, chk2: false, chk3: false, chk4: false, chk4b: false, chk5: false, chk5b: false, chk6: false, chk7: false
+  };
+  var MODOS = ["pred", "onehot", "ecuacion", "desenrollar", "salida", "formas", "atras"];
+  function modo() { return MODOS[est.paso]; }
+  var PALS = ["olla", "hola", "lola"];
+
+  function seg(el, items, fn) {
+    el.innerHTML = "";
+    items.forEach(function (it, i) {
+      var b = document.createElement("button");
+      b.type = "button"; b.textContent = it; b.setAttribute("data-i", i);
+      b.addEventListener("click", function () { fn(i); render(); });
+      el.appendChild(b);
+    });
+  }
+  function marcar(el, i) { [].forEach.call(el.children, function (b) { b.setAttribute("aria-pressed", +b.getAttribute("data-i") === i ? "true" : "false"); }); }
+  seg($("segMem"), ["Sin memoria", "Con memoria"], function (i) { est.sinMem = i === 0; });
+  seg($("segPal"), PALS, function (i) { est.pal = PALS[i]; $("txtPal").value = ""; $("avisoPal").textContent = ""; });
+  seg($("segConf"), ["Muchos a muchos", "Muchos a uno"], function (i) { est.unoFinal = i === 1; });
+  $("txtPal").addEventListener("input", function () {
+    var v = this.value.toLowerCase().replace(/\s+/g, "");
+    if (!v) { $("avisoPal").textContent = ""; return; }
+    if (!/^[hola]+$/.test(v)) { $("avisoPal").textContent = "Solo las letras h, o, l, a."; return; }
+    if (v.length < 2) { $("avisoPal").textContent = "Hacen falta al menos dos letras."; return; }
+    $("avisoPal").textContent = "";
+    est.pal = v;
+    render();
+  });
+  $("btnLeer").addEventListener("click", function () {
+    var lim = est.chk3 ? correr(est.pal).T : 1;
+    if (est.tVis < lim) est.tVis++;
+    render();
+  });
+  $("btnVaciar").addEventListener("click", function () { est.tVis = 0; render(); });
+
+  function render() {
+    var m = modo();
+    var pal = (m === "pred" || m === "onehot" || (m === "ecuacion" && !est.chk3)) ? "olla" : est.pal;
+    var r = correr(pal, (m === "pred" && est.sinMem) ? CERO3 : null);
+    $("escHint").textContent = HINTS[m]();
+    $("filaMem").hidden = !(m === "pred" && est.chk1);
+    $("filaPal").hidden = !(m === "desenrollar" || m === "salida" || m === "atras" || (m === "ecuacion" && est.chk3));
+    $("avisoPal").hidden = $("filaPal").hidden;
+    $("filaT").hidden = m !== "ecuacion";
+    $("filaConf").hidden = m !== "salida";
+    marcar($("segMem"), est.sinMem ? 0 : 1);
+    marcar($("segPal"), PALS.indexOf(est.pal));
+    marcar($("segConf"), est.unoFinal ? 1 : 0);
+    var tVis = m === "ecuacion" ? Math.min(est.tVis, r.T) : r.T;
+    if (m === "ecuacion") $("btnLeer").disabled = tVis >= (est.chk3 ? r.T : 1);
+    dibujar($("esc"), {
+      r: r, tVis: tVis,
+      incognita: m === "pred" && !est.chk1,
+      sinMem: m === "pred" && est.sinMem,
+      salida: m === "pred" ? est.chk1 : (m === "salida" || m === "atras"),
+      unoFinal: m === "salida" && est.unoFinal,
+      onehot: m === "onehot",
+      formas: m === "formas",
+      atras: m === "atras",
+      ocultarAtras: m === "atras" && !est.chk7
+    });
+    panel(m, r, tVis);
+    vivos(r, m, tVis);
+  }
+  function panel(m, r, tVis) {
+    var h = "", t;
+    if (m === "pred") {
+      if (!est.chk1) h = '<div class="lectura-esc">Entran o, l, l. La red tiene que decir l, l, a. Las respuestas aparecen cuando contestes la predicción.</div>';
+      else {
+        var sm = correr("olla", CERO3), cm = correr("olla");
+        h = '<div class="lectura-esc">Sin memoria dice: <b>' + [1, 2, 3].map(function (k) { return LET[sm.pred[k]]; }).join(", ") + '</b> · acierta <span class="' + (aciertos(sm) === 3 ? "si" : "no") + '">' + aciertos(sm) + ' de 3</span>' +
+          '<br>Con memoria dice: <b>' + [1, 2, 3].map(function (k) { return LET[cm.pred[k]]; }).join(", ") + '</b> · acierta <span class="si">' + aciertos(cm) + ' de 3</span>' +
+          '<br>Estado después de cada l: h₂ = ' + v3(cm.h[2]) + ', h₃ = ' + v3(cm.h[3]) + '</div>';
+      }
+    } else if (m === "onehot") {
+      h = '<div class="lectura-esc">Vocabulario: h, o, l, a. Entra <b>o</b> = (0, 1, 0, 0), después <b>l</b> = (0, 0, 1, 0), después <b>l</b> = (0, 0, 1, 0). La a no entra: es lo último que hay que predecir.</div>';
+    } else if (m === "ecuacion") {
+      h = '<div class="lectura-esc">Palabra: <b>' + r.pal + '</b> · letras leídas: ' + tVis + ' de ' + r.T + (est.chk3 ? "" : ' (después del chequeo puedes seguir leyendo)') + '</div>';
+    } else if (m === "desenrollar") {
+      h = '<div class="mats">' + matHtml("Wxh (3 × 4)", P.Wxh) + matHtml("Whh (3 × 3)", P.Whh, "rec") + matHtml("bh", P.bh) + matHtml("Why (4 × 3)", P.Why) + matHtml("by", P.by) + '</div>' +
+        '<div class="lectura-esc">Palabra <b>' + r.pal + '</b>: ' + r.T + ' copias de la celda · parámetros: ' + (est.chk4 ? '<b>12 + 9 + 3 + 12 + 4 = 40</b>, lea lo que lea' : '<span class="oc">?</span>') + '</div>';
+    } else if (m === "salida") {
+      var filas = "";
+      for (t = 1; t <= r.T; t++) {
+        if (est.unoFinal && t < r.T) continue;
+        filas += '<tr><td>' + t + ' · ' + r.pal[t - 1] + '</td>' + r.p[t].map(function (v, q) { return '<td class="' + (q === r.pred[t] ? (q === r.obj[t] ? "si" : "no") : "") + '">' + f(v, 4) + '</td>'; }).join("") +
+          '<td>' + r.pal[t] + '</td><td>' + f(r.perd[t], 4) + '</td></tr>';
+      }
+      h = '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>t · entra</th><th>p(h)</th><th>p(o)</th><th>p(l)</th><th>p(a)</th><th>sigue</th><th>−ln p</th></tr></thead><tbody>' + filas + '</tbody></table></div>' +
+        '<div class="lectura-esc">' + (est.unoFinal ? 'Muchos a uno: solo cuenta la última salida, pérdida ' + f(r.perd[r.T], 4) : 'Pérdida de la palabra: <b>' + f(r.L, 4) + '</b> · acierta ' + aciertos(r) + ' de ' + r.T) + '</div>';
+    } else if (m === "formas") {
+      h = formasHtml();
+    } else if (m === "atras") {
+      var ls = [];
+      for (t = r.T; t >= 1; t--) ls.push("t = " + t + ": " + (est.chk7 ? f(r.sum[t], 4) : "?"));
+      h = '<div class="lectura-esc">Barras naranjas, de h₁ a h' + (r.T < 10 ? String.fromCharCode(8320 + r.T) : "_" + r.T) + ': ' + (est.chk7 ? r.g.slice(1).map(corto).join(", ") : "aparecen con el chequeo") +
+        '<br>Tamaño del sumando de cada paso en el gradiente de W_hh (pérdida total): ' + ls.join(" · ") + '</div>';
+    }
+    $("panel").innerHTML = h;
+    if (m === "formas") ligarFormas();
+  }
+  /* calculadora de formas del paso 6 */
+  var FM = { N: 2, T: 3, d: 4, n: 3 };
+  function miles(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, "\u2009"); }
+  function formasHtml() {
+    function fila(id, lab, min, max) { return '<div class="esc-fila"><span class="seg-lab" style="min-width:8.5em">' + lab + '</span><input type="range" id="fm' + id + '" min="' + min + '" max="' + max + '" step="1" value="' + FM[id] + '" aria-label="' + lab + '"><span class="lectura-esc"><b>' + FM[id] + '</b></span></div>'; }
+    var N = FM.N, T = FM.T, d = FM.d, n = FM.n, ver = est.chk6;
+    var keras = n * (d + n) + n, torch = n * (d + n) + 2 * n;
+    return fila("N", "lote N", 1, 64) + fila("T", "pasos T", 1, 50) + fila("d", "características d", 1, 300) + fila("n", "unidades n", 1, 200) +
+      '<div class="formas" style="margin-top:8px">' +
+      '<span class="k">entrada X</span><span><b>(' + N + ', ' + T + ', ' + d + ')</b> = (lote, tiempo, características)</span>' +
+      '<span class="k">rebanada X[:, t, :]</span><span>(' + N + ', ' + d + ')</span>' +
+      '<span class="k">estado H</span><span>(' + N + ', ' + n + ')</span>' +
+      '<span class="k">W_xh</span><span>PyTorch (' + n + ', ' + d + ') · Keras kernel (' + d + ', ' + n + ')</span>' +
+      '<span class="k">W_hh</span><span>(' + n + ', ' + n + ')</span>' +
+      '<span class="k">salida</span><span>todos los pasos (' + N + ', ' + T + ', ' + n + ') · solo el último (' + N + ', ' + n + ')</span>' +
+      '<span class="k">parámetros</span><span>Keras ' + (ver ? '<b>' + miles(keras) + '</b>' : '<span class="oc">?</span>') + ' · PyTorch ' + (ver ? '<b>' + miles(torch) + '</b>' : '<span class="oc">?</span>') + ' (no dependen de N ni de T)</span>' +
+      '</div>';
+  }
+  function ligarFormas() {
+    ["N", "T", "d", "n"].forEach(function (k) {
+      var el = $("fm" + k);
+      if (el) el.addEventListener("input", function () { FM[k] = +this.value; var p = $("panel"); p.innerHTML = formasHtml(); ligarFormas(); });
+    });
+  }
+  function vivos(r, m, tVis) {
+    // paso 3: la cuenta del ultimo paso leido
+    var t = Math.max(1, Math.min(tVis, r.T));
+    if (tVis === 0) $("vivo3").innerHTML = "h₀ = (0, 0, 0): la memoria vacía. Lee la primera letra.";
+    else {
+      var ocH = !est.chk3 && t === 2;
+      $("vivo3").innerHTML = "t = " + t + ", entra «" + r.pal[t - 1] + "»: W_xh x = columna " + r.pal[t - 1] + " = " + v3c(r["col" + t]) +
+        " · W_hh h" + String.fromCharCode(8320 + Math.min(t - 1, 9)) + " = " + v3(r["rec" + t]) + " · b_h = (0, 0, 1)<br>z = " + (ocH ? "?" : v3(r.z[t])) + " · h = tanh(z) = " + (ocH ? "?" : v3(r.h[t]));
+    }
+    var o = correr(est.pal);
+    var tt = o.T;
+    $("vivo5").innerHTML = "«" + o.pal + "», último paso (entra «" + o.pal[tt - 1] + "»): y = W_hy h + b_y = " + v3(o.y[tt]) + " → p = " + v3(o.p[tt]) + " → elige «" + LET[o.pred[tt]] + "»; L = " + f(o.L, 4);
+    var ol = correr("olla");
+    var d3 = ol.h[3].map(function (v) { return 1 - v * v; });
+    $("vivo7").innerHTML = "«olla», t = 3: 1 − h₃² = " + v3(d3) + " · W_hh solo tiene 0 y ±1: el que achica es el 1 − h²";
+  }
+  var HINTS = {
+    pred: function () { return est.chk1 ? "Compara la red sin memoria con la recurrente." : "Primero la predicción."; },
+    onehot: function () { return "Debajo de cada letra, su vector one-hot."; },
+    ecuacion: function () { return "Lee la palabra de a una letra. Los colores son el estado h."; },
+    desenrollar: function () { return "Una celda, copiada una vez por letra. Prueba otra palabra."; },
+    salida: function () { return "Azul: la letra que elige. Violeta: la que sigue de verdad."; },
+    formas: function () { return "Mueve los tamaños y mira las formas."; },
+    atras: function () { return est.chk7 ? "Prueba una palabra larga, como ollllllllla." : "Primero la predicción."; }
+  };
+  function entrar(i) {
+    est.paso = i;
+    var m = MODOS[i];
+    if (m === "pred") est.sinMem = false;
+    if (m === "ecuacion") { est.tVis = est.chk3 ? Math.max(est.tVis, 1) : 1; if (!est.chk3) est.pal = "olla"; }
+    if (m === "salida") est.unoFinal = false;
+    render();
+  }
+
+  /* ---------------- chequeos ---------------- */
+  var pasos;
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+  function mostrarTras(cls) { [].forEach.call(document.querySelectorAll("." + cls), function (e) { e.hidden = false; }); }
+  B.opcionMultiple(cuerpo("chk1"), {
+    pregunta: "Una red sin memoria solo ve la letra actual. Con «olla» tiene que acertar tres veces: después de o, l; después de l, l; después de l, a. ¿Cuántas puede acertar como máximo?",
+    opciones: ["Dos: ante las dos l tiene que responder lo mismo, y una de las dos veces se equivoca", "Las tres, si la entrenas el tiempo suficiente", "Ninguna: sin memoria no puede predecir nada", "Una sola"],
+    correcta: 0,
+    pistas: [null, "Entrenar más cambia los pesos, pero sigue recibiendo la misma entrada, l, las dos veces. ¿Puede dar dos respuestas distintas a la misma entrada?", "Después de la o siempre viene l: eso se puede aprender sin recordar nada.", "La o y una de las dos l se pueden acertar mirando solo la letra actual."],
+    explicacion: "Una función da la misma salida para la misma entrada. Las dos l son la misma entrada, así que una de las dos predicciones falla siempre: lo mejor es 2 de 3. Ahora toca <b>Sin memoria</b> y <b>Con memoria</b> en el escenario.",
+    alResolver: function () { est.chk1 = true; mostrarTras("tras-chk1"); if (est.paso === 0) render(); pasos.completar(0); }
+  });
+  B.opcionMultiple(cuerpo("chk2"), {
+    pregunta: "¿Por qué no numerar las letras (h = 1, o = 2, l = 3, a = 4) y meter un solo número por letra?",
+    opciones: ["Porque la red leería un orden y unas distancias que no existen: a sería «el doble» de o, y l quedaría «entre» o y a", "Porque los números enteros no se pueden multiplicar por pesos", "Porque así la red no sabría cuántas letras tiene la palabra", "No hay problema: es lo mismo y ocupa menos"],
+    correcta: 0,
+    pistas: [null, "Cualquier número se multiplica por un peso. El problema es qué significa ese número.", "El largo de la palabra lo da la cantidad de pasos, no la codificación de cada letra.", "Con un solo número, la neurona responde w·1 a la h y w·4 a la a: cuatro veces más fuerte, sin ninguna razón."],
+    explicacion: "Con one-hot, las cuatro letras están a la misma distancia unas de otras y cada una activa su propia columna de pesos. Un número por letra inventaría una escala.",
+    alResolver: function () { est.chk2 = true; pasos.completar(1); }
+  });
+  B.numerico(cuerpo("chk3"), {
+    pregunta: "Ya tienes $h_1 = (-0.7616,\\ 0,\\ 0.7616)$. Entra la l. ¿Cuánto vale la <b>segunda</b> componente de $z_2 = W_{xh}x_2 + W_{hh}h_1 + b_h$?",
+    respuesta: -1.761594,
+    tolerancia: 0.002,
+    pistas: ["La segunda fila de $W_{xh}$ es (1, 0, −1, 0); la columna de la l es la tercera: −1.", "La segunda fila de $W_{hh}$ es (0, 0, −1): toma menos la tercera componente de $h_1$, que es 0.7616. Y $b_h$ tiene 0 en la segunda."],
+    diagnostico: function (v) {
+      if (Math.abs(v + 1) < 0.002) return "Te quedaste con la letra y olvidaste la memoria: falta $W_{hh}h_1$.";
+      if (Math.abs(v + 0.7616) < 0.002) return "Eso es solo la memoria. Falta la columna de la l en $W_{xh}$.";
+      if (Math.abs(v - 0.2384) < 0.002 || Math.abs(v + 0.2384) < 0.002) return "Revisa el signo de $W_{hh}h_1$: la fila es (0, 0, −1).";
+      if (Math.abs(v + 0.9427) < 0.002) return "Eso ya es la tanh. Se pide $z$, antes de la tanh.";
+      return null;
+    },
+    explicacion: "$-1 + (-0.7616) + 0 = -1.7616$, y $\\tanh(-1.7616) = -0.9427$. Ya puedes seguir leyendo la palabra.",
+    alResolver: function () { est.chk3 = true; if (est.paso === 2) render(); pasos.completar(2); }
+  });
+  function cerrar4() { if (est.chk4 && est.chk4b) pasos.completar(3); }
+  B.opcionMultiple(cuerpo("chk4"), {
+    pregunta: "Esta red tiene 40 números para aprender cuando lee «olla». Si leyera una palabra de 100 letras, ¿cuántos tendría?",
+    opciones: ["Los mismos 40: las 99 copias usan los mismos pesos", "100 veces más: un juego de pesos por letra", "40 más los 100 estados", "Depende de qué letras tenga la palabra"],
+    correcta: 0,
+    pistas: [null, "Mira el panel mientras escribes una palabra más larga: ¿cambia alguna matriz?", "Los estados no se aprenden: se calculan con los pesos en cada paso.", "Las letras solo eligen columnas de $W_{xh}$; las matrices son las mismas."],
+    explicacion: "Los pesos se comparten en el tiempo. Lo que crece con el largo es la cantidad de cuentas y de estados guardados, no la cantidad de parámetros.",
+    alResolver: function () { est.chk4 = true; if (est.paso === 3) render(); cerrar4(); }
+  });
+  B.opcionMultiple(cuerpo("chk4b"), {
+    pregunta: "La red desenrollada de «olla» tiene tres copias de la celda. ¿Es una red de tres capas?",
+    opciones: ["No: es una capa recurrente usada tres veces; las tres copias comparten los mismos pesos", "Sí: cada copia es una capa oculta", "Sí, pero solo durante el entrenamiento", "Depende de cuántas unidades tenga el estado"],
+    correcta: 0,
+    pistas: [null, "En una red de tres capas, ¿cuántas matrices de pesos ocultas hay? ¿Y aquí?", "En el entrenamiento se desenrolla igual, pero los pesos siguen siendo uno solo.", "Las unidades son el ancho del estado, no la cantidad de capas."],
+    explicacion: "Tres pasos no son tres capas: es la misma capa vista tres veces. El número de pasos lo pone el largo de la secuencia.",
+    alResolver: function () { est.chk4b = true; mostrarTras("tras-chk4b"); cerrar4(); }
+  });
+  function cerrar5() { if (est.chk5 && est.chk5b) pasos.completar(4); }
+  B.opcionMultiple(cuerpo("chk5"), {
+    pregunta: "Quieres que una RNN lea una reseña de cine entera y diga si es positiva o negativa. ¿Qué salidas usas?",
+    opciones: ["Solo la última: muchos a uno, con el estado que ya leyó todo", "Una salida por palabra, y la reseña es positiva si la mayoría lo son", "Solo la primera: la red decide al empezar", "Ninguna: se mira el estado $h_0$"],
+    correcta: 0,
+    pistas: [null, "Puede funcionar, pero ¿qué sabe la red en la palabra 3 sobre el final de la reseña?", "Al empezar todavía no leyó nada.", "$h_0$ es cero: es la memoria vacía."],
+    explicacion: "Muchos a uno: el último estado resume la reseña completa y una sola capa de salida lo clasifica. Es la configuración «N a 1» de la UD4.",
+    alResolver: function () { est.chk5 = true; cerrar5(); }
+  });
+  B.opcionMultiple(cuerpo("chk5b"), {
+    pregunta: "Con las puntuaciones $(0.3,\\ 1.0,\\ 0.5,\\ 1.2)$ para h, o, l, a, ¿qué letra elige esa red después de la h?",
+    opciones: ["La a: su puntuación, 1.2, es la mayor", "La o, como dice el texto: está en negrita", "La o, porque la softmax la favorece", "No se puede saber sin la softmax"],
+    correcta: 0,
+    pistas: [null, "La negrita marca la letra correcta, no la que la red elige. ¿Cuál es el número más grande?", "La softmax no cambia el orden: el número más grande da la probabilidad más grande.", "La softmax conserva el orden, así que la letra elegida se ve en las puntuaciones."],
+    explicacion: "Gana la a. La softmax es creciente: la puntuación más alta es siempre la probabilidad más alta.",
+    alResolver: function () { est.chk5b = true; mostrarTras("tras-chk5b"); cerrar5(); }
+  });
+  B.numerico(cuerpo("chk6"), {
+    pregunta: "En la Demo 2 de la UD4 hay una <code>SimpleRNN(128)</code> de Keras que recibe 256 características en cada paso. ¿Cuántos parámetros tiene?",
+    respuesta: 49280,
+    tolerancia: 0,
+    pistas: ["$W_{xh}$ es 128 × 256 y $W_{hh}$ es 128 × 128.", "Más un sesgo de 128 (Keras usa uno solo): $128\\cdot256 + 128\\cdot128 + 128$."],
+    diagnostico: function (v) {
+      if (v === 49152) return "Faltó el sesgo: 128 números más.";
+      if (v === 49408) return "Esa es la cuenta de PyTorch, con dos sesgos. Keras usa uno.";
+      if (v === 65664 || v === 65536) return "$W_{hh}$ lleva el estado al estado: es 128 × 128, no 128 × 256.";
+      if (v === 32896 || v === 32768) return "Falta $W_{hh}$, la memoria: 128 × 128.";
+      return null;
+    },
+    explicacion: "$32\\,768 + 16\\,384 + 128 = 49\\,280$, lo que imprime el <code>model.summary()</code> de la Demo 2. No depende del lote ni del largo de las secuencias. Mueve los deslizadores para comprobarlo.",
+    alResolver: function () { est.chk6 = true; if (est.paso === 5) render(); pasos.completar(5); }
+  });
+  B.opcionMultiple(cuerpo("chk7"), {
+    pregunta: "En esta red, $W_{hh}$ solo tiene ceros y ±1: no agranda ni achica. ¿La señal de la última predicción de «olla» llega entera al estado $h_1$?",
+    opciones: ["No: en cada paso se multiplica también por $1 - h_t^2$, que es menor que 1", "Sí: con un $W_{hh}$ que no achica, el producto vale 1", "No: se pierde porque $h_0 = 0$", "Sí, y además crece, porque se suma la de cada paso"],
+    correcta: 0,
+    pistas: [null, "Es lo que dice Raschka con su $w^{t-k}$. ¿Qué le falta a ese factor?", "$h_0$ anula el sumando del primer paso en el gradiente de $W_{hh}$, pero no corta la señal que llega a $h_1$.", "La suma es la de los sumandos del gradiente; la señal que viaja hacia atrás se multiplica."],
+    explicacion: "Cada cruce multiplica por $\\mathrm{diag}(1-h_t^2)\\,W_{hh}$. Con «olla», a $h_1$ le llega 0.108 contra 0.962 en $h_3$: unas nueve veces menos en dos pasos.",
+    alResolver: function () { est.chk7 = true; mostrarTras("tras-chk7"); if (est.paso === 6) render(); pasos.completar(6); }
+  });
+
+  pasos = B.pasos($("recorrido"), {
+    concepto: C,
+    alEntrar: function (i) { entrar(i); },
+    alTerminar: function () { location.hash = "retos"; }
+  });
+  if (pasos.hecho(0)) { est.chk1 = true; mostrarTras("tras-chk1"); }
+  if (pasos.hecho(1)) est.chk2 = true;
+  if (pasos.hecho(2)) est.chk3 = true;
+  if (pasos.hecho(3)) { est.chk4 = est.chk4b = true; mostrarTras("tras-chk4b"); }
+  if (pasos.hecho(4)) { est.chk5 = est.chk5b = true; mostrarTras("tras-chk5b"); }
+  if (pasos.hecho(5)) est.chk6 = true;
+  if (pasos.hecho(6)) { est.chk7 = true; mostrarTras("tras-chk7"); }
+  entrar(0);
+
+  /* ---------------- hipotesis inicial ---------------- */
+  (function () {
+    var ta = $("hipotesis"), t = null;
+    ta.value = B.nota("rnn", "hipotesis");
+    function cita() {
+      var v = ta.value.trim(), el = $("citaHipo");
+      el.hidden = !v;
+      if (v) { el.textContent = ""; el.appendChild(document.createTextNode("Al principio escribiste: «" + v + "». Ahora ya lo viste: la red guarda un vector de números, el estado oculto, que mezcla la letra nueva con el estado anterior. ¿Tu idea se parecía? ¿Y te imaginabas que recordar lo de hace muchos pasos fuera tan difícil?")); }
+    }
+    cita();
+    ta.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { B.nota("rnn", "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; cita(); }, 500);
+    });
+  })();
+
+  /* ---------------- marcadores de estado de retos ---------------- */
+  function pintarEstados() {
+    [].forEach.call(document.querySelectorAll("[data-reto]"), function (el) {
+      var ok = C.retoOk(el.getAttribute("data-reto"));
+      el.textContent = ok ? "resuelto" : "pendiente";
+      el.classList.toggle("ok", ok);
+    });
+  }
+  C.alCambiar(pintarEstados);
+
+  /* ---------------- reto: ojo clinico ---------------- */
+  (function () {
+    var cont = $("ojo");
+    cont.innerHTML = '<div class="ronda"></div><div class="ojo-dato"></div><p class="ojo-q"></p><div class="ojo-opts"></div>' +
+      '<div class="fb" aria-live="polite"></div><div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    var OPS = ["Alcanza sin memoria", "Hace falta memoria"];
+    var ronda, aciertosO, respondida, actual;
+    function analizar(w) {
+      var sig = {};
+      for (var i = 0; i < w.length - 1; i++) { var c = w[i]; (sig[c] = sig[c] || []); if (sig[c].indexOf(w[i + 1]) < 0) sig[c].push(w[i + 1]); }
+      var choque = Object.keys(sig).filter(function (c) { return sig[c].length > 1; });
+      return { sig: sig, choque: choque };
+    }
+    function generar() {
+      var quiero = Math.random() < 0.5;
+      for (var t = 0; t < 2000; t++) {
+        var n = 4 + Math.floor(Math.random() * 3), w = "";
+        for (var i = 0; i < n; i++) w += LET[Math.floor(Math.random() * 4)];
+        var a = analizar(w);
+        if ((a.choque.length > 0) === quiero) return { w: w, a: a, ok: quiero ? 1 : 0 };
+      }
+      return { w: "olla", a: analizar("olla"), ok: 1 };
+    }
+    function nueva() { ronda = 0; aciertosO = 0; mostrar(); }
+    function mostrar() {
+      respondida = false;
+      actual = generar();
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 5 · aciertos " + aciertosO;
+      cont.querySelector(".ojo-dato").textContent = actual.w;
+      cont.querySelector(".ojo-q").textContent = "¿Una red que solo ve la letra actual podría acertar todas las letras siguientes?";
+      cont.querySelector(".ojo-opts").innerHTML = OPS.map(function (o, i) { return '<button type="button" class="opt" data-v="' + i + '">' + o + '</button>'; }).join("");
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+    }
+    cont.querySelector(".ojo-opts").addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || respondida) return;
+      respondida = true;
+      var ok = +b.getAttribute("data-v") === actual.ok;
+      if (ok) aciertosO++;
+      b.classList.add(ok ? "ok" : "mal");
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (x) { x.disabled = true; if (+x.getAttribute("data-v") === actual.ok) x.classList.add("ok"); });
+      var lista = Object.keys(actual.a.sig).map(function (c) { return c + " → " + actual.a.sig[c].join(", "); }).join(" · ");
+      var por = actual.ok ? "La " + actual.a.choque[0] + " va seguida de letras distintas según el momento: la letra actual no alcanza." : "Cada letra va seguida siempre de la misma: una tabla fija lo resuelve.";
+      cont.querySelector(".fb").innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No.</span> ') + por + " (" + lista + ")";
+      var sig2 = cont.querySelector(".sig");
+      sig2.hidden = false;
+      if (ronda === 4) {
+        var aprobo = aciertosO >= 4;
+        C.reto("ojo", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertosO + " de 5" + (aprobo ? ". Aprobado." : ". Necesitas 4 para aprobar.");
+        sig2.textContent = "Otra tanda";
+      } else sig2.textContent = "Siguiente ronda";
+    });
+    cont.querySelector(".sig").addEventListener("click", function () { if (ronda === 4) nueva(); else { ronda++; mostrar(); } });
+    nueva();
+  })();
+
+  /* ---------------- reto: construir ---------------- */
+  (function () {
+    var K = [[0, 0, 0], [0, 0, 0], [0, 0, 0]], avisado = false, logrados = [false, false, false], nPista = 0;
+    function igualPagina() { return K.every(function (fl, i) { return fl.every(function (v, j) { return v === P.Whh[i][j]; }); }); }
+    var OBJ = [
+      ["Que «olla» acierte las tres letras.", function (ro) { return aciertos(ro) === 3; }],
+      ["Que «hola» acierte las tres letras.", function (ro, rh) { return aciertos(rh) === 3; }],
+      ["Las dos a la vez, con una W_hh distinta de la de la página.", function (ro, rh) { return aciertos(ro) === 3 && aciertos(rh) === 3 && !igualPagina(); }]
+    ];
+    var ul = $("objetivos");
+    OBJ.forEach(function (o) { var li = document.createElement("li"); li.innerHTML = '<span class="m"></span><span>' + o[0] + '</span>'; ul.appendChild(li); });
+    var rej = $("kRejilla");
+    for (var i = 0; i < 3; i++) for (var j = 0; j < 3; j++) {
+      var b = document.createElement("button");
+      b.type = "button"; b.setAttribute("data-i", i); b.setAttribute("data-j", j);
+      b.setAttribute("aria-label", "W_hh fila " + (i + 1) + " columna " + (j + 1));
+      rej.appendChild(b);
+    }
+    rej.addEventListener("click", function (e) {
+      var b = e.target.closest("button");
+      if (!b) return;
+      var i = +b.getAttribute("data-i"), j = +b.getAttribute("data-j");
+      K[i][j] = K[i][j] === 1 ? -1 : K[i][j] + 1;
+      pintar();
+    });
+    function linea(ro) {
+      var s = "«" + ro.pal + "»: ";
+      for (var t = 1; t <= ro.T; t++) s += '<span class="' + (ro.pred[t] === ro.obj[t] ? "si" : "no") + '">' + LET[ro.pred[t]] + '</span>' + (t < ro.T ? ", " : "");
+      return s + " · " + aciertos(ro) + " de 3";
+    }
+    function pintar() {
+      [].forEach.call(rej.children, function (b) {
+        var v = K[+b.getAttribute("data-i")][+b.getAttribute("data-j")];
+        b.textContent = v === 0 ? "0" : f(v, 0);
+        b.classList.toggle("no0", v !== 0);
+      });
+      var ro = correr("olla", K), rh = correr("hola", K);
+      $("kPred").innerHTML = linea(ro) + "<br>" + linea(rh);
+      OBJ.forEach(function (o, k) { if (!logrados[k] && o[1](ro, rh)) logrados[k] = true; ul.children[k].classList.toggle("hecho", logrados[k]); });
+      if (!avisado && logrados.every(Boolean)) { avisado = true; C.reto("construir", true); }
+    }
+    var PISTAS = [
+      "La unidad 1 es la que vota por la a: la fila de la a en W_hy es (1, −1, −2). Para que «olla» diga a al final, la unidad 1 tiene que quedar positiva después de la segunda l, y no después de la primera.",
+      "La unidad 2 se enciende en negativo cuando entra la l (W_xh tiene −1 ahí). Una unidad que copie la unidad 2 del paso anterior con signo cambiado sabe si la letra anterior fue una l: prueba la casilla fila 1, columna 2.",
+      "Además de la de la página hay más de cien W_hh con −1, 0 y 1 que aciertan las dos palabras. Una con tres números: fila 2 = (0, 0, −1), fila 3 = (0, 1, −1), fila 1 en cero."
+    ];
+    $("kPista").addEventListener("click", function () {
+      $("kPistaTxt").innerHTML = PISTAS.slice(0, nPista + 1).map(function (p, k) { return "<b>Pista " + (k + 1) + ".</b> " + p; }).join("<br>");
+      nPista = Math.min(nPista + 1, PISTAS.length - 1);
+    });
+    pintar();
+  })();
+
+  /* ---------------- reto: a mano ---------------- */
+  (function () {
+    var D;
+    function azar(a) { return a[Math.floor(Math.random() * a.length)]; }
+    function generar() {
+      var k = Math.floor(Math.random() * 4), h = [azar([-1, -0.5, 0, 0.5, 1]), azar([-1, -0.5, 0.5, 1]), azar([-1, -0.5, 0.5, 1])], i = Math.floor(Math.random() * 3);
+      var col = P.Wxh[i][k], rec = 0;
+      for (var j = 0; j < 3; j++) rec += P.Whh[i][j] * h[j];
+      D = { k: k, h: h, i: i, col: col, rec: rec, b: P.bh[i], z: col + rec + P.bh[i] };
+      $("manoDatos").innerHTML = '<table class="datos-mano"><tr><th>entra</th><th>h_(t−1)</th><th>componente pedida</th></tr><tr><td>' + LET[k] + '</td><td>(' + h.map(function (v) { return f(v, 1); }).join(", ") + ')</td><td>' + (i + 1) + 'ª</td></tr></table>';
+    }
+    generar();
+    B.numerico($("mano"), {
+      pregunta: function () { return "¿Cuánto vale la componente " + (D.i + 1) + " de $z_t$?"; },
+      respuesta: function () { return D.z; },
+      tolerancia: 0.001,
+      pistas: [
+        function () { return "Columna de la " + LET[D.k] + " en $W_{xh}$, fila " + (D.i + 1) + ": " + f(D.col, 0) + "."; },
+        function () { return "Fila " + (D.i + 1) + " de $W_{hh}$ por $h_{t-1}$: " + f(D.rec, 1) + "."; },
+        function () { return "Sesgo: " + D.b + ". Suma las tres partes."; }
+      ],
+      diagnostico: function (v) {
+        if (Math.abs(v - (D.col + D.b)) < 0.001 && D.rec !== 0) return "Faltó la memoria, $W_{hh}h_{t-1}$.";
+        if (Math.abs(v - (D.rec + D.b)) < 0.001 && D.col !== 0) return "Faltó la letra: la columna de $W_{xh}$.";
+        if (Math.abs(v - (D.col + D.rec)) < 0.001 && D.b !== 0) return "Faltó el sesgo $b_h$.";
+        return null;
+      },
+      explicacion: function () { return "$" + f(D.col, 0) + " + (" + f(D.rec, 1) + ") + " + D.b + " = " + f(D.z, 1) + "$. El estado sería $\\tanh(" + f(D.z, 1) + ") = " + f(Math.tanh(D.z), 4) + "$."; },
+      reintentable: true,
+      antesDeReintentar: generar,
+      alResolver: function (ok) { C.reto("mano", ok); }
+    });
+  })();
+
+  /* ---------------- reto: cazar el error ---------------- */
+  B.cazarError($("error"), {
+    variantes: [
+      {
+        intro: "Alguien revisa la figura «hola» de la UD4: entra la h y la letra correcta es la o. Orden de las puntuaciones: h, o, l, a.",
+        lineas: [
+          "y_1 = (0.3,\\ 1.0,\\ 0.5,\\ 1.2)",
+          "\\text{la puntuación más alta es la de la } o",
+          "\\text{la red elige la } o\\text{, como se esperaba}",
+          "p(o) = \\dfrac{e^{1.0}}{e^{0.3}+e^{1.0}+e^{0.5}+e^{1.2}} = 0.301"
+        ],
+        erronea: 1,
+        explicacion: "La más alta es 1.2, la de la a. La red de la figura elige la a, con $p(a) = 0.367$. La tercera línea razona bien desde una lectura equivocada, y la cuarta es correcta."
+      },
+      {
+        intro: "Parámetros de una <code>SimpleRNN(128)</code> de Keras que recibe 256 características por paso.",
+        lineas: [
+          "W_{xh}:\\ 128 \\times 256 = 32\\,768",
+          "W_{hh}:\\ 128 \\times 256 = 32\\,768",
+          "b_h:\\ 128",
+          "\\text{total} = 65\\,664"
+        ],
+        erronea: 1,
+        explicacion: "$W_{hh}$ lleva el estado de 128 al estado de 128: es 128 × 128 = 16 384. El total correcto es 49 280, el de la Demo 2."
+      },
+      {
+        intro: "Cuánto influye $h_1$ en $h_3$, con $h_t = \\tanh(W_{xh}x_t + W_{hh}h_{t-1} + b_h)$.",
+        lineas: [
+          "\\dfrac{\\partial h_3}{\\partial h_1} = \\dfrac{\\partial h_3}{\\partial h_2}\\,\\dfrac{\\partial h_2}{\\partial h_1}",
+          "\\dfrac{\\partial h_t}{\\partial h_{t-1}} = W_{hh}",
+          "\\dfrac{\\partial h_3}{\\partial h_1} = W_{hh}^{2}",
+          "\\text{si } W_{hh} \\text{ no achica, la señal llega entera}"
+        ],
+        erronea: 1,
+        explicacion: "Falta la derivada de la tanh: $\\partial h_t/\\partial h_{t-1} = \\mathrm{diag}(1-h_t^2)\\,W_{hh}$. Es el mismo olvido del $w^{t-k}$ de Raschka. Con «olla», la señal a $h_1$ es unas nueve veces menor que a $h_3$ aunque $W_{hh}$ no achique."
+      }
+    ],
+    alResolver: function (ok) { C.reto("error", ok); }
+  });
+
+  /* ---------------- retos de propiedades ---------------- */
+  function prop(id, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple($(id), cfg);
+  }
+  prop("prop1", {
+    pregunta: "Una RNN lee una frase de 20 palabras. ¿Qué cambia de un paso al siguiente?",
+    opciones: ["La entrada $x_t$ y el estado $h_t$; las matrices de pesos son las mismas en los 20 pasos", "Las matrices de pesos: cada paso tiene las suyas", "Solo la entrada: el estado se fija en el primer paso", "El tamaño del estado, que crece con cada palabra"],
+    correcta: 0,
+    pistas: [null, "Si cada paso tuviera sus pesos, una frase de 21 palabras necesitaría pesos que nunca se entrenaron.", "El estado se recalcula en cada paso: es justamente la memoria.", "El tamaño del estado lo fija la arquitectura (aquí, 3)."],
+    explicacion: "Los pesos se comparten en el tiempo; lo que viaja y cambia es el estado. Por eso la red lee frases de cualquier largo."
+  });
+  prop("prop2", {
+    pregunta: "En la retropropagación en el tiempo de «olla», el sumando del primer paso en el gradiente de $W_{hh}$ vale cero. ¿Por qué?",
+    opciones: ["Porque ese sumando es el error del paso por $h_0$, y $h_0 = 0$", "Porque el gradiente se desvaneció del todo antes de llegar", "Porque la primera predicción es correcta", "Porque la tanh está saturada en el primer paso"],
+    correcta: 0,
+    pistas: [null, "A $h_1$ le llega 0.108, no cero.", "Las tres predicciones son correctas y los otros sumandos no son cero.", "$1 - h_1^2$ vale 0.42, 1 y 0.42: nada saturado del todo."],
+    explicacion: "El sumando del paso $t$ es $\\delta_t\\,h_{t-1}^{\\top}$: lo que $W_{hh}$ multiplicó en ese paso. En el primero multiplicó a $h_0 = 0$, así que no tuvo ninguna culpa."
+  });
+  prop("prop3", {
+    pregunta: "¿Por qué el estado de una RNN simple suele pasar por tanh y no por ReLU?",
+    opciones: ["Porque el estado se vuelve a multiplicar por $W_{hh}$ en cada paso: acotarlo entre −1 y 1 evita que crezca sin freno", "Porque ReLU no se puede derivar", "Porque tanh no tiene el problema del gradiente que se desvanece", "Porque tanh es más rápida de calcular"],
+    correcta: 0,
+    pistas: [null, "ReLU se deriva sin problema salvo en el 0, y se usa en casi todas las capas densas.", "Al contrario: $1 - h^2 \\le 1$ achica la señal en cada paso; lo viste en el paso 7.", "La exponencial de tanh cuesta más que un máximo."],
+    explicacion: "Con ReLU y un $W_{hh}$ que agranda, el estado se multiplica paso tras paso y explota. La tanh lo deja siempre entre −1 y 1. El precio es el $1 - h^2$ que achica el gradiente."
+  });
+  prop("prop4", {
+    pregunta: "Raschka escribe $[W_{xh};\\,W_{hh}]$ con punto y coma. En su Figure 15.6, la entrada tiene 4 números y el estado 5. ¿Qué forma tiene esa matriz?",
+    opciones: ["5 × 9: los dos bloques van lado a lado y multiplican al vector apilado $[x;\\,h]$ de 9", "9 × 5: el punto y coma apila los bloques uno sobre otro", "10 × 4", "5 × 5: se suman los dos bloques"],
+    correcta: 0,
+    pistas: [null, "Apilados, $W_{xh}$ (5 × 4) y $W_{hh}$ (5 × 5) no tienen el mismo ancho: no se pueden poner uno sobre otro.", "Ninguno de los dos bloques tiene esa forma.", "No tienen la misma forma, así que no se pueden sumar."],
+    explicacion: "$[W_{xh}\\ \\ W_{hh}]$ es 5 × 9 y multiplica a $[x;\\,h]$, que sí va apilado (9 × 1). El punto y coma del libro sugiere lo contrario; la figura es la que tiene razón."
+  });
+
+  /* ---------------- formula de memoria ---------------- */
+  B.ordenar($("formula"), {
+    piezas: ["h_t", "=", "\\tanh\\Big(", "W_{xh}\\,x_t", "+\\,W_{hh}\\,h_{t-1}", "+\\,b_h", "\\Big)"],
+    distractores: ["+\\,W_{hh}\\,h_{t}", "\\sigma\\Big(", "W_{t}\\,x_t"],
+    soluciones: [[0, 1, 2, 3, 4, 5, 6], [0, 1, 2, 3, 5, 4, 6]],
+    explicacion: "La letra nueva por $W_{xh}$, el estado <b>anterior</b> por $W_{hh}$, el sesgo, y la tanh. Los pesos no llevan el subíndice $t$: son los mismos en cada paso.",
+    alResolver: function (ok) { C.reto("formula", ok); }
+  });
+
+  /* ---------------- vida real ---------------- */
+  (function () {
+    var CODIGO = {
+      py: [[null, "import numpy as np"],
+        [null, ""],
+        ["pesos", "letras = [\"h\", \"o\", \"l\", \"a\"]"],
+        ["pesos", "Wxh = np.array([[1, -1, 0, 0], [1, 0, -1, 0], [1, 0, 0, 0]])   # columnas: h, o, l, a"],
+        ["pesos", "Whh = np.array([[0, -1, 0], [0, 0, -1], [0, 1, 0]])"],
+        ["pesos", "bh = np.array([0, 0, 1])"],
+        ["pesos", "Why = np.array([[0, 0, 0], [1, 1, 1], [-2, 0, 1], [1, -1, -2]])"],
+        ["pesos", "by = np.array([-1, 0, 1, 0])"],
+        [null, ""],
+        ["def", "def one_hot(c):"],
+        ["def", "    x = np.zeros(4)"],
+        ["def", "    x[letras.index(c)] = 1"],
+        ["def", "    return x"],
+        [null, ""],
+        ["def", "def ver(v):"],
+        ["def", "    return \" \".join(f\"{x:.4f}\" for x in v)"],
+        [null, ""],
+        ["pal", "palabra = \"olla\""],
+        ["h0", "h = np.zeros(3)                                   # h0: la memoria empieza vacía"],
+        ["h0", "perdida = 0.0"],
+        [null, "for t in range(len(palabra) - 1):"],
+        ["x", "    x = one_hot(palabra[t])"],
+        ["h", "    h = np.tanh(Wxh @ x + Whh @ h + bh)           # el estado nuevo"],
+        ["y", "    y = Why @ h + by                              # puntuaciones de las 4 letras"],
+        ["p", "    p = np.exp(y) / np.sum(np.exp(y))             # softmax"],
+        ["sig", "    sigue = palabra[t + 1]"],
+        ["perd", "    perdida -= np.log(p[letras.index(sigue)])"],
+        ["pr", "    print(t, palabra[t], ver(h), letras[np.argmax(p)], sigue)"],
+        ["prp", "print(\"pérdida:\", round(perdida, 4))"],
+        [null, ""],
+        [null, "# versión matricial: un lote de palabras, forma (lote, tiempo, letras)"],
+        ["X", "X = np.array([[one_hot(c) for c in w[:-1]] for w in [\"olla\", \"hola\"]])"],
+        ["prX", "print(\"forma de X:\", X.shape)"],
+        ["T", "WxhT, WhhT = Wxh.T, Whh.T"],
+        ["H0", "H = np.zeros((2, 3))"],
+        [null, "for t in range(X.shape[1]):"],
+        ["Ht", "    H = np.tanh(X[:, t, :] @ WxhT + H @ WhhT + bh)"],
+        ["prH", "print(\"olla:\", ver(H[0]), \"| hola:\", ver(H[1]))"],
+        ["prI", "print(\"igual al bucle:\", np.allclose(H[0], h))"]],
+      r: [["pesos", "letras <- c(\"h\", \"o\", \"l\", \"a\")"],
+        ["pesos", "Wxh <- matrix(c(1, -1, 0, 0,  1, 0, -1, 0,  1, 0, 0, 0), 3, 4, byrow = TRUE)   # columnas: h, o, l, a"],
+        ["pesos", "Whh <- matrix(c(0, -1, 0,  0, 0, -1,  0, 1, 0), 3, 3, byrow = TRUE)"],
+        ["pesos", "bh <- c(0, 0, 1)"],
+        ["pesos", "Why <- matrix(c(0, 0, 0,  1, 1, 1,  -2, 0, 1,  1, -1, -2), 4, 3, byrow = TRUE)"],
+        ["pesos", "by <- c(-1, 0, 1, 0)"],
+        [null, ""],
+        ["def", "one_hot <- function(c) {"],
+        ["def", "  x <- numeric(4)"],
+        ["def", "  x[match(c, letras)] <- 1"],
+        ["def", "  x"],
+        [null, "}"],
+        [null, ""],
+        ["def", "ver <- function(v) paste(sprintf(\"%.4f\", v), collapse = \" \")"],
+        [null, ""],
+        ["pal", "palabra <- strsplit(\"olla\", \"\")[[1]]"],
+        ["h0", "h <- numeric(3)                                   # h0: la memoria empieza vacía"],
+        ["h0", "perdida <- 0"],
+        [null, "for (t in 1:(length(palabra) - 1)) {"],
+        ["x", "  x <- one_hot(palabra[t])"],
+        ["h", "  h <- as.vector(tanh(Wxh %*% x + Whh %*% h + bh))   # el estado nuevo"],
+        ["y", "  y <- as.vector(Why %*% h + by)                  # puntuaciones de las 4 letras"],
+        ["p", "  p <- exp(y) / sum(exp(y))                       # softmax"],
+        ["sig", "  sigue <- palabra[t + 1]"],
+        ["perd", "  perdida <- perdida - log(p[match(sigue, letras)])"],
+        ["pr", "  cat(t, palabra[t], ver(h), letras[which.max(p)], sigue, \"\\n\")"],
+        [null, "}"],
+        ["prp", "cat(\"pérdida:\", round(perdida, 4), \"\\n\")"],
+        [null, ""],
+        [null, "# versión matricial: un lote de palabras, forma (lote, tiempo, letras)"],
+        ["X", "palabras <- c(\"olla\", \"hola\")"],
+        ["X", "X <- array(0, dim = c(2, 3, 4))"],
+        ["X", "for (i in 1:2) for (t in 1:3) X[i, t, ] <- one_hot(substr(palabras[i], t, t))"],
+        ["prX", "cat(\"forma de X:\", dim(X), \"\\n\")"],
+        ["T", "WxhT <- t(Wxh); WhhT <- t(Whh)"],
+        ["H0", "H <- matrix(0, 2, 3)"],
+        [null, "for (t in 1:dim(X)[2]) {"],
+        ["Ht", "  H <- tanh(X[, t, ] %*% WxhT + H %*% WhhT + matrix(bh, 2, 3, byrow = TRUE))"],
+        [null, "}"],
+        ["prH", "cat(\"olla:\", ver(H[1, ]), \"| hola:\", ver(H[2, ]), \"\\n\")"],
+        ["prI", "cat(\"igual al bucle:\", isTRUE(all.equal(H[1, ], h)), \"\\n\")"]]
+    };
+    // salida real de python3 y Rscript, caracter por caracter (R deja un espacio antes del salto de linea)
+    var SALIDA = {"py": ["0 o -0.7616 0.0000 0.7616 l l", "1 l 0.0000 -0.9427 0.7616 l l", "2 l 0.7365 -0.9427 0.0573 a a", "pérdida: 0.651", "forma de X: (2, 3, 4)", "olla: 0.7365 -0.9427 0.0573 | hola: 0.6328 -0.9597 0.2486", "igual al bucle: True"], "r": ["1 o -0.7616 0.0000 0.7616 l l ", "2 l 0.0000 -0.9427 0.7616 l l ", "3 l 0.7365 -0.9427 0.0573 a a ", "pérdida: 0.651 ", "forma de X: 2 3 4 ", "olla: 0.7365 -0.9427 0.0573 | hola: 0.6328 -0.9597 0.2486 ", "igual al bucle: TRUE "]};
+    var SAL_BPTT = {"py": ["paso 2 tamaño del sumando: 0.9811", "paso 1 tamaño del sumando: 0.7227", "paso 0 tamaño del sumando: 0.0000", "dWhh: -0.4939 0.1518 0.3712", "dWhh: -0.0839 -0.0433 0.1189", "dWhh: 0.1010 -0.7466 0.5022", "diferencias finitas coinciden: True"], "r": ["paso 3 tamaño del sumando: 0.9811 ", "paso 2 tamaño del sumando: 0.7227 ", "paso 1 tamaño del sumando: 0.0000 ", "dWhh: -0.4939 0.1518 0.3712 ", "dWhh: -0.0839 -0.0433 0.1189 ", "dWhh: 0.1010 -0.7466 0.5022 ", "diferencias finitas coinciden: TRUE "]};
+    var RO = correr("olla"), RH = correr("hola");
+    var EV = [];
+    (function () {
+      var fase = 1, sal = 0, filas = [], lote = null, cur = -1, perd = 0;
+      function foto(id, x) { EV.push(Object.assign({ id: id, fase: fase, sal: sal, filas: filas.slice(), lote: lote, cur: cur, t: null, perd: perd }, x || {})); }
+      foto("pesos"); foto("def");
+      fase = 2;
+      foto("pal"); foto("h0");
+      for (var t = 1; t <= 3; t++) {
+        cur = t;
+        foto("x", { t: t });
+        filas[t] = { h: RO.h[t] };
+        foto("h", { t: t });
+        filas[t] = { h: RO.h[t], y: RO.y[t] };
+        foto("y", { t: t });
+        filas[t] = { h: RO.h[t], y: RO.y[t], p: RO.p[t] };
+        foto("p", { t: t });
+        foto("sig", { t: t });
+        perd += RO.perd[t];
+        foto("perd", { t: t });
+        sal++; filas[t].pr = true;
+        foto("pr", { t: t, nueva: true });
+      }
+      cur = -1;
+      sal++; foto("prp", { nueva: true });
+      fase = 3;
+      foto("X");
+      sal++; foto("prX", { nueva: true });
+      foto("T");
+      lote = { t: 0 }; foto("H0");
+      for (t = 1; t <= 3; t++) { lote = { t: t }; foto("Ht", { t: t }); }
+      sal++; foto("prH", { nueva: true });
+      sal++; foto("prI", { nueva: true, fin: true });
+    })();
+
+    function narrar(e, ctx) {
+      var py = ctx.lang() === "py", t = e.t, ix = t != null ? (py ? t - 1 : t) : null;
+      switch (e.id) {
+        case "pesos": return "Los pesos de la red de juguete, escritos a mano: " + (py ? "<b>np.array</b> con una lista por fila" : "<b>matrix</b> con <b>byrow = TRUE</b> para escribirlos por filas") + ". W_xh es 3 × 4 (una columna por letra), W_hh 3 × 3, W_hy 4 × 3.";
+        case "def": return "<b>one_hot</b> convierte una letra en su vector de cuatro posiciones; <b>ver</b> escribe un vector con cuatro decimales.";
+        case "pal": return py ? "La palabra es un texto: <b>palabra[t]</b> es su letra t, contando desde 0." : "<b>strsplit</b> parte el texto en letras: <b>palabra[t]</b> es la letra t, contando desde 1.";
+        case "h0": return "El estado empieza en <b>h = (0, 0, 0)</b>: la memoria vacía. La pérdida, en 0.";
+        case "x": return "Paso <b>t = " + ix + "</b>: entra la <b>" + RO.pal[t - 1] + "</b> como one-hot.";
+        case "h": return "El estado nuevo mezcla la letra (columna " + RO.pal[t - 1] + " de W_xh) con el estado anterior (W_hh h). Queda <b>" + v3(RO.h[t]) + "</b>." + (t === 3 ? " Compáralo con el del paso anterior: misma letra, otro estado." : "");
+        case "y": return "Puntuaciones de las cuatro letras: " + v3(RO.y[t]) + ".";
+        case "p": return "La softmax las vuelve probabilidades; la mayor es la de la <b>" + LET[RO.pred[t]] + "</b>, " + f(RO.p[t][RO.pred[t]], 4) + ".";
+        case "sig": return "La letra que de verdad sigue: <b>" + RO.pal[t] + "</b>.";
+        case "perd": return "Suma −ln p(" + RO.pal[t] + ") = " + f(RO.perd[t], 4) + " a la pérdida, que va en " + f(e.perd, 4) + ".";
+        case "pr": return "Imprime el paso, la letra, el estado, lo que predice y lo que sigue." + (t === 3 ? " Las tres aciertan." : "");
+        case "prp": return "La pérdida de la palabra: " + [1, 2, 3].map(function (k) { return f(RO.perd[k], 4); }).join(" + ") + " = <b>" + f(RO.L, 4) + "</b>. <b>round</b> no escribe el cero final: imprime 0.651.";
+        case "X": return py ? "El lote: una lista de palabras, cada una una lista de vectores one-hot (sin la última letra). <b>np.array</b> lo vuelve un tensor." : "El lote como <b>array</b> de tres ejes, lleno con dos bucles: palabra i, paso t, y el one-hot de la letra.";
+        case "prX": return "Forma <b>(2, 3, 4)</b>: lote, tiempo, letras.";
+        case "T": return "Con las palabras en filas, cada producto va del otro lado: X W_xhᵀ en vez de W_xh x. Se trasponen una vez.";
+        case "H0": return "Los dos estados iniciales, uno por fila: H es 2 × 3 de ceros.";
+        case "Ht": return "Paso <b>t = " + ix + "</b>: " + (py ? "<b>X[:, t, :]</b>" : "<b>X[, t, ]</b>") + " es la rebanada de este paso (2 × 4), y una sola línea actualiza los dos estados a la vez." + (py ? "" : " El sesgo va como matriz por filas: sumado como vector, R lo reciclaría por columnas.");
+        case "prH": return "Los estados finales del lote: el de «olla» y el de «hola».";
+        case "prI": return "El estado de «olla» calculado con el lote es el mismo que el del bucle: <b>" + (py ? "True" : "TRUE") + "</b>.";
+      }
+      return "";
+    }
+    function celdaH(v) {
+      return v.map(function (x) {
+        var a = Math.min(1, Math.abs(x)).toFixed(2);
+        return '<span class="hv" style="background:' + (x > 0 ? "color-mix(in srgb, var(--pos) " + Math.round(a * 45) + "%, transparent)" : x < 0 ? "color-mix(in srgb, var(--neg) " + Math.round(a * 45) + "%, transparent)" : "transparent") + '">' + f(x, 4) + '</span>';
+      }).join(" ");
+    }
+    function visual(e, anterior, ctx) {
+      var h = '<thead><tr><th>t</th><th>entra</th><th>h</th><th>predice</th><th>sigue</th></tr></thead><tbody>';
+      for (var t = 1; t <= 3; t++) {
+        var fl = e && e.filas[t], cur = !!(e && e.cur === t);
+        h += '<tr><td class="' + (cur ? "cur" : "") + '">' + ctx.ix(t - 1) + '</td><td>' + RO.pal[t - 1] + '</td>' +
+          '<td class="' + (fl ? "" : "vacia") + '">' + (fl ? celdaH(fl.h) : "·") + '</td>' +
+          '<td class="' + (fl && fl.p ? (RO.pred[t] === RO.obj[t] ? "si" : "no") : "vacia") + '">' + (fl && fl.p ? LET[RO.pred[t]] : "·") + '</td>' +
+          '<td class="' + (fl && fl.p ? "" : "vacia") + '">' + (fl && fl.p ? RO.pal[t] : "·") + '</td></tr>';
+      }
+      $("vrTabla").innerHTML = h + '</tbody>';
+      var l = '<thead><tr><th>palabra</th><th>H después del paso ' + (e && e.lote ? ctx.ix(Math.max(0, e.lote.t - 1)) : "") + '</th></tr></thead><tbody>';
+      [["olla", RO], ["hola", RH]].forEach(function (q) {
+        var tt = e && e.lote ? e.lote.t : -1;
+        l += '<tr><td>' + q[0] + '</td><td class="' + (tt >= 0 ? "" : "vacia") + '">' + (tt > 0 ? celdaH(q[1].h[tt]) : tt === 0 ? celdaH([0, 0, 0]) : "·") + '</td></tr>';
+      });
+      $("vrLote").innerHTML = l + '</tbody>';
+      var cu = "";
+      if (e && e.t != null && e.fase === 2) {
+        var t2 = e.t;
+        if (e.id === "h") cu = "z = " + v3c(RO["col" + t2]) + " + " + v3(RO["rec" + t2]) + " + (0, 0, 1) = " + v3(RO.z[t2]) + " → tanh → " + v3(RO.h[t2]);
+        else if (e.id === "y" || e.id === "p") cu = "y = " + v3(RO.y[t2]) + (e.id === "p" ? " → p = " + v3(RO.p[t2]) : "");
+        else if (e.id === "perd") cu = "pérdida = " + f(e.perd, 4);
+      }
+      $("vrCuenta").textContent = cu;
+      var lineas = (SALIDA[ctx.lang()] || []).slice(0, e ? e.sal : 0);
+      $("vrConsola").innerHTML = lineas.length ? lineas.map(function (ln, k) {
+        return '<span class="' + (e && e.nueva && k === lineas.length - 1 ? "nueva" : "") + '">' + ctx.esc(ln) + '</span>';
+      }).join("\n") : '<span class="vacia">Todavía no imprimió nada.</span>';
+    }
+    B.vidaReal($("vidareal"), {
+      codigo: CODIGO,
+      eventos: EV,
+      narrar: narrar,
+      vars: function (e, ctx) {
+        var v = [];
+        if (!e) return v;
+        if (e.t != null) v.push('<span>t = <b>' + ctx.ix(e.t - 1) + '</b></span>');
+        if (e.fase === 2 && e.id !== "pal") v.push('<span>pérdida = <b>' + f(e.perd, 4) + '</b></span>');
+        return v;
+      },
+      visual: visual,
+      demora: function (e) { return !e ? 600 : e.id === "pr" || e.id.indexOf("pr") === 0 ? 1200 : e.id === "h" || e.id === "Ht" ? 1000 : 700; }
+    });
+    $("salBpttPy").textContent = SAL_BPTT.py.join("\n");
+    $("salBpttR").textContent = SAL_BPTT.r.join("\n");
+
+    B.numerico(cuerpo("vrPred"), {
+      pregunta: "Antes de reproducir: con <code>palabra = \"olla\"</code>, ¿cuántas veces se ejecuta la línea del estado nuevo, la de la tanh, dentro del primer bucle?",
+      respuesta: 3,
+      tolerancia: 0,
+      pistas: ["El bucle recorre <code>len(palabra) - 1</code> pasos.", "La última letra no entra: solo se predice."],
+      diagnostico: function (v) {
+        if (v === 4) return "La a no entra a la red: es lo que hay que predecir al final. El bucle va hasta el largo menos uno.";
+        if (v === 1) return "Es una sola línea de código, pero está dentro del bucle: se ejecuta una vez por letra que entra.";
+        return null;
+      },
+      explicacion: "Tres: una por cada letra que entra (o, l, l). La misma línea, con los mismos pesos, tres veces: eso es la red desenrollada.",
+      alResolver: function (ok) { C.reto("codigo1", ok); }
+    });
+    prop("codigo2", {
+      pregunta: "Quieres cargar estos pesos en una <code>SimpleRNN(3)</code> de Keras con <code>set_weights([Wxh, Whh, bh])</code>, sin trasponer nada. Keras guarda <code>kernel</code> como (entrada, unidades) = (4, 3). ¿Qué pasa?",
+      opciones: [
+        "$W_{xh}$ (3 × 4) da error de forma; si traspones solo esa, $W_{hh}$ (3 × 3) entra sin error pero traspuesta, y «olla» pasa a predecir l, l, l",
+        "Keras detecta las dos y las traspone sola",
+        "Funciona igual: trasponer no cambia una matriz cuadrada",
+        "Da error de forma en las dos"
+      ],
+      correcta: 0,
+      pistas: [null, "Keras compara formas; no sabe en qué convención escribiste tus matrices.", "Una matriz cuadrada traspuesta tiene la misma forma, pero otros números en cada lugar: $W_{hh}$ no es simétrica.", "$W_{hh}$ es 3 × 3: traspuesta o no, la forma coincide."],
+      explicacion: "El error de $W_{xh}$ avisa; el de $W_{hh}$ no: la forma coincide y la red calcula con $W_{hh}^{\\top}$. Con NumPy se comprueba que así «olla» da l, l, l y «hola» o, l, l: falla la última letra en las dos, igual que sin memoria. Keras no se corrió aquí; el comportamiento de <code>set_weights</code> es comparar formas."
+    });
+    prop("codigo3", {
+      pregunta: "El cuaderno Demo 1 arma el vocabulario con <code>chars = list(set(data))</code>. Entrenas, guardas los pesos y mañana vuelves a correr el cuaderno para generar texto con ellos. ¿Qué puede pasar?",
+      opciones: [
+        "Que el orden de las letras cambie entre una ejecución y otra: el one-hot ya no coincide con las columnas de los pesos guardados",
+        "Nada: <code>set</code> ordena las letras alfabéticamente",
+        "Que se pierdan las letras repetidas del texto y la red no pueda leerlo",
+        "Que el vocabulario incluya letras que no están en el texto"
+      ],
+      correcta: 0,
+      pistas: [null, "Prueba en Python, dos veces seguidas: <code>print(list(set(\"hola\")))</code>. Aquí dio ['h', 'o', 'l', 'a'] y después ['l', 'a', 'h', 'o'].", "El vocabulario debe tener cada letra una sola vez: eso está bien.", "<code>set(data)</code> solo tiene las letras que aparecen."],
+      explicacion: "Python desordena los conjuntos de texto de forma distinta en cada ejecución (por seguridad, el hash de los textos cambia). Dentro de una misma corrida no se nota; entre dos corridas, la letra 3 puede pasar a ser otra. La UD6 de Matemáticas usa <code>sorted(list(set(text)))</code>, que da siempre el mismo orden."
+    });
+  })();
+
+  /* ---------------- tarjetas ---------------- */
+  B.tarjetas($("tarjetas"), [
+    ["¿Qué es el estado oculto?", "Un vector que la red arrastra de un paso al siguiente y que resume lo leído hasta ahora. Empieza en $h_0 = 0$."],
+    ["La ecuación de la RNN", "$h_t = \\tanh(W_{xh}x_t + W_{hh}h_{t-1} + b_h)$, y la salida $y_t = W_{hy}h_t + b_y$ con softmax."],
+    ["¿Por qué hace falta memoria en «olla»?", "Las dos l son la misma entrada y piden respuestas distintas (l y a). Solo el estado las distingue."],
+    ["¿Cuántos pesos tiene una RNN que lee 100 pasos?", "Los mismos que una que lee 3: las copias desenrolladas comparten $W_{xh}$, $W_{hh}$ y $W_{hy}$."],
+    ["¿Pasos o capas?", "Desenrollar no agrega capas: es la misma capa usada $T$ veces. Una RNN de dos capas apila dos celdas en cada paso, cada una con sus pesos."],
+    ["Formas", "Entrada (lote, tiempo, características). Parámetros de la capa: $n(d+n)+n$ en Keras, $n(d+n)+2n$ en PyTorch. SimpleRNN(128) sobre 256: 49 280."],
+    ["Retropropagación en el tiempo", "El gradiente de $W_{hh}$ suma un sumando por paso; la señal que vuelve se multiplica en cada paso por $\\mathrm{diag}(1-h_t^2)\\,W_{hh}$."],
+    ["La figura «hola» de la UD4", "Para la entrada h, la puntuación mayor es la de la a (1.2 contra 1.0): esa red elige la a, no la o."]
+  ]);
+
+  /* ---------------- conexiones ---------------- */
+  B.conexiones("rnn");
+})();
+</script>
+</body>
+</html>

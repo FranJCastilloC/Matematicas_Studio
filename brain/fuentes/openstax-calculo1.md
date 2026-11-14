@@ -101,3 +101,5 @@ Las fórmulas son imágenes o salen rotas en el texto extraído (por ejemplo √
 - 1.5 trae las funciones hiperbólicas (PDF 115-120) dentro de la sección de exponenciales y logaritmos; quien busque solo exp y log puede saltar esas páginas.
 
 Tono: introductorio y muy detallado, con todos los pasos algebraicos escritos y ejemplos de física y economía. Buena versión amable antes de un texto más formal.
+
+> Nota (2026-11-12): `~/brain/03-Matematicas` se reorganizó. Los libros enteros están en `03-Matematicas/Libros/` y los archivos por unidad quedaron directamente en la carpeta del nivel (sin la subcarpeta del libro). Las rutas vigentes están en `biblioteca/fuentes.js`; las páginas no cambian.

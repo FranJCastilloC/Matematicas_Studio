@@ -62,7 +62,7 @@ CSS ni JS relativos con `file://`, así que para probar siempre usar el servidor
 
 ## Construir por tandas
 
-El catálogo tiene el mapa completo (186 conceptos al 2026-11-11) y cada planeado lleva `tanda` (1 primero), ordenada por las
+El catálogo tiene el mapa completo (188 conceptos, todos listos al 2026-11-13) y cada planeado lleva `tanda` (1 primero), ordenada por las
 fechas del campus (`window.TANDAS`). El plan completo está en `~/.claude/plans/users-franciscocastillo-brain-second-br-splendid-diffie.md`.
 Por cada tanda:
 1. Mapas de citas primero: por cada fuente nueva, leer el PDF (o delegar la lectura) y guardar `brain/fuentes/<fuente>.md`

@@ -1,0 +1,1460 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>El gradiente que se desvanece</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+/* naranja: la senal de error que viaja hacia atras (como en retropropagacion.html). Azul (--j): lo que va hacia adelante. */
+:root { --atras: #c2610c; --atras-soft: #fbecdc; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --atras: #f2a15c; --atras-soft: #33230f; } }
+:root[data-theme="dark"] { --atras: #f2a15c; --atras-soft: #33230f; }
+@media (min-width: 981px) { .escenario { max-height: calc(100vh - 80px); overflow-y: auto; } }
+
+.cad-svg { width: 100%; height: auto; display: block; }
+.cad-svg .nd { fill: var(--surface); stroke: var(--j); stroke-width: 1.8; }
+.cad-svg .nd.in { stroke: var(--ink-3); }
+.cad-svg .ar { stroke: var(--ink-3); stroke-width: 1.3; fill: none; }
+.cad-svg .atajo { stroke: var(--accent); stroke-width: 1.6; fill: none; stroke-dasharray: 4 3; }
+.cad-svg .t { font: 10px var(--f-mono); fill: var(--ink); text-anchor: middle; dominant-baseline: central; }
+.cad-svg .t.fac { fill: var(--atras); font-weight: 600; font-size: 9.5px; }
+.cad-svg .t.hv { fill: var(--j); font-size: 9px; }
+.cad-svg .t.lab { font: 10.5px var(--f-body); fill: var(--ink-2); }
+.cad-svg .t.val { font-size: 8.6px; fill: var(--ink-2); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+.cad-svg .t.oc { fill: var(--accent); font-weight: 600; font-size: 11px; }
+.cad-svg .t.tick { font-size: 9px; fill: var(--ink-3); text-anchor: end; }
+.cad-svg .grid { stroke: var(--line-soft); }
+.cad-svg .base { stroke: var(--line); }
+.cad-svg .bar { fill: var(--atras); }
+.cad-svg .bar.fant { fill: none; stroke: var(--ink-3); stroke-dasharray: 3 3; }
+.cad-svg .bar.oc { fill: none; stroke: var(--accent); stroke-dasharray: 4 3; }
+.cad-svg .umbral { stroke: var(--bad); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.cad-svg .flecha { fill: var(--ink-3); }
+
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.esc-head .hint { font-size: 12.5px; color: var(--ink-2); }
+.esc-fila { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; margin-top: 8px; }
+.esc-fila .seg-lab { margin-left: 0; }
+.esc-fila input[type=range] { flex: 1 1 140px; min-width: 120px; }
+.seg.multi { flex-wrap: wrap; }
+.panel { margin-top: 10px; display: grid; gap: 8px; }
+.lectura-esc { font-family: var(--f-mono); font-size: 12.5px; color: var(--ink-2); line-height: 1.7; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.lectura-esc b { color: var(--ink); font-weight: 500; }
+.lectura-esc .bw { color: var(--atras); font-weight: 600; }
+.lectura-esc .fw { color: var(--j); font-weight: 600; }
+.lectura-esc .oc { color: var(--accent); font-weight: 600; }
+.lectura-esc .si { color: var(--ok); font-weight: 600; }
+.lectura-esc .no { color: var(--bad); font-weight: 600; }
+.tras[hidden] { display: none; }
+pre.codigo-bloque { margin: 8px 0; padding: 10px 12px; background: var(--surface-2); border-radius: 8px; font-family: var(--f-mono); font-size: 12.5px; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.tabla { width: 100%; border-collapse: collapse; font-family: var(--f-mono); font-size: 12px; font-variant-numeric: tabular-nums; margin-top: 6px; }
+.tabla th { font-weight: 500; color: var(--ink-3); font-size: 11px; text-align: right; padding: 4px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.tabla td { text-align: right; padding: 3px 6px; border-bottom: 1px solid var(--line-soft); color: var(--ink-2); white-space: nowrap; }
+.tabla td:first-child, .tabla th:first-child { text-align: left; }
+.tabla td.bw { color: var(--atras); font-weight: 600; }
+.tabla td.fw { color: var(--j); }
+.tabla td.cur { background: var(--accent-soft); color: var(--ink); font-weight: 600; }
+.tabla td.vacia { color: var(--ink-3); }
+.tabla-wrap { overflow-x: auto; }
+
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.ojo-q { margin: 8px 0 0; font-size: 14px; }
+.ojo-dato { font-family: var(--f-mono); font-size: 13px; margin-top: 8px; line-height: 1.8; overflow-wrap: anywhere; }
+.ojo-opts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
+.ojo-opts .opt { text-align: center; }
+.objetivos { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.objetivos li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.objetivos .m { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.objetivos li.hecho { color: var(--ink); }
+.objetivos li.hecho .m { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 3px var(--surface); }
+.datos-mano { border-collapse: collapse; font-family: var(--f-mono); font-size: 13px; margin: 4px 0 12px; }
+.datos-mano th, .datos-mano td { padding: 4px 8px; border: 1px solid var(--line); text-align: center; white-space: nowrap; }
+.datos-mano th { color: var(--ink-3); font-weight: 500; font-size: 11.5px; }
+
+.consola { margin-top: 10px; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); font-family: var(--f-mono); font-size: 12px; color: var(--ink-2); white-space: pre-wrap; overflow-wrap: anywhere; min-height: 2.4em; }
+.consola .nueva { color: var(--ink); font-weight: 600; }
+.consola .vacia { color: var(--ink-3); }
+.vr-cuenta { font-family: var(--f-mono); font-size: 12px; color: var(--ink-2); margin-top: 8px; min-height: 1.4em; overflow-wrap: anywhere; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ El gradiente que se desvanece</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Aprendizaje automático · Redes neuronales · SM142004 UD4, Raschka caps. 11, 13 y 15</p>
+    <h1>El gradiente que se desvanece</h1>
+    <p class="lede">
+      La retropropagación lleva el error de la salida hacia la entrada, capa por capa. En cada capa que cruza, la señal se
+      <b>multiplica</b> por un número. Si esos números son menores que 1, después de diez capas no queda casi nada y las primeras
+      capas dejan de aprender; si son mayores que 1, la señal explota. Aquí vas a ver esa cadena de multiplicaciones en una red de
+      diez capas, y las cuatro ideas que la domaron: otra activación, la escala de los pesos al empezar, el recorte y los atajos.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> Entrenas una red de diez capas. Las últimas capas cambian rápido y las primeras casi no se mueven, época tras época. ¿Por qué crees que pasa? ¿Qué cambiarías para arreglarlo?</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: creo que las primeras capas reciben..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>De una fila de neuronas a las redes muy profundas</h2>
+      <p>Ocho pasos. Cada uno termina con un chequeo que abre el siguiente. Equivocarte aquí no resta nada: es parte del método.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="Diez capas">
+          <span class="etapa">Paso 1</span>
+          <h3>Diez neuronas en fila</h3>
+          <p>En el escenario hay la red más flaca que se puede hacer: diez capas de <b>una sola neurona</b>, una detrás de otra. Cada neurona recibe lo que entrega la anterior, lo multiplica por su peso y lo pasa por una sigmoide. Todos los pesos valen 1 y la entrada también.</p>
+          <p>Al final está la pérdida. Cuando la red se equivoca, la retropropagación manda una señal de error de vuelta, desde la capa 10 hasta la capa 1, como viste en <a href="retropropagacion.html">Retropropagación</a>. Cuánto aprende una capa depende de cuánta señal le llega. Debajo de cada neurona va a aparecer una barra con la señal que recibe.</p>
+          <p>Raschka lo advierte cuando presenta las redes con varias capas ocultas: cuantas más capas, más chicos se vuelven los gradientes <cite class="cita" data-fuente="raschka11" data-pag="5" data-pimp="339" data-seccion="Recuadro: Adding additional hidden layers" data-que="El número de capas como hiperparámetro y la advertencia: los gradientes de la pérdida se achican a medida que se agregan capas (vanishing gradient). Por eso hicieron falta técnicas especiales para las redes profundas." data-cuando="Al terminar este paso"></cite>.</p>
+          <div class="check" id="chk1"><p class="check-tit">Predice antes de ver las barras</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Multiplica">
+          <span class="etapa">Paso 2</span>
+          <h3>Cada cruce multiplica</h3>
+          <p>Mira las flechas entre las neuronas: ahora llevan un número naranja. Es lo que le pasa a la señal de error al cruzar esa capa hacia atrás: <b>se multiplica</b> por ese número. La capa 10 recibe 1 de la pérdida. Para llegar a la capa 9 cruza una vez; para llegar a la capa 1 cruza nueve veces.</p>
+          <p>Aquí todos los números de las flechas rondan 0.22. Multiplicar por 0.22 es quedarse con algo menos de un cuarto. Hazlo nueve veces seguidas y queda una millonésima. No hace falta ninguna capa defectuosa: alcanza con que todas achiquen un poco.</p>
+          <p>Nield lo define con palabras: las pendientes de las derivadas parciales se vuelven tan pequeñas que se acercan a 0 antes de tiempo y frenan el entrenamiento <cite class="cita" data-fuente="nield7" data-pag="11" data-seccion="ReLU y el gradiente que se desvanece" data-que="La única definición del capítulo: las derivadas parciales se achican hasta casi 0 y el entrenamiento se frena. La menciona para justificar ReLU." data-cuando="Al terminar este paso"></cite>.</p>
+          <div class="check" id="chk2"><p class="check-tit">Calcula antes de mirar</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="El techo">
+          <span class="etapa">Paso 3</span>
+          <h3>De dónde sale el 0.22: el techo de la sigmoide</h3>
+          <p>Pon nombres. La capa <span data-tex="k"></span> calcula <span data-tex="z_k = w_k\,h_{k-1}"></span> y entrega <span data-tex="h_k = \sigma(z_k)"></span>. Por la regla de la cadena, la señal que llega a la capa anterior es:</p>
+          <div class="fbloque">
+            <div data-tex="\frac{\partial L}{\partial h_{k-1}} = \frac{\partial L}{\partial h_k}\cdot\underbrace{w_k\,\sigma'(z_k)}_{\text{el número de la flecha}} \qquad\Longrightarrow\qquad \frac{\partial L}{\partial h_1} = \frac{\partial L}{\partial h_{10}}\prod_{k=2}^{10} w_k\,\sigma'(z_k)" data-display></div>
+            <div class="vivo" id="vivo3"></div>
+          </div>
+          <p>En <a href="activaciones.html">Funciones de activación</a> viste que la pendiente de la sigmoide nunca pasa de <span data-tex="0.25"></span>. Con pesos de 1, cada factor es a lo sumo 0.25: la cadena no tiene cómo mantenerse. Y fíjate en la forma del producto: el mismo tipo de factor, nueve veces. Eso es una <b>potencia</b>, y las potencias de un número menor que 1 caen de forma exponencial.</p>
+          <p>Por eso el escenario cambió a <b>escala logarítmica</b>: cada raya horizontal es una potencia de 10. Una caída exponencial se ve como una escalera pareja, con el mismo salto en cada capa. Prueba la escala lineal para ver por qué hace falta: las primeras seis barras desaparecen. La UD4 lo dice en una línea: la sigmoide y la tanh "saturan rápido" y producen el desvanecimiento del gradiente <cite class="cita" data-fuente="dl4" data-pag="15" data-seccion="Funciones de activación: sigmoid y tanh" data-que="Rangos (0, 1) y (−1, 1), la saturación y el nombre del fenómeno. No explica por qué pasa ni escribe ninguna derivada: lo que explica este paso no está en la unidad." data-cuando="Al terminar este paso"></cite>. La unidad no da el porqué; el porqué es este producto.</p>
+          <div class="check" id="chk3"><p class="check-tit">Calcula la cota</p><div class="cuerpo"></div></div>
+
+          <div class="destacado">
+            <p class="dest-tit">Una trampa muy común</p>
+            <h4>Si a la capa 1 le llega casi cero, ¿ya aprendió todo lo que podía?</h4>
+            <p>Un gradiente casi cero suena a "estoy en el fondo, no hay hacia dónde bajar". Antes de decidir, mira la salida de la red en el panel del escenario y cambia la entrada <span data-tex="x"></span> con los botones.</p>
+            <div class="check" id="chk3b"><p class="check-tit">Predice antes de seguir</p><div class="cuerpo"></div></div>
+            <div class="tras tras-chk3b" hidden>
+              <p>La red responde <b>0.659</b> con cualquier entrada: −2, 1 o 3 dan lo mismo hasta el sexto decimal. Es una red que no distingue nada, lo peor posible, y aun así a su primera capa le llega una millonésima. El terreno es plano, no es un fondo. Hacia adelante pasa lo mismo que hacia atrás: cada sigmoide aprieta las diferencias y después de diez la entrada ya se olvidó. Es la meseta del XOR que viste en <a href="retropropagacion.html">Retropropagación</a>, llevada al extremo.</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="ReLU">
+          <span class="etapa">Paso 4</span>
+          <h3>Cambiar la activación: ReLU y su pendiente 1</h3>
+          <p>El factor de cada flecha es peso por pendiente. Si la pendiente fuera 1, con pesos de 1 el factor sería exactamente 1 y la señal llegaría entera. ReLU tiene pendiente 1 donde está encendida. Elige <b>ReLU</b> arriba del escenario: las diez barras quedan a la misma altura. Elige <b>tanh</b>: su pendiente llega a 1 en el centro, así que achica menos que la sigmoide, pero achica.</p>
+          <p>La UD4 presenta ReLU como la solución: "las derivadas no disminuyen" <cite class="cita" data-fuente="dl4" data-pag="16" data-seccion="Funciones de activación: ReLU" data-que="ReLU como respuesta al desvanecimiento del gradiente y el cero en los negativos que 'limita el número de neuronas activas'. La fórmula está escrita max(O, x), con la letra O." data-cuando="Después del chequeo"></cite>, y Raschka dice que lo "resuelve" <cite class="cita" data-fuente="raschka12" data-pag="37" data-pimp="405" data-seccion="Rectified linear unit activation" data-que="tanh(20) y tanh(25) dan 1.0: la derivada se aplasta con entradas grandes; ReLU con derivada 1 para entradas positivas. Dice que resuelve el problema; en realidad solo lo evita donde la neurona está encendida." data-cuando="Después del chequeo"></cite>. Las dos frases tienen letra chica: la pendiente es 1 <b>solo para entradas positivas</b>. Para las negativas es 0, y un factor 0 en la cadena no achica la señal: la corta.</p>
+          <div class="check" id="chk4"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+          <p class="tras tras-chk4" hidden>Con ReLU y <span data-tex="x = -1"></span>, la primera neurona recibe <span data-tex="z_1 = -1"></span> y entrega 0; las siguientes reciben 0 y su pendiente, por convención, también es 0. La señal llega a la capa 10 y no pasa de ahí. Es la neurona muerta de <a href="activaciones.html">Funciones de activación</a>, vista desde la cadena. Leaky ReLU deja una pendiente de 0.01 en los negativos: ya no corta, pero <span data-tex="0.01^9"></span> es igual de cero en la práctica.</p>
+        </section>
+
+        <section class="paso card" data-titulo="Los pesos">
+          <span class="etapa">Paso 5</span>
+          <h3>La escala de los pesos: desvanecer o explotar</h3>
+          <p>Con ReLU encendida, la pendiente es 1 y el factor de cada flecha es solo el peso. Mueve el deslizador de <span data-tex="w"></span>: con <span data-tex="w = 0.5"></span> la escalera baja; con <span data-tex="w = 2"></span> sube. Es una potencia pura:</p>
+          <div class="fbloque">
+            <div data-tex="\frac{\partial L}{\partial h_1} = w^{9}\cdot\frac{\partial L}{\partial h_{10}} \qquad 0.5^9 \approx 0.002 \qquad 2^9 = 512" data-display></div>
+            <div class="vivo" id="vivo5"></div>
+          </div>
+          <p>Por debajo de 1 se desvanece; por encima de 1 <b>explota</b>, y no hay término medio estable salvo el 1 exacto. Cuando explota, el paso de descenso se vuelve enorme y los pesos saltan lejos de todo lo que habían aprendido. Raschka hace esta cuenta con un factor <span data-tex="w^{t-k}"></span> y la dibuja con <span data-tex="w = 0.99"></span> y <span data-tex="w = 1.01"></span>: en cien pasos, <span data-tex="0.99^{100} \approx 0.37"></span> y <span data-tex="1.01^{100} \approx 2.7"></span> <cite class="cita" data-fuente="raschka15" data-pag="12" data-pimp="510" data-seccion="The challenges of learning long-range interactions, Figure 15.8" data-que="El factor w^(t−k): si |w| &lt; 1 se desvanece y si |w| &gt; 1 explota cuando t − k es grande. Figure 15.8 con una sola unidad y w = 0.99, 1.01 y 1. La figura rotula |w_hh| y el texto dice w: es lo mismo." data-cuando="Al terminar este paso"></cite>. Ancho contra profundidad, dice el mismo libro: más capas dan más capacidad con menos parámetros, pero son más propensas a desvanecer y a explotar <cite class="cita" data-fuente="raschka13" data-pag="15" data-pimp="423" data-seccion="Teorema de aproximación universal; ancho contra profundidad" data-que="Una capa oculta ancha alcanza para aproximar funciones continuas, pero las redes profundas usan menos parámetros. El precio: el gradiente que se desvanece y el que explota." data-cuando="Después de los dos chequeos"></cite>.</p>
+          <div class="check" id="chk5"><p class="check-tit">Calcula antes de mover el deslizador</p><div class="cuerpo"></div></div>
+          <div class="check" id="chk5b"><p class="check-tit">Y con la sigmoide</p><div class="cuerpo"></div></div>
+          <p class="tras tras-chk5b" hidden>Compruébalo: sigmoide y <span data-tex="w = 4"></span> deja a la capa 1 en <span data-tex="8.5\times10^{-11}"></span>, peor que con <span data-tex="w = 1"></span>. Las neuronas reciben <span data-tex="z \approx 3.9"></span>, donde la sigmoide ya está plana: <span data-tex="\sigma'(3.9) \approx 0.019"></span>, y el factor es <span data-tex="4 \times 0.019 = 0.076"></span>. Con activaciones que se saturan, los pesos grandes no explotan: aplastan.</p>
+        </section>
+
+        <section class="paso card" data-titulo="Arrancar">
+          <span class="etapa">Paso 6</span>
+          <h3>Capas anchas: arrancar con la escala justa (Xavier y He)</h3>
+          <p>Las redes de verdad tienen capas anchas. El escenario ahora tiene diez capas de <b>64 neuronas</b> con pesos al azar, y cada barra es el tamaño (la norma) de la señal que llega a la capa. Cada neurona suma 64 entradas, así que lo que importa ya no es un peso sino la <b>varianza</b> de los pesos. Si las entradas tienen tamaño parecido, la varianza de la suma es:</p>
+          <div class="fbloque">
+            <div data-tex="\mathrm{Var}(z) = n\cdot\mathrm{Var}(w)\cdot\mathbb{E}[h^2]" data-display></div>
+            <div class="vivo" id="vivo6"></div>
+          </div>
+          <p>Para que nada crezca ni se encoja de capa en capa, ese factor tiene que valer 1. Con tanh, que cerca de 0 es casi la identidad, sale <span data-tex="\mathrm{Var}(w) = 1/n"></span>: es la inicialización de <b>Xavier</b> (Glorot), que en su forma completa promedia las entradas y las salidas, <span data-tex="2/(n_{\text{ent}}+n_{\text{sal}})"></span>, para cuidar también la pasada hacia atrás <cite class="cita" data-fuente="raschka13" data-pag="6" data-pimp="414" data-seccion="Recuadro: Xavier (or Glorot) initialization" data-que="Por qué: equilibrar la varianza de los gradientes entre capas. Las dos versiones: uniforme en ±√6/√(n_ent + n_sal) y normal con σ = √2/√(n_ent + n_sal). Glorot y Bengio, 2010. Una página antes: los pesos al azar rompen la simetría." data-cuando="Al terminar este paso"></cite>. Con ReLU, la mitad de las neuronas entrega 0, así que <span data-tex="\mathbb{E}[h^2]"></span> es la mitad de <span data-tex="\mathrm{Var}(z)"></span> y hay que compensar con el doble: <span data-tex="\mathrm{Var}(w) = 2/n"></span>, la inicialización de <b>He</b>. Prueba las cuatro opciones con cada activación.</p>
+          <p>La inicialización no aparece en la UD4, y la de He no aparece en ningún libro de esta ruta. La red de dígitos de Raschka arranca con desviación 0.1 fija <cite class="cita" data-fuente="raschka11" data-pag="14" data-pimp="348" data-seccion="NeuralNetMLP: __init__" data-que="Los pesos con rng.normal(loc=0.0, scale=0.1) y los sesgos en cero, sin decir por qué 0.1. Con 784 entradas y sigmoide, Xavier daría unos 0.05." data-cuando="Cuando quieras comparar con un código real"></cite>, y Nield con uniformes entre 0 y 1, todos positivos y sin discusión. La UD4, en cambio, dice que normalizar los datos evita los gradientes explosivos o desvanecientes <cite class="cita" data-fuente="dl4" data-pag="43" data-seccion="Tema 12: limitaciones y buenas prácticas" data-que="Normalizar los datos 'evitando gradientes explosivos o desvanecientes', dropout y L2. Matiz: normalizar la entrada ayuda, pero la cadena depende de los pesos y las activaciones de cada capa, no de la entrada." data-cuando="Al terminar este paso"></cite>: ayuda a la primera capa, pero la cadena de este escenario depende de los pesos y las activaciones de todas.</p>
+          <div class="check" id="chk6"><p class="check-tit">Calcula</p><div class="cuerpo"></div></div>
+          <div class="cita" id="citaHipo" hidden></div>
+        </section>
+
+        <section class="paso card" data-titulo="Recortar">
+          <span class="etapa">Paso 7</span>
+          <h3>El recorte del gradiente: un freno para la explosión</h3>
+          <p>Cuando la señal explota, una salida de emergencia es <b>recortar</b> el gradiente antes de dar el paso. Hay dos maneras, y no hacen lo mismo:</p>
+          <div class="fbloque">
+            <div data-tex="\text{por norma: } \mathbf{g} \leftarrow \mathbf{g}\cdot\frac{c}{\lVert\mathbf{g}\rVert}\ \text{ si } \lVert\mathbf{g}\rVert > c \qquad\qquad \text{por valor: } g_i \leftarrow \min(\max(g_i, -c),\ c)" data-display></div>
+            <div class="vivo" id="vivo7"></div>
+          </div>
+          <p>En el escenario, la red es la cadena con ReLU y <span data-tex="w = 2"></span>; las barras son el gradiente de los diez sesgos (con ReLU encendida es la misma señal) y la raya roja es el umbral <span data-tex="c = 5"></span>. Recortar por norma achica todo el vector por el mismo número: conserva la dirección y solo acorta el paso. Recortar por valor aplasta cada número contra el umbral: la capa 1 pasa de pesar 512 veces más que la capa 10 a pesar 5 veces más. Cambia la dirección del paso.</p>
+          <p>Raschka lo nombra en una frase, sin código, aunque la apertura del capítulo lo promete como tema: se fija un umbral y se asigna ese valor a los gradientes que lo superan, es decir, el recorte por valor <cite class="cita" data-fuente="raschka15" data-pag="12" data-pimp="510" data-seccion="Tres soluciones: gradient clipping, TBPTT y LSTM" data-que="El recorte: un umbral, y los gradientes que lo pasan toman ese valor. La retropropagación truncada (20 de 100 pasos). Las dos arreglan la explosión; para el desvanecimiento proponen la LSTM." data-cuando="Al terminar este paso"></cite>. En la UD4, la explosión solo se nombra, y el único recorte está en el cuaderno de la Demo 1 de LSTM: <code>np.clip(dparam, -5, 5)</code>, por valor, con umbral 5. Ojo: recortar no sirve contra el desvanecimiento. No hay umbral que agrande una señal que ya llegó en cero.</p>
+          <div class="check" id="chk7"><p class="check-tit">Calcula</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Atajos">
+          <span class="etapa">Paso 8</span>
+          <h3>Atajos, y la misma cadena en el tiempo</h3>
+          <p>Otra salida es no obligar a la señal a cruzar todas las curvas. Una <b>conexión residual</b> suma la entrada de la capa a su salida: <span data-tex="h_k = h_{k-1} + \sigma(w\,h_{k-1})"></span>. Al derivar, el factor de cada flecha pasa a ser <span data-tex="1 + w\,\sigma'(z_k)"></span>: hay un 1 que viaja por el atajo sin multiplicarse por nada. Enciende <b>Atajos</b> en el escenario con la sigmoide: la señal llega casi entera a la capa 1. (Con ReLU y <span data-tex="w = 1"></span>, el factor es 2 y explota: por eso las redes residuales reales arrancan la rama con pesos chicos y normalizan.)</p>
+          <p>Ahora fíjate en algo que estuvo todo el tiempo: tu cadena usa <b>el mismo</b> <span data-tex="w"></span> en las diez capas. Eso es una red recurrente desplegada en el tiempo: el mismo peso <span data-tex="w_{hh}"></span> aplicado paso tras paso, y el error que vuelve desde el paso <span data-tex="t"></span> hasta el paso <span data-tex="k"></span> es un producto de <span data-tex="t-k"></span> factores <cite class="cita" data-fuente="raschka15" data-pag="11" data-pimp="509" data-seccion="The challenges of learning long-range interactions" data-que="El factor multiplicativo ∂h(t)/∂h(k) es un producto de t − k derivadas, una por paso. Errata: lo resume como w^(t−k) y olvida la derivada de tanh; cada factor es en realidad diag(1 − h²)·W_hh." data-cuando="Al terminar este paso"></cite>. La UD4 lo dice para las RNN: los gradientes se vuelven pequeños al retroceder en el tiempo, y por eso existen LSTM y GRU; la explosión solo la nombra <cite class="cita" data-fuente="dl4" data-pag="26" data-seccion="Tema 7: introducción a las RNN" data-que="Datos secuenciales, el desvanecimiento del gradiente al retroceder en el tiempo y la explosión del gradiente (solo nombrada), con LSTM y GRU como solución." data-cuando="Al terminar este paso"></cite>. La LSTM es la idea del atajo llevada a la memoria: su estado de celda pasa de un paso al siguiente con una suma, sin multiplicarse por un peso <cite class="cita" data-fuente="raschka15" data-pag="13" data-pimp="511" data-seccion="Long short-term memory cells, Figure 15.9" data-que="La celda de memoria reemplaza a la capa oculta; la arista recurrente con peso 1 deseable; el estado C pasa a C del paso siguiente sin multiplicarse por un peso. Las compuertas siguen en la página 512." data-cuando="Antes de la página de LSTM y GRU"></cite>.</p>
+          <div class="check" id="chk8"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+          <p class="tras tras-chk8" hidden>Raschka dice que la "solución ingenua" sería <span data-tex="|w| = 1"></span>. Con tanh y <span data-tex="w = 1"></span>, la capa 1 recibe <b>0.097</b>: diez veces menos. Cada factor es <span data-tex="w\,(1-h_k^2)"></span>, y como <span data-tex="1 - h^2 < 1"></span> siempre que <span data-tex="h \ne 0"></span>, el producto se encoge aunque el peso sea exactamente 1. Su <span data-tex="w^{t-k}"></span> se olvidó de la derivada de la activación.</p>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+        </div>
+        <div class="esc-fila" id="filaAct">
+          <span class="seg-lab">Activación</span>
+          <div class="seg" id="segAct" role="group" aria-label="Activación"></div>
+        </div>
+        <div class="esc-fila" id="filaW">
+          <span class="seg-lab">Peso w</span>
+          <input type="range" id="rngW" min="0.25" max="4" step="0.05" value="1" aria-label="Peso de todas las capas">
+          <span class="lectura-esc" id="wVal"></span>
+        </div>
+        <div class="esc-fila" id="filaX">
+          <span class="seg-lab">Entrada x</span>
+          <div class="seg" id="segX" role="group" aria-label="Entrada"></div>
+        </div>
+        <div class="esc-fila" id="filaInit">
+          <span class="seg-lab">Pesos al azar con</span>
+          <div class="seg multi" id="segInit" role="group" aria-label="Inicialización"></div>
+          <button type="button" class="ghost" id="btnSemilla">Otros pesos</button>
+        </div>
+        <div class="esc-fila" id="filaClip">
+          <span class="seg-lab">Recorte</span>
+          <div class="seg" id="segClip" role="group" aria-label="Recorte"></div>
+        </div>
+        <div class="esc-fila" id="filaRes">
+          <span class="seg-lab">Atajos</span>
+          <div class="seg" id="segRes" role="group" aria-label="Conexiones residuales"></div>
+        </div>
+        <svg id="cadena" class="cad-svg" role="img" aria-label="Diez capas en fila y la señal de error que llega a cada una"></svg>
+        <div class="esc-fila" id="filaEscala">
+          <span class="seg-lab">Escala</span>
+          <div class="seg" id="segEscala" role="group" aria-label="Escala vertical"></div>
+        </div>
+        <div class="panel" id="panel"></div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>El programa arma la cadena de diez capas con bucles: la pasada hacia adelante guarda la pendiente de cada capa y la pasada hacia atrás multiplica, capa por capa. La pérdida manda 1 a la última capa. Imprime la señal que llega a cada capa con sigmoide y con ReLU, la compara con la fórmula del producto escrita con <code>cumprod</code>, y al final recorta el gradiente que explota de las dos maneras.</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir <span class="estado" data-reto="codigo1"></span></p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="true">Python</button>
+            <button type="button" data-lang="r" aria-pressed="false">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">1 · hacia adelante</span><span data-f="2">2 · hacia atrás</span><span data-f="3">3 · comparar</span><span data-f="4">4 · recortar</span>
+        </div>
+        <h3 class="mini-tit vr-tit">Las diez capas (sigmoide, w = 1)</h3>
+        <div class="tabla-wrap"><table class="tabla" id="vrTabla"></table></div>
+        <div class="vr-cuenta" id="vrCuenta"></div>
+        <h3 class="mini-tit vr-tit">Lo que imprime</h3>
+        <div class="consola" id="vrConsola"></div>
+      </div>
+    </div>
+
+    <p class="vr-nota">En PyTorch y Keras nadie escribe este bucle: la pasada hacia atrás es automática y el problema se ataca al construir la red (ReLU, la inicialización, atajos, normalización) y al entrenar (recorte). No hay una función de librería que "calcule el desvanecimiento", así que el programa se compara con la fórmula cerrada, el producto de los factores, escrita en una línea con <code>cumprod</code>. Python y R imprimen exactamente lo mismo.</p>
+
+    <details class="profundizar">
+      <summary>Capas anchas con pesos al azar, y la inicialización que trae scikit-learn (se corrió en Python y R)</summary>
+      <div>
+        <p>Diez capas de 64 neuronas con ReLU, pesos normales con cuatro desviaciones distintas, y el tamaño de la señal que llega a la capa 1 cuando a la capa 10 llega 1. Python:</p>
+        <pre class="codigo-bloque">import numpy as np
+from sklearn.neural_network import MLPClassifier
+
+def ancha(desv, n=64, capas=10, semilla=0):
+    rng = np.random.default_rng(semilla)
+    W = [rng.normal(0, desv, (n, n)) for _ in range(capas)]
+    h = rng.normal(0, 1, n)
+    d = []
+    for k in range(capas):                     # hacia adelante, relu
+        z = W[k] @ h
+        h = np.maximum(z, 0)
+        d.append((z &gt; 0) * 1.0)
+    g = np.ones(n) / np.sqrt(n)                # señal de tamaño 1 en la última capa
+    tam = []
+    for k in range(capas - 1, -1, -1):         # hacia atrás
+        tam.append(np.linalg.norm(g))
+        g = W[k].T @ (g * d[k])
+    return tam[-1]                             # tamaño en la capa 1
+
+for nombre, desv in [("0.01", 0.01), ("1", 1.0), ("Xavier", np.sqrt(1 / 64)), ("He", np.sqrt(2 / 64))]:
+    print(nombre, f"{ancha(desv):.1e}")
+
+red = MLPClassifier(hidden_layer_sizes=(64,), activation="relu", random_state=0)
+red.partial_fit(np.zeros((2, 64)), [0, 1], classes=[0, 1])
+print("sklearn, límite de sus pesos:", round(np.abs(red.coefs_[0]).max(), 4),
+      "Glorot:", round(np.sqrt(6 / (64 + 64)), 4))</pre>
+        <pre class="codigo-bloque">0.01 2.1e-11
+1 2.1e+07
+Xavier 1.6e-01
+He 3.6e+00
+sklearn, límite de sus pesos: 0.2155 Glorot: 0.2165</pre>
+        <p>R (otro generador de azar, así que otros pesos y otros números del mismo tamaño):</p>
+        <pre class="codigo-bloque">ancha &lt;- function(desv, n = 64, capas = 10, semilla = 0) {
+  set.seed(semilla)
+  W &lt;- lapply(1:capas, function(k) matrix(rnorm(n * n, 0, desv), n, n))
+  h &lt;- rnorm(n)
+  d &lt;- list()
+  for (k in 1:capas) {                         # hacia adelante, relu
+    z &lt;- as.vector(W[[k]] %*% h)
+    h &lt;- pmax(z, 0)
+    d[[k]] &lt;- as.numeric(z &gt; 0)
+  }
+  g &lt;- rep(1, n) / sqrt(n)                     # señal de tamaño 1 en la última capa
+  for (k in capas:1) {                         # hacia atrás
+    tam &lt;- sqrt(sum(g^2))
+    g &lt;- as.vector(t(W[[k]]) %*% (g * d[[k]]))
+  }
+  tam                                          # tamaño en la capa 1
+}
+for (p in list(c("0.01", 0.01), c("1", 1), c("Xavier", sqrt(1 / 64)), c("He", sqrt(2 / 64)))) {
+  cat(p[1], formatC(ancha(as.numeric(p[2])), format = "e", digits = 1), "\n")
+}</pre>
+        <pre class="codigo-bloque">0.01 1.1e-11
+1 1.1e+07
+Xavier 8.3e-02
+He 1.9e+00 </pre>
+        <p>Con desviación 0.01 la señal se va a <span data-tex="10^{-11}"></span> y con 1 a <span data-tex="10^{7}"></span>: dieciocho órdenes de magnitud de diferencia solo por cómo arrancan los pesos. Xavier con ReLU se desvanece despacio (cada capa apaga la mitad), y He queda del orden de 1: no exactamente 1, porque con 64 neuronas el azar todavía se nota. La última línea muestra que <code>MLPClassifier</code> usa Glorot uniforme (límite <span data-tex="\sqrt{6/(n_{\text{ent}}+n_{\text{sal}})}"></span>) incluso con ReLU: lo dice su código fuente, y el peso más grande que sorteó queda justo por debajo de ese límite.</p>
+      </div>
+    </details>
+
+    <details class="profundizar">
+      <summary>Lo mismo en PyTorch y Keras (no se corrió: no están instalados en esta máquina)</summary>
+      <div>
+        <pre class="codigo-bloque">import torch
+capa = torch.nn.Linear(64, 64)
+torch.nn.init.kaiming_normal_(capa.weight, nonlinearity="relu")   # He: varianza 2/n
+torch.nn.init.xavier_normal_(capa.weight)                         # Xavier: varianza 2/(n_ent + n_sal)
+# en el bucle de entrenamiento, entre backward() y step():
+torch.nn.utils.clip_grad_norm_(modelo.parameters(), max_norm=5.0)   # recorte por norma
+torch.nn.utils.clip_grad_value_(modelo.parameters(), clip_value=5.0) # recorte por valor
+
+import tensorflow as tf
+tf.keras.layers.Dense(64, activation="relu", kernel_initializer="he_normal")
+tf.keras.optimizers.SGD(learning_rate=0.01, clipnorm=5.0)          # o clipvalue=5.0</pre>
+        <p>Keras arranca sus capas <code>Dense</code> con <code>glorot_uniform</code> si no le dices nada; PyTorch, con una uniforme de límite <span data-tex="1/\sqrt{n}"></span>. Ninguno elige He solo porque la activación sea ReLU: hay que pedirlo.</p>
+      </div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>La inicialización de scikit-learn</h3><span class="estado" data-reto="codigo2"></span></div>
+        <div id="codigo2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>El recorte del cuaderno</h3><span class="estado" data-reto="codigo3"></span></div>
+        <div id="codigo3"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: la biblioteca te avisa en el índice cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>¿Se desvanece, explota o llega?</h3><span class="estado" data-reto="ojo"></span></div>
+        <p class="desc">Cinco cadenas de diez capas al azar. Mira la activación, el peso y si hay atajos, y decide qué le pasa a la señal en la capa 1, sin calcular. Apruebas con 4 de 5.</p>
+        <div id="ojo"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Construir</span><h3>Que llegue, que explote, que se salve</h3><span class="estado" data-reto="construir"></span></div>
+        <p class="desc">Una cadena de diez capas con entrada 1. Cumple los tres objetivos; no hace falta que sea a la vez.</p>
+        <div class="esc-fila"><span class="seg-lab">Activación</span><div class="seg" id="kAct" role="group" aria-label="Activación del reto"></div></div>
+        <div class="esc-fila"><span class="seg-lab">Peso w</span><input type="range" id="kW" min="0.25" max="4" step="0.05" value="1" aria-label="Peso del reto"><span class="lectura-esc" id="kWv"></span></div>
+        <div class="esc-fila"><span class="seg-lab">Atajos</span><div class="seg" id="kRes" role="group" aria-label="Atajos del reto"></div></div>
+        <svg id="kSvg" class="cad-svg" role="img" aria-label="Señal por capa del reto"></svg>
+        <div class="lectura-esc" id="kVivo"></div>
+        <ul class="objetivos" id="objetivos"></ul>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>La cadena con lápiz</h3><span class="estado" data-reto="mano"></span></div>
+        <p class="desc">Cuatro capas de una neurona con ReLU, sin sesgos, cada una con su propio peso: <span data-tex="z_k = w_k\,h_{k-1}"></span>, <span data-tex="h_k = \max(0, z_k)"></span>. La pérdida manda <span data-tex="\partial L/\partial h_4 = 1"></span>. Haz la pasada hacia adelante y después la de atrás.</p>
+        <div id="manoDatos"></div>
+        <div id="mano"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Alguien se equivocó</h3><span class="estado" data-reto="error"></span></div>
+        <p class="desc">Una de las líneas tiene un error. Tócala.</p>
+        <div id="error"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Casi cero</h3><span class="estado" data-reto="prop1"></span></div>
+        <div id="prop1"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>El 2 de He</h3><span class="estado" data-reto="prop2"></span></div>
+        <div id="prop2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Lo que arregla el recorte</h3><span class="estado" data-reto="prop3"></span></div>
+        <div id="prop3"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Por qué funciona un atajo</h3><span class="estado" data-reto="prop4"></span></div>
+        <div id="prop4"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>"ReLU lo resuelve"</h3><span class="estado" data-reto="prop5"></span></div>
+        <div id="prop5"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Recordar a la fuerza es lo que fija. Arma la fórmula de la señal que llega a la primera capa y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Fórmula de memoria</span><h3>La señal que llega a la capa 1</h3><span class="estado" data-reto="formula"></span></div>
+        <p class="desc">La cadena de diez capas con sigmoide, de la pérdida a la primera capa. Hay piezas de más que no pertenecen. No mires arriba.</p>
+        <div id="formula"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el libro</h2>
+      <p class="lecturas-intro">Ya viste la cadena encogerse y explotar, y las cuatro maneras de domarla. Ahora ve a la versión técnica y reconócela. La UD4 nombra el fenómeno pero no explica por qué pasa; Raschka lo explica para las RNN con un factor <i>w<sup>t−k</sup></i> al que le falta la derivada de la activación, y da la fórmula de Xavier en el cap. 13. La inicialización de He no está en ningún material de la ruta. Si abres la biblioteca con doble clic, el enlace abre el PDF en esa página.</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> La cadena de diez capas de una neurona, con todos los pesos iguales, sin sesgos y con entrada 1, es inventada
+    para que el producto se vea limpio; la convención de que la pérdida manda 1 a la última capa también. Las cifras del recorrido y de la
+    vida real se calcularon con python3 y Rscript. Las capas anchas del paso 6 se sortean en el navegador con una semilla fija (el botón
+    "Otros pesos" la cambia), así que sus números no son los del recuadro de Python y R. Las cadenas del ojo clínico y del reto a mano se
+    generan al azar. Tu progreso se guarda en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+/*
+  Ejemplo de esta pagina: cadena de 10 capas de una neurona, z_k = w h_(k-1), sin sesgos, x = 1, dL/dh_10 = 1.
+  Barra de la capa k = dL/dh_k; cruzar la capa k hacia atras multiplica por w * act'(z_k) (con atajo: 1 + w * act'(z_k)).
+  Calculado con python3 y Rscript:
+    sigmoide, w = 1: 1.4e-06 6.5e-06 2.9e-05 1.3e-04 5.7e-04 2.5e-03 1.1e-02 5.0e-02 2.2e-01 1 (factor 0.2247 desde la capa 3)
+      salida h_10 = 0.659045 a 0.659046 para x = -2, -1, 1, 3
+    tanh, w = 1: capa 1 = 0.097; relu w = 1: todo 1; relu w = 2: 512 ... 1; relu w = 0.5: 0.002 ... 1
+    sigmoide w = 4: capa 1 = 8.5e-11 (factor 0.076); atajos con sigmoide: 1.257, con tanh: 1.134
+    recorte de (512, 256, ..., 1) con c = 5: norma 591.2; por norma 4.3 ... 0.0085; por valor 5 5 5 5 5 5 5 4 2 1
+  La ruta de redes usa la red de juguete 2-2-1 de perceptron.html; esta pagina no la necesita.
+*/
+(function () {
+  "use strict";
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var RETOS = ["ojo", "construir", "mano", "error", "prop1", "prop2", "prop3", "prop4", "prop5", "formula", "codigo1", "codigo2", "codigo3"];
+  var C = B.concepto({ id: "gradiente-desvanece", retos: RETOS, pasos: 8 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  /* ---------------- utilidades ---------------- */
+  var f = B.fmt;
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+  function mostrarTras(cls) { [].forEach.call(document.querySelectorAll("." + cls), function (e) { e.hidden = false; }); }
+  function corto(v) {
+    var a = Math.abs(v);
+    if (a === 0) return "0";
+    if (a >= 0.01 && a < 1000) {
+      var d = a >= 100 ? 0 : a >= 10 ? 1 : a >= 1 ? 2 : 3;
+      var s = (+a.toFixed(d)).toString();
+      return (v < 0 ? "−" : "") + s;
+    }
+    var m = v.toExponential(1).split("e");
+    return m[0].replace("-", "−") + "e" + m[1].replace("+", "").replace("-", "−");
+  }
+  function sig(z) { return 1 / (1 + Math.exp(-z)); }
+  function activ(z, a) {
+    if (a === "sig") { var s = sig(z); return [s, s * (1 - s)]; }
+    if (a === "tanh") { var t = Math.tanh(z); return [t, 1 - t * t]; }
+    return [Math.max(z, 0), z > 0 ? 1 : 0];
+  }
+  var NOMACT = { sig: "sigmoide", tanh: "tanh", relu: "ReLU" };
+  // la cadena: sen[i] = dL/dh de la capa i+1; fac[i] = factor al cruzar la capa i+1 hacia atras
+  function cadena(w, a, x, res, capas) {
+    capas = capas || 10;
+    var h = [x], z = [], d = [];
+    for (var k = 0; k < capas; k++) {
+      var zz = w * h[k], r = activ(zz, a);
+      z.push(zz); d.push(r[1]); h.push(res ? h[k] + r[0] : r[0]);
+    }
+    var sen = [], fac = [], s = 1;
+    for (k = capas - 1; k >= 0; k--) { sen[k] = s; fac[k] = (res ? 1 : 0) + w * d[k]; s = s * fac[k]; }
+    return { h: h, z: z, d: d, fac: fac, sen: sen };
+  }
+
+  /* ---------------- capas anchas con azar reproducible ---------------- */
+  var N = 64;
+  var INITS = [["σ = 0.01", 0.01], ["σ = 1", 1], ["Xavier", Math.sqrt(1 / N)], ["He", Math.sqrt(2 / N)]];
+  function rngDe(seed) {
+    var t = seed >>> 0;
+    return function () {
+      t += 0x6D2B79F5; var r = t;
+      r = Math.imul(r ^ (r >>> 15), r | 1);
+      r ^= r + Math.imul(r ^ (r >>> 7), r | 61);
+      return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  var cacheBase = {};
+  function base(seed) {
+    if (cacheBase[seed]) return cacheBase[seed];
+    var u = rngDe(seed * 7919 + 13);
+    function normal() { var a = 1 - u(), b = u(); return Math.sqrt(-2 * Math.log(a)) * Math.cos(2 * Math.PI * b); }
+    var W = new Float64Array(10 * N * N), x = [], g = [], i;
+    for (i = 0; i < W.length; i++) W[i] = normal();
+    for (i = 0; i < N; i++) { x.push(normal()); g.push(normal()); }
+    cacheBase[seed] = { W: W, x: x, g: g };
+    return cacheBase[seed];
+  }
+  function ancha(desv, a, seed) {
+    var bs = base(seed), W = bs.W, h = bs.x.slice(), D = [], k, i, j;
+    for (k = 0; k < 10; k++) {
+      var nh = new Array(N), dk = new Array(N), o = k * N * N;
+      for (i = 0; i < N; i++) {
+        var z = 0;
+        for (j = 0; j < N; j++) z += W[o + i * N + j] * h[j];
+        var r = activ(desv * z, a); nh[i] = r[0]; dk[i] = r[1];
+      }
+      h = nh; D.push(dk);
+    }
+    var rms = Math.sqrt(h.reduce(function (s, v) { return s + v * v; }, 0) / N);
+    var g = bs.g.slice(), nn = Math.sqrt(g.reduce(function (s, v) { return s + v * v; }, 0));
+    g = g.map(function (v) { return v / nn; });
+    var sen = [];
+    for (k = 9; k >= 0; k--) {
+      sen[k] = Math.sqrt(g.reduce(function (s, v) { return s + v * v; }, 0));
+      var o2 = k * N * N, u2 = g.map(function (v, t) { return v * D[k][t]; }), ng = new Array(N);
+      for (j = 0; j < N; j++) { var s2 = 0; for (i = 0; i < N; i++) s2 += W[o2 + i * N + j] * u2[i]; ng[j] = desv * s2; }
+      g = ng;
+    }
+    return { sen: sen, rms: rms };
+  }
+
+  /* ---------------- dibujo: cadena arriba, barras abajo ---------------- */
+  var XN = function (i) { return 64 + i * 38; };
+  function dibujar(svg, o) {
+    // o: sen, fac, h, log, ocultar(i), ancho, res, umbral, fantasma, sinCadena
+    var W = 446, top = o.sinCadena ? 14 : 84, bot = o.sinCadena ? 196 : 262, Hh = bot + 26;
+    var s = "", i;
+    if (!o.sinCadena) {
+      s += '<text class="t lab" x="20" y="10">x</text>';
+      s += '<circle class="nd in" cx="20" cy="36" r="10"/><text class="t" x="20" y="36">' + (o.x != null ? corto(o.x) : "") + '</text>';
+      for (i = 0; i < 10; i++) {
+        var x0 = i === 0 ? 30 : XN(i - 1) + (o.ancho ? 12 : 11), x1 = XN(i) - (o.ancho ? 12 : 11);
+        s += '<line class="ar" x1="' + x0 + '" y1="36" x2="' + x1 + '" y2="36"/>';
+        if (o.fac && i > 0) s += '<text class="t fac" x="' + ((x0 + x1) / 2).toFixed(1) + '" y="18">×' + corto(o.fac[i]).replace("−", "-") + '</text>';
+        if (o.res && i > 0) s += '<path class="atajo" d="M' + XN(i - 1) + ',' + (o.ancho ? 22 : 25) + ' Q' + ((XN(i - 1) + XN(i)) / 2) + ',2 ' + XN(i) + ',' + (o.ancho ? 22 : 25) + '"/>';
+        if (o.ancho) s += '<rect class="nd" x="' + (XN(i) - 11) + '" y="20" width="22" height="32" rx="5"/><text class="t" x="' + XN(i) + '" y="36">64</text>';
+        else s += '<circle class="nd" cx="' + XN(i) + '" cy="36" r="11"/><text class="t" x="' + XN(i) + '" y="36">' + (i + 1) + '</text>';
+        if (o.h && !o.ancho) s += '<text class="t hv" x="' + XN(i) + '" y="60">' + corto(o.h[i + 1]) + '</text>';
+      }
+      s += '<line class="ar" x1="' + (XN(9) + 11) + '" y1="36" x2="428" y2="36"/><text class="t lab" x="436" y="36">L</text>';
+      s += '<text class="t lab" x="' + XN(0) + '" y="73" text-anchor="start" style="text-anchor:start">' + (o.ancho ? "tamaño de la señal que llega a cada capa" : "h de cada capa, y debajo la señal que le llega") + '</text>';
+    }
+    // escala
+    var lo = -8, hi = 4, maxL = 0;
+    o.sen.forEach(function (v) { maxL = Math.max(maxL, v); });
+    if (o.fantasma) o.fantasma.forEach(function (v) { maxL = Math.max(maxL, v); });
+    function yv(v) {
+      if (o.log) { var e = v <= 0 ? lo - 1 : Math.log10(v); e = Math.max(lo, Math.min(hi, e)); return bot - (e - lo) / (hi - lo) * (bot - top); }
+      return bot - Math.min(v, maxL) / (maxL || 1) * (bot - top);
+    }
+    if (o.log) {
+      for (var e = lo; e <= hi; e++) {
+        var yy = yv(Math.pow(10, e)).toFixed(1);
+        s += '<line class="grid" x1="40" x2="' + (W - 6) + '" y1="' + yy + '" y2="' + yy + '"/>';
+        if (e % 2 === 0) s += '<text class="t tick" x="36" y="' + yy + '">' + (e === 0 ? "1" : "1e" + String(e).replace("-", "−")) + '</text>';
+      }
+    } else {
+      [0, 0.5, 1].forEach(function (q) { var yy = (bot - q * (bot - top)).toFixed(1); s += '<line class="grid" x1="40" x2="' + (W - 6) + '" y1="' + yy + '" y2="' + yy + '"/><text class="t tick" x="36" y="' + yy + '">' + corto(q * maxL) + '</text>'; });
+    }
+    s += '<line class="base" x1="40" x2="' + (W - 6) + '" y1="' + bot + '" y2="' + bot + '"/>';
+    if (o.umbral) { var yu = yv(o.umbral).toFixed(1); s += '<line class="umbral" x1="40" x2="' + (W - 6) + '" y1="' + yu + '" y2="' + yu + '"/><text class="t val" x="' + (W - 8) + '" y="' + (yu - 7) + '" style="text-anchor:end">umbral ' + o.umbral + '</text>'; }
+    for (i = 0; i < 10; i++) {
+      var cx = XN(i), v = o.sen[i], oc = o.ocultar && o.ocultar(i);
+      if (o.fantasma) { var yf = yv(o.fantasma[i]); s += '<rect class="bar fant" x="' + (cx - 10) + '" y="' + yf.toFixed(1) + '" width="20" height="' + Math.max(0.5, bot - yf).toFixed(1) + '"/>'; }
+      if (oc) {
+        s += '<rect class="bar oc" x="' + (cx - 10) + '" y="' + (bot - 40) + '" width="20" height="40"/><text class="t oc" x="' + cx + '" y="' + (bot - 50) + '">?</text>';
+      } else {
+        var yb = yv(v), hb = Math.max(v > 0 ? 1.5 : 0, bot - yb);
+        s += '<rect class="bar" x="' + (cx - 10) + '" y="' + (bot - hb).toFixed(1) + '" width="20" height="' + hb.toFixed(1) + '"/>';
+        var fuera = o.log && v > 0 && (Math.log10(v) > hi || Math.log10(v) < lo);
+        s += '<text class="t val" x="' + cx + '" y="' + Math.max(top - 6, bot - hb - 8).toFixed(1) + '">' + (fuera ? (Math.log10(v) > hi ? "↑" : "↓") : "") + corto(v) + '</text>';
+      }
+      s += '<text class="t lab" x="' + cx + '" y="' + (bot + 12) + '">' + (i + 1) + '</text>';
+    }
+    s += '<text class="t lab" x="' + (W - 8) + '" y="' + (bot + 22) + '" style="text-anchor:end">capa</text>';
+    svg.setAttribute("viewBox", "0 0 " + W + " " + Hh);
+    svg.innerHTML = s;
+  }
+
+  /* ---------------- estado del recorrido ---------------- */
+  var est = {
+    paso: 0, act: "sig", w: 1, x: 1, log: false, res: false, init: 3, seed: 1, clip: 0,
+    chk1: false, chk2: false, chk3: false, chk3b: false, chk4: false, chk5: false, chk5b: false, chk6: false, chk7: false, chk8: false
+  };
+  var MODOS = ["pred", "cadena", "techo", "relu", "escala", "ancho", "recorte", "atajo"];
+  function modo() { return MODOS[est.paso]; }
+  var XS = [-2, -1, 1, 3];
+  var CLIPS = ["Sin recorte", "Por norma", "Por valor"];
+
+  function seg(el, items, fn) {
+    el.innerHTML = "";
+    items.forEach(function (it, i) {
+      var b = document.createElement("button");
+      b.type = "button"; b.textContent = it; b.setAttribute("data-i", i);
+      b.addEventListener("click", function () { fn(i); render(); });
+      el.appendChild(b);
+    });
+  }
+  function marcar(el, i) { [].forEach.call(el.children, function (b) { b.setAttribute("aria-pressed", +b.getAttribute("data-i") === i ? "true" : "false"); }); }
+  var ACTS = ["sig", "tanh", "relu"];
+  seg($("segAct"), ["Sigmoide", "tanh", "ReLU"], function (i) { est.act = ACTS[i]; });
+  seg($("segX"), XS.map(String), function (i) { est.x = XS[i]; });
+  seg($("segInit"), INITS.map(function (q) { return q[0]; }), function (i) { est.init = i; });
+  seg($("segClip"), CLIPS, function (i) { est.clip = i; });
+  seg($("segRes"), ["Sin atajos", "Con atajos"], function (i) { est.res = i === 1; });
+  seg($("segEscala"), ["Lineal", "Logarítmica"], function (i) { est.log = i === 1; });
+  $("rngW").addEventListener("input", function () { est.w = +this.value; render(); });
+  $("btnSemilla").addEventListener("click", function () { est.seed++; render(); });
+
+  function datos() {
+    var m = modo();
+    if (m === "ancho") { var r = ancha(INITS[est.init][1], est.act, est.seed); return { sen: r.sen, rms: r.rms, ancho: true }; }
+    if (m === "recorte") {
+      var c = cadena(est.w, "relu", 1, false), g = c.sen.slice(), nrm = Math.sqrt(g.reduce(function (s, v) { return s + v * v; }, 0)), out = g;
+      if (est.clip === 1 && nrm > 5) out = g.map(function (v) { return v * 5 / nrm; });
+      if (est.clip === 2) out = g.map(function (v) { return Math.min(Math.max(v, -5), 5); });
+      return { c: c, sen: out, orig: g, norma: nrm };
+    }
+    var cc = cadena(est.w, est.act, est.x, est.res);
+    return { c: cc, sen: cc.sen };
+  }
+  function ocultar(i) {
+    var m = modo();
+    if (m === "pred") return !est.chk1;
+    if (m === "cadena") return !est.chk2 && i <= 6;
+    if (m === "relu") return !est.chk4 && est.act === "relu" && est.x < 0 && i < 9;
+    if (m === "escala") return !(est.chk5 && est.chk5b) && i === 0;
+    if (m === "atajo") return !est.chk8 && i === 0;
+    return false;
+  }
+  function render() {
+    var m = modo(), D = datos();
+    $("escHint").textContent = HINTS[m]();
+    $("filaAct").hidden = m === "pred" || m === "cadena" || m === "techo" || m === "recorte";
+    $("filaW").hidden = !(m === "escala" || m === "recorte" || m === "atajo");
+    $("filaX").hidden = !(m === "techo" || m === "relu");
+    $("filaInit").hidden = m !== "ancho";
+    $("filaClip").hidden = m !== "recorte";
+    $("filaRes").hidden = m !== "atajo";
+    $("filaEscala").hidden = m === "pred" || m === "cadena";
+    marcar($("segAct"), ACTS.indexOf(est.act));
+    marcar($("segX"), XS.indexOf(est.x));
+    marcar($("segInit"), est.init);
+    marcar($("segClip"), est.clip);
+    marcar($("segRes"), est.res ? 1 : 0);
+    marcar($("segEscala"), est.log ? 1 : 0);
+    $("rngW").value = est.w;
+    $("wVal").textContent = "w = " + f(est.w, 2);
+    var o = { sen: D.sen, log: est.log, ocultar: ocultar, x: m === "ancho" ? null : (m === "recorte" ? 1 : est.x) };
+    if (m === "ancho") o.ancho = true;
+    else {
+      o.h = D.c.h;
+      if (m !== "pred") o.fac = D.c.fac;
+      o.res = est.res && m === "atajo";
+    }
+    if (m === "recorte") { o.umbral = 5; if (est.clip) o.fantasma = D.orig; }
+    dibujar($("cadena"), o);
+    panel(m, D);
+    vivos();
+  }
+  function panel(m, D) {
+    var h = "", c = D.c;
+    if (m === "pred") h = est.chk1 ? '<div class="lectura-esc">Capa 10: <span class="bw">1</span>. Capa 1: <span class="bw">' + corto(D.sen[0]) + '</span>, unas ' + Math.round(1 / D.sen[0]).toLocaleString("es") + ' veces menos.</div>'
+      : '<div class="lectura-esc">Las barras aparecen cuando respondas la predicción.</div>';
+    else if (m === "cadena") h = '<div class="lectura-esc">Los números naranjas de las flechas: ' + c.fac.slice(1).map(function (v) { return corto(v); }).join(", ") + '.<br>Capa 10 → capa 9: 1 × ' + corto(c.fac[9]) + ' = ' + corto(c.sen[8]) + '.</div>';
+    else if (m === "techo" || m === "relu") {
+      h = '<div class="lectura-esc">Salida de la red: h₁₀ = <span class="fw">' + f(c.h[10], 6) + '</span> con x = ' + est.x + '.<br>Señal en la capa 1: <span class="bw">' + (ocultar(0) ? "?" : corto(D.sen[0])) + '</span>' +
+        (m === "techo" ? ' · cota con factores de 0.25: 0.25⁹ = ' + corto(Math.pow(0.25, 9)) : ' · ' + NOMACT[est.act]) + '</div>';
+    } else if (m === "escala" || m === "atajo") {
+      h = '<div class="lectura-esc">' + NOMACT[est.act] + ', w = ' + f(est.w, 2) + (m === "atajo" && est.res ? ", con atajos" : "") + ': factores entre ' + corto(Math.min.apply(null, c.fac.slice(1))) + ' y ' + corto(Math.max.apply(null, c.fac.slice(1))) +
+        '<br>Señal en la capa 1: <span class="bw">' + (ocultar(0) ? "?" : corto(D.sen[0])) + '</span> · salida h₁₀ = ' + corto(c.h[10]) + '</div>';
+    } else if (m === "ancho") {
+      var sd = INITS[est.init][1], ocHe = !est.chk6 && est.init === 3;
+      h = '<div class="lectura-esc">' + NOMACT[est.act] + ', pesos normales con σ = ' + (ocHe ? '<span class="oc">?</span>' : f(sd, 4)) + ' (n = 64, n·σ² = ' + (ocHe ? '<span class="oc">?</span>' : corto(N * sd * sd)) + ')' +
+        '<br>Señal en la capa 1 / capa 10: <span class="bw">' + corto(D.sen[0]) + '</span> · tamaño típico de h₁₀: ' + corto(D.rms) + '</div>';
+    } else if (m === "recorte") {
+      h = '<div class="lectura-esc">ReLU, w = ' + f(est.w, 2) + ': norma del gradiente ' + corto(D.norma) + (D.norma > 5 ? ' (pasa el umbral 5)' : ' (no pasa el umbral)') +
+        '<br>Capa 1 / capa 10 antes: <b>' + corto(D.orig[0] / D.orig[9]) + '</b>, después: <b class="' + (Math.abs(D.sen[0] / D.sen[9] - D.orig[0] / D.orig[9]) < 1e-9 ? "si" : "no") + '">' + corto(D.sen[0] / D.sen[9]) + '</b>' +
+        (est.clip === 0 ? "" : est.clip === 1 ? " · misma dirección, paso más corto" : " · cambió la dirección") + '</div>';
+    }
+    $("panel").innerHTML = h;
+  }
+  function vivos() {
+    var c = cadena(1, "sig", 1, false);
+    var z = c.z[9];
+    $("vivo3").innerHTML = "capa 10: z = " + f(z, 4) + ", σ′(z) = " + f(sig(z), 4) + " × " + f(1 - sig(z), 4) + " = " + f(c.d[9], 4) + "; factor = 1 × " + f(c.d[9], 4) + " = " + f(c.fac[9], 4);
+    var r = cadena(est.w, "relu", 1, false);
+    $("vivo5").innerHTML = "ReLU, w = " + f(est.w, 2) + ": " + f(est.w, 2) + "⁹ = " + ((est.chk5 && est.chk5b) || Math.abs(est.w - 0.8) > 0.001 ? corto(r.sen[0]) : "?");
+    var sd = INITS[est.init][1];
+    $("vivo6").innerHTML = "n = 64, σ = " + (!est.chk6 && est.init === 3 ? "?" : f(sd, 4)) + ": n · Var(w) = 64 × " + (!est.chk6 && est.init === 3 ? "?" : corto(sd * sd)) + " = " + (!est.chk6 && est.init === 3 ? "?" : corto(N * sd * sd)) + (est.act === "relu" ? "; con ReLU, la mitad: " + (!est.chk6 && est.init === 3 ? "?" : corto(N * sd * sd / 2)) : "");
+    var g = cadena(est.w, "relu", 1, false).sen, nrm = Math.sqrt(g.reduce(function (s, v) { return s + v * v; }, 0));
+    $("vivo7").innerHTML = "con w = " + f(est.w, 2) + ": ‖g‖ = " + f(nrm, 1) + (nrm > 5 ? "; por norma, cada número × 5/" + f(nrm, 1) + " = " + corto(5 / nrm) + "; por valor, la capa 1 pasa de " + corto(g[0]) + " a " + corto(Math.min(g[0], 5)) : "; no pasa el umbral, no se recorta");
+  }
+  var HINTS = {
+    pred: function () { return est.chk1 ? "Las barras: cuánta señal de error llega a cada capa." : "Primero la predicción."; },
+    cadena: function () { return "En naranja, el número por el que se multiplica la señal en cada cruce."; },
+    techo: function () { return "Escala logarítmica: cada raya es 10 veces la de abajo. Cambia la entrada."; },
+    relu: function () { return "Cambia la activación y la entrada."; },
+    escala: function () { return "Mueve w con ReLU, y después prueba la sigmoide."; },
+    ancho: function () { return "Diez capas de 64 neuronas. Prueba cada inicialización con cada activación."; },
+    recorte: function () { return "La raya roja es el umbral. Compara los dos recortes."; },
+    atajo: function () { return "Enciende los atajos y prueba las tres activaciones."; }
+  };
+  function entrar(i) {
+    est.paso = i;
+    var m = MODOS[i];
+    est.res = false; est.clip = est.clip || 0;
+    if (m === "pred" || m === "cadena") { est.act = "sig"; est.w = 1; est.x = 1; est.log = false; }
+    if (m === "techo") { est.act = "sig"; est.w = 1; est.log = true; }
+    if (m === "relu") { est.w = 1; est.log = true; if (!est.chk4) { est.act = "relu"; est.x = 1; } }
+    if (m === "escala") { est.act = "relu"; est.x = 1; est.log = true; }
+    if (m === "ancho") { est.act = "relu"; est.log = true; }
+    if (m === "recorte") { est.w = 2; est.log = true; est.clip = 0; }
+    if (m === "atajo") { est.act = est.chk8 ? "sig" : "tanh"; est.w = 1; est.x = 1; est.log = true; }
+    render();
+  }
+
+  /* ---------------- chequeos ---------------- */
+  var pasos;
+  B.opcionMultiple(cuerpo("chk1"), {
+    pregunta: "La red se equivocó y manda la señal de error hacia atrás. ¿Qué capa recibe la señal más grande?",
+    opciones: ["La capa 10, la más cercana a la salida", "La capa 1, la más cercana a la entrada", "Todas reciben lo mismo: el error es uno solo", "La capa del medio"],
+    correcta: 0,
+    pistas: [null, "La señal sale de la pérdida y tiene que cruzar capas para llegar. ¿Cuál es la que más capas tiene que cruzar?", "El error es uno, pero cada capa lo recibe después de pasar por las que están entre ella y la salida.", "Nada especial pasa en el medio: piensa en qué le hace a la señal cada capa que cruza."],
+    explicacion: "La capa 10 recibe 1 y la capa 1 recibe 0.0000014, unas setecientas mil veces menos. No se reparte: se gasta en el camino. Con esa señal, las primeras capas casi no se mueven aunque entrenes mil épocas.",
+    alResolver: function () { est.chk1 = true; if (est.paso === 0) render(); pasos.completar(0); }
+  });
+  B.numerico(cuerpo("chk2"), {
+    pregunta: "A la capa 10 le llega 1. Cada cruce multiplica por 0.2247. ¿Cuánto le llega a la capa 7?",
+    respuesta: 0.011345,
+    tolerancia: 0.0004,
+    pistas: ["De la capa 10 a la 7 hay tres cruces: 10 a 9, 9 a 8 y 8 a 7.", "$0.2247 \\times 0.2247 \\times 0.2247$."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 0.0505) < 0.002) return "Esa es la capa 8: dos cruces. A la 7 le falta uno más.";
+      if (Math.abs(v - 0.00255) < 0.0003) return "Esa es la capa 6: cuatro cruces.";
+      if (Math.abs(v - 0.674) < 0.01) return "Sumaste. Cada cruce multiplica.";
+      if (Math.abs(v - 0.7753) < 0.01) return "Restaste. Cada cruce multiplica por 0.2247, no le quita 0.2247.";
+      return null;
+    },
+    explicacion: "$0.2247^3 = 0.0113$. Tres cruces y ya queda el 1 %. Las barras de las capas 1 a 7 se abrieron: en escala lineal, las primeras casi no se ven.",
+    alResolver: function () { est.chk2 = true; if (est.paso === 1) render(); pasos.completar(1); }
+  });
+  function cerrar3() { if (est.chk3 && est.chk3b) pasos.completar(2); }
+  B.opcionMultiple(cuerpo("chk3"), {
+    pregunta: "Con pesos de 1 y sigmoide, cada factor es a lo sumo 0.25. De la capa 10 a la 1 hay nueve cruces. ¿Como mínimo, cuántas veces más chica llega la señal a la capa 1?",
+    opciones: ["$4^9 = 262\\,144$ veces", "$9 \\times 4 = 36$ veces", "$4$ veces: cada factor es un cuarto", "$9^4 = 6561$ veces"],
+    correcta: 0,
+    pistas: [null, "Eso sería si los factores se sumaran. Se multiplican.", "Eso es un solo cruce. Hay nueve.", "Son nueve factores de un cuarto: la base es 4 y el exponente 9."],
+    explicacion: "$(1/4)^9 = 1/262\\,144$. Es una cota: en la cadena real los factores son 0.2247, un poco menos que 0.25, y la capa 1 recibe unas setecientas mil veces menos. Con diez capas la sigmoide ya no deja aprender a la primera.",
+    alResolver: function () { est.chk3 = true; cerrar3(); }
+  });
+  B.opcionMultiple(cuerpo("chk3b"), {
+    pregunta: "A la capa 1 le llega 0.0000014. ¿Qué significa?",
+    opciones: ["Que el terreno es casi plano en esa dirección, no que la red sea buena", "Que la capa 1 ya está en su mejor valor", "Que la red ya clasifica bien y solo falta afinar", "Que hay un error en la retropropagación"],
+    correcta: 0,
+    pistas: [null, "Cambia la entrada con los botones y mira la salida de la red: ¿distingue algo?", "Una red que da la misma respuesta para todo no puede estar clasificando bien.", "La cuenta es la regla de la cadena tal cual; el número chico es real."],
+    explicacion: "Gradiente chico quiere decir pendiente chica, no fondo. Esta red responde 0.659 para cualquier entrada y aun así su primera capa casi no recibe señal.",
+    alResolver: function () { est.chk3b = true; mostrarTras("tras-chk3b"); cerrar3(); }
+  });
+  B.opcionMultiple(cuerpo("chk4"), {
+    pregunta: "Con ReLU y pesos de 1, la señal llega entera a la capa 1. Si cambias la entrada a $x = -1$, ¿qué le llega a la capa 1?",
+    opciones: ["0: la primera neurona se apaga y la señal no pasa", "1, igual que antes: la pendiente de ReLU es 1", "−1: la señal cambia de signo", "Algo chico pero no cero, como con la sigmoide"],
+    correcta: 0,
+    pistas: [null, "La pendiente de ReLU es 1 solo para entradas positivas. ¿Qué recibe la primera neurona con $x = -1$?", "ReLU nunca entrega negativos. Sigue la entrada capa por capa.", "La pendiente de ReLU no es chica: es 1 o es 0."],
+    explicacion: "$z_1 = -1$, $h_1 = 0$, y de ahí en adelante todas reciben 0: pendiente 0 en cada cruce. Ahora elige $x = -1$ en el escenario.",
+    alResolver: function () { est.chk4 = true; mostrarTras("tras-chk4"); if (est.paso === 3) render(); pasos.completar(3); }
+  });
+  function cerrar5() { if (est.chk5 && est.chk5b) { if (est.paso === 4) render(); pasos.completar(4); } }
+  B.numerico(cuerpo("chk5"), {
+    pregunta: "Con ReLU, entrada 1 y $w = 0.8$ en las diez capas, ¿cuánto le llega a la capa 1?",
+    respuesta: Math.pow(0.8, 9),
+    tolerancia: 0.003,
+    pistas: ["Con ReLU encendida cada factor es solo el peso: 0.8.", "Nueve cruces: $0.8^9$."],
+    diagnostico: function (v) {
+      if (Math.abs(v - Math.pow(0.8, 10)) < 0.003) return "Contaste diez cruces. De la capa 10 a la 1 hay nueve.";
+      if (Math.abs(v - 7.2) < 0.05) return "Multiplicaste 0.8 por 9. Es 0.8 multiplicado por sí mismo nueve veces.";
+      return null;
+    },
+    explicacion: "$0.8^9 = 0.134$. Un peso apenas por debajo de 1 ya pierde siete octavos de la señal en diez capas.",
+    alResolver: function () { est.chk5 = true; cerrar5(); }
+  });
+  B.opcionMultiple(cuerpo("chk5b"), {
+    pregunta: "Con la sigmoide la señal se desvanece porque $w\\,\\sigma' \\le 0.25$. ¿Y si subes el peso a $w = 4$? Así $4 \\times 0.25 = 1$.",
+    opciones: ["Empeora: las neuronas se saturan y $\\sigma'$ cae mucho más que 0.25", "Se arregla: cada factor vale 1", "Explota, como con ReLU y $w = 2$", "No cambia nada: la sigmoide no depende de $w$"],
+    correcta: 0,
+    pistas: [null, "El 0.25 es el máximo de $\\sigma'$, en $z = 0$. Con $w = 4$, ¿cuánto vale $z$ en cada capa?", "Para explotar el factor tiene que pasar de 1. ¿Puede $4\\,\\sigma'(z)$ pasar de 1 cuando $z$ es grande?", "$z = w\\,h$: el peso cambia dónde cae $z$ en la curva, y con eso la pendiente."],
+    explicacion: "Con $w = 4$ cada neurona recibe $z \\approx 3.9$, donde $\\sigma' \\approx 0.019$: el factor es 0.076 y la capa 1 recibe $8.5\\times10^{-11}$. Pruébalo: elige la sigmoide y sube $w$.",
+    alResolver: function () { est.chk5b = true; mostrarTras("tras-chk5b"); if (est.paso === 4) { est.act = "sig"; est.w = 4; } cerrar5(); }
+  });
+  B.numerico(cuerpo("chk6"), {
+    pregunta: "Una capa ReLU recibe $n = 64$ entradas. ¿Qué desviación estándar $\\sigma$ pide la inicialización de He, $\\mathrm{Var}(w) = 2/n$?",
+    respuesta: Math.sqrt(2 / 64),
+    tolerancia: 0.003,
+    pistas: ["Primero la varianza: $2/64$.", "La desviación es la raíz de la varianza: $\\sqrt{0.03125}$."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 0.03125) < 0.001) return "Esa es la varianza. La desviación es su raíz.";
+      if (Math.abs(v - 0.125) < 0.003) return "Esa es la de Xavier, $\\sqrt{1/64}$. Con ReLU va el doble de varianza.";
+      if (Math.abs(v - 0.25) < 0.003) return "Usaste $\\sqrt{2}/\\sqrt{64}\\cdot\\sqrt 2$ o $2/8$. La cuenta es $\\sqrt{2/64}$.";
+      return null;
+    },
+    explicacion: "$\\sqrt{2/64} = 0.177$. Así $n\\,\\mathrm{Var}(w) = 2$, y como ReLU apaga la mitad, cada capa entrega señales del mismo tamaño que recibe. Prueba He con ReLU y después Xavier con tanh.",
+    alResolver: function () { est.chk6 = true; if (est.paso === 5) render(); pasos.completar(5); }
+  });
+  B.numerico(cuerpo("chk7"), {
+    pregunta: "Un gradiente de dos números, $\\mathbf{g} = (3,\\ 4)$, se recorta por norma con umbral $c = 1$. ¿Cuánto vale su primer número después del recorte?",
+    respuesta: 0.6,
+    tolerancia: 0.005,
+    pistas: ["$\\lVert\\mathbf{g}\\rVert = \\sqrt{9 + 16} = 5$, que pasa el umbral.", "Se multiplica todo por $c/\\lVert\\mathbf{g}\\rVert = 1/5$."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 1) < 0.005) return "Así recortarías por valor: cada número contra el umbral. Por norma se achica todo el vector por el mismo factor.";
+      if (Math.abs(v - 3) < 0.005) return "El vector pasa el umbral (su norma es 5), así que sí se recorta.";
+      if (Math.abs(v - 0.75) < 0.005) return "Esa es la proporción entre los dos números. Divide 3 por la norma, 5.";
+      return null;
+    },
+    explicacion: "$(3, 4)\\cdot\\tfrac15 = (0.6,\\ 0.8)$: norma 1 y la misma dirección. Por valor saldría $(1, 1)$, que apunta a otro lado.",
+    alResolver: function () { est.chk7 = true; pasos.completar(6); }
+  });
+  B.opcionMultiple(cuerpo("chk8"), {
+    pregunta: "Raschka dice que con $|w| = 1$ el factor $w^{t-k}$ ni se desvanece ni explota. Con tanh y $w = 1$ en las diez capas, ¿qué le llega a la capa 1?",
+    opciones: ["Cerca de 0.1: tanh′ es menor que 1 y achica igual", "Exactamente 1: el peso vale 1", "Explota, porque tanh llega hasta 1", "0, como ReLU con entrada negativa"],
+    correcta: 0,
+    pistas: [null, "El factor de cada cruce es peso por pendiente. ¿Cuánto vale la pendiente de tanh fuera del 0?", "Ningún factor pasa de 1: $w = 1$ y $\\tanh' \\le 1$.", "tanh solo tiene pendiente 0 muy lejos, y la entrada es 1."],
+    explicacion: "Le llega 0.097. Los factores van de 0.59 a 0.87: son $1 - h_k^2$, nunca 1 salvo con $h = 0$. El $w^{t-k}$ del libro se olvida de la derivada de la activación.",
+    alResolver: function () { est.chk8 = true; mostrarTras("tras-chk8"); if (est.paso === 7) render(); pasos.completar(7); }
+  });
+
+  pasos = B.pasos($("recorrido"), {
+    concepto: C,
+    alEntrar: function (i) { entrar(i); },
+    alTerminar: function () { location.hash = "retos"; }
+  });
+  if (pasos.hecho(0)) est.chk1 = true;
+  if (pasos.hecho(1)) est.chk2 = true;
+  if (pasos.hecho(2)) { est.chk3 = est.chk3b = true; mostrarTras("tras-chk3b"); }
+  if (pasos.hecho(3)) { est.chk4 = true; mostrarTras("tras-chk4"); }
+  if (pasos.hecho(4)) { est.chk5 = est.chk5b = true; mostrarTras("tras-chk5b"); }
+  if (pasos.hecho(5)) est.chk6 = true;
+  if (pasos.hecho(6)) est.chk7 = true;
+  if (pasos.hecho(7)) { est.chk8 = true; mostrarTras("tras-chk8"); }
+  entrar(0);
+
+  /* ---------------- hipotesis inicial ---------------- */
+  (function () {
+    var ta = $("hipotesis"), t = null;
+    ta.value = B.nota("gradiente-desvanece", "hipotesis");
+    function cita() {
+      var v = ta.value.trim(), el = $("citaHipo");
+      el.hidden = !v;
+      if (v) { el.textContent = ""; el.appendChild(document.createTextNode("Al principio escribiste: «" + v + "». Ahora ya tienes la respuesta: a las primeras capas les llega un producto de muchos factores. ¿Tu arreglo tocaba la activación, la escala de los pesos, o algo distinto?")); }
+    }
+    cita();
+    ta.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { B.nota("gradiente-desvanece", "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; cita(); }, 500);
+    });
+  })();
+
+  /* ---------------- marcadores de estado de retos ---------------- */
+  function pintarEstados() {
+    [].forEach.call(document.querySelectorAll("[data-reto]"), function (el) {
+      var ok = C.retoOk(el.getAttribute("data-reto"));
+      el.textContent = ok ? "resuelto" : "pendiente";
+      el.classList.toggle("ok", ok);
+    });
+  }
+  C.alCambiar(pintarEstados);
+
+  /* ---------------- reto: ojo clinico ---------------- */
+  (function () {
+    var cont = $("ojo");
+    cont.innerHTML = '<div class="ronda"></div><div class="ojo-dato"></div><p class="ojo-q"></p><div class="ojo-opts"></div>' +
+      '<div class="fb" aria-live="polite"></div><div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    function azar(a) { return a[Math.floor(Math.random() * a.length)]; }
+    var OPS = ["Se desvanece", "Llega", "Explota"];
+    var ronda, aciertos, respondida, actual;
+    function generar() {
+      for (var t = 0; t < 500; t++) {
+        var a = azar(ACTS), w = azar([0.5, 0.75, 1, 2, 3]), res = Math.random() < 0.25;
+        var c = cadena(w, a, 1, res), v = c.sen[0], cls = v < 0.02 ? 0 : v > 50 ? 2 : (v > 0.3 && v < 3 ? 1 : -1);
+        if (cls < 0) continue;
+        return { a: a, w: w, res: res, v: v, ok: cls, fac: c.fac };
+      }
+      return { a: "relu", w: 1, res: false, v: 1, ok: 1, fac: cadena(1, "relu", 1, false).fac };
+    }
+    function nueva() { ronda = 0; aciertos = 0; mostrar(); }
+    function mostrar() {
+      respondida = false;
+      actual = generar();
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 5 · aciertos " + aciertos;
+      cont.querySelector(".ojo-dato").innerHTML = "Diez capas · activación <b>" + NOMACT[actual.a] + "</b> · w = <b>" + actual.w + "</b> en todas · entrada 1 · " + (actual.res ? "<b>con atajos</b>" : "sin atajos");
+      cont.querySelector(".ojo-q").textContent = "¿Qué le pasa a la señal que llega a la capa 1?";
+      cont.querySelector(".ojo-opts").innerHTML = OPS.map(function (o, i) { return '<button type="button" class="opt" data-v="' + i + '">' + o + '</button>'; }).join("");
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+    }
+    cont.querySelector(".ojo-opts").addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || respondida) return;
+      respondida = true;
+      var ok = +b.getAttribute("data-v") === actual.ok;
+      if (ok) aciertos++;
+      b.classList.add(ok ? "ok" : "mal");
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (x) { x.disabled = true; if (+x.getAttribute("data-v") === actual.ok) x.classList.add("ok"); });
+      var por = actual.res ? "Con atajos cada factor es 1 + w·pendiente" : actual.a === "relu" ? "Con ReLU encendida cada factor es el peso, " + actual.w : actual.a === "sig" ? "Con la sigmoide cada factor es a lo sumo " + actual.w + " × 0.25, y si el peso es grande la neurona se satura" : "Con tanh cada factor es " + actual.w + " × (1 − h²)";
+      cont.querySelector(".fb").innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No.</span> ') + por + ". A la capa 1 le llega <b>" + corto(actual.v) + "</b>.";
+      var sig2 = cont.querySelector(".sig");
+      sig2.hidden = false;
+      if (ronda === 4) {
+        var aprobo = aciertos >= 4;
+        C.reto("ojo", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertos + " de 5" + (aprobo ? ". Aprobado." : ". Necesitas 4 para aprobar.");
+        sig2.textContent = "Otra tanda";
+      } else sig2.textContent = "Siguiente ronda";
+    });
+    cont.querySelector(".sig").addEventListener("click", function () { if (ronda === 4) nueva(); else { ronda++; mostrar(); } });
+    nueva();
+  })();
+
+  /* ---------------- reto: construir ---------------- */
+  (function () {
+    var k = { act: "sig", w: 1, res: false }, avisado = false, logrados = [false, false, false];
+    var OBJ = [
+      ["Sin atajos, que a la capa 1 le llegue entre 0.5 y 2.", function (v) { return !k.res && v >= 0.5 && v <= 2; }],
+      ["Que explote: más de 1000 en la capa 1.", function (v) { return v > 1000; }],
+      ["Con la sigmoide, que a la capa 1 le llegue más de 0.5.", function (v) { return k.act === "sig" && v > 0.5; }]
+    ];
+    var ul = $("objetivos");
+    OBJ.forEach(function (o) { var li = document.createElement("li"); li.innerHTML = '<span class="m"></span><span>' + o[0] + '</span>'; ul.appendChild(li); });
+    function segK(el, items, fn, ini) {
+      items.forEach(function (it, i) {
+        var b = document.createElement("button");
+        b.type = "button"; b.textContent = it; b.setAttribute("aria-pressed", i === ini ? "true" : "false");
+        b.addEventListener("click", function () { fn(i); [].forEach.call(el.children, function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); }); pintar(); });
+        el.appendChild(b);
+      });
+    }
+    segK($("kAct"), ["Sigmoide", "tanh", "ReLU"], function (i) { k.act = ACTS[i]; }, 0);
+    segK($("kRes"), ["Sin atajos", "Con atajos"], function (i) { k.res = i === 1; }, 0);
+    $("kW").addEventListener("input", function () { k.w = +this.value; pintar(); });
+    function pintar() {
+      var c = cadena(k.w, k.act, 1, k.res), v = c.sen[0];
+      $("kWv").textContent = "w = " + f(k.w, 2);
+      dibujar($("kSvg"), { sen: c.sen, log: true, sinCadena: true });
+      $("kVivo").innerHTML = NOMACT[k.act] + ", w = " + f(k.w, 2) + (k.res ? ", con atajos" : "") + " · capa 1: <b>" + corto(v) + "</b>";
+      OBJ.forEach(function (o, i) { if (!logrados[i] && o[1](v)) logrados[i] = true; ul.children[i].classList.toggle("hecho", logrados[i]); });
+      if (!avisado && logrados.every(Boolean)) { avisado = true; C.reto("construir", true); }
+    }
+    pintar();
+  })();
+
+  /* ---------------- reto: a mano ---------------- */
+  (function () {
+    var D;
+    function azar(a) { return a[Math.floor(Math.random() * a.length)]; }
+    function generar() {
+      for (var t = 0; t < 500; t++) {
+        var x = azar([1, 2]), w = [azar([1, 2, 3, -1]), azar([0.5, 2, 3, -1]), azar([0.5, 2, 3, -2]), azar([0.5, 2, 3, -1])];
+        var h = [x], z = [], d = [];
+        for (var i = 0; i < 4; i++) { z.push(w[i] * h[i]); h.push(Math.max(0, z[i])); d.push(z[i] > 0 ? 1 : 0); }
+        if (z.some(function (q) { return q === 0; })) continue;
+        var g = w[1] * d[1] * w[2] * d[2] * w[3] * d[3];
+        if (g === 0 && Math.random() < 0.7) continue;
+        D = { x: x, w: w, z: z, h: h, d: d, g: g, sinRelu: w[1] * w[2] * w[3], conW1: g * w[0] * d[0] };
+        break;
+      }
+      $("manoDatos").innerHTML = '<table class="datos-mano"><tr><th>x</th><th>w₁</th><th>w₂</th><th>w₃</th><th>w₄</th></tr><tr><td>' + D.x + '</td>' + D.w.map(function (v) { return '<td>' + v + '</td>'; }).join("") + '</tr></table>';
+    }
+    generar();
+    B.numerico($("mano"), {
+      pregunta: "¿Cuánto vale $\\partial L/\\partial h_1$, la señal que llega a la capa 1?",
+      respuesta: function () { return D.g; },
+      tolerancia: 0.001,
+      pistas: [
+        function () { return "Adelante: $z = (" + D.z.join(",\\ ") + ")$ y $h = (" + D.h.slice(1).join(",\\ ") + ")$."; },
+        function () { return "Las pendientes de ReLU de las capas 2, 3 y 4: " + D.d.slice(1).join(", ") + ". Cada cruce multiplica por su peso y su pendiente."; },
+        function () { return "$\\partial L/\\partial h_1 = 1\\cdot(w_4 \\cdot " + D.d[3] + ")(w_3 \\cdot " + D.d[2] + ")(w_2 \\cdot " + D.d[1] + ")$."; }
+      ],
+      diagnostico: function (v) {
+        if (D.g !== D.sinRelu && Math.abs(v - D.sinRelu) < 0.001) return "Multiplicaste los pesos y olvidaste las pendientes: alguna neurona está apagada ($z < 0$) y corta la señal.";
+        if (D.conW1 !== D.g && Math.abs(v - D.conW1) < 0.001) return "Cruzaste también la capa 1. La señal llega a $h_1$ después de cruzar las capas 4, 3 y 2.";
+        return null;
+      },
+      explicacion: function () {
+        return "Cruces de las capas 4, 3 y 2: $(" + D.w[3] + "\\cdot" + D.d[3] + ")(" + D.w[2] + "\\cdot" + D.d[2] + ")(" + D.w[1] + "\\cdot" + D.d[1] + ") = " + D.g + "$." + (D.g === 0 ? " Una neurona apagada corta la cadena entera." : "");
+      },
+      reintentable: true,
+      antesDeReintentar: generar,
+      alResolver: function (ok) { C.reto("mano", ok); }
+    });
+  })();
+
+  /* ---------------- reto: cazar el error ---------------- */
+  B.cazarError($("error"), {
+    variantes: [
+      {
+        intro: "Alguien quiere arreglar el desvanecimiento de una cadena de diez sigmoides subiendo los pesos.",
+        lineas: [
+          "\\text{factor de cada cruce} = w\\,\\sigma'(z_k)",
+          "\\sigma'(z) \\le 0.25 \\text{ para todo } z",
+          "\\text{con } w = 4:\\ \\text{factor} = 4 \\times 0.25 = 1",
+          "\\text{nueve cruces: } 1^9 = 1,\\ \\text{la señal llega entera}"
+        ],
+        erronea: 2,
+        explicacion: "0.25 es el máximo de $\\sigma'$, en $z = 0$. Con $w = 4$ las neuronas reciben $z \\approx 3.9$ y $\\sigma'(3.9) \\approx 0.019$: el factor es 0.076 y la capa 1 recibe $8.5\\times10^{-11}$. La última línea razona bien sobre un número equivocado."
+      },
+      {
+        intro: "La inicialización de una capa ReLU con $n = 64$ entradas.",
+        lineas: [
+          "\\mathrm{Var}(z) = n\\,\\mathrm{Var}(w)\\,\\mathbb{E}[h^2]",
+          "\\text{ReLU apaga la mitad: } \\mathbb{E}[h^2] = \\tfrac12\\,\\mathrm{Var}(z_{\\text{anterior}})",
+          "\\text{para que no cambie: } \\tfrac12\\,n\\,\\mathrm{Var}(w) = 1 \\;\\Rightarrow\\; \\mathrm{Var}(w) = \\tfrac{1}{2n}",
+          "\\sigma_w = \\sqrt{1/128} = 0.088"
+        ],
+        erronea: 2,
+        explicacion: "De $\\tfrac12\\,n\\,\\mathrm{Var}(w) = 1$ sale $\\mathrm{Var}(w) = 2/n$, no $1/(2n)$: hay que compensar la mitad apagada con el doble. Es la de He, $\\sigma = \\sqrt{2/64} = 0.177$. Con 0.088 cada capa entrega la mitad de la varianza que recibe."
+      },
+      {
+        intro: "Recorte por norma de $\\mathbf{g} = (6,\\ 8)$ con umbral $c = 5$.",
+        lineas: [
+          "\\lVert\\mathbf{g}\\rVert = \\sqrt{36 + 64} = 10",
+          "10 > 5:\\ \\text{hay que recortar}",
+          "\\mathbf{g} \\leftarrow \\mathbf{g}/c = (1.2,\\ 1.6)",
+          "\\text{la dirección no cambió}"
+        ],
+        erronea: 2,
+        explicacion: "Se multiplica por $c/\\lVert\\mathbf{g}\\rVert = 5/10$: $(3,\\ 4)$, de norma 5. Dividir por $c$ deja la dirección bien pero la norma en 2, no en el umbral. La última línea es cierta para los dos cálculos."
+      }
+    ],
+    alResolver: function (ok) { C.reto("error", ok); }
+  });
+
+  /* ---------------- retos de propiedades ---------------- */
+  function prop(id, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple($(id), cfg);
+  }
+  prop("prop1", {
+    pregunta: "Entrenando una red profunda, el gradiente de los pesos de la primera capa es del orden de $10^{-7}$. ¿Qué puedes concluir?",
+    opciones: ["Que esa capa casi no está aprendiendo; no dice nada de si la red es buena", "Que la primera capa ya llegó a su mejor valor", "Que la tasa de aprendizaje es demasiado grande", "Que conviene quitar la primera capa porque no sirve"],
+    correcta: 0,
+    pistas: [null, "En el paso 3, la red respondía lo mismo para cualquier entrada y aun así su primera capa recibía una millonésima.", "Con una tasa grande la pérdida salta; un gradiente chico es otra cosa.", "La capa puede ser necesaria; lo que no tiene es señal para aprender."],
+    explicacion: "Un gradiente chico es pendiente chica: un terreno plano, que puede estar lejísimos del mínimo. Es el síntoma del desvanecimiento, no del éxito."
+  });
+  prop("prop2", {
+    pregunta: "Xavier usa $\\mathrm{Var}(w) = 1/n$ y He usa $2/n$. ¿De dónde sale el 2 de He?",
+    opciones: ["ReLU entrega 0 en la mitad de las neuronas, y eso parte la varianza a la mitad", "De promediar las entradas y las salidas de la capa", "Es un número empírico, sin una cuenta detrás", "De que la pendiente de ReLU vale 2"],
+    correcta: 0,
+    pistas: [null, "Ese promedio es lo que hace Xavier en su forma completa, $2/(n_{\\text{ent}}+n_{\\text{sal}})$.", "Sale de la fórmula $\\mathrm{Var}(z) = n\\,\\mathrm{Var}(w)\\,\\mathbb{E}[h^2]$.", "La pendiente de ReLU es 1 o 0."],
+    explicacion: "Con ReLU, $\\mathbb{E}[h^2] = \\tfrac12\\mathrm{Var}(z)$ de la capa anterior. Para que $n\\,\\mathrm{Var}(w)\\cdot\\tfrac12 = 1$ hace falta $\\mathrm{Var}(w) = 2/n$."
+  });
+  prop("prop3", {
+    pregunta: "¿Contra qué sirve recortar el gradiente?",
+    opciones: ["Contra la explosión: acota el paso; contra el desvanecimiento no hace nada", "Contra los dos: lo lleva siempre al umbral", "Contra el desvanecimiento, porque agranda los gradientes chicos", "Contra ninguno: solo ahorra memoria"],
+    correcta: 0,
+    pistas: [null, "Recortar es achicar lo que pasa el umbral. ¿Qué le hace a un número que ya está por debajo?", "Mira la fórmula: el recorte solo actúa si $\\lVert\\mathbf{g}\\rVert > c$.", "En el paso 7, la capa 1 pasó de 512 a 4.3: cambió algo de verdad."],
+    explicacion: "El recorte es un freno: si el gradiente pasa el umbral, lo acorta. Lo que ya llegó en $10^{-7}$ sigue en $10^{-7}$. Para el desvanecimiento hacen falta ReLU, buena inicialización o atajos."
+  });
+  prop("prop4", {
+    pregunta: "Con una conexión residual, $h_k = h_{k-1} + F(h_{k-1})$. ¿Por qué deja pasar la señal hacia atrás?",
+    opciones: ["Porque al derivar aparece $1 + F'$: hay un camino con factor 1 que no se multiplica por pendientes", "Porque la red tiene menos capas", "Porque elimina la activación", "Porque obliga a que todos los pesos valgan 1"],
+    correcta: 0,
+    pistas: [null, "Las capas siguen siendo diez: el atajo se suma, no reemplaza.", "La rama $F$ sigue teniendo su activación.", "Los pesos de la rama pueden valer cualquier cosa."],
+    explicacion: "$\\partial h_k/\\partial h_{k-1} = 1 + F'(h_{k-1})$. Aunque $F'$ sea chico, el factor queda cerca de 1. La celda de la LSTM hace algo parecido en el tiempo: su estado pasa con una suma."
+  });
+  prop("prop5", {
+    pregunta: "Raschka (cap. 12) y la UD4 dicen que ReLU resuelve el gradiente que se desvanece. ¿Qué le falta a esa frase?",
+    opciones: ["Que solo vale para neuronas encendidas: con $z \\le 0$ la pendiente es 0 y la señal se corta", "Nada: con ReLU la señal llega siempre entera", "Que ReLU solo funciona en la capa de salida", "Que ReLU también se satura para entradas grandes"],
+    correcta: 0,
+    pistas: [null, "En el paso 4, con $x = -1$, ¿llegó la señal entera?", "ReLU se usa sobre todo en capas ocultas.", "Para entradas positivas grandes la pendiente sigue siendo 1: no se satura por arriba."],
+    explicacion: "Pendiente 1 a la derecha, 0 a la izquierda. ReLU evita que la señal se encoja de a poco, pero la corta en seco en las neuronas apagadas. Y si los pesos no tienen la escala justa, igual se desvanece o explota."
+  });
+
+  /* ---------------- formula de memoria ---------------- */
+  B.ordenar($("formula"), {
+    piezas: ["\\frac{\\partial L}{\\partial h_1}", "=", "\\frac{\\partial L}{\\partial h_{10}}", "\\prod_{k=2}^{10}", "w_k", "\\sigma'(z_k)"],
+    distractores: ["\\sum_{k=2}^{10}", "+", "\\tfrac{1}{n}"],
+    soluciones: [[0, 1, 2, 3, 4, 5], [0, 1, 2, 3, 5, 4], [0, 1, 3, 4, 5, 2], [0, 1, 3, 5, 4, 2]],
+    explicacion: "Un producto de nueve factores, uno por cada capa que cruza la señal, cada uno peso por pendiente. Con $\\sigma' \\le 1/4$ y pesos de 1, a lo sumo $4^{-9}$.",
+    alResolver: function (ok) { C.reto("formula", ok); }
+  });
+
+  /* ---------------- vida real ---------------- */
+  (function () {
+    var CODIGO = {
+      py: [[null, "import numpy as np"],
+        [null, ""],
+        ["def", "def activar(z, f):"],
+        ["def", "    if f == \"sigmoide\":"],
+        ["def", "        s = 1 / (1 + np.exp(-z))"],
+        ["def", "        return s, s * (1 - s)                # valor y derivada"],
+        ["def", "    return max(z, 0.0), 1.0 if z > 0 else 0.0   # relu"],
+        [null, ""],
+        ["cad", "def cadena(w, f, x=1.0, capas=10):"],
+        ["h0", "    h = [x]"],
+        ["h0", "    d = []"],
+        [null, "    for k in range(capas):                    # hacia adelante"],
+        ["fw_a", "        a, da = activar(w * h[k], f)"],
+        ["fw_g", "        h.append(a)"],
+        ["fw_g", "        d.append(da)"],
+        ["s0", "    senal = np.zeros(capas)"],
+        ["s0", "    s = 1.0                                   # lo que la pérdida manda a la última capa"],
+        [null, "    for k in range(capas - 1, -1, -1):        # hacia atrás"],
+        ["bw_s", "        senal[k] = s"],
+        ["bw_m", "        s = s * w * d[k]                      # cruzar la capa: peso por derivada"],
+        ["ret", "    return senal, np.array(d)"],
+        [null, ""],
+        ["def", "def ver(v):"],
+        ["def", "    return \" \".join(f\"{x:.1e}\" for x in v)"],
+        [null, ""],
+        ["call", "sen, d = cadena(1.0, \"sigmoide\")"],
+        ["pr1", "print(\"sigmoide, w = 1:\", ver(sen))"],
+        ["fac", "fac = 1.0 * d[1:]"],
+        ["cer", "cerrada = np.append(np.cumprod(fac[::-1])[::-1], 1.0)"],
+        ["pr_cum", "print(\"con cumprod coincide:\", np.allclose(sen, cerrada))"],
+        ["pr_r1", "print(\"relu, w = 1:    \", ver(cadena(1.0, \"relu\")[0]))"],
+        ["pr_r2", "print(\"relu, w = 2:    \", ver(cadena(2.0, \"relu\")[0]))"],
+        ["pr_r3", "print(\"relu, w = 0.5:  \", ver(cadena(0.5, \"relu\")[0]))"],
+        [null, ""],
+        [null, "# recorte: el gradiente de los sesgos con relu y w = 2 es la misma señal"],
+        ["g", "g = cadena(2.0, \"relu\")[0]"],
+        ["umb", "umbral = 5.0"],
+        ["norma", "norma = np.sqrt(np.sum(g ** 2))"],
+        ["pn", "por_norma = g * umbral / norma if norma > umbral else g"],
+        ["pr_n", "print(\"norma:\", round(norma, 1))"],
+        ["pr_pn", "print(\"por norma:\", ver(por_norma))"],
+        ["pr_pv", "print(\"por valor:\", ver(np.clip(g, -umbral, umbral)))"]],
+      r: [["def", "activar <- function(z, f) {"],
+        ["def", "  if (f == \"sigmoide\") {"],
+        ["def", "    s <- 1 / (1 + exp(-z))"],
+        ["def", "    return(c(s, s * (1 - s)))                 # valor y derivada"],
+        [null, "  }"],
+        ["def", "  c(max(z, 0), if (z > 0) 1 else 0)           # relu"],
+        [null, "}"],
+        [null, ""],
+        ["cad", "cadena <- function(w, f, x = 1, capas = 10) {"],
+        ["h0", "  h <- c(x)"],
+        ["h0", "  d <- numeric(capas)"],
+        [null, "  for (k in 1:capas) {                        # hacia adelante"],
+        ["fw_a", "    r <- activar(w * h[k], f)"],
+        ["fw_g", "    h[k + 1] <- r[1]"],
+        ["fw_g", "    d[k] <- r[2]"],
+        [null, "  }"],
+        ["s0", "  senal <- numeric(capas)"],
+        ["s0", "  s <- 1                                      # lo que la pérdida manda a la última capa"],
+        [null, "  for (k in capas:1) {                        # hacia atrás"],
+        ["bw_s", "    senal[k] <- s"],
+        ["bw_m", "    s <- s * w * d[k]                         # cruzar la capa: peso por derivada"],
+        [null, "  }"],
+        ["ret", "  list(senal = senal, d = d)"],
+        [null, "}"],
+        [null, ""],
+        ["def", "ver <- function(v) paste(formatC(v, format = \"e\", digits = 1), collapse = \" \")"],
+        [null, ""],
+        ["call", "r <- cadena(1, \"sigmoide\")"],
+        ["pr1", "cat(\"sigmoide, w = 1:\", ver(r$senal), \"\\n\")"],
+        ["fac", "fac <- 1 * r$d[-1]"],
+        ["cer", "cerrada <- c(rev(cumprod(rev(fac))), 1)"],
+        ["pr_cum", "cat(\"con cumprod coincide:\", isTRUE(all.equal(r$senal, cerrada)), \"\\n\")"],
+        ["pr_r1", "cat(\"relu, w = 1:    \", ver(cadena(1, \"relu\")$senal), \"\\n\")"],
+        ["pr_r2", "cat(\"relu, w = 2:    \", ver(cadena(2, \"relu\")$senal), \"\\n\")"],
+        ["pr_r3", "cat(\"relu, w = 0.5:  \", ver(cadena(0.5, \"relu\")$senal), \"\\n\")"],
+        [null, ""],
+        [null, "# recorte: el gradiente de los sesgos con relu y w = 2 es la misma señal"],
+        ["g", "g <- cadena(2, \"relu\")$senal"],
+        ["umb", "umbral <- 5"],
+        ["norma", "norma <- sqrt(sum(g^2))"],
+        ["pn", "por_norma <- if (norma > umbral) g * umbral / norma else g"],
+        ["pr_n", "cat(\"norma:\", round(norma, 1), \"\\n\")"],
+        ["pr_pn", "cat(\"por norma:\", ver(por_norma), \"\\n\")"],
+        ["pr_pv", "cat(\"por valor:\", ver(pmin(pmax(g, -umbral), umbral)), \"\\n\")"]]
+    };
+    // salida real de python3 y Rscript, caracter por caracter (R deja un espacio antes del salto de linea)
+    var SALIDA = {"py": ["sigmoide, w = 1: 1.4e-06 6.5e-06 2.9e-05 1.3e-04 5.7e-04 2.5e-03 1.1e-02 5.0e-02 2.2e-01 1.0e+00", "con cumprod coincide: True", "relu, w = 1:     1.0e+00 1.0e+00 1.0e+00 1.0e+00 1.0e+00 1.0e+00 1.0e+00 1.0e+00 1.0e+00 1.0e+00", "relu, w = 2:     5.1e+02 2.6e+02 1.3e+02 6.4e+01 3.2e+01 1.6e+01 8.0e+00 4.0e+00 2.0e+00 1.0e+00", "relu, w = 0.5:   2.0e-03 3.9e-03 7.8e-03 1.6e-02 3.1e-02 6.2e-02 1.2e-01 2.5e-01 5.0e-01 1.0e+00", "norma: 591.2", "por norma: 4.3e+00 2.2e+00 1.1e+00 5.4e-01 2.7e-01 1.4e-01 6.8e-02 3.4e-02 1.7e-02 8.5e-03", "por valor: 5.0e+00 5.0e+00 5.0e+00 5.0e+00 5.0e+00 5.0e+00 5.0e+00 4.0e+00 2.0e+00 1.0e+00"], "r": ["sigmoide, w = 1: 1.4e-06 6.5e-06 2.9e-05 1.3e-04 5.7e-04 2.5e-03 1.1e-02 5.0e-02 2.2e-01 1.0e+00 ", "con cumprod coincide: TRUE ", "relu, w = 1:     1.0e+00 1.0e+00 1.0e+00 1.0e+00 1.0e+00 1.0e+00 1.0e+00 1.0e+00 1.0e+00 1.0e+00 ", "relu, w = 2:     5.1e+02 2.6e+02 1.3e+02 6.4e+01 3.2e+01 1.6e+01 8.0e+00 4.0e+00 2.0e+00 1.0e+00 ", "relu, w = 0.5:   2.0e-03 3.9e-03 7.8e-03 1.6e-02 3.1e-02 6.2e-02 1.2e-01 2.5e-01 5.0e-01 1.0e+00 ", "norma: 591.2 ", "por norma: 4.3e+00 2.2e+00 1.1e+00 5.4e-01 2.7e-01 1.4e-01 6.8e-02 3.4e-02 1.7e-02 8.5e-03 ", "por valor: 5.0e+00 5.0e+00 5.0e+00 5.0e+00 5.0e+00 5.0e+00 5.0e+00 4.0e+00 2.0e+00 1.0e+00 "]};
+    var CS = cadena(1, "sig", 1, false);
+    var EV = [];
+    (function () {
+      var fase = 1, sal = 0, H = [null], Z = [], Dd = [], SEN = [], cur = -1, s = null;
+      function foto(id, x) { EV.push(Object.assign({ id: id, fase: fase, sal: sal, H: H.slice(), Z: Z.slice(), Dd: Dd.slice(), SEN: SEN.slice(), cur: cur, s: s, k: null }, x || {})); }
+      foto("def"); foto("cad"); foto("call");
+      H = [1]; foto("h0");
+      for (var k = 0; k < 10; k++) {
+        cur = k; Z[k] = CS.z[k];
+        foto("fw_a", { k: k });
+        H[k + 1] = CS.h[k + 1]; Dd[k] = CS.d[k];
+        foto("fw_g", { k: k });
+      }
+      fase = 2; cur = -1; s = 1;
+      foto("s0");
+      for (k = 9; k >= 0; k--) {
+        cur = k; SEN[k] = s;
+        foto("bw_s", { k: k });
+        s = s * CS.fac[k];
+        foto("bw_m", { k: k });
+      }
+      cur = -1;
+      foto("ret");
+      sal++; foto("pr1", { nueva: true });
+      fase = 3;
+      foto("fac"); foto("cer");
+      sal++; foto("pr_cum", { nueva: true });
+      sal++; foto("pr_r1", { nueva: true });
+      sal++; foto("pr_r2", { nueva: true });
+      sal++; foto("pr_r3", { nueva: true });
+      fase = 4;
+      foto("g"); foto("umb"); foto("norma"); foto("pn");
+      sal++; foto("pr_n", { nueva: true });
+      sal++; foto("pr_pn", { nueva: true });
+      sal++; foto("pr_pv", { nueva: true, fin: true });
+    })();
+
+    function narrar(e, ctx) {
+      var py = ctx.lang() === "py", ix = ctx.ix;
+      switch (e.id) {
+        case "def": return "Define <b>activar</b>, que devuelve el valor de la activación y su pendiente en z (sigmoide o ReLU), y <b>ver</b>, que escribe los números en notación científica con un decimal.";
+        case "cad": return "La función principal: una cadena de <b>capas</b> neuronas, todas con el mismo peso <b>w</b>, entrada <b>x</b> y sin sesgos.";
+        case "call": return "La llama con la sigmoide y w = 1: la cadena del recorrido.";
+        case "h0": return "h guarda lo que entrega cada capa, empezando por la entrada (h = [1]). d va a guardar la pendiente de cada capa, que la pasada hacia atrás necesita.";
+        case "fw_a": return "Capa <b>k = " + ix(e.k) + "</b>: z = w · h = " + f(CS.z[e.k], 4) + ", sigmoide " + f(CS.h[e.k + 1], 4) + " y pendiente " + f(CS.d[e.k], 4) + "." + (e.k >= 3 ? " Ya está pegada en 0.659: cada capa entrega casi lo mismo que recibe." : "");
+        case "fw_g": return "Guarda el valor y la pendiente de la capa " + ix(e.k) + ".";
+        case "s0": return "Un lugar para la señal de cada capa, y <b>s = 1</b>: lo que la pérdida le manda a la última capa.";
+        case "bw_s": return "Capa <b>k = " + ix(e.k) + "</b>: anota la señal que le llega, <b>" + corto(e.SEN[e.k]) + "</b>.";
+        case "bw_m": return "Cruza la capa hacia atrás: s × w × pendiente = " + corto(e.SEN[e.k]) + " × 1 × " + f(CS.d[e.k], 4) + " = <b>" + corto(e.s) + "</b>.";
+        case "ret": return "Devuelve las diez señales y las pendientes.";
+        case "pr1": return "Las diez señales, de la capa 1 a la 10: de <b>1.4e-06</b> a 1. Es la escalera del paso 3.";
+        case "fac": return "La versión cerrada: los factores de cruce (w por pendiente) de las capas 2 a 10.";
+        case "cer": return py ? "<b>np.cumprod</b> multiplica acumulando; al revés, desde la capa 10, da el producto de los factores que separan a cada capa de la pérdida." : "<b>cumprod</b> multiplica acumulando; con <b>rev</b> se hace desde la capa 10.";
+        case "pr_cum": return "Los bucles y la fórmula del producto dan lo mismo.";
+        case "pr_r1": return "ReLU con w = 1: cada factor es 1 × 1. La señal llega entera a todas las capas.";
+        case "pr_r2": return "ReLU con w = 2: cada factor es 2 y a la capa 1 le llega <b>512</b>, que es 2⁹. Explota.";
+        case "pr_r3": return "ReLU con w = 0.5: 0.5⁹ ≈ 0.002. Misma activación, otro peso, y se desvanece.";
+        case "g": return "El gradiente de los diez sesgos de la cadena que explota. Con ReLU encendida, el gradiente de un sesgo es la señal que llega a su capa: (512, 256, ..., 1).";
+        case "umb": return "El umbral del recorte: 5, el del cuaderno de la Demo 1 de la UD4.";
+        case "norma": return "La norma del vector: √(512² + 256² + ... + 1²) = <b>591.2</b>.";
+        case "pn": return "Recorte por norma: si la norma pasa el umbral, todo el vector se multiplica por 5 / 591.2.";
+        case "pr_n": return "Imprime la norma.";
+        case "pr_pn": return "Por norma: la capa 1 queda en 4.3 y la 10 en 0.0085. La proporción entre ellas sigue siendo 512: misma dirección.";
+        case "pr_pv": return py ? "Por valor, con <b>np.clip</b>: las siete primeras quedan en 5. La capa 1 ya no pesa 512 veces más que la 10, sino 5: cambió la dirección del paso." : "Por valor, con <b>pmin</b> y <b>pmax</b>: las siete primeras quedan en 5. La capa 1 ya no pesa 512 veces más que la 10, sino 5: cambió la dirección del paso.";
+      }
+      return "";
+    }
+    function visual(e, anterior, ctx) {
+      var h = '<thead><tr><th>capa</th><th>z</th><th>h</th><th>pendiente</th><th>señal</th></tr></thead><tbody>';
+      function c(cur, v, txt, cls) { return '<td class="' + (cur ? "cur" : v === null || v === undefined ? "vacia" : cls || "") + '">' + (v === null || v === undefined ? "·" : txt) + '</td>'; }
+      for (var i = 0; i < 10; i++) {
+        var cur = !!(e && e.cur === i);
+        h += '<tr><td>' + ctx.ix(i) + '</td>' + c(cur, e ? e.Z[i] : null, e && e.Z[i] != null ? f(e.Z[i], 4) : "", "fw") + c(cur, e ? e.H[i + 1] : null, e && e.H[i + 1] != null ? f(e.H[i + 1], 4) : "", "fw") +
+          c(cur, e ? e.Dd[i] : null, e && e.Dd[i] != null ? f(e.Dd[i], 4) : "") + c(cur, e ? e.SEN[i] : null, e && e.SEN[i] != null ? corto(e.SEN[i]) : "", "bw") + '</tr>';
+      }
+      $("vrTabla").innerHTML = h + '</tbody>';
+      var cu = "";
+      if (e) {
+        if (e.id === "fw_a") cu = "z = 1 × " + f(e.k === 0 ? 1 : CS.h[e.k], 4) + " = " + f(CS.z[e.k], 4) + " · σ(z) = " + f(CS.h[e.k + 1], 4) + " · σ′(z) = " + f(CS.d[e.k], 4);
+        else if (e.id === "bw_m") cu = "s = " + corto(e.SEN[e.k]) + " × 1 × " + f(CS.d[e.k], 4) + " = " + corto(e.s);
+        else if (e.fase >= 2 && e.s != null && e.id !== "bw_s") cu = "s = " + corto(e.s);
+      }
+      $("vrCuenta").textContent = cu;
+      var lineas = SALIDA[ctx.lang()].slice(0, e ? e.sal : 0);
+      $("vrConsola").innerHTML = lineas.length ? lineas.map(function (l, k) {
+        return '<span class="' + (e && e.nueva && k === lineas.length - 1 ? "nueva" : "") + '">' + ctx.esc(l) + '</span>';
+      }).join("\n") : '<span class="vacia">Todavía no imprimió nada.</span>';
+    }
+    B.vidaReal($("vidareal"), {
+      codigo: CODIGO,
+      eventos: EV,
+      narrar: narrar,
+      vars: function (e, ctx) {
+        var v = [];
+        if (!e) return v;
+        if (e.k !== null) v.push('<span>k = <b>' + ctx.ix(e.k) + '</b></span>');
+        if (e.s != null) v.push('<span>s = <b>' + corto(e.s) + '</b></span>');
+        return v;
+      },
+      visual: visual,
+      demora: function (e) { return !e ? 600 : e.id === "fw_g" ? 350 : e.id === "fw_a" || e.id === "bw_s" || e.id === "bw_m" ? 650 : e.id.indexOf("pr_") === 0 || e.id === "pr1" ? 1300 : 900; }
+    });
+
+    B.numerico(cuerpo("vrPred"), {
+      pregunta: "Antes de reproducir: el programa imprime la señal de cada capa con ReLU y $w = 2$. ¿Qué número imprime para la capa 1?",
+      respuesta: 512,
+      tolerancia: 0,
+      pistas: ["Con ReLU encendida, cada cruce multiplica por el peso, 2.", "De la capa 10 a la capa 1 hay nueve cruces."],
+      diagnostico: function (v) {
+        if (v === 1024) return "Eso son diez cruces. La capa 10 recibe 1 sin cruzar nada; a la capa 1 la separan nueve.";
+        if (v === 18) return "Multiplicaste 2 por 9. Son nueve factores de 2 multiplicados entre sí.";
+        if (v === 256) return "Ocho cruces: ese es el de la capa 2.";
+        return null;
+      },
+      explicacion: "$2^9 = 512$. El programa lo imprime como <code>5.1e+02</code>, en notación científica con un decimal.",
+      alResolver: function (ok) { C.reto("codigo1", ok); }
+    });
+    prop("codigo2", {
+      pregunta: "Armas un <code>MLPClassifier</code> con <code>activation=\"relu\"</code> y no le dices nada de la inicialización. ¿Con qué arranca sus pesos?",
+      opciones: [
+        "Glorot (Xavier) uniforme, límite $\\sqrt{6/(n_{\\text{ent}}+n_{\\text{sal}})}$: no cambia a He por usar ReLU",
+        "He, porque detecta que la activación es ReLU",
+        "Normales con desviación 1",
+        "Todos en cero, y el primer paso los separa"
+      ],
+      correcta: 0,
+      pistas: [null, "Mira la última línea del recuadro de capas anchas: el peso más grande que sorteó queda justo debajo de 0.2165.", "Con desviación 1 y 64 entradas, la señal del recuadro explotaba a $10^7$: scikit-learn no haría eso.", "Con todos en cero, las neuronas serían gemelas para siempre (lo viste en Retropropagación)."],
+      explicacion: "El código fuente de scikit-learn 1.6.1 (<code>_init_coef</code>) usa uniforme en $\\pm\\sqrt{6/(n_{\\text{ent}}+n_{\\text{sal}})}$ para todas las activaciones salvo la logística, donde pone 2 en lugar de 6. Con ReLU queda un poco por debajo de He. Para redes poco profundas no se nota; con muchas capas, sí."
+    });
+    prop("codigo3", {
+      pregunta: "El cuaderno de la Demo 1 de LSTM (UD4) recorta con <code>np.clip(dparam, -5, 5)</code>. Con el gradiente $(512, 256, \\ldots, 1)$ de la cadena que explota, ¿qué hace ese recorte?",
+      opciones: [
+        "Deja (5, 5, 5, 5, 5, 5, 5, 4, 2, 1): cambia la dirección, la capa 1 pasa de pesar 512 veces la 10 a pesar 5",
+        "Lo divide todo por la norma: misma dirección, norma 5",
+        "Nada, porque el umbral es para valores negativos",
+        "Lo deja todo en 5, incluidas las capas 8 a 10"
+      ],
+      correcta: 0,
+      pistas: [null, "Eso es el recorte por norma. <code>np.clip</code> trabaja número por número.", "El intervalo es de −5 a 5: corta por los dos lados.", "Los números que ya están dentro del intervalo no se tocan."],
+      explicacion: "<code>np.clip</code> recorta por valor: cada número contra el umbral, por separado. Es lo que imprime la última línea del programa. Para conservar la dirección se recorta por norma, como <code>clip_grad_norm_</code> de PyTorch o <code>clipnorm</code> de Keras. En la Demo 1 el recorte por valor funciona porque solo hace de freno de emergencia."
+    });
+  })();
+
+  /* ---------------- tarjetas ---------------- */
+  B.tarjetas($("tarjetas"), [
+    ["¿Por qué se desvanece el gradiente?", "La señal que llega a una capa es un producto de factores, uno por cada capa que cruza: peso por pendiente. Si casi todos son menores que 1, el producto cae de forma exponencial."],
+    ["La cota de la sigmoide", "$\\sigma' \\le 1/4$: con pesos de 1, nueve cruces dejan a lo sumo $4^{-9} \\approx 4\\times10^{-6}$."],
+    ["¿Y si los factores son mayores que 1?", "Explota: con ReLU y $w = 2$, la capa 1 recibe $2^9 = 512$ veces más. El paso de descenso se vuelve enorme."],
+    ["¿ReLU lo resuelve?", "Lo evita en las neuronas encendidas (pendiente 1). En las apagadas la pendiente es 0 y corta la señal. Y la escala de los pesos sigue mandando."],
+    ["Xavier y He", "Xavier: $\\mathrm{Var}(w) = 2/(n_{\\text{ent}}+n_{\\text{sal}})$, para tanh y sigmoide. He: $\\mathrm{Var}(w) = 2/n_{\\text{ent}}$, para ReLU, porque apaga la mitad."],
+    ["Recorte por norma o por valor", "Por norma: $\\mathbf{g}\\cdot c/\\lVert\\mathbf{g}\\rVert$, misma dirección. Por valor: cada número contra $\\pm c$, cambia la dirección. Ninguno ayuda contra el desvanecimiento."],
+    ["¿Qué hace un atajo residual?", "$h_k = h_{k-1} + F(h_{k-1})$: el factor pasa a ser $1 + F'$, así que la señal tiene un camino que no se encoge."],
+    ["¿Qué tiene que ver con las RNN?", "Una RNN desplegada es una cadena con el mismo peso en cada paso: el error que vuelve $t-k$ pasos es un producto de $t-k$ factores $w\\,\\tanh'$."]
+  ]);
+
+  /* ---------------- conexiones ---------------- */
+  B.conexiones("gradiente-desvanece");
+})();
+</script>
+</body>
+</html>

@@ -31,20 +31,6 @@ window.FUENTES = {
     archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142001 - Matematicas y estadistica para la IA/UD2. Teoría de la estimación/SM142001_MUIA_UD2_CONTENIDO TEÓRICO-2.pdf",
     nota: "Probabilidad, distribuciones, máxima verosimilitud, intervalos y contrastes, tal como te los van a evaluar. Tiene erratas: las páginas las señalan."
   },
-  openstax: {
-    corto: "OpenStax Statistics",
-    titulo: "Introductory Statistics, 2.ª edición",
-    autor: "OpenStax (Illowsky y Dean)",
-    archivo: "/Users/franciscocastillo/brain/03-Matematicas/08-Probabilidad-y-estadistica/openstax-introductory-statistics-2e.pdf",
-    nota: "El libro de texto de base: probabilidad, distribuciones, TCL, intervalos y contrastes, con muchos ejemplos. Página PDF = impresa + 12."
-  },
-  openintro: {
-    corto: "OpenIntro",
-    titulo: "OpenIntro Statistics, 4.ª edición",
-    autor: "Diez, Çetinkaya-Rundel y Barr",
-    archivo: "/Users/franciscocastillo/brain/03-Matematicas/11-Estadistica-avanzada/https::www.biostat.jhsph.edu:~iruczins:teaching:books:2019.openintro.statistics.pdf",
-    nota: "Probabilidad e inferencia explicadas con datos reales y ejercicios guiados. Página PDF = impresa."
-  },
   raschka3: {
     corto: "Raschka cap. 3",
     titulo: "Machine Learning with PyTorch and Scikit-Learn, cap. 3: A Tour of Machine Learning Classifiers Using Scikit-Learn",
@@ -221,27 +207,6 @@ window.FUENTES = {
     archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142003 - Clasificaciones y agrupaciones/UD0. Intro to ML/ud0-intro-ml.html",
     tipo: "diapositivas",
     nota: "Proceso de modelado, partición de datos, validación cruzada, sesgo y varianza, y métricas (52 diapositivas)."
-  },
-  boyd: {
-    corto: "Boyd VMLS",
-    titulo: "Introduction to Applied Linear Algebra: Vectors, Matrices, and Least Squares",
-    autor: "Stephen Boyd y Lieven Vandenberghe",
-    archivo: "/Users/franciscocastillo/brain/03-Matematicas/14-Algebra-lineal/boyd-vmls-applied-linear-algebra.pdf",
-    nota: "Álgebra lineal aplicada: normas, distancias, mínimos cuadrados, ajuste de datos y regularización. Página PDF = impresa + 10."
-  },
-  calculo1: {
-    corto: "OpenStax Cálculo 1",
-    titulo: "Calculus Volume 1",
-    autor: "OpenStax (Strang y Herman)",
-    archivo: "/Users/franciscocastillo/brain/03-Matematicas/09-Calculo-I/openstax-calculus-volume-1.pdf",
-    nota: "Exponenciales y logaritmos, límites, derivadas y sus aplicaciones, con muchos ejemplos. Página PDF = impresa + 8."
-  },
-  calculo3: {
-    corto: "OpenStax Cálculo 3",
-    titulo: "Calculus Volume 3",
-    autor: "OpenStax (Strang y Herman)",
-    archivo: "/Users/franciscocastillo/brain/03-Matematicas/12-Calculo-multivariable/openstax-calculus-volume-3.pdf",
-    nota: "Funciones de varias variables: curvas de nivel, derivadas parciales, gradiente, máximos y Lagrange. Página PDF = impresa + 8."
   },
   raschka5: {
     corto: "Raschka cap. 5",
@@ -474,5 +439,950 @@ window.FUENTES = {
     autor: "Stefan Jansen",
     archivo: "/Users/franciscocastillo/brain/02-Biblioteca/Finanzas-ML/ML4T/Cap13 - Data-Driven Risk Factors and Asset Allocation with Unsupervised Learning.pdf",
     nota: "PCA aplicado a retornos de acciones: factores de riesgo y eigenportfolios."
+  },
+  dl4: {
+    corto: "Deep Learning UD4 teoría",
+    titulo: "UD4. Deep Learning y LSTM. Contenido teórico",
+    autor: "Máster en IA, UAX. Técnicas de IA: regresiones, deep learning y otros",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142004 - Regresiones, deep learning y otros/UD4. Deep Learning y LSTM/Contenido teórico UD4 - Deep Learning y LSTM vC.pdf",
+    nota: "Neurona, perceptrón, activaciones, pérdidas, red multicapa, RNN y LSTM. Tiene erratas: la neurona sin sumatorio y el perceptrón que para cuando las clases no son separables."
+  },
+  dl4diapo: {
+    corto: "Deep Learning UD4 diapositivas",
+    titulo: "UD4. Introducción al Deep Learning (diapositivas)",
+    autor: "Máster en IA, UAX. Técnicas de IA: regresiones, deep learning y otros",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142004 - Regresiones, deep learning y otros/UD4. Deep Learning y LSTM/UD4 - DL.pdf",
+    nota: "Diapositivas en PDF: citar por página del PDF. La de softmax muestra la curva de la sigmoide."
+  },
+  lstm4: {
+    corto: "LSTM UD4 diapositivas",
+    titulo: "UD4. LSTM (diapositivas)",
+    autor: "Máster en IA, UAX. Técnicas de IA: regresiones, deep learning y otros",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142004 - Regresiones, deep learning y otros/UD4. Deep Learning y LSTM/UD4 - LSTM.pdf",
+    nota: "RNN, el ejemplo de \"hola\", gradiente que se desvanece, LSTM y GRU. Diapositivas en PDF: citar por página del PDF."
+  },
+  cnn5: {
+    corto: "CNN UD5 teoría",
+    titulo: "UD5. Redes convolucionales. Contenido teórico",
+    autor: "Máster en IA, UAX. Técnicas de IA: regresiones, deep learning y otros",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142004 - Regresiones, deep learning y otros/UD5. Redes convolucionales/Contenido teórico CNN - vC.pdf",
+    nota: "Convolución, filtros, stride, padding, pooling y transfer learning. Tiene erratas: el detector de Sobel suma 235 donde es 315."
+  },
+  cnn5diapo: {
+    corto: "CNN UD5 diapositivas",
+    titulo: "UD5. Redes convolutivas (diapositivas)",
+    autor: "Máster en IA, UAX. Técnicas de IA: regresiones, deep learning y otros",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142004 - Regresiones, deep learning y otros/UD5. Redes convolucionales/UD5 - CNN.pdf",
+    nota: "Diapositivas en PDF: citar por página del PDF. Ejemplo 6×6 con filtro 3×3 y max pooling."
+  },
+  rl6: {
+    corto: "Refuerzo UD6 teoría",
+    titulo: "UD6. Reinforcement Learning. Contenido teórico",
+    autor: "Máster en IA, UAX. Técnicas de IA: regresiones, deep learning y otros",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142004 - Regresiones, deep learning y otros/UD6. Reinforcement Learning/Contenido teórico UD6.pdf",
+    nota: "MDP, valor, Bellman, Monte Carlo, Q-learning, gradiente de política y DQN. Llama recompensa esperada al retorno esperado."
+  },
+  rl6diapo: {
+    corto: "Refuerzo UD6 diapositivas",
+    titulo: "UD6. Reinforcement Learning (diapositivas)",
+    autor: "Máster en IA, UAX. Técnicas de IA: regresiones, deep learning y otros",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142004 - Regresiones, deep learning y otros/UD6. Reinforcement Learning/UD6 - RL.pdf",
+    nota: "Diapositivas en PDF: citar por página del PDF. El índice falla desde el tema 5."
+  },
+  ud6: {
+    corto: "UD6 teoría",
+    titulo: "UD6. Teoría de grafos complejos. Contenido teórico",
+    autor: "Máster en IA, UAX. Matemáticas y estadística para la IA",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142001 - Matematicas y estadistica para la IA/UD6. Teoría de grafos complejos/UD6 Contenido Teorico.pdf",
+    nota: "Redes neuronales (pp. 5-22) y grafos (pp. 23-33): centralidad, PageRank, comunidades. Tiene erratas: la neurona del paraguas da 0.56, no 0.92."
+  },
+  nield7: {
+    corto: "Nield cap. 7",
+    titulo: "Essential Math for Data Science, cap. 7: Neural Networks",
+    autor: "Thomas Nield",
+    archivo: "/Users/franciscocastillo/brain/02-Biblioteca/Matematicas/Essential-Math/07 Cap 7 Neural Networks.pdf",
+    nota: "Red de colores claro y oscuro, propagación hacia adelante y atrás con NumPy. La retropropagación matricial del código está mal en la capa oculta."
+  },
+  raschka11: {
+    corto: "Raschka cap. 11",
+    titulo: "Machine Learning with PyTorch and Scikit-Learn, cap. 11: Implementing a Multilayer Artificial Neural Network from Scratch",
+    autor: "Raschka, Liu y Mirjalili",
+    archivo: "/Users/franciscocastillo/brain/02-Biblioteca/Machine-Learning/PyTorch-Scikit-Learn/Cap11 - Implementing a Multilayer Artificial Neural Network from Scratch.pdf",
+    nota: "Red multicapa desde cero sobre MNIST y retropropagación. Página PDF = impresa − 334."
+  },
+  raschka12: {
+    corto: "Raschka cap. 12",
+    titulo: "Machine Learning with PyTorch and Scikit-Learn, cap. 12: Parallelizing Neural Network Training with PyTorch",
+    autor: "Raschka, Liu y Mirjalili",
+    archivo: "/Users/franciscocastillo/brain/02-Biblioteca/Machine-Learning/PyTorch-Scikit-Learn/Cap12 - Parallelizing Neural Network Training with PyTorch.pdf",
+    nota: "Tensores de PyTorch, mini-lotes, SGD y funciones de activación. Página PDF = impresa − 368."
+  },
+  raschka13: {
+    corto: "Raschka cap. 13",
+    titulo: "Machine Learning with PyTorch and Scikit-Learn, cap. 13: Going Deeper – The Mechanics of PyTorch",
+    autor: "Raschka, Liu y Mirjalili",
+    archivo: "/Users/franciscocastillo/brain/02-Biblioteca/Machine-Learning/PyTorch-Scikit-Learn/Cap13 - Going Deeper – The Mechanics of PyTorch.pdf",
+    nota: "Autograd, inicialización de Xavier y el XOR con una red. Página PDF = impresa − 408."
+  },
+  raschka14: {
+    corto: "Raschka cap. 14",
+    titulo: "Machine Learning with PyTorch and Scikit-Learn, cap. 14: Classifying Images with Deep Convolutional Neural Networks",
+    autor: "Raschka, Liu y Mirjalili",
+    archivo: "/Users/franciscocastillo/brain/02-Biblioteca/Machine-Learning/PyTorch-Scikit-Learn/Cap14 - Classifying Images with Deep Convolutional Neural Networks.pdf",
+    nota: "Convolución 1D y 2D, padding, stride, pooling, dropout y pérdidas. Página PDF = impresa − 450. Su conv2d falla con stride 2."
+  },
+  raschka15: {
+    corto: "Raschka cap. 15",
+    titulo: "Machine Learning with PyTorch and Scikit-Learn, cap. 15: Modeling Sequential Data Using Recurrent Neural Networks",
+    autor: "Raschka, Liu y Mirjalili",
+    archivo: "/Users/franciscocastillo/brain/02-Biblioteca/Machine-Learning/PyTorch-Scikit-Learn/Cap15 - Modeling Sequential Data Using Recurrent Neural Networks.pdf",
+    nota: "RNN, retropropagación en el tiempo, gradiente que se desvanece y LSTM. Página PDF = impresa − 498. El factor w^(t−k) ignora la derivada de tanh."
+  },
+  raschka19: {
+    corto: "Raschka cap. 19",
+    titulo: "Machine Learning with PyTorch and Scikit-Learn, cap. 19: Reinforcement Learning for Decision Making in Complex Environments",
+    autor: "Raschka, Liu y Mirjalili",
+    archivo: "/Users/franciscocastillo/brain/02-Biblioteca/Machine-Learning/PyTorch-Scikit-Learn/Cap19 - Reinforcement Learning for Decision Making in Complex Environments.pdf",
+    nota: "MDP, retorno, Bellman, programación dinámica, Monte Carlo, TD, Q-learning y DQN. Página PDF = impresa − 672. Los retornos del episodio 1 están corridos un índice."
+  },
+  liu15: {
+    corto: "Liu cap. 15",
+    titulo: "Python Machine Learning by Example, cap. 15: Making Decisions in Complex Environments with Reinforcement Learning",
+    autor: "Yuxi (Hayden) Liu",
+    archivo: "/Users/franciscocastillo/brain/02-Biblioteca/Machine-Learning/ML-by-Example/Cap15 - Making Decisions in Complex Environments with Reinforcement Learning.pdf",
+    nota: "Iteración de valor y de política en FrozenLake, Monte Carlo en Blackjack y Q-learning. Página PDF = impresa − 446."
+  },
+  arq1: {
+    corto: "Arquitectura UD1 teoría",
+    titulo: "UD1. Arquitectura de computadores. Contenido teórico",
+    autor: "Máster en IA, UAX. Arquitectura de computadores y redes de comunicación",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142052 - Arquitectura de computadores y redes/UD1. Arquitectura de computadores/MUIA_SM142052_UD1_Contenido_teórico.pdf",
+    nota: "Sistemas de numeración: decimal, binario, hexadecimal, complemento a dos y ASCII (pp. 17-22). Página PDF = impresa + 3."
+  },
+  arq1diapo: {
+    corto: "Arquitectura UD1 diapositivas",
+    titulo: "UD1. Arquitectura de computadores (diapositivas)",
+    autor: "Máster en IA, UAX. Arquitectura de computadores y redes de comunicación",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142052 - Arquitectura de computadores y redes/UD1. Arquitectura de computadores/MUIA_SM142052_UD1_Presentación.pdf",
+    nota: "Diapositivas en PDF: citar por página del PDF. El ejemplo de binario a decimal de la p. 33 suma 91, no 109."
+  },
+  arq2: {
+    corto: "Arquitectura UD2 teoría",
+    titulo: "UD2. CPU, memoria y organización. Contenido teórico",
+    autor: "Máster en IA, UAX. Arquitectura de computadores y redes de comunicación",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142052 - Arquitectura de computadores y redes/UD2. CPU, memoria y organizacion/MUIA_SM142052_UD2_Contenido_teorico.pdf",
+    nota: "Solo nombra el desbordamiento y el formato IEEE 754. Página PDF = impresa + 3."
+  },
+  szp1: {
+    corto: "Stitz-Zeager 0.1",
+    titulo: "Precalculus Prerequisites (cap. 0), sección 0.1: Basic Set Theory and Interval Notation",
+    autor: "Carl Stitz y Jeff Zeager",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/01-Aritmetica-basica/Unidad 01 - 0.1 Basic Set Theory and Interval Notation.pdf",
+    nota: "Conjuntos de números, recta numérica e intervalos. Página impresa = página del archivo + 2."
+  },
+  szp2: {
+    corto: "Stitz-Zeager 0.2",
+    titulo: "Precalculus Prerequisites (cap. 0), sección 0.2: Real Number Arithmetic",
+    autor: "Carl Stitz y Jeff Zeager",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/01-Aritmetica-basica/Unidad 02 - 0.2 Real Number Arithmetic.pdf",
+    nota: "Aritmética de los reales: fracciones, orden de operaciones, exponentes y notación científica. Página impresa = página del archivo + 17."
+  },
+  szp3: {
+    corto: "Stitz-Zeager 0.3",
+    titulo: "Precalculus Prerequisites (cap. 0), sección 0.3: Linear Equations and Inequalities",
+    autor: "Carl Stitz y Jeff Zeager",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/01-Aritmetica-basica/Unidad 03 - 0.3 Linear Equations and Inequalities.pdf",
+    nota: "Ecuaciones y desigualdades lineales. Página impresa = página del archivo + 37."
+  },
+  szp4: {
+    corto: "Stitz-Zeager 0.4",
+    titulo: "Precalculus Prerequisites (cap. 0), sección 0.4: Absolute Value Equations and Inequalities",
+    autor: "Carl Stitz y Jeff Zeager",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/01-Aritmetica-basica/Unidad 04 - 0.4 Absolute Value Equations and Inequalities.pdf",
+    nota: "Ecuaciones y desigualdades con valor absoluto. Página impresa = página del archivo + 50."
+  },
+  szp5: {
+    corto: "Stitz-Zeager 0.5",
+    titulo: "Precalculus Prerequisites (cap. 0), sección 0.5: Polynomial Arithmetic",
+    autor: "Carl Stitz y Jeff Zeager",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/01-Aritmetica-basica/Unidad 05 - 0.5 Polynomial Arithmetic.pdf",
+    nota: "Operaciones con polinomios y productos notables. Página impresa = página del archivo + 59."
+  },
+  szp6: {
+    corto: "Stitz-Zeager 0.6",
+    titulo: "Precalculus Prerequisites (cap. 0), sección 0.6: Factoring",
+    autor: "Carl Stitz y Jeff Zeager",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/01-Aritmetica-basica/Unidad 06 - 0.6 Factoring.pdf",
+    nota: "Factorización. Página impresa = página del archivo + 69."
+  },
+  szp7: {
+    corto: "Stitz-Zeager 0.7",
+    titulo: "Precalculus Prerequisites (cap. 0), sección 0.7: Quadratic Equations",
+    autor: "Carl Stitz y Jeff Zeager",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/01-Aritmetica-basica/Unidad 07 - 0.7 Quadratic Equations.pdf",
+    nota: "Ecuaciones cuadráticas: completar el cuadrado y fórmula general. Página impresa = página del archivo + 82."
+  },
+  szp8: {
+    corto: "Stitz-Zeager 0.8",
+    titulo: "Precalculus Prerequisites (cap. 0), sección 0.8: Rational Expressions and Equations",
+    autor: "Carl Stitz y Jeff Zeager",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/01-Aritmetica-basica/Unidad 08 - 0.8 Rational Expressions and Equations.pdf",
+    nota: "Expresiones y ecuaciones racionales. Página impresa = página del archivo + 95."
+  },
+  szp9: {
+    corto: "Stitz-Zeager 0.9",
+    titulo: "Precalculus Prerequisites (cap. 0), sección 0.9: Radicals and Equations",
+    autor: "Carl Stitz y Jeff Zeager",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/01-Aritmetica-basica/Unidad 09 - 0.9 Radicals and Equations.pdf",
+    nota: "Radicales y exponentes racionales. Página impresa = página del archivo + 110."
+  },
+  szp10: {
+    corto: "Stitz-Zeager 0.10",
+    titulo: "Precalculus Prerequisites (cap. 0), sección 0.10: Complex Numbers",
+    autor: "Carl Stitz y Jeff Zeager",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/01-Aritmetica-basica/Unidad 10 - 0.10 Complex Numbers.pdf",
+    nota: "Números complejos. Página impresa = página del archivo + 125."
+  },
+  prealg1: {
+    corto: "OpenStax Prealgebra cap. 1",
+    titulo: "Prealgebra 2e, cap. 1: Whole Numbers",
+    autor: "Marecek, Anthony-Smith y Mathis (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/02-Prealgebra/Unidad 01 - Whole Numbers.pdf",
+    nota: "Números enteros positivos, recta y valor posicional. Página impresa = página del archivo + 6."
+  },
+  prealg2: {
+    corto: "OpenStax Prealgebra cap. 2",
+    titulo: "Prealgebra 2e, cap. 2: The Language of Algebra",
+    autor: "Marecek, Anthony-Smith y Mathis (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/02-Prealgebra/Unidad 02 - The Language of Algebra.pdf",
+    nota: "Lenguaje del álgebra: orden de operaciones, exponentes, expresiones. Página impresa = página del archivo + 94."
+  },
+  prealg3: {
+    corto: "OpenStax Prealgebra cap. 3",
+    titulo: "Prealgebra 2e, cap. 3: Integers",
+    autor: "Marecek, Anthony-Smith y Mathis (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/02-Prealgebra/Unidad 03 - Integers.pdf",
+    nota: "Enteros, opuestos y valor absoluto. Página impresa = página del archivo + 170."
+  },
+  prealg4: {
+    corto: "OpenStax Prealgebra cap. 4",
+    titulo: "Prealgebra 2e, cap. 4: Fractions",
+    autor: "Marecek, Anthony-Smith y Mathis (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/02-Prealgebra/Unidad 04 - Fractions.pdf",
+    nota: "Fracciones. Página impresa = página del archivo + 252."
+  },
+  prealg5: {
+    corto: "OpenStax Prealgebra cap. 5",
+    titulo: "Prealgebra 2e, cap. 5: Decimals",
+    autor: "Marecek, Anthony-Smith y Mathis (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/02-Prealgebra/Unidad 05 - Decimals.pdf",
+    nota: "Decimales, razones y tasas. Página impresa = página del archivo + 366."
+  },
+  prealg6: {
+    corto: "OpenStax Prealgebra cap. 6",
+    titulo: "Prealgebra 2e, cap. 6: Percents",
+    autor: "Marecek, Anthony-Smith y Mathis (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/02-Prealgebra/Unidad 06 - Percents.pdf",
+    nota: "Porcentajes y proporciones. Página impresa = página del archivo + 466."
+  },
+  prealg7: {
+    corto: "OpenStax Prealgebra cap. 7",
+    titulo: "Prealgebra 2e, cap. 7: The Properties of Real Numbers",
+    autor: "Marecek, Anthony-Smith y Mathis (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/02-Prealgebra/Unidad 07 - The Properties of Real Numbers.pdf",
+    nota: "Números racionales e irracionales y propiedades de los reales. Página impresa = página del archivo + 538."
+  },
+  prealg8: {
+    corto: "OpenStax Prealgebra cap. 8",
+    titulo: "Prealgebra 2e, cap. 8: Solving Linear Equations",
+    autor: "Marecek, Anthony-Smith y Mathis (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/02-Prealgebra/Unidad 08 - Solving Linear Equations.pdf",
+    nota: "Ecuaciones lineales. Página impresa = página del archivo + 600."
+  },
+  prealg10: {
+    corto: "OpenStax Prealgebra cap. 10",
+    titulo: "Prealgebra 2e, cap. 10: Polynomials",
+    autor: "Marecek, Anthony-Smith y Mathis (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/02-Prealgebra/Unidad 10 - Polynomials.pdf",
+    nota: "Polinomios, leyes de exponentes y notación científica. Página impresa = página del archivo + 778."
+  },
+  prealg11: {
+    corto: "OpenStax Prealgebra cap. 11",
+    titulo: "Prealgebra 2e, cap. 11: Graphs",
+    autor: "Marecek, Anthony-Smith y Mathis (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/02-Prealgebra/Unidad 11 - Graphs.pdf",
+    nota: "Gráficas, plano cartesiano y pendiente. Página impresa = página del archivo + 864."
+  },
+  prealg12: {
+    corto: "OpenStax Prealgebra cap. 12",
+    titulo: "Prealgebra 2e, cap. 12: Apendices y Respuestas",
+    autor: "Marecek, Anthony-Smith y Mathis (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/02-Prealgebra/Unidad 12 - Apendices y Respuestas.pdf",
+    nota: "Apéndices: tabla de potencias y raíces. Página impresa = página del archivo + 960."
+  },
+  alg1: {
+    corto: "OpenStax Elementary Algebra, archivo 1",
+    titulo: "Elementary Algebra 2e, archivo 1 (pp. 11 en adelante)",
+    autor: "Marecek, Anthony-Smith y Mathis (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/03-Algebra-I/Unidad 01 - Foundations.pdf",
+    nota: "Contiene 1.2 variables y expresiones, 1.3 valor absoluto (el archivo no coincide con el capítulo de su nombre). Página impresa = página del archivo + 10."
+  },
+  alg2: {
+    corto: "OpenStax Elementary Algebra, archivo 2",
+    titulo: "Elementary Algebra 2e, archivo 2 (pp. 131 en adelante)",
+    autor: "Marecek, Anthony-Smith y Mathis (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/03-Algebra-I/Unidad 02 - Solving Linear Equations and Inequalities.pdf",
+    nota: "Contiene 1.8-1.9 propiedad distributiva e inicio de 2.1 (el archivo no coincide con el capítulo de su nombre). Página impresa = página del archivo + 130."
+  },
+  alg3: {
+    corto: "OpenStax Elementary Algebra, archivo 3",
+    titulo: "Elementary Algebra 2e, archivo 3 (pp. 211 en adelante)",
+    autor: "Marecek, Anthony-Smith y Mathis (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/03-Algebra-I/Unidad 03 - Math Models.pdf",
+    nota: "Contiene 2.1-2.7 ecuaciones y desigualdades lineales (el archivo no coincide con el capítulo de su nombre). Página impresa = página del archivo + 210."
+  },
+  alg4: {
+    corto: "OpenStax Elementary Algebra, archivo 4",
+    titulo: "Elementary Algebra 2e, archivo 4 (pp. 323 en adelante)",
+    autor: "Marecek, Anthony-Smith y Mathis (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/03-Algebra-I/Unidad 04 - Graphs.pdf",
+    nota: "Contiene 4.1-4.4 plano y pendiente (el archivo no coincide con el capítulo de su nombre). Página impresa = página del archivo + 322."
+  },
+  alg5: {
+    corto: "OpenStax Elementary Algebra, archivo 5",
+    titulo: "Elementary Algebra 2e, archivo 5 (pp. 487 en adelante)",
+    autor: "Marecek, Anthony-Smith y Mathis (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/03-Algebra-I/Unidad 05 - Systems of Linear Equations.pdf",
+    nota: "Contiene 4.5-4.7 forma pendiente-intercepto y 5.1 sistemas por gráfica (el archivo no coincide con el capítulo de su nombre). Página impresa = página del archivo + 486."
+  },
+  alg6: {
+    corto: "OpenStax Elementary Algebra, archivo 6",
+    titulo: "Elementary Algebra 2e, archivo 6 (pp. 595 en adelante)",
+    autor: "Marecek, Anthony-Smith y Mathis (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/03-Algebra-I/Unidad 06 - Polynomials.pdf",
+    nota: "Contiene 5.2-5.3 sustitución y eliminación, 6.1-6.2 polinomios (el archivo no coincide con el capítulo de su nombre). Página impresa = página del archivo + 594."
+  },
+  alg7: {
+    corto: "OpenStax Elementary Algebra, archivo 7",
+    titulo: "Elementary Algebra 2e, archivo 7 (pp. 717 en adelante)",
+    autor: "Marecek, Anthony-Smith y Mathis (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/03-Algebra-I/Unidad 07 - Factoring.pdf",
+    nota: "Contiene 6.3-6.7 productos, exponentes y notación científica, 7.1 factor común (el archivo no coincide con el capítulo de su nombre). Página impresa = página del archivo + 716."
+  },
+  alg8: {
+    corto: "OpenStax Elementary Algebra, archivo 8",
+    titulo: "Elementary Algebra 2e, archivo 8 (pp. 821 en adelante)",
+    autor: "Marecek, Anthony-Smith y Mathis (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/03-Algebra-I/Unidad 08 - Rational Expressions and Equations.pdf",
+    nota: "Contiene 7.2-7.6 factorización, 8.1-8.3 expresiones racionales (el archivo no coincide con el capítulo de su nombre). Página impresa = página del archivo + 820."
+  },
+  alg9: {
+    corto: "OpenStax Elementary Algebra, archivo 9",
+    titulo: "Elementary Algebra 2e, archivo 9 (pp. 941 en adelante)",
+    autor: "Marecek, Anthony-Smith y Mathis (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/03-Algebra-I/Unidad 09 - Roots and Radicals.pdf",
+    nota: "Contiene 8.4-8.9 racionales y proporciones, 9.1-9.3 raíces (el archivo no coincide con el capítulo de su nombre). Página impresa = página del archivo + 940."
+  },
+  alg10: {
+    corto: "OpenStax Elementary Algebra, archivo 10",
+    titulo: "Elementary Algebra 2e, archivo 10 (pp. 1065 en adelante)",
+    autor: "Marecek, Anthony-Smith y Mathis (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/03-Algebra-I/Unidad 10 - Quadratic Equations.pdf",
+    nota: "Contiene 9.4-9.8 radicales, 10.1-10.3 ecuaciones cuadráticas (el archivo no coincide con el capítulo de su nombre). Página impresa = página del archivo + 1064."
+  },
+  alg11: {
+    corto: "OpenStax Elementary Algebra, archivo 11",
+    titulo: "Elementary Algebra 2e, archivo 11 (pp. 1193 en adelante)",
+    autor: "Marecek, Anthony-Smith y Mathis (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/03-Algebra-I/Unidad 11 - Apendices y Respuestas.pdf",
+    nota: "Contiene final de 10.3, 10.4 fórmula general y 10.5 la parábola (el archivo no coincide con el capítulo de su nombre). Página impresa = página del archivo + 1192."
+  },
+  sz1: {
+    corto: "Stitz-Zeager cap. 1",
+    titulo: "College Algebra, cap. 1: Relations and Functions",
+    autor: "Carl Stitz y Jeff Zeager",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/05-Algebra-II/Unidad 01 - Relations and Functions.pdf",
+    nota: "Funciones, dominio y recorrido, transformaciones y funciones a trozos. Página impresa = página del archivo + 0."
+  },
+  sz2: {
+    corto: "Stitz-Zeager cap. 2",
+    titulo: "College Algebra, cap. 2: Linear and Quadratic Functions",
+    autor: "Carl Stitz y Jeff Zeager",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/05-Algebra-II/Unidad 02 - Linear and Quadratic Functions.pdf",
+    nota: "Funciones lineales, valor absoluto, cuadráticas y desigualdades. Página impresa = página del archivo + 150."
+  },
+  sz3: {
+    corto: "Stitz-Zeager cap. 3",
+    titulo: "College Algebra, cap. 3: Polynomial Functions",
+    autor: "Carl Stitz y Jeff Zeager",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/05-Algebra-II/Unidad 03 - Polynomial Functions.pdf",
+    nota: "Funciones polinómicas, ceros y multiplicidad. Página impresa = página del archivo + 234."
+  },
+  sz4: {
+    corto: "Stitz-Zeager cap. 4",
+    titulo: "College Algebra, cap. 4: Rational Functions",
+    autor: "Carl Stitz y Jeff Zeager",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/05-Algebra-II/Unidad 04 - Rational Functions.pdf",
+    nota: "Funciones racionales y asíntotas. Página impresa = página del archivo + 300."
+  },
+  sz5: {
+    corto: "Stitz-Zeager cap. 5",
+    titulo: "College Algebra, cap. 5: Further Topics in Functions",
+    autor: "Carl Stitz y Jeff Zeager",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/05-Algebra-II/Unidad 05 - Further Topics in Functions.pdf",
+    nota: "Composición e inversa. Página impresa = página del archivo + 358."
+  },
+  sz8: {
+    corto: "Stitz-Zeager cap. 8",
+    titulo: "College Algebra, cap. 8: Systems of Equations and Matrices",
+    autor: "Carl Stitz y Jeff Zeager",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/05-Algebra-II/Unidad 08 - Systems of Equations and Matrices.pdf",
+    nota: "Sistemas de ecuaciones (8.1). Página impresa = página del archivo + 548."
+  },
+  sz9: {
+    corto: "Stitz-Zeager cap. 9",
+    titulo: "College Algebra, cap. 9: Sequences and the Binomial Theorem",
+    autor: "Carl Stitz y Jeff Zeager",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/05-Algebra-II/Unidad 09 - Sequences and the Binomial Theorem.pdf",
+    nota: "Sucesiones, notación sigma y series. Página impresa = página del archivo + 650."
+  },
+  ostat0: {
+    corto: "OpenStax Estadística preliminares",
+    titulo: "Introductory Statistics 2e, preliminares: 00 - Portada y Preliminares",
+    autor: "Illowsky y Dean (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/08-Probabilidad-y-estadistica/00 - Portada y Preliminares.pdf",
+    nota: "Archivo por unidad del libro: página del libro entero = página del archivo + 0."
+  },
+  ostat1: {
+    corto: "OpenStax Estadística cap. 1",
+    titulo: "Introductory Statistics 2e, cap. 1: Unidad 01 - Sampling and Data",
+    autor: "Illowsky y Dean (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/08-Probabilidad-y-estadistica/Unidad 01 - Sampling and Data.pdf",
+    nota: "Archivo por unidad del libro: página del libro entero = página del archivo + 16."
+  },
+  ostat2: {
+    corto: "OpenStax Estadística cap. 2",
+    titulo: "Introductory Statistics 2e, cap. 2: Unidad 02 - Descriptive Statistics",
+    autor: "Illowsky y Dean (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/08-Probabilidad-y-estadistica/Unidad 02 - Descriptive Statistics.pdf",
+    nota: "Archivo por unidad del libro: página del libro entero = página del archivo + 76."
+  },
+  ostat3: {
+    corto: "OpenStax Estadística cap. 3",
+    titulo: "Introductory Statistics 2e, cap. 3: Unidad 03 - Probability Topics",
+    autor: "Illowsky y Dean (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/08-Probabilidad-y-estadistica/Unidad 03 - Probability Topics.pdf",
+    nota: "Archivo por unidad del libro: página del libro entero = página del archivo + 178."
+  },
+  ostat4: {
+    corto: "OpenStax Estadística cap. 4",
+    titulo: "Introductory Statistics 2e, cap. 4: Unidad 04 - Discrete Random Variables",
+    autor: "Illowsky y Dean (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/08-Probabilidad-y-estadistica/Unidad 04 - Discrete Random Variables.pdf",
+    nota: "Archivo por unidad del libro: página del libro entero = página del archivo + 238."
+  },
+  ostat5: {
+    corto: "OpenStax Estadística cap. 5",
+    titulo: "Introductory Statistics 2e, cap. 5: Unidad 05 - Continuous Random Variables",
+    autor: "Illowsky y Dean (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/08-Probabilidad-y-estadistica/Unidad 05 - Continuous Random Variables.pdf",
+    nota: "Archivo por unidad del libro: página del libro entero = página del archivo + 302."
+  },
+  ostat6: {
+    corto: "OpenStax Estadística cap. 6",
+    titulo: "Introductory Statistics 2e, cap. 6: Unidad 06 - The Normal Distribution",
+    autor: "Illowsky y Dean (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/08-Probabilidad-y-estadistica/Unidad 06 - The Normal Distribution.pdf",
+    nota: "Archivo por unidad del libro: página del libro entero = página del archivo + 346."
+  },
+  ostat7: {
+    corto: "OpenStax Estadística cap. 7",
+    titulo: "Introductory Statistics 2e, cap. 7: Unidad 07 - The Central Limit Theorem",
+    autor: "Illowsky y Dean (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/08-Probabilidad-y-estadistica/Unidad 07 - The Central Limit Theorem.pdf",
+    nota: "Archivo por unidad del libro: página del libro entero = página del archivo + 376."
+  },
+  ostat8: {
+    corto: "OpenStax Estadística cap. 8",
+    titulo: "Introductory Statistics 2e, cap. 8: Unidad 08 - Confidence Intervals",
+    autor: "Illowsky y Dean (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/08-Probabilidad-y-estadistica/Unidad 08 - Confidence Intervals.pdf",
+    nota: "Archivo por unidad del libro: página del libro entero = página del archivo + 416."
+  },
+  ostat9: {
+    corto: "OpenStax Estadística cap. 9",
+    titulo: "Introductory Statistics 2e, cap. 9: Unidad 09 - Hypothesis Testing with One Sample",
+    autor: "Illowsky y Dean (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/08-Probabilidad-y-estadistica/Unidad 09 - Hypothesis Testing with One Sample.pdf",
+    nota: "Archivo por unidad del libro: página del libro entero = página del archivo + 472."
+  },
+  ostat10: {
+    corto: "OpenStax Estadística cap. 10",
+    titulo: "Introductory Statistics 2e, cap. 10: Unidad 10 - Hypothesis Testing with Two Samples",
+    autor: "Illowsky y Dean (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/08-Probabilidad-y-estadistica/Unidad 10 - Hypothesis Testing with Two Samples.pdf",
+    nota: "Archivo por unidad del libro: página del libro entero = página del archivo + 522."
+  },
+  ostat11: {
+    corto: "OpenStax Estadística cap. 11",
+    titulo: "Introductory Statistics 2e, cap. 11: Unidad 11 - The Chi-Square Distribution",
+    autor: "Illowsky y Dean (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/08-Probabilidad-y-estadistica/Unidad 11 - The Chi-Square Distribution.pdf",
+    nota: "Archivo por unidad del libro: página del libro entero = página del archivo + 574."
+  },
+  ostat12: {
+    corto: "OpenStax Estadística cap. 12",
+    titulo: "Introductory Statistics 2e, cap. 12: Unidad 12 - Linear Regression and Correlation",
+    autor: "Illowsky y Dean (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/08-Probabilidad-y-estadistica/Unidad 12 - Linear Regression and Correlation.pdf",
+    nota: "Archivo por unidad del libro: página del libro entero = página del archivo + 628."
+  },
+  ostat13: {
+    corto: "OpenStax Estadística cap. 13",
+    titulo: "Introductory Statistics 2e, cap. 13: Unidad 13 - F Distribution and One-Way ANOVA",
+    autor: "Illowsky y Dean (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/08-Probabilidad-y-estadistica/Unidad 13 - F Distribution and One-Way ANOVA.pdf",
+    nota: "Archivo por unidad del libro: página del libro entero = página del archivo + 690."
+  },
+  ostat14: {
+    corto: "OpenStax Estadística cap. 14",
+    titulo: "Introductory Statistics 2e, cap. 14: Unidad 14 - Apendices e Indice",
+    autor: "Illowsky y Dean (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/08-Probabilidad-y-estadistica/Unidad 14 - Apendices e Indice.pdf",
+    nota: "Archivo por unidad del libro: página del libro entero = página del archivo + 730."
+  },
+  oint0: {
+    corto: "OpenIntro preliminares",
+    titulo: "OpenIntro Statistics 4e, preliminares: 00 - Portada y Preliminares",
+    autor: "Diez, Çetinkaya-Rundel y Barr",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/11-Estadistica-avanzada/00 - Portada y Preliminares.pdf",
+    nota: "Archivo por unidad del libro: página del libro entero = página del archivo + 0."
+  },
+  oint1: {
+    corto: "OpenIntro cap. 1",
+    titulo: "OpenIntro Statistics 4e, cap. 1: Unidad 01 - Introduction to Data",
+    autor: "Diez, Çetinkaya-Rundel y Barr",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/11-Estadistica-avanzada/Unidad 01 - Introduction to Data.pdf",
+    nota: "Archivo por unidad del libro: página del libro entero = página del archivo + 6."
+  },
+  oint2: {
+    corto: "OpenIntro cap. 2",
+    titulo: "OpenIntro Statistics 4e, cap. 2: Unidad 02 - Summarizing Data",
+    autor: "Diez, Çetinkaya-Rundel y Barr",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/11-Estadistica-avanzada/Unidad 02 - Summarizing Data.pdf",
+    nota: "Archivo por unidad del libro: página del libro entero = página del archivo + 40."
+  },
+  oint3: {
+    corto: "OpenIntro cap. 3",
+    titulo: "OpenIntro Statistics 4e, cap. 3: Unidad 03 - Probability",
+    autor: "Diez, Çetinkaya-Rundel y Barr",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/11-Estadistica-avanzada/Unidad 03 - Probability.pdf",
+    nota: "Archivo por unidad del libro: página del libro entero = página del archivo + 80."
+  },
+  oint4: {
+    corto: "OpenIntro cap. 4",
+    titulo: "OpenIntro Statistics 4e, cap. 4: Unidad 04 - Distributions of Random Variables",
+    autor: "Diez, Çetinkaya-Rundel y Barr",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/11-Estadistica-avanzada/Unidad 04 - Distributions of Random Variables.pdf",
+    nota: "Archivo por unidad del libro: página del libro entero = página del archivo + 128."
+  },
+  oint5: {
+    corto: "OpenIntro cap. 5",
+    titulo: "OpenIntro Statistics 4e, cap. 5: Unidad 05 - Foundations for Inference",
+    autor: "Diez, Çetinkaya-Rundel y Barr",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/11-Estadistica-avanzada/Unidad 05 - Foundations for Inference.pdf",
+    nota: "Archivo por unidad del libro: página del libro entero = página del archivo + 168."
+  },
+  oint6: {
+    corto: "OpenIntro cap. 6",
+    titulo: "OpenIntro Statistics 4e, cap. 6: Unidad 06 - Inference for Categorical Data",
+    autor: "Diez, Çetinkaya-Rundel y Barr",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/11-Estadistica-avanzada/Unidad 06 - Inference for Categorical Data.pdf",
+    nota: "Archivo por unidad del libro: página del libro entero = página del archivo + 208."
+  },
+  oint7: {
+    corto: "OpenIntro cap. 7",
+    titulo: "OpenIntro Statistics 4e, cap. 7: Unidad 07 - Inference for Numerical Data",
+    autor: "Diez, Çetinkaya-Rundel y Barr",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/11-Estadistica-avanzada/Unidad 07 - Inference for Numerical Data.pdf",
+    nota: "Archivo por unidad del libro: página del libro entero = página del archivo + 248."
+  },
+  oint8: {
+    corto: "OpenIntro cap. 8",
+    titulo: "OpenIntro Statistics 4e, cap. 8: Unidad 08 - Introduction to Linear Regression",
+    autor: "Diez, Çetinkaya-Rundel y Barr",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/11-Estadistica-avanzada/Unidad 08 - Introduction to Linear Regression.pdf",
+    nota: "Archivo por unidad del libro: página del libro entero = página del archivo + 304."
+  },
+  oint9: {
+    corto: "OpenIntro cap. 9",
+    titulo: "OpenIntro Statistics 4e, cap. 9: Unidad 09 - Multiple and Logistic Regression",
+    autor: "Diez, Çetinkaya-Rundel y Barr",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/11-Estadistica-avanzada/Unidad 09 - Multiple and Logistic Regression.pdf",
+    nota: "Archivo por unidad del libro: página del libro entero = página del archivo + 344."
+  },
+  oint10: {
+    corto: "OpenIntro cap. 10",
+    titulo: "OpenIntro Statistics 4e, cap. 10: Unidad 10 - Apendices y Ejercicios",
+    autor: "Diez, Çetinkaya-Rundel y Barr",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/11-Estadistica-avanzada/Unidad 10 - Apendices y Ejercicios.pdf",
+    nota: "Archivo por unidad del libro: página del libro entero = página del archivo + 388."
+  },
+  boyd0: {
+    corto: "Boyd VMLS preliminares",
+    titulo: "Introduction to Applied Linear Algebra (VMLS), preliminares: Portada y Preliminares",
+    autor: "Boyd y Vandenberghe",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/14-Algebra-lineal/boyd-vmls-applied-linear-algebra - 00 - Portada y Preliminares.pdf",
+    nota: "Archivo por unidad del libro: página del libro entero = página del archivo + 0."
+  },
+  boyd1: {
+    corto: "Boyd VMLS cap. 1",
+    titulo: "Introduction to Applied Linear Algebra (VMLS), cap. 1: Vectors",
+    autor: "Boyd y Vandenberghe",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/14-Algebra-lineal/boyd-vmls-applied-linear-algebra - Unidad 01 - Vectors.pdf",
+    nota: "Archivo por unidad del libro: página del libro entero = página del archivo + 10."
+  },
+  boyd2: {
+    corto: "Boyd VMLS cap. 2",
+    titulo: "Introduction to Applied Linear Algebra (VMLS), cap. 2: Matrices",
+    autor: "Boyd y Vandenberghe",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/14-Algebra-lineal/boyd-vmls-applied-linear-algebra - Unidad 02 - Matrices.pdf",
+    nota: "Archivo por unidad del libro: página del libro entero = página del archivo + 114."
+  },
+  boyd3: {
+    corto: "Boyd VMLS cap. 3",
+    titulo: "Introduction to Applied Linear Algebra (VMLS), cap. 3: Least Squares",
+    autor: "Boyd y Vandenberghe",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/14-Algebra-lineal/boyd-vmls-applied-linear-algebra - Unidad 03 - Least Squares.pdf",
+    nota: "Archivo por unidad del libro: página del libro entero = página del archivo + 232."
+  },
+  boyd4: {
+    corto: "Boyd VMLS cap. 4",
+    titulo: "Introduction to Applied Linear Algebra (VMLS), cap. 4: Appendices",
+    autor: "Boyd y Vandenberghe",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/14-Algebra-lineal/boyd-vmls-applied-linear-algebra - Unidad 04 - Appendices.pdf",
+    nota: "Archivo por unidad del libro: página del libro entero = página del archivo + 444."
+  },
+  calc1u0: {
+    corto: "OpenStax Cálculo 1 preliminares",
+    titulo: "Calculus Volume 1, preliminares: Portada y Preliminares",
+    autor: "Strang, Herman y otros (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/09-Calculo-I/openstax-calculus-volume-1 - 00 - Portada y Preliminares.pdf",
+    nota: "Archivo por unidad del libro: página del libro entero = página del archivo + 0."
+  },
+  calc1u1: {
+    corto: "OpenStax Cálculo 1 cap. 1",
+    titulo: "Calculus Volume 1, cap. 1: Functions and Graphs",
+    autor: "Strang, Herman y otros (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/09-Calculo-I/openstax-calculus-volume-1 - Unidad 01 - Functions and Graphs.pdf",
+    nota: "Archivo por unidad del libro: página del libro entero = página del archivo + 14."
+  },
+  calc1u2: {
+    corto: "OpenStax Cálculo 1 cap. 2",
+    titulo: "Calculus Volume 1, cap. 2: Limits",
+    autor: "Strang, Herman y otros (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/09-Calculo-I/openstax-calculus-volume-1 - Unidad 02 - Limits.pdf",
+    nota: "Archivo por unidad del libro: página del libro entero = página del archivo + 130."
+  },
+  calc1u3: {
+    corto: "OpenStax Cálculo 1 cap. 3",
+    titulo: "Calculus Volume 1, cap. 3: Derivatives",
+    autor: "Strang, Herman y otros (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/09-Calculo-I/openstax-calculus-volume-1 - Unidad 03 - Derivatives.pdf",
+    nota: "Archivo por unidad del libro: página del libro entero = página del archivo + 220."
+  },
+  calc1u4: {
+    corto: "OpenStax Cálculo 1 cap. 4",
+    titulo: "Calculus Volume 1, cap. 4: Applications of Derivatives",
+    autor: "Strang, Herman y otros (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/09-Calculo-I/openstax-calculus-volume-1 - Unidad 04 - Applications of Derivatives.pdf",
+    nota: "Archivo por unidad del libro: página del libro entero = página del archivo + 348."
+  },
+  calc1u5: {
+    corto: "OpenStax Cálculo 1 cap. 5",
+    titulo: "Calculus Volume 1, cap. 5: Integration",
+    autor: "Strang, Herman y otros (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/09-Calculo-I/openstax-calculus-volume-1 - Unidad 05 - Integration.pdf",
+    nota: "Archivo por unidad del libro: página impresa = página del archivo + 506; página del PDF del libro entero = página del archivo + 514."
+  },
+  calc1u6: {
+    corto: "OpenStax Cálculo 1 cap. 6",
+    titulo: "Calculus Volume 1, cap. 6: Applications of Integration",
+    autor: "Strang, Herman y otros (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/09-Calculo-I/openstax-calculus-volume-1 - Unidad 06 - Applications of Integration.pdf",
+    nota: "Archivo por unidad del libro: página del libro entero = página del archivo + 630."
+  },
+  calc1u7: {
+    corto: "OpenStax Cálculo 1 cap. 7",
+    titulo: "Calculus Volume 1, cap. 7: Apendices y Soluciones",
+    autor: "Strang, Herman y otros (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/09-Calculo-I/openstax-calculus-volume-1 - Unidad 07 - Apendices y Soluciones.pdf",
+    nota: "Archivo por unidad del libro: página del libro entero = página del archivo + 770."
+  },
+  calc3u0: {
+    corto: "OpenStax Cálculo 3 preliminares",
+    titulo: "Calculus Volume 3, preliminares: 00 - Portada y Preliminares",
+    autor: "Strang, Herman y otros (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/12-Calculo-multivariable/00 - Portada y Preliminares.pdf",
+    nota: "Archivo por unidad del libro: página del libro entero = página del archivo + 0."
+  },
+  calc3u1: {
+    corto: "OpenStax Cálculo 3 cap. 1",
+    titulo: "Calculus Volume 3, cap. 1: Unidad 01 - Parametric Equations and Polar Coordinates",
+    autor: "Strang, Herman y otros (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/12-Calculo-multivariable/Unidad 01 - Parametric Equations and Polar Coordinates.pdf",
+    nota: "Archivo por unidad del libro: página del libro entero = página del archivo + 14."
+  },
+  calc3u2: {
+    corto: "OpenStax Cálculo 3 cap. 2",
+    titulo: "Calculus Volume 3, cap. 2: Unidad 02 - Vectors in Space",
+    autor: "Strang, Herman y otros (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/12-Calculo-multivariable/Unidad 02 - Vectors in Space.pdf",
+    nota: "Archivo por unidad del libro: página del libro entero = página del archivo + 108."
+  },
+  calc3u3: {
+    corto: "OpenStax Cálculo 3 cap. 3",
+    titulo: "Calculus Volume 3, cap. 3: Unidad 03 - Vector-Valued Functions",
+    autor: "Strang, Herman y otros (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/12-Calculo-multivariable/Unidad 03 - Vector-Valued Functions.pdf",
+    nota: "Archivo por unidad del libro: página del libro entero = página del archivo + 266."
+  },
+  calc3u4: {
+    corto: "OpenStax Cálculo 3 cap. 4",
+    titulo: "Calculus Volume 3, cap. 4: Unidad 04 - Differentiation of Functions of Several Variables",
+    autor: "Strang, Herman y otros (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/12-Calculo-multivariable/Unidad 04 - Differentiation of Functions of Several Variables.pdf",
+    nota: "Archivo por unidad del libro: página del libro entero = página del archivo + 340."
+  },
+  calc3u5: {
+    corto: "OpenStax Cálculo 3 cap. 5",
+    titulo: "Calculus Volume 3, cap. 5: Unidad 05 - Multiple Integration",
+    autor: "Strang, Herman y otros (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/12-Calculo-multivariable/Unidad 05 - Multiple Integration.pdf",
+    nota: "Archivo por unidad del libro: página del libro entero = página del archivo + 484."
+  },
+  calc3u6: {
+    corto: "OpenStax Cálculo 3 cap. 6",
+    titulo: "Calculus Volume 3, cap. 6: Unidad 06 - Vector Calculus",
+    autor: "Strang, Herman y otros (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/12-Calculo-multivariable/Unidad 06 - Vector Calculus.pdf",
+    nota: "Archivo por unidad del libro: página del libro entero = página del archivo + 648."
+  },
+  calc3u7: {
+    corto: "OpenStax Cálculo 3 cap. 7",
+    titulo: "Calculus Volume 3, cap. 7: Unidad 07 - Second-Order Differential Equations",
+    autor: "Strang, Herman y otros (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/12-Calculo-multivariable/Unidad 07 - Second-Order Differential Equations.pdf",
+    nota: "Archivo por unidad del libro: página del libro entero = página del archivo + 838."
+  },
+  calc3u8: {
+    corto: "OpenStax Cálculo 3 cap. 8",
+    titulo: "Calculus Volume 3, cap. 8: Unidad 08 - Apendices y Soluciones",
+    autor: "Strang, Herman y otros (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/12-Calculo-multivariable/Unidad 08 - Apendices y Soluciones.pdf",
+    nota: "Archivo por unidad del libro: página del libro entero = página del archivo + 904."
+  },
+  geom1: {
+    corto: "Africk geometría u1",
+    titulo: "Elementary College Geometry, unidad 1: Lines, Angles, and Triangles",
+    autor: "Henry Africk",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/04-Geometria/Unidad 01 - Lines, Angles, and Triangles.pdf",
+    nota: "Archivo por unidad. La página impresa es la \"sección.página\" del pie y no hay desfase constante: el mapa trae la conversión por archivo."
+  },
+  geom2: {
+    corto: "Africk geometría u2",
+    titulo: "Elementary College Geometry, unidad 2: Congruent Triangles",
+    autor: "Henry Africk",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/04-Geometria/Unidad 02 - Congruent Triangles.pdf",
+    nota: "Archivo por unidad. La página impresa es la \"sección.página\" del pie y no hay desfase constante: el mapa trae la conversión por archivo."
+  },
+  geom3: {
+    corto: "Africk geometría u3",
+    titulo: "Elementary College Geometry, unidad 3: Quadrilaterals",
+    autor: "Henry Africk",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/04-Geometria/Unidad 03 - Quadrilaterals.pdf",
+    nota: "Archivo por unidad. La página impresa es la \"sección.página\" del pie y no hay desfase constante: el mapa trae la conversión por archivo."
+  },
+  geom4: {
+    corto: "Africk geometría u4",
+    titulo: "Elementary College Geometry, unidad 4: Similar Triangles",
+    autor: "Henry Africk",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/04-Geometria/Unidad 04 - Similar Triangles.pdf",
+    nota: "Archivo por unidad. La página impresa es la \"sección.página\" del pie y no hay desfase constante: el mapa trae la conversión por archivo."
+  },
+  geom5: {
+    corto: "Africk geometría u5",
+    titulo: "Elementary College Geometry, unidad 5: Trigonometry and Right Triangles",
+    autor: "Henry Africk",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/04-Geometria/Unidad 05 - Trigonometry and Right Triangles.pdf",
+    nota: "Archivo por unidad. La página impresa es la \"sección.página\" del pie y no hay desfase constante: el mapa trae la conversión por archivo."
+  },
+  geom6: {
+    corto: "Africk geometría u6",
+    titulo: "Elementary College Geometry, unidad 6: Area and Perimeter",
+    autor: "Henry Africk",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/04-Geometria/Unidad 06 - Area and Perimeter.pdf",
+    nota: "Archivo por unidad. La página impresa es la \"sección.página\" del pie y no hay desfase constante: el mapa trae la conversión por archivo."
+  },
+  geom7: {
+    corto: "Africk geometría u7",
+    titulo: "Elementary College Geometry, unidad 7: Regular Polygons and Circles",
+    autor: "Henry Africk",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/04-Geometria/Unidad 07 - Regular Polygons and Circles.pdf",
+    nota: "Archivo por unidad. La página impresa es la \"sección.página\" del pie y no hay desfase constante: el mapa trae la conversión por archivo."
+  },
+  geom8: {
+    corto: "Africk geometría u8",
+    titulo: "Elementary College Geometry, unidad 8: Apéndice y fórmulas",
+    autor: "Henry Africk",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/04-Geometria/Unidad 08 - Apendice y Formulas.pdf",
+    nota: "Archivo por unidad. La página impresa es la \"sección.página\" del pie y no hay desfase constante: el mapa trae la conversión por archivo."
+  },
+  calc2u1: {
+    corto: "OpenStax Cálculo 2 cap. 1",
+    titulo: "Calculus Volume 2, cap. 1: Integration",
+    autor: "Strang, Herman y otros (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/10-Calculo-II/Unidad 01 - Integration.pdf",
+    nota: "Archivo por unidad de Calculus Volume 2. El mapa de citas da la relación entre la página del archivo y la impresa."
+  },
+  calc2u2: {
+    corto: "OpenStax Cálculo 2 cap. 2",
+    titulo: "Calculus Volume 2, cap. 2: Applications of Integration",
+    autor: "Strang, Herman y otros (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/10-Calculo-II/Unidad 02 - Applications of Integration.pdf",
+    nota: "Archivo por unidad de Calculus Volume 2. El mapa de citas da la relación entre la página del archivo y la impresa."
+  },
+  calc2u3: {
+    corto: "OpenStax Cálculo 2 cap. 3",
+    titulo: "Calculus Volume 2, cap. 3: Techniques of Integration",
+    autor: "Strang, Herman y otros (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/10-Calculo-II/Unidad 03 - Techniques of Integration.pdf",
+    nota: "Archivo por unidad: página impresa = página del archivo + 230."
+  },
+  calc2u4: {
+    corto: "OpenStax Cálculo 2 cap. 4",
+    titulo: "Calculus Volume 2, cap. 4: Introduction to Differential Equations",
+    autor: "Strang, Herman y otros (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/10-Calculo-II/Unidad 04 - Introduction to Differential Equations.pdf",
+    nota: "Archivo por unidad: página impresa = página del archivo + 306."
+  },
+  calc2u5: {
+    corto: "OpenStax Cálculo 2 cap. 5",
+    titulo: "Calculus Volume 2, cap. 5: Sequences and Series",
+    autor: "Strang, Herman y otros (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/10-Calculo-II/Unidad 05 - Sequences and Series.pdf",
+    nota: "Archivo por unidad: página impresa = página del archivo + 372."
+  },
+  calc2u6: {
+    corto: "OpenStax Cálculo 2 cap. 6",
+    titulo: "Calculus Volume 2, cap. 6: Power Series",
+    autor: "Strang, Herman y otros (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/10-Calculo-II/Unidad 06 - Power Series.pdf",
+    nota: "Archivo por unidad: página impresa = página del archivo + 468."
+  },
+  calc2u7: {
+    corto: "OpenStax Cálculo 2 cap. 7",
+    titulo: "Calculus Volume 2, cap. 7: Parametric Equations and Polar Coordinates",
+    autor: "Strang, Herman y otros (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/10-Calculo-II/Unidad 07 - Parametric Equations and Polar Coordinates.pdf",
+    nota: "Archivo por unidad de Calculus Volume 2. El mapa de citas da la relación entre la página del archivo y la impresa."
+  },
+  calc2u8: {
+    corto: "OpenStax Cálculo 2 cap. 8",
+    titulo: "Calculus Volume 2, cap. 8: Tablas, Respuestas e Indice",
+    autor: "Strang, Herman y otros (OpenStax)",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/10-Calculo-II/Unidad 08 - Tablas, Respuestas e Indice.pdf",
+    nota: "Archivo por unidad de Calculus Volume 2. El mapa de citas da la relación entre la página del archivo y la impresa."
+  },
+  trig11: {
+    corto: "Stitz-Zeager Trigonometría cap. 11",
+    titulo: "College Trigonometry, cap. 11: Applications of Trigonometry",
+    autor: "Carl Stitz y Jeff Zeager",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/06-Trigonometria/Unidad 02 - Cap 11 Applications of Trigonometry.pdf",
+    nota: "Coordenadas polares, números complejos en forma polar y cónicas con foco y directriz. Página impresa = página del archivo + 880."
+  },
+  conic7: {
+    corto: "Stitz-Zeager Cónicas",
+    titulo: "Precalculus, cap. 7: Hooked on Conics",
+    autor: "Carl Stitz y Jeff Zeager",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/07-Precalculo/Unidad 07 - Hooked on Conics.pdf",
+    nota: "Círculo, parábola, elipse e hipérbola con sus ecuaciones. Página impresa = página del archivo + 494."
+  },
+  trig10: {
+    corto: "Stitz-Zeager Trigonometría cap. 10",
+    titulo: "College Trigonometry, cap. 10: Foundations of Trigonometry",
+    autor: "Carl Stitz y Jeff Zeager",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/06-Trigonometria/Unidad 01 - Cap 10 Foundations of Trigonometry.pdf",
+    nota: "Ángulos, círculo unitario, funciones trigonométricas, identidades, gráficas, inversas y ecuaciones. Página impresa = página del archivo + 692."
+  },
+  hef1: {
+    corto: "Hefferon cap. 1",
+    titulo: "Linear Algebra, cap. 1: Linear Systems",
+    autor: "Jim Hefferon",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/14-Algebra-lineal/hefferon-linear-algebra - Unidad 01 - Linear Systems.pdf",
+    nota: "Eliminación gaussiana y forma escalonada. Página impresa = página del archivo."
+  },
+  hef2: {
+    corto: "Hefferon cap. 2",
+    titulo: "Linear Algebra, cap. 2: Vector Spaces",
+    autor: "Jim Hefferon",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/14-Algebra-lineal/hefferon-linear-algebra - Unidad 02 - Vector Spaces.pdf",
+    nota: "Independencia lineal, base, dimensión y rango. Página impresa = página del archivo + 82."
+  },
+  hef3: {
+    corto: "Hefferon cap. 3",
+    titulo: "Linear Algebra, cap. 3: Maps Between Spaces",
+    autor: "Jim Hefferon",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/14-Algebra-lineal/hefferon-linear-algebra - Unidad 03 - Maps Between Spaces.pdf",
+    nota: "Transformaciones lineales, rango y nulidad, y matrices ortonormales 2x2. Página impresa = página del archivo + 172."
+  },
+  hef5: {
+    corto: "Hefferon cap. 5",
+    titulo: "Linear Algebra, cap. 5: Similarity",
+    autor: "Jim Hefferon",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/14-Algebra-lineal/hefferon-linear-algebra - Unidad 05 - Similarity.pdf",
+    nota: "Diagonalización y valores propios (sobre los complejos). Página impresa = página del archivo + 396."
+  },
+  trench1: {
+    corto: "Trench cap. 1",
+    titulo: "Elementary Differential Equations, cap. 1: Introduction",
+    autor: "William F. Trench",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/13-Ecuaciones-diferenciales/Unidad 01 - Introduction.pdf",
+    nota: "Qué es una ecuación diferencial, orden, solución y campos de direcciones. Página impresa = página del archivo."
+  },
+  trench2: {
+    corto: "Trench cap. 2",
+    titulo: "Elementary Differential Equations, cap. 2: First Order Equations",
+    autor: "William F. Trench",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/13-Ecuaciones-diferenciales/Unidad 02 - First Order Equations.pdf",
+    nota: "Ecuaciones lineales, separables, exactas y cambios de variable. Página impresa = página del archivo + 28."
+  },
+  trench3: {
+    corto: "Trench cap. 3",
+    titulo: "Elementary Differential Equations, cap. 3: Numerical Methods",
+    autor: "William F. Trench",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/13-Ecuaciones-diferenciales/Unidad 03 - Numerical Methods.pdf",
+    nota: "Método de Euler, Euler mejorado y Runge-Kutta. Página impresa = página del archivo + 94."
+  },
+  trench4: {
+    corto: "Trench cap. 4",
+    titulo: "Elementary Differential Equations, cap. 4: Applications of First Order Equations",
+    autor: "William F. Trench",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/13-Ecuaciones-diferenciales/Unidad 04 - Applications of First Order Equations.pdf",
+    nota: "Crecimiento, enfriamiento, mezclas y modelos de poblaciones. Página impresa = página del archivo + 128."
+  },
+  trench5: {
+    corto: "Trench cap. 5",
+    titulo: "Elementary Differential Equations, cap. 5: Linear Second Order Equations",
+    autor: "William F. Trench",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/13-Ecuaciones-diferenciales/Unidad 05 - Linear Second Order Equations.pdf",
+    nota: "Ecuaciones lineales de segundo orden, raíces de la ecuación característica. Página impresa = página del archivo + 192."
+  },
+  trench6: {
+    corto: "Trench cap. 6",
+    titulo: "Elementary Differential Equations, cap. 6: Applications of Linear Second Order Equations",
+    autor: "William F. Trench",
+    archivo: "/Users/franciscocastillo/brain/03-Matematicas/13-Ecuaciones-diferenciales/Unidad 06 - Applications of Linear Second Order Equations.pdf",
+    nota: "Resortes, oscilaciones amortiguadas, circuitos y resonancia. Página impresa = página del archivo + 266."
   }
 };

@@ -1,0 +1,1644 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LSTM y GRU</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+/* grifos: olvido (ambar), entrada (magenta), salida (indigo), reinicio de la GRU (oliva); naranja: la senal hacia atras (como en rnn.html) */
+:root { --gf: #b7791f; --gi: #b03a8c; --go: #4f5bd5; --gr: #6b8e23; --atras: #c2610c; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --gf: #e0b04f; --gi: #e07bc4; --go: #8f98f0; --gr: #a5c95a; --atras: #f2a15c; } }
+:root[data-theme="dark"] { --gf: #e0b04f; --gi: #e07bc4; --go: #8f98f0; --gr: #a5c95a; --atras: #f2a15c; }
+@media (min-width: 981px) { .escenario { max-height: calc(100vh - 80px); overflow-y: auto; } }
+
+.cel-svg { width: 100%; height: auto; display: block; }
+.cel-svg .cinta { fill: var(--surface-2); stroke: var(--line); stroke-width: 1.2; }
+.cel-svg .cinta.gru { stroke: var(--gi); stroke-dasharray: 5 3; }
+.cel-svg .pos { fill: var(--pos); }
+.cel-svg .neg { fill: var(--neg); }
+.cel-svg .cero { fill: var(--cell-zero); }
+.cel-svg .sep { stroke: var(--surface); stroke-width: 1.5; }
+.cel-svg .marco { fill: none; stroke: var(--line); stroke-width: 1; }
+.cel-svg .cur { fill: none; stroke: var(--accent); stroke-width: 1.6; }
+.cel-svg .vacio { fill: var(--cell-zero); }
+.cel-svg .gf { fill: var(--gf); }
+.cel-svg .gi { fill: var(--gi); }
+.cel-svg .go { fill: var(--go); }
+.cel-svg .gr { fill: var(--gr); }
+.cel-svg .ficha { fill: var(--surface-2); stroke: var(--line); }
+.cel-svg .t { font: 10px var(--f-mono); fill: var(--ink); text-anchor: middle; dominant-baseline: central; }
+.cel-svg .t.letra { font: 600 13px var(--f-mono); }
+.cel-svg .t.num { font-size: 8.6px; fill: var(--ink); }
+.cel-svg .t.lab { font: 10px var(--f-body); fill: var(--ink-3); text-anchor: start; }
+.cel-svg .t.labc { font: 10px var(--f-body); fill: var(--ink-3); }
+.cel-svg .t.oc { fill: var(--accent); font-weight: 600; font-size: 12px; }
+.cel-svg .t.bien { fill: var(--ok); font-weight: 600; text-anchor: end; }
+.cel-svg .t.mal { fill: var(--bad); font-weight: 600; text-anchor: end; }
+.cel-svg .t.neutro { fill: var(--ink-2); font-weight: 600; text-anchor: end; }
+.cel-svg .t.kf { fill: var(--gf); font-weight: 600; }
+.cel-svg .t.ki { fill: var(--gi); font-weight: 600; }
+.cel-svg .t.ko { fill: var(--go); font-weight: 600; }
+.cel-svg .t.kr { fill: var(--gr); font-weight: 600; }
+.cel-svg .t.bw { fill: var(--atras); font-weight: 600; font-size: 8.6px; }
+.cel-svg .punta { fill: var(--ink-3); }
+.cel-svg .barra.atras { fill: var(--atras); }
+.cel-svg .barra.fant { fill: none; stroke: var(--accent); stroke-dasharray: 3 3; }
+.cel-svg .base { stroke: var(--line); }
+.cel-svg .linea-c { fill: none; stroke: var(--pos); stroke-width: 2; }
+.cel-svg .linea-c.o { stroke: var(--neg); stroke-dasharray: 5 3; }
+.cel-svg .eje { stroke: var(--ink-3); stroke-width: 1; }
+
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.esc-head .hint { font-size: 12.5px; color: var(--ink-2); }
+.esc-fila { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; margin-top: 8px; }
+.esc-fila .seg-lab { margin-left: 0; }
+.esc-fila input[type=text] { width: 11em; font: 14px var(--f-mono); padding: 5px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); }
+.esc-fila input[type=range] { flex: 1 1 120px; min-width: 100px; }
+#segPal { flex-wrap: wrap; }
+#segPal button { padding: 7px 8px; }
+.esc-fila .val { font-family: var(--f-mono); font-size: 13px; min-width: 3.2em; }
+.panel { margin-top: 10px; display: grid; gap: 8px; }
+.lectura-esc { font-family: var(--f-mono); font-size: 12.5px; color: var(--ink-2); line-height: 1.7; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.lectura-esc b { color: var(--ink); font-weight: 500; }
+.lectura-esc .oc { color: var(--accent); font-weight: 600; }
+.lectura-esc .si { color: var(--ok); font-weight: 600; }
+.lectura-esc .no { color: var(--bad); font-weight: 600; }
+.lectura-esc .kf { color: var(--gf); font-weight: 600; }
+.lectura-esc .ki { color: var(--gi); font-weight: 600; }
+.lectura-esc .ko { color: var(--go); font-weight: 600; }
+.lectura-esc .kr { color: var(--gr); font-weight: 600; }
+.lectura-esc .bw { color: var(--atras); font-weight: 600; }
+.leyenda { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--ink-2); }
+.leyenda i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+.aviso-pal { font-size: 12px; color: var(--bad); min-height: 1em; }
+.tras[hidden] { display: none; }
+pre.codigo-bloque { margin: 8px 0; padding: 10px 12px; background: var(--surface-2); border-radius: 8px; font-family: var(--f-mono); font-size: 12.5px; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.tabla { width: 100%; border-collapse: collapse; font-family: var(--f-mono); font-size: 12px; font-variant-numeric: tabular-nums; margin-top: 6px; }
+.tabla th { font-weight: 500; color: var(--ink-3); font-size: 11px; text-align: right; padding: 4px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.tabla td { text-align: right; padding: 3px 6px; border-bottom: 1px solid var(--line-soft); color: var(--ink-2); white-space: nowrap; }
+.tabla td:first-child, .tabla th:first-child { text-align: left; }
+.tabla td.cur { background: var(--accent-soft); color: var(--ink); font-weight: 600; }
+.tabla td.vacia { color: var(--ink-3); }
+.tabla td.si { color: var(--ok); font-weight: 600; }
+.tabla td.no { color: var(--bad); font-weight: 600; }
+.tabla td.oc { color: var(--accent); font-weight: 600; }
+.tabla-wrap { overflow-x: auto; }
+
+.formas { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; font-family: var(--f-mono); font-size: 12px; color: var(--ink-2); align-items: center; }
+.formas b { color: var(--ink); font-weight: 500; }
+.formas .k { color: var(--ink-3); }
+
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.ojo-q { margin: 8px 0 0; font-size: 14px; }
+.ojo-dato { font-family: var(--f-mono); font-size: 14px; margin-top: 8px; line-height: 1.8; overflow-wrap: anywhere; }
+.ojo-opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
+.ojo-opts .opt { text-align: center; }
+.objetivos { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.objetivos li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.objetivos .m { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.objetivos li.hecho { color: var(--ink); }
+.objetivos li.hecho .m { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 3px var(--surface); }
+.datos-mano { border-collapse: collapse; font-family: var(--f-mono); font-size: 13px; margin: 4px 0 12px; }
+.datos-mano th, .datos-mano td { padding: 4px 8px; border: 1px solid var(--line); text-align: center; white-space: nowrap; }
+.datos-mano th { color: var(--ink-3); font-weight: 500; font-size: 11.5px; }
+
+.consola { margin-top: 10px; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); font-family: var(--f-mono); font-size: 12px; color: var(--ink-2); white-space: pre-wrap; overflow-wrap: anywhere; min-height: 2.4em; }
+.consola .nueva { color: var(--ink); font-weight: 600; }
+.consola .vacia { color: var(--ink-3); }
+.vr-cuenta { font-family: var(--f-mono); font-size: 12px; color: var(--ink-2); margin-top: 8px; min-height: 1.4em; overflow-wrap: anywhere; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ LSTM y GRU</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Aprendizaje automático · Redes neuronales · SM142004 UD4, Raschka cap. 15</p>
+    <h1>LSTM y GRU</h1>
+    <p class="lede">
+      En la página de RNN viste que la señal que vuelve hacia atrás se encoge en cada paso, hasta que la red no puede aprender
+      a usar algo que leyó hace diez letras. La LSTM le agrega a la celda una <b>cinta transportadora</b>, el estado de celda,
+      y tres <b>compuertas</b> que funcionan como grifos: una decide cuánto se conserva, otra cuánto se escribe y otra cuánto se
+      muestra. Aquí vas a ver una celda de juguete, con todos sus pesos escritos a mano, guardar la primera letra de una palabra
+      durante diez pasos. Al final, la GRU hace lo mismo con dos grifos.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> Tienes que recordar un número de teléfono mientras alguien te dicta una lista de compras larga. ¿Qué haces con cada cosa nueva que escuchas para no perder el número? Si construyeras esa memoria con números, ¿qué decisiones tendría que tomar en cada momento?</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: creo que tendría que decidir..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>De la memoria que se apaga a la cinta con grifos</h2>
+      <p>Ocho pasos. Cada uno termina con un chequeo que abre el siguiente. Equivocarte aquí no resta nada: es parte del método.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="Guardar">
+          <span class="etapa">Paso 1</span>
+          <h3>Recordar la primera letra</h3>
+          <p>Con las mismas letras de la página de RNN, h, o, l, a, hay una tarea nueva. La palabra empieza con <b>h</b> o con <b>o</b>, después vienen muchas <b>l</b>, y al final llega una <b>a</b>, que funciona como pregunta: ¿con qué letra empezó? En <b>hllllllllla</b> la respuesta es h, y lo que hay que recordar está diez letras atrás.</p>
+          <p>Una memoria que resuelva esto tiene que hacer cosas distintas según la letra que llega. Antes de mirar el escenario, decide qué tiene que hacer mientras llegan las l.</p>
+          <p>La UD4 presenta la LSTM justamente así: una variante de la RNN con una <b>célula de memoria</b> gestionada por <b>puertas</b> <cite class="cita" data-fuente="dl4" data-pag="35" data-seccion="Tema 9: introducción a LSTM" data-que="La LSTM como variante de la RNN pensada para el desvanecimiento del gradiente: una célula de memoria y puertas que la gestionan. En la página siguiente, los componentes clave." data-cuando="Al terminar este paso"></cite>.</p>
+          <div class="check" id="chk1"><p class="check-tit">Predice antes de mirar</p><div class="cuerpo"></div></div>
+          <div class="tras tras-chk1" hidden>
+            <p>En el escenario, la franja horizontal es la <b>cinta</b>: la memoria. Debajo de cada letra hay tres barras, los grifos: <b style="color:var(--gf)">olvido</b>, <b style="color:var(--gi)">entrada</b> y <b style="color:var(--go)">salida</b>. Barra llena es grifo abierto (cerca de 1); vacía, cerrado (cerca de 0). Con la h se abre la entrada y la cinta se llena de verde azulado. Durante las l, la entrada está cerrada y el olvido abierto: la cinta conserva y se desgasta apenas. Con la a se abre la salida y la celda muestra lo que guardó.</p>
+            <p>Ojo con el nombre: el grifo de <b>olvido</b> abierto quiere decir que la celda <b>conserva</b>. Es el nombre que usa todo el mundo (forget gate), y confunde a todos al principio. Piénsalo como "grifo de lo que se queda".</p>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="La RNN olvida">
+          <span class="etapa">Paso 2</span>
+          <h3>Por qué una RNN no aprende a recordar tan lejos</h3>
+          <p>En la página de <a href="rnn.html">RNN y estado oculto</a> viste la señal de la última predicción viajar hacia atrás: con <b>ollllllllla</b>, al estado <span data-tex="h_1"></span> le llega unas 600 veces menos que a <span data-tex="h_{10}"></span>. En cada paso se multiplica por <span data-tex="W_{hh}"></span> y por la derivada de la tanh, y el producto de muchos factores menores que 1 se apaga. Es la cadena de <a href="gradiente-desvanece.html">El gradiente que se desvanece</a>, ahora en el tiempo. La UD4 lo dice en una línea: los gradientes se vuelven pequeños al retroceder en el tiempo, y LSTM y GRU son la solución <cite class="cita" data-fuente="dl4" data-pag="26" data-seccion="Tema 7: introducción a RNN" data-que="Datos secuenciales, el desvanecimiento del gradiente (se vuelve pequeño al retroceder en el tiempo), la explosión (solo nombrada) y LSTM y GRU presentadas como la solución." data-cuando="Al terminar este paso"></cite>.</p>
+          <p>En el escenario, arriba, la señal en la RNN de la página anterior, con sus mismos pesos; abajo, la señal en la cinta de la LSTM. En la cinta, cada paso hacia atrás multiplica solo por el grifo de olvido <span data-tex="f"></span>, que en esta celda vale 0.982. Raschka lista tres remedios: recortar el gradiente, que solo arregla la explosión; truncar la retropropagación, que limita lo que se aprende; y la LSTM <cite class="cita" data-fuente="raschka15" data-pag="12" data-pimp="510" data-seccion="The challenges of learning long-range interactions" data-que="El factor w^(t−k) con la Figure 15.8 (w = 0.99, 1.01) y las tres soluciones: gradient clipping, TBPTT y LSTM (Hochreiter y Schmidhuber, 1997). A ese factor le falta la derivada de la tanh." data-cuando="Al terminar este paso"></cite>.</p>
+          <div class="check" id="chk2"><p class="check-tit">Calcula</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="La cinta">
+          <span class="etapa">Paso 3</span>
+          <h3>La cinta: multiplicar por f y sumar</h3>
+          <p>La cinta guarda un número, el <b>estado de celda</b> <span data-tex="c_t"></span>. Empieza en <span data-tex="c_0 = 0"></span>. En cada paso le pasan dos cosas: se multiplica por el grifo de olvido <span data-tex="f_t"></span> y se le suma lo que deja pasar el grifo de entrada <span data-tex="i_t"></span>:</p>
+          <div class="fbloque">
+            <div data-tex="c_t \;=\; f_t \odot c_{t-1} \;+\; i_t \odot \tilde c_t" data-display></div>
+            <div class="vivo" id="vivo3"></div>
+          </div>
+          <p><span data-tex="\tilde c_t"></span> es el <b>candidato</b>: lo que la letra propone escribir, entre −1 y 1, en la fila de abajo del escenario. Usa <b>Leer la letra siguiente</b>. Esta celda tiene una sola unidad para que la cinta sea un solo número; en una LSTM de verdad <span data-tex="c_t"></span> es un vector, y <span data-tex="\odot"></span> quiere decir multiplicar casilla por casilla.</p>
+          <p>Esta es la ecuación central de la LSTM: el camino de <span data-tex="c_{t-1}"></span> a <span data-tex="c_t"></span> no cruza ninguna matriz de pesos ni ninguna tanh, solo un producto por <span data-tex="f_t"></span> y una suma. Por eso la señal llega. Raschka lo dibuja en la Figure 15.9: la línea de arriba de la celda solo tiene un <span data-tex="\odot"></span> y un <span data-tex="\oplus"></span> <cite class="cita" data-fuente="raschka15" data-pag="13" data-pimp="511" data-seccion="Long short-term memory cells" data-que="La celda de memoria que reemplaza a la capa oculta, el cell state y la Figure 15.9 con sus σ, tanh, ⊙ y ⊕. Ahí está también la frase del peso w = 1, que se revisa en el recuadro de este paso." data-cuando="Al terminar este paso"></cite>.</p>
+          <div class="check" id="chk3"><p class="check-tit">Calcula con los números del escenario</p><div class="cuerpo"></div></div>
+
+          <div class="destacado">
+            <p class="dest-tit">Una confusión muy común</p>
+            <h4>¿La cinta recuerda para siempre?</h4>
+            <p>Se suele decir que en la cinta la memoria "no se multiplica por nada". Antes de seguir, decide cuánto dura de verdad.</p>
+            <div class="check" id="chk3b"><p class="check-tit">Predice antes de seguir</p><div class="cuerpo"></div></div>
+            <div class="tras tras-chk3b" hidden>
+              <p>Queda alrededor del 16 %: <span data-tex="0.982^{100} = 0.163"></span>. La cinta no tiene memoria infinita: la tiene larga, y el largo lo decide <span data-tex="f"></span>. Raschka escribe, en la página citada arriba, que la arista recurrente de la celda tiene "el peso deseable <span data-tex="w = 1"></span>"; con la compuerta de olvido, que el libro agrega en la página siguiente, en realidad se multiplica por <span data-tex="f_t"></span> en cada paso, y vale 1 solo si el grifo está abierto del todo.</p>
+              <p>Y un detalle de la UD4: el texto presenta las ecuaciones de las puertas una por una, pero nunca escribe la de <span data-tex="c_t"></span>, que es la central. Solo aparece en el recuadro de la figura "Flujo de Información en las LSTM", como <span data-tex="c_t = c_{t-1}\cdot f_t + \tilde c_t\cdot i_t"></span> <cite class="cita" data-fuente="dl4" data-pag="37" data-seccion="Puerta de salida y flujo de información en las LSTM" data-que="Las ecuaciones de i_t, c̃_t y O_t en el texto, y la figura de la celda con las cinco ecuaciones alrededor. La de c_t está solo en el recuadro de la figura, con un punto donde va el producto casilla por casilla." data-cuando="Ahora"></cite>, y en la diapositiva 38 <cite class="cita" data-fuente="lstm4" data-pag="38" data-seccion="Celda LSTM con ecuaciones" data-que="El diagrama de la celda con las seis ecuaciones, incluida c_t. La diapositiva anterior tiene el mismo diagrama limpio, sin ecuaciones: sirve para repasar la cinta de arriba." data-cuando="Ahora"></cite>. El punto que usa es el producto casilla por casilla, <span data-tex="\odot"></span>, y no se dice.</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Olvido">
+          <span class="etapa">Paso 4</span>
+          <h3>El grifo de olvido</h3>
+          <p>Cada grifo es una neurona con sigmoide, que da un número entre 0 y 1: la apertura. Lee el estado anterior pegado a la letra, <span data-tex="[h_{t-1},\, x_t]"></span>, que aquí son cinco números (uno del estado y cuatro del one-hot):</p>
+          <div class="fbloque">
+            <div data-tex="f_t \;=\; \sigma\big(W_f\,[h_{t-1},\, x_t] + b_f\big)" data-display></div>
+            <div class="vivo" id="vivo4"></div>
+          </div>
+          <p>En esta celda de juguete los cinco pesos de <span data-tex="W_f"></span> valen 0 y el sesgo es <span data-tex="b_f = 4"></span>: el grifo queda en <span data-tex="\sigma(4) = 0.982"></span> con cualquier letra. Lo decide solo el sesgo. La UD4 lo escribe con la misma notación de corchetes: cerca de 0 olvida, cerca de 1 conserva <cite class="cita" data-fuente="dl4" data-pag="36" data-seccion="Componentes clave: puerta de olvido" data-que="f_t = σ(w_f [h_{t−1}, x_t] + b_f) con la concatenación entre corchetes, la lectura de 0 (olvida) y 1 (conserva), y la candidata C̃_t con tanh." data-cuando="Al terminar este paso"></cite>. Raschka cuenta, entre las páginas 511 y 512, que este grifo no estaba en la LSTM original de 1997: lo agregaron Gers, Schmidhuber y Cummins en 2000.</p>
+          <div class="check" id="chk4"><p class="check-tit">Predice antes de mover</p><div class="cuerpo"></div></div>
+          <div class="tras tras-chk4" hidden>
+            <p>Mueve el deslizador del sesgo de olvido. Con <span data-tex="b_f = 0"></span> el dato de la h se reduce a la mitad en cada paso, y al final pesan más las marcas que dejaron las l: la cinta termina en −0.013 y la celda dice o. Con <span data-tex="b_f = 8"></span> la cinta casi no se desgasta.</p>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Entrada">
+          <span class="etapa">Paso 5</span>
+          <h3>El grifo de entrada y el candidato</h3>
+          <p>Lo que se escribe en la cinta tiene dos piezas:</p>
+          <div class="fbloque">
+            <div data-tex="i_t \;=\; \sigma\big(W_i\,[h_{t-1},\, x_t] + b_i\big) \qquad\quad \tilde c_t \;=\; \tanh\big(W_c\,[h_{t-1},\, x_t] + b_c\big)" data-display></div>
+            <div class="vivo" id="vivo5"></div>
+          </div>
+          <p>El candidato <span data-tex="\tilde c_t"></span>, con tanh, es el <b>contenido</b>, con signo: la h propone <span data-tex="\tanh(2) = 0.964"></span>, la o propone −0.964 y la l, alrededor de −0.756. El grifo de entrada <span data-tex="i_t"></span>, con sigmoide, decide <b>cuánto</b> de ese contenido entra. Sus pesos son 4 para la h y la o, y −4 para la l y la a: se abre con la primera letra y queda casi cerrado con el resto. Raschka tiene las seis ecuaciones juntas en una página, con <span data-tex="W_{x\cdot}"></span> y <span data-tex="W_{h\cdot}"></span> por separado en vez de una matriz sobre el vector pegado <cite class="cita" data-fuente="raschka15" data-pag="14" data-pimp="512" data-seccion="Long short-term memory cells" data-que="f_t, i_t, C̃_t, C(t) = (C(t−1) ⊙ f_t) ⊕ (i_t ⊙ C̃_t), o_t y h(t) = o_t ⊙ tanh(C(t)). Al final de la página, el recuadro de la GRU, sin ecuaciones." data-cuando="Al terminar este paso"></cite>. Es lo mismo: <span data-tex="W_{xi}\,x_t + W_{hi}\,h_{t-1} = W_i\,[h_{t-1},\, x_t]"></span> si pegas las dos matrices lado a lado.</p>
+          <div class="check" id="chk5"><p class="check-tit">Predice antes de mover</p><div class="cuerpo"></div></div>
+          <div class="tras tras-chk5" hidden>
+            <p>Mueve el peso de la l en el grifo de entrada. Con +4, cada l escribe casi entero su −0.756 y en dos pasos tapa a la h. Con −8, las l casi no escriben y la memoria aguanta mucho más: un grifo de entrada bien cerrado protege la cinta tanto como un olvido bien abierto.</p>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Salida">
+          <span class="etapa">Paso 6</span>
+          <h3>El grifo de salida: guardar sin mostrar</h3>
+          <p>La cinta es la memoria privada de la celda. Lo que muestra hacia afuera, a la capa siguiente y a sí misma en el paso siguiente, es <span data-tex="h_t"></span>: la cinta pasada por tanh y multiplicada por el grifo de salida.</p>
+          <div class="fbloque">
+            <div data-tex="o_t \;=\; \sigma\big(W_o\,[h_{t-1},\, x_t] + b_o\big) \qquad\quad h_t \;=\; o_t \odot \tanh(c_t)" data-display></div>
+            <div class="vivo" id="vivo6"></div>
+          </div>
+          <p>Aquí la salida se abre solo con la a, la pregunta: sus pesos son −4 para h, o y l, y +4 para la a. La respuesta de la celda es el signo de <span data-tex="h_T"></span>: positivo, empezó con h; negativo, con o. La fila de arriba del escenario es <span data-tex="h_t"></span>.</p>
+          <p>La notación del material cambia aquí. La UD4, en la teoría y en las diapositivas, escribe esta compuerta en las ecuaciones como <span data-tex="O_t"></span>, con mayúscula, con peso <span data-tex="\omega_0"></span> y sesgo <span data-tex="b_0"></span> (con un cero, no con la letra o), y en el texto y la figura la llama <span data-tex="o_t"></span>; y los productos de <span data-tex="c_t"></span> y <span data-tex="h_t"></span> son casilla por casilla sin decirlo <cite class="cita" data-fuente="lstm4" data-pag="36" data-seccion="Componentes clave" data-que="Las cinco ecuaciones de las puertas, con O_t mayúscula y el subíndice cero en ω_0 y b_0. Falta la ecuación de c_t, que está en la diapositiva 38." data-cuando="Al terminar este paso"></cite>. Raschka tiene un choque parecido: la compuerta de salida es <span data-tex="o_t"></span> y la salida de la red también se llama <span data-tex="o"></span>.</p>
+          <div class="check" id="chk6"><p class="check-tit">Calcula</p><div class="cuerpo"></div></div>
+
+          <div class="destacado">
+            <p class="dest-tit">Otra confusión natural</p>
+            <h4>Durante las l, h vale casi cero: ¿la celda olvidó?</h4>
+            <p>Mira la fila de arriba del escenario: mientras pasan las l, <span data-tex="h_t"></span> vale alrededor de 0.01. Antes de seguir, decide qué quiere decir eso.</p>
+            <div class="check" id="chk6b"><p class="check-tit">Decide antes de seguir</p><div class="cuerpo"></div></div>
+            <div class="tras tras-chk6b" hidden>
+              <p>No olvidó. La memoria está en la cinta, que durante las l va de 0.92 a 0.69; <span data-tex="h_t"></span> es lo que la celda muestra, y el grifo de salida está casi cerrado. Esa es la diferencia con la RNN: allí el estado que se guarda y el que se muestra son el mismo vector. En la LSTM hay dos, <span data-tex="c"></span> de largo plazo y <span data-tex="h"></span> de corto plazo: de ahí el nombre, <b>long short-term memory</b>, una memoria de corto plazo que dura mucho.</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="GRU">
+          <span class="etapa">Paso 7</span>
+          <h3>La GRU: dos grifos y sin cinta aparte</h3>
+          <p>La GRU (Cho y otros, 2014) simplifica la celda. Junta olvido y entrada en un solo grifo, el de <b>actualización</b> <span data-tex="z_t"></span>: lo que se conserva es <span data-tex="1 - z_t"></span> y lo que entra es <span data-tex="z_t"></span>, así que suman 1. No tiene cinta aparte: <span data-tex="h_t"></span> hace de cinta y de salida a la vez. Y el grifo de <b>reinicio</b> <span data-tex="r_t"></span> decide cuánto del estado anterior mira el candidato.</p>
+          <div class="fbloque">
+            <div data-tex="z_t = \sigma\big(W_z[h_{t-1},\, x_t] + b_z\big) \qquad r_t = \sigma\big(W_r[h_{t-1},\, x_t] + b_r\big)" data-display></div>
+            <div data-tex="\tilde h_t = \tanh\big(W_h\,[\,r_t \odot h_{t-1},\; x_t\,] + b_h\big) \qquad h_t = (1 - z_t)\odot h_{t-1} \;+\; z_t \odot \tilde h_t" data-display></div>
+            <div class="vivo" id="vivo7"></div>
+          </div>
+          <p>En el escenario, cambia entre LSTM y GRU con la misma palabra. La GRU de juguete usa los mismos números: <span data-tex="z"></span> tiene los pesos del grifo de entrada (se abre con h y o), el reinicio se cierra con h y o (al empezar una palabra no hace falta mirar el pasado) y el candidato es el de la LSTM. Ninguno de los dos materiales escribe estas ecuaciones: la UD4 describe la GRU en prosa <cite class="cita" data-fuente="dl4" data-pag="38" data-seccion="Tema 10: LSTM frente a RNN y GRU" data-que="La LSTM de 1997 y sus ventajas, y la GRU de Cho y otros (2014) con sus dos puertas, actualización y reinicio, sin célula separada. Sin ecuaciones, y con los papeles de las puertas confundidos." data-cuando="Al terminar este paso"></cite>, las diapositivas la dibujan con <span data-tex="z_t"></span>, <span data-tex="r_t"></span> y un nodo "1−" <cite class="cita" data-fuente="lstm4" data-pag="44" data-seccion="GRU" data-que="El diagrama de la celda GRU con r_t y z_t (sigmoides), el candidato con tanh y el nodo 1−. Sin ecuaciones: compáralo con las de este paso." data-cuando="Al terminar este paso"></cite>, y Raschka solo le dedica el recuadro de la página 512. Estas son las de Chung y otros (2014).</p>
+          <p>Un aviso sobre la UD4: dice que la puerta de reinicio "determina cuánto de la memoria pasada se olvida". No es así: el reinicio solo decide cuánto de <span data-tex="h_{t-1}"></span> entra al candidato. Quien mezcla memoria vieja y nueva es la de actualización. Y otro sobre las librerías: PyTorch y Keras usan la convención contraria, con <span data-tex="z_t"></span> multiplicando al estado viejo. Lo vas a ver en la vida real.</p>
+          <div class="check" id="chk7"><p class="check-tit">Elige con una razón</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Parámetros">
+          <span class="etapa">Paso 8</span>
+          <h3>Contar parámetros: cuatro bloques contra tres</h3>
+          <p>Cada grifo, y también el candidato, es una pequeña capa densa sobre <span data-tex="[h_{t-1},\, x_t]"></span>. Con <span data-tex="n"></span> unidades y <span data-tex="m"></span> entradas, cada bloque tiene <span data-tex="n(m+n)"></span> pesos y <span data-tex="n"></span> sesgos. La LSTM tiene cuatro bloques (<span data-tex="i, f, \tilde c, o"></span>); la GRU, tres (<span data-tex="z, r, \tilde h"></span>):</p>
+          <div class="fbloque">
+            <div data-tex="\text{LSTM: } 4\,\big(n(m+n) + n\big) \qquad\quad \text{GRU: } 3\,\big(n(m+n) + n\big)" data-display></div>
+            <div class="vivo" id="vivo8"></div>
+          </div>
+          <p>La celda de juguete tiene <span data-tex="n = 1"></span> y <span data-tex="m = 4"></span>: 24 números la LSTM y 18 la GRU. Las librerías agregan sesgos: PyTorch pone dos por bloque, y la GRU de Keras, con <code>reset_after=True</code> por defecto, también. La UD4 tiene la tabla "Resumen Comparativo", con 3 puertas para la LSTM y 2 para la GRU <cite class="cita" data-fuente="dl4" data-pag="39" data-seccion="Diferencias entre LSTM y GRU: resumen comparativo" data-que="Las cinco diferencias entre LSTM y GRU y la tabla que compara RNN, LSTM y GRU: memoria a largo plazo, gradiente, número de puertas, coste." data-cuando="Al terminar este paso"></cite>; los bloques de pesos son uno más, porque el candidato tiene los suyos. El cuaderno Demo 2 de la misma unidad imprime los parámetros de una LSTM en su <code>model.summary()</code>, sin explicar la cuenta: hazla tú.</p>
+          <div class="check" id="chk8"><p class="check-tit">Calcula</p><div class="cuerpo"></div></div>
+          <div class="cita" id="citaHipo" hidden></div>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+        </div>
+        <div class="esc-fila" id="filaPal">
+          <span class="seg-lab">Palabra</span>
+          <div class="seg" id="segPal" role="group" aria-label="Palabras de ejemplo"></div>
+          <input type="text" id="txtPal" maxlength="40" aria-label="Escribe una palabra con h, o, l, a" placeholder="h, o, l, a">
+        </div>
+        <div class="aviso-pal" id="avisoPal"></div>
+        <div class="esc-fila" id="filaT">
+          <button type="button" class="primary" id="btnLeer">Leer la letra siguiente</button>
+          <button type="button" class="ghost" id="btnVaciar">Volver a empezar</button>
+        </div>
+        <div class="esc-fila" id="filaBf">
+          <span class="seg-lab">Sesgo de olvido b_f</span>
+          <input type="range" id="rngBf" min="-2" max="8" step="0.5" value="4" aria-label="Sesgo de olvido">
+          <span class="val" id="valBf">4</span>
+        </div>
+        <div class="esc-fila" id="filaWil">
+          <span class="seg-lab">Peso de la l en la entrada</span>
+          <input type="range" id="rngWil" min="-8" max="4" step="0.5" value="-4" aria-label="Peso de la l en el grifo de entrada">
+          <span class="val" id="valWil">−4</span>
+        </div>
+        <div class="esc-fila" id="filaCel">
+          <span class="seg-lab">Celda</span>
+          <div class="seg" id="segCel" role="group" aria-label="LSTM o GRU"></div>
+        </div>
+        <svg id="esc" class="cel-svg" role="img" aria-label="La celda LSTM desenrollada letra por letra, con la cinta y los grifos"></svg>
+        <div class="leyenda" id="leyenda"></div>
+        <div class="panel" id="panel"></div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>El programa escribe la celda de juguete con sus pesos, lee "hllllllllla" con un bucle sobre el tiempo, calcula los cuatro bloques en cada paso con productos punto, actualiza la cinta y lo que muestra, e imprime cada paso. Después apila los cuatro bloques en una sola matriz, en el orden de PyTorch (i, f, g, o), procesa un lote de dos palabras a la vez y comprueba que da lo mismo que el bucle.</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir <span class="estado" data-reto="codigo1"></span></p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="true">Python</button>
+            <button type="button" data-lang="r" aria-pressed="false">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">1 · pesos</span><span data-f="2">2 · bucle en el tiempo</span><span data-f="3">3 · matriz y lote</span>
+        </div>
+        <h3 class="mini-tit vr-tit">La cinta mientras corre el bucle</h3>
+        <svg id="vrSvg" class="cel-svg" role="img" aria-label="La cinta y los grifos hasta el paso actual"></svg>
+        <div class="vr-cuenta" id="vrCuenta"></div>
+        <h3 class="mini-tit vr-tit">El lote: dos palabras a la vez</h3>
+        <div class="tabla-wrap"><table class="tabla" id="vrLote"></table></div>
+        <h3 class="mini-tit vr-tit">Lo que imprime</h3>
+        <div class="consola" id="vrConsola"></div>
+      </div>
+    </div>
+
+    <p class="vr-nota">Ni scikit-learn ni R base traen una capa LSTM (el paquete <code>nnet</code> solo tiene redes densas, y en esta máquina no hay PyTorch ni Keras), así que el programa se compara contra su propia versión matricial: las cuatro compuertas apiladas en una matriz de 4 × 5, aplicadas a un lote de dos palabras, dan el mismo <span data-tex="h_T"></span> que el bucle. Python y R imprimen lo mismo; R cuenta los pasos desde 1. La celda no está entrenada: los pesos son enteros elegidos a mano.</p>
+
+    <details class="profundizar">
+      <summary>La señal hacia atrás por la cinta, contra diferencias finitas (se corrió en Python y R)</summary>
+      <div>
+        <p>¿Cuánto cambia la respuesta final <span data-tex="h_{11}"></span> si empujas un poquito la cinta después de la primera letra? Solo por la cinta, la cuenta es <span data-tex="\frac{\partial h_{11}}{\partial c_{11}}\prod_{t=2}^{11} f_t"></span>, con <span data-tex="\frac{\partial h_{11}}{\partial c_{11}} = o_{11}\,(1 - \tanh^2 c_{11})"></span>. El programa la compara con la derivada medida empujando <span data-tex="c_1"></span> hacia arriba y hacia abajo. Python:</p>
+        <pre class="codigo-bloque">import numpy as np
+
+letras = ["h", "o", "l", "a"]
+W = {"i": [0, 4, 4, -4, -4], "f": [0, 0, 0, 0, 0], "g": [1, 2, -2, -1, 0], "o": [0, -4, -4, -4, 4]}
+b = {"i": 0, "f": 4, "g": 0, "o": 0}
+sigmoide = lambda z: 1 / (1 + np.exp(-z))
+
+def correr(palabra, empuje=0.0):              # empuje: lo que se le suma a c_1
+    h, celda, fs = 0.0, 0.0, []
+    for t, letra in enumerate(palabra):
+        v = np.concatenate(([h], np.eye(4)[letras.index(letra)]))
+        i, f, o = (sigmoide(np.dot(W[k], v) + b[k]) for k in ["i", "f", "o"])
+        g = np.tanh(np.dot(W["g"], v) + b["g"])
+        celda = f * celda + i * g + (empuje if t == 0 else 0)
+        h = o * np.tanh(celda)
+        fs.append(f)
+    return h, celda, o, fs
+
+palabra = "hllllllllla"
+h, celda, o, fs = correr(palabra)
+cinta = np.prod(fs[1:])                        # cruzar la cinta de c_1 a c_11
+print("producto de las f:", f"{cinta:.4f}")
+print("solo por la cinta:", f"{o * (1 - np.tanh(celda) ** 2) * cinta:.4f}")
+eps = 1e-6
+num = (correr(palabra, eps)[0] - correr(palabra, -eps)[0]) / (2 * eps)
+print("diferencias finitas:", f"{num:.4f}")</pre>
+        <pre class="codigo-bloque" id="salGradPy"></pre>
+        <p>R:</p>
+        <pre class="codigo-bloque">letras &lt;- c("h", "o", "l", "a")
+W &lt;- list(i = c(0, 4, 4, -4, -4), f = c(0, 0, 0, 0, 0), g = c(1, 2, -2, -1, 0), o = c(0, -4, -4, -4, 4))
+b &lt;- list(i = 0, f = 4, g = 0, o = 0)
+sigmoide &lt;- function(z) 1 / (1 + exp(-z))
+
+correr &lt;- function(palabra, empuje = 0) {      # empuje: lo que se le suma a c_1
+  h &lt;- 0; celda &lt;- 0; fs &lt;- c()
+  for (t in seq_along(palabra)) {
+    v &lt;- c(h, diag(4)[match(palabra[t], letras), ])
+    i &lt;- sigmoide(sum(W$i * v) + b$i); f &lt;- sigmoide(sum(W$f * v) + b$f); o &lt;- sigmoide(sum(W$o * v) + b$o)
+    g &lt;- tanh(sum(W$g * v) + b$g)
+    celda &lt;- f * celda + i * g + (if (t == 1) empuje else 0)
+    h &lt;- o * tanh(celda)
+    fs &lt;- c(fs, f)
+  }
+  list(h = h, celda = celda, o = o, fs = fs)
+}
+
+palabra &lt;- strsplit("hllllllllla", "")[[1]]
+r &lt;- correr(palabra)
+cinta &lt;- prod(r$fs[-1])                        # cruzar la cinta de c_1 a c_11
+cat("producto de las f:", sprintf("%.4f", cinta), "\n")
+cat("solo por la cinta:", sprintf("%.4f", r$o * (1 - tanh(r$celda)^2) * cinta), "\n")
+eps &lt;- 1e-6
+num &lt;- (correr(palabra, eps)$h - correr(palabra, -eps)$h) / (2 * eps)
+cat("diferencias finitas:", sprintf("%.4f", num), "\n")</pre>
+        <pre class="codigo-bloque" id="salGradR"></pre>
+        <p>Por la cinta llega 0.5338 y en total 0.5343: casi todo viaja por la cinta. La diferencia es el camino que pasa por <span data-tex="h_{t-1}"></span> y vuelve a entrar al candidato, que aquí casi no pesa porque el grifo de salida está cerrado durante las l. En la RNN de la página anterior, la misma pregunta daba unas 600 veces menos al principio que al final.</p>
+      </div>
+    </details>
+
+    <details class="profundizar">
+      <summary>La misma celda en PyTorch y Keras (no se corrió: no están instalados en esta máquina)</summary>
+      <div>
+        <pre class="codigo-bloque">import torch
+lstm = torch.nn.LSTM(input_size=4, hidden_size=1, batch_first=True)
+with torch.no_grad():
+    lstm.weight_ih_l0.copy_(torch.tensor(M[:, 1:], dtype=torch.float32))   # (4, 4): filas i, f, g, o
+    lstm.weight_hh_l0.copy_(torch.tensor(M[:, :1], dtype=torch.float32))   # (4, 1): la columna de h_(t-1)
+    lstm.bias_ih_l0.copy_(torch.tensor(bb, dtype=torch.float32))
+    lstm.bias_hh_l0.zero_()                                                # el segundo sesgo de PyTorch
+salida, (h_T, c_T) = lstm(torch.tensor(X, dtype=torch.float32))           # X de forma (2, 11, 4)
+# salida: (2, 11, 1), todos los h; h_T y c_T: (1, 2, 1) = (capas, lote, unidades)
+
+import tensorflow as tf
+capa = tf.keras.layers.LSTM(1, return_sequences=True)   # unit_forget_bias=True por defecto
+capa.build((None, 11, 4))
+capa.set_weights([M[:, 1:].T, M[:, :1].T, bb])   # kernel (4, 4) y recurrent_kernel (1, 4), columnas i, f, c, o</pre>
+        <p>PyTorch devuelve dos cosas: la secuencia de salidas y la tupla con el último <span data-tex="h"></span> y la última cinta <span data-tex="c"></span>. Raschka lo usa así en su modelo de sentimiento, <code>out, (hidden, cell) = self.rnn(out)</code> <cite class="cita" data-fuente="raschka15" data-pag="23" data-pimp="521" data-seccion="Building an RNN model for the sentiment analysis task" data-que="El modelo Embedding → nn.LSTM(20, 64, batch_first=True) → capas densas, con la LSTM devolviendo out, (hidden, cell): la salida y la tupla de estado oculto y cinta." data-cuando="Después de la vida real"></cite>. La <code>nn.LSTM(4, 1)</code> tiene <span data-tex="4\,(1\cdot4 + 1\cdot1 + 2) = 28"></span> parámetros; la <code>LSTM(1)</code> de Keras, 24. Las dos guardan los bloques en el orden i, f, c (o g), o: el mismo de la matriz <code>M</code> del programa.</p>
+      </div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>El orden de los bloques</h3><span class="estado" data-reto="codigo2"></span></div>
+        <div id="codigo2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>La z de PyTorch</h3><span class="estado" data-reto="codigo3"></span></div>
+        <div id="codigo3"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: la biblioteca te avisa en el índice cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>¿Qué le pasa a la cinta?</h3><span class="estado" data-reto="ojo"></span></div>
+        <p class="desc">Cinco pasos al azar de una celda: la cinta que llega, los dos grifos y el candidato. Decide, sin calcular, qué le pasa a la cinta en ese paso. Apruebas con 4 de 5.</p>
+        <div id="ojo"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Construir</span><h3>Una memoria que aguante</h3><span class="estado" data-reto="construir"></span></div>
+        <p class="desc">La celda de la página lee h, después <i>n</i> letras l y al final la a. Mueve el sesgo de olvido y el peso de la l en el grifo de entrada, y mira la cinta. Cumple los tres objetivos; no hace falta que sea a la vez.</p>
+        <div class="esc-fila"><span class="seg-lab">Sesgo de olvido b_f</span><input type="range" id="kBf" min="-2" max="8" step="0.5" value="4" aria-label="Sesgo de olvido del reto"><span class="val" id="kBfV">4</span></div>
+        <div class="esc-fila"><span class="seg-lab">Peso de la l en la entrada</span><input type="range" id="kWil" min="-8" max="4" step="0.5" value="-4" aria-label="Peso de la l del reto"><span class="val" id="kWilV">−4</span></div>
+        <div class="esc-fila"><span class="seg-lab">Cantidad de l</span><input type="range" id="kN" min="1" max="150" step="1" value="9" aria-label="Cantidad de letras l"><span class="val" id="kNV">9</span></div>
+        <svg id="kSvg" class="cel-svg" role="img" aria-label="La cinta a lo largo de la palabra"></svg>
+        <div class="lectura-esc" id="kLect"></div>
+        <ul class="objetivos" id="objetivos"></ul>
+        <div class="btn-row" style="margin-top:8px"><button type="button" class="ghost" id="kPista">Una pista</button></div>
+        <div class="lectura-esc" id="kPistaTxt"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>Un paso de la cinta con lápiz</h3><span class="estado" data-reto="mano"></span></div>
+        <p class="desc">Con los valores de la tabla, calcula <span data-tex="c_t = f_t\,c_{t-1} + i_t\,\tilde c_t"></span>.</p>
+        <div id="manoDatos"></div>
+        <div id="mano"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Alguien se equivocó</h3><span class="estado" data-reto="error"></span></div>
+        <p class="desc">Una de las líneas tiene un error. Tócala.</p>
+        <div id="error"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>El camino de la cinta</h3><span class="estado" data-reto="prop1"></span></div>
+        <div id="prop1"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Sigmoide o tanh</h3><span class="estado" data-reto="prop2"></span></div>
+        <div id="prop2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>El sesgo de olvido al empezar</h3><span class="estado" data-reto="prop3"></span></div>
+        <div id="prop3"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Cuánto más liviana es la GRU</h3><span class="estado" data-reto="prop4"></span></div>
+        <div id="prop4"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Recordar a la fuerza es lo que fija. Arma la ecuación de la cinta y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Fórmula de memoria</span><h3>La cinta</h3><span class="estado" data-reto="formula"></span></div>
+        <p class="desc">Hay piezas de más que no pertenecen. No mires arriba.</p>
+        <div id="formula"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el libro</h2>
+      <p class="lecturas-intro">Ya viste la cinta conservar un dato diez pasos y los grifos abrirse y cerrarse. Ahora ve a la versión técnica y reconócela. La UD4 explica las puertas de a una, pero la ecuación de la cinta solo está en la figura de la página 37 y en la diapositiva 38; la GRU no tiene ecuaciones en ningún material. Raschka pone las seis ecuaciones de la LSTM juntas en la página 512. Si abres la biblioteca con doble clic, el enlace abre el PDF en esa página.</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> La celda de juguete (una sola unidad, vocabulario h, o, l, a como en la página de RNN) y sus pesos
+    enteros son inventados: se eligieron a mano para que recuerde la primera letra de "hllllllllla" y de "ollllllllla", sin
+    entrenarla. La tarea de recordar la primera letra también es inventada. La RNN del paso 2 es la de la página de RNN, con sus
+    mismos pesos. Todas las cifras se calcularon con python3 y Rscript. Los pasos del ojo clínico y los valores del reto a mano se
+    generan al azar. Tu progreso se guarda en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+/*
+  EJEMPLO DE ESTA PAGINA (sigue el de rnn.html: vocabulario h, o, l, a en one-hot; la RNN del paso 2 usa sus mismos pesos).
+  Celda LSTM de juguete de UNA unidad, pesos escritos a mano. Cada bloque lee v = [h_(t-1), x_t] (5 numeros):
+    i (entrada)   = sigma([0 | 4, 4, -4, -4] . v + 0)
+    f (olvido)    = sigma([0 | 0, 0, 0, 0] . v + 4)       = 0.982 con cualquier letra
+    g (candidato) = tanh ([1 | 2, -2, -1, 0] . v + 0)
+    o (salida)    = sigma([0 | -4, -4, -4, 4] . v + 0)
+    c_t = f c_(t-1) + i g      h_t = o tanh(c_t)      respuesta = signo de h_T (positivo: empezo con h; negativo: con o)
+  Calculado con python3 y Rscript:
+    hllllllllla: c = 0.9467, 0.9161, 0.8860, 0.8565, 0.8274, 0.7990, 0.7710, 0.7435, 0.7165, 0.6900, 0.6778; h_11 = 0.5795 -> h
+    ollllllllla: h_11 = -0.7050 -> o.  Falla (dice o) desde 45 l.  Con b_f = 0: h_11 = -0.0125 (dice o).
+    dh_11/dc_1 = 0.5343 (diferencias finitas); solo por la cinta 0.5338; producto de las f 0.8340 (0.982^10).
+    RNN de rnn.html: con ollllllllla, h1 recibe 0.0024 contra 1.4263 en h10 (unas 600 veces menos).
+    Bloques en orden f, i, g, o (orden equivocado): h_11 = -0.0247 con las dos palabras.
+  GRU de juguete: z = sigma([0 | 4, 4, -4, -4] . v), r = sigma([0 | -4, -4, 4, 4] . v), n = tanh([1 | 2, -2, -1, 0] . [r h, x]),
+    h = (1 - z) h_(t-1) + z n.  hllllllllla: h = 0.9467, 0.9284, ..., 0.7825, 0.7800 -> h; falla desde 57 l.
+    Con la convencion de PyTorch (h = (1 - z) n + z h_(t-1)) y los mismos pesos: h_11 = -0.7404 con las dos palabras.
+  Parametros: LSTM 4 (n (m + n) + n) = 24, GRU 18; LSTM(128) sobre 64 = 98 816 (cuaderno Demo 2 de la UD4).
+*/
+(function () {
+  "use strict";
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var RETOS = ["ojo", "construir", "mano", "error", "prop1", "prop2", "prop3", "prop4", "formula", "codigo1", "codigo2", "codigo3"];
+  var C = B.concepto({ id: "lstm-gru", retos: RETOS, pasos: 8 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  /* ---------------- la celda de juguete ---------------- */
+  var f = B.fmt;
+  var LET = ["h", "o", "l", "a"];
+  var PAL0 = "hllllllllla";
+  var LW = { i: [0, 4, 4, -4, -4], f: [0, 0, 0, 0, 0], g: [1, 2, -2, -1, 0], o: [0, -4, -4, -4, 4] };
+  var LB = { i: 0, f: 4, g: 0, o: 0 };
+  var GW = { z: [0, 4, 4, -4, -4], r: [0, -4, -4, 4, 4], n: [1, 2, -2, -1, 0] };
+  function sig(z) { return 1 / (1 + Math.exp(-z)); }
+  function th(z) { return Math.tanh(z); }
+  function pre(w, hp, k) { return w[0] * hp + w[1 + k]; }
+
+  // indices matematicos: t = 1..T, c[0] = h[0] = 0
+  function lstm(pal, op) {
+    op = op || {};
+    var bf = op.bf != null ? op.bf : LB.f, wi = LW.i.slice();
+    if (op.wil != null) wi[3] = op.wil;
+    var T = pal.length, r = { pal: pal, T: T, k: [null], f: [null], i: [null], g: [null], o: [null], c: [0], h: [0], d: [] };
+    for (var t = 1; t <= T; t++) {
+      var k = LET.indexOf(pal[t - 1]), hp = r.h[t - 1];
+      var i = sig(pre(wi, hp, k) + LB.i), ff = sig(pre(LW.f, hp, k) + bf), g = th(pre(LW.g, hp, k) + LB.g), o = sig(pre(LW.o, hp, k) + LB.o);
+      var c = ff * r.c[t - 1] + i * g;
+      r.k.push(k); r.i.push(i); r.f.push(ff); r.g.push(g); r.o.push(o); r.c.push(c); r.h.push(o * th(c));
+    }
+    // senal hacia atras: d[t] = dh_T / dc_t (los grifos no miran h_(t-1); el candidato si, con peso LW.g[0])
+    r.d[T] = r.o[T] * (1 - th(r.c[T]) * th(r.c[T]));
+    for (t = T; t >= 2; t--) {
+      var dhdc = r.o[t - 1] * (1 - th(r.c[t - 1]) * th(r.c[t - 1]));
+      r.d[t - 1] = r.d[t] * (r.f[t] + r.i[t] * (1 - r.g[t] * r.g[t]) * LW.g[0] * dhdc);
+    }
+    r.hT = r.h[T];
+    r.resp = r.hT > 0 ? "h" : r.hT < 0 ? "o" : "?";
+    return r;
+  }
+  function gru(pal, estiloTorch) {
+    var T = pal.length, r = { pal: pal, T: T, k: [null], z: [null], r: [null], n: [null], h: [0] };
+    for (var t = 1; t <= T; t++) {
+      var k = LET.indexOf(pal[t - 1]), hp = r.h[t - 1];
+      var z = sig(pre(GW.z, hp, k)), rr = sig(pre(GW.r, hp, k)), n = th(GW.n[1 + k] + GW.n[0] * rr * hp);
+      var h = estiloTorch ? z * hp + (1 - z) * n : (1 - z) * hp + z * n;
+      r.k.push(k); r.z.push(z); r.r.push(rr); r.n.push(n); r.h.push(h);
+    }
+    r.hT = r.h[T];
+    r.resp = r.hT > 0 ? "h" : r.hT < 0 ? "o" : "?";
+    return r;
+  }
+
+  /* la RNN de rnn.html, con sus mismos pesos: senal de la ultima prediccion hacia cada estado */
+  var RP = {
+    Wxh: [[1, -1, 0, 0], [1, 0, -1, 0], [1, 0, 0, 0]],
+    Whh: [[0, -1, 0], [0, 0, -1], [0, 1, 0]],
+    bh: [0, 0, 1],
+    Why: [[0, 0, 0], [1, 1, 1], [-2, 0, 1], [1, -1, -2]],
+    by: [-1, 0, 1, 0]
+  };
+  function mv(M, v) { return M.map(function (fila) { var s = 0; for (var j = 0; j < v.length; j++) s += fila[j] * v[j]; return s; }); }
+  function mtv(M, v) { var out = []; for (var j = 0; j < M[0].length; j++) { var s = 0; for (var i = 0; i < M.length; i++) s += M[i][j] * v[i]; out.push(s); } return out; }
+  function norma(v) { return Math.sqrt(v.reduce(function (s, x) { return s + x * x; }, 0)); }
+  function rnnSenal(pal) {
+    var T = pal.length - 1;
+    if (T < 1) return null;
+    var hs = [[0, 0, 0]];
+    for (var t = 1; t <= T; t++) {
+      var k = LET.indexOf(pal[t - 1]), rec = mv(RP.Whh, hs[t - 1]);
+      hs.push(rec.map(function (v, i) { return th(RP.Wxh[i][k] + v + RP.bh[i]); }));
+    }
+    var y = mv(RP.Why, hs[T]).map(function (v, q) { return v + RP.by[q]; });
+    var m = Math.max.apply(null, y), e = y.map(function (v) { return Math.exp(v - m); }), s = e.reduce(function (a, b) { return a + b; }, 0);
+    var dy = e.map(function (v) { return v / s; });
+    dy[LET.indexOf(pal[T])] -= 1;
+    var g = mtv(RP.Why, dy), gs = [];
+    gs[T] = norma(g);
+    for (t = T; t >= 2; t--) {
+      var hh = hs[t];
+      g = mtv(RP.Whh, g.map(function (v, i) { return (1 - hh[i] * hh[i]) * v; }));
+      gs[t - 1] = norma(g);
+    }
+    return { T: T, g: gs };
+  }
+
+  /* ---------------- dibujo ---------------- */
+  function corto(v) {
+    var a = Math.abs(v);
+    if (a === 0) return "0";
+    if (a >= 0.01 && a < 1000) { var d = a >= 100 ? 0 : a >= 10 ? 1 : a >= 1 ? 2 : 3; return (v < 0 ? "−" : "") + (+a.toFixed(d)).toString(); }
+    var mm = v.toExponential(1).split("e");
+    return mm[0].replace("-", "−") + "e" + mm[1].replace("+", "").replace("-", "−");
+  }
+  function sub(n) { return String(n).split("").map(function (ch) { return String.fromCharCode(8320 + +ch); }).join(""); }
+  function caja(x, y, w, h, v, extra) {
+    var o = '<rect class="cero" x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="2"/>';
+    if (Math.abs(v) > 1e-9) o += '<rect class="' + (v > 0 ? "pos" : "neg") + '" fill-opacity="' + Math.min(1, Math.abs(v)).toFixed(3) + '" x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="2"/>';
+    return o + (extra || "");
+  }
+  var GCLS = { f: "gf", i: "gi", o: "go", z: "gi", r: "gr" };
+  var GLAB = { f: "kf", i: "ki", o: "ko", z: "ki", r: "kr" };
+  // o: r, tipo ("lstm"|"gru"), tVis, incognita, grifos [], verH, ocultarC (t), ocultarH (t), respuesta, cur (t)
+  function dibujarCelda(svg, o) {
+    var r = o.r, T = r.T, W = 460, x0 = 50, colW = (W - x0 - 8) / T, roomy = colW >= 30;
+    var gru = o.tipo === "gru";
+    var Y = { h: 14, b0: 32, b1: 60, g0: 74, g1: 112, cand: 126, tile: 140, resp: 182 };
+    var Hh = 194, out = "";
+    function cx(t) { return x0 + colW * (t - 0.5); }
+    // etiquetas
+    out += '<text class="t lab" x="2" y="' + Y.h + '">' + (gru ? "" : "h muestra") + '</text>';
+    out += '<text class="t lab" x="2" y="' + ((Y.b0 + Y.b1) / 2) + '">' + (gru ? "h (cinta)" : "c cinta") + '</text>';
+    out += '<text class="t lab" x="2" y="' + ((Y.g0 + Y.g1) / 2) + '">grifos</text>';
+    out += '<text class="t lab" x="2" y="' + Y.cand + '">' + (gru ? "h̃ cand." : "c̃ cand.") + '</text>';
+    // cinta
+    out += '<rect class="cinta' + (gru ? " gru" : "") + '" x="' + (x0 - 3) + '" y="' + Y.b0 + '" width="' + (W - x0 - 2) + '" height="' + (Y.b1 - Y.b0) + '" rx="8"/>';
+    var vals = gru ? r.h : r.c;
+    for (var t = 1; t <= T; t++) {
+      var c = cx(t), vis = t <= o.tVis && !o.incognita;
+      var xL = x0 + colW * (t - 1) + 1, wC = colW - 2;
+      if (vis) {
+        var ocC = o.ocultarC === t;
+        if (!ocC) out += caja(xL, Y.b0 + 3, wC, Y.b1 - Y.b0 - 6, vals[t]);
+        if (ocC) out += '<text class="t oc" x="' + c + '" y="' + ((Y.b0 + Y.b1) / 2) + '">?</text>';
+        else if (roomy) out += '<text class="t num" x="' + c + '" y="' + ((Y.b0 + Y.b1) / 2) + '">' + f(vals[t], 2) + '</text>';
+      } else if (o.incognita) {
+        out += '<text class="t oc" x="' + c + '" y="' + ((Y.b0 + Y.b1) / 2) + '">?</text>';
+      }
+      if (t > 1) out += '<line class="sep" x1="' + (x0 + colW * (t - 1)).toFixed(1) + '" x2="' + (x0 + colW * (t - 1)).toFixed(1) + '" y1="' + (Y.b0 + 2) + '" y2="' + (Y.b1 - 2) + '"/>';
+      // h que muestra (solo LSTM)
+      if (!gru && o.verH && vis) {
+        var s = Math.min(16, colW - 6);
+        if (o.ocultarH === t) out += '<text class="t oc" x="' + c + '" y="' + Y.h + '">?</text>';
+        else {
+          out += caja(c - s / 2, Y.h - 7, s, 14, r.h[t]);
+          if (roomy) out += '<text class="t num" x="' + c + '" y="' + (Y.h - 0) + '" style="font-size:7.6px">' + f(r.h[t], 2) + '</text>';
+        }
+      }
+      // grifos
+      var gs = o.grifos || [], ng = gs.length;
+      if (ng) {
+        var bw = Math.max(3, Math.min(9, (colW - 6) / ng - 2)), gap = 2, x1 = c - (ng * bw + (ng - 1) * gap) / 2, hg = Y.g1 - Y.g0;
+        gs.forEach(function (q, j) {
+          var xb = x1 + j * (bw + gap);
+          out += '<rect class="vacio" x="' + xb.toFixed(1) + '" y="' + Y.g0 + '" width="' + bw.toFixed(1) + '" height="' + hg + '" rx="1.5"/>';
+          if (vis) {
+            var v = r[q][t], hv = Math.max(0.8, v * hg);
+            out += '<rect class="' + GCLS[q] + '" x="' + xb.toFixed(1) + '" y="' + (Y.g1 - hv).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + hv.toFixed(1) + '" rx="1.5"/>';
+          } else if (o.incognita && j === 1) out += '<text class="t oc" x="' + c + '" y="' + ((Y.g0 + Y.g1) / 2) + '">?</text>';
+          if (t === 1) out += '<text class="t ' + GLAB[q] + '" x="' + (xb + bw / 2).toFixed(1) + '" y="' + (Y.g1 + 6) + '" style="font-size:8px">' + q + '</text>';
+        });
+      }
+      // candidato
+      if (vis && o.verCand !== false) {
+        var cv = gru ? r.n[t] : r.g[t], sc = Math.min(12, colW - 8);
+        out += caja(c - sc / 2, Y.cand - 6, sc, 12, cv);
+      }
+      // ficha
+      out += '<rect class="ficha" x="' + (c - Math.min(12, colW / 2 - 1)).toFixed(1) + '" y="' + Y.tile + '" width="' + Math.min(24, colW - 2).toFixed(1) + '" height="24" rx="5"/><text class="t letra" x="' + c.toFixed(1) + '" y="' + (Y.tile + 12) + '">' + r.pal[t - 1] + '</text>';
+      if (o.cur === t) out += '<rect class="cur" x="' + (x0 + colW * (t - 1) + 0.5).toFixed(1) + '" y="4" width="' + (colW - 1).toFixed(1) + '" height="' + (Y.tile + 26) + '" rx="4"/>';
+    }
+    // punta de la cinta
+    out += '<path class="punta" d="M' + (W - 2) + ',' + ((Y.b0 + Y.b1) / 2) + ' l-7,-6 l0,12 Z"/>';
+    if (o.respuesta) {
+      var p0 = r.pal[0], esperado = p0 === "h" || p0 === "o" ? p0 : null, dice = r.resp;
+      var cls = !esperado ? "neutro" : dice === esperado ? "bien" : "mal";
+      var txt = o.ocultarH === T ? "respuesta: ?" : "h" + sub(T) + " = " + f(r.hT, 4) + " → dice " + dice + (esperado ? (dice === esperado ? ", bien" : ", mal") : "");
+      out += '<text class="t ' + cls + '" x="' + (W - 4) + '" y="' + Y.resp + '">' + txt + '</text>';
+      if (!esperado) out += '<text class="t lab" x="2" y="' + Y.resp + '">la primera letra no es h ni o</text>';
+    }
+    svg.setAttribute("viewBox", "0 0 " + W + " " + Hh);
+    svg.innerHTML = out;
+  }
+  // paso 2: senal hacia atras en la RNN de rnn.html y en la cinta
+  function dibujarSenal(svg, pal, ocultarLstm) {
+    var W = 460, x0 = 50, T = pal.length, colW = (W - x0 - 8) / T, roomy = colW >= 30, out = "";
+    var rn = rnnSenal(pal), ls = lstm(pal);
+    var Y = { r0: 22, r1: 82, l0: 112, l1: 172, tile: 184 };
+    function cx(t) { return x0 + colW * (t - 0.5); }
+    out += '<text class="t lab" x="2" y="' + (Y.r0 - 12) + '">RNN de la página anterior: lo que le llega a cada h</text>';
+    out += '<text class="t lab" x="2" y="' + (Y.l0 - 12) + '">LSTM: lo que le llega a cada c por la cinta</text>';
+    var bw = Math.min(18, colW - 6);
+    for (var t = 1; t <= T; t++) {
+      var c = cx(t);
+      if (rn && t <= rn.T) {
+        var v = rn.g[t] / rn.g[rn.T], hb = Math.max(0.8, v * (Y.r1 - Y.r0));
+        out += '<rect class="barra atras" x="' + (c - bw / 2).toFixed(1) + '" y="' + (Y.r1 - hb).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + hb.toFixed(1) + '"/>';
+        if (roomy || t === 1 || t === rn.T) out += '<text class="t bw" x="' + c.toFixed(1) + '" y="' + (Y.r1 - hb - 6).toFixed(1) + '">' + corto(v) + '</text>';
+      }
+      var vl = ls.d[t] / ls.d[T];
+      if (ocultarLstm && t < T) {
+        out += '<rect class="barra fant" x="' + (c - bw / 2).toFixed(1) + '" y="' + (Y.l1 - 30) + '" width="' + bw.toFixed(1) + '" height="30"/>';
+        if (roomy || t === 1) out += '<text class="t oc" x="' + c.toFixed(1) + '" y="' + (Y.l1 - 38) + '">?</text>';
+      } else {
+        var hl = Math.max(0.8, vl * (Y.l1 - Y.l0));
+        out += '<rect class="barra atras" x="' + (c - bw / 2).toFixed(1) + '" y="' + (Y.l1 - hl).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + hl.toFixed(1) + '"/>';
+        if (roomy || t === 1 || t === T) out += '<text class="t bw" x="' + c.toFixed(1) + '" y="' + (Y.l1 - hl - 6).toFixed(1) + '">' + corto(vl) + '</text>';
+      }
+      out += '<rect class="ficha" x="' + (c - Math.min(12, colW / 2 - 1)).toFixed(1) + '" y="' + Y.tile + '" width="' + Math.min(24, colW - 2).toFixed(1) + '" height="24" rx="5"/><text class="t letra" x="' + c.toFixed(1) + '" y="' + (Y.tile + 12) + '">' + pal[t - 1] + '</text>';
+    }
+    out += '<line class="base" x1="' + x0 + '" x2="' + (W - 6) + '" y1="' + Y.r1 + '" y2="' + Y.r1 + '"/><line class="base" x1="' + x0 + '" x2="' + (W - 6) + '" y1="' + Y.l1 + '" y2="' + Y.l1 + '"/>';
+    svg.setAttribute("viewBox", "0 0 " + W + " 214");
+    svg.innerHTML = out;
+    return { rn: rn, ls: ls };
+  }
+  function leyenda(items) {
+    $("leyenda").innerHTML = items.map(function (it) { return '<span><i style="background:var(' + it[0] + ')"></i>' + it[1] + '</span>'; }).join("");
+  }
+
+  /* ---------------- estado del recorrido ---------------- */
+  var est = {
+    paso: 0, pal: PAL0, tVis: 1, bf: 4, wil: -4, celda: "lstm",
+    chk1: false, chk2: false, chk3: false, chk3b: false, chk4: false, chk5: false, chk6: false, chk6b: false, chk7: false, chk8: false
+  };
+  var MODOS = ["pred", "rnn", "cinta", "olvido", "entrada", "salida", "gru", "params"];
+  function modo() { return MODOS[est.paso]; }
+  var PALS = ["hllllllllla", "ollllllllla", "h" + new Array(23).join("l") + "a"];
+
+  function seg(el, items, fn) {
+    el.innerHTML = "";
+    items.forEach(function (it, i) {
+      var b = document.createElement("button");
+      b.type = "button"; b.textContent = it; b.setAttribute("data-i", i);
+      b.addEventListener("click", function () { fn(i); render(); });
+      el.appendChild(b);
+    });
+  }
+  function marcar(el, i) { [].forEach.call(el.children, function (b) { b.setAttribute("aria-pressed", +b.getAttribute("data-i") === i ? "true" : "false"); }); }
+  seg($("segPal"), ["hllllllllla", "ollllllllla", "h, 22 l, a"], function (i) { est.pal = PALS[i]; $("txtPal").value = ""; $("avisoPal").textContent = ""; est.tVis = Math.max(est.tVis, 1); });
+  seg($("segCel"), ["LSTM", "GRU"], function (i) { est.celda = i === 0 ? "lstm" : "gru"; });
+  $("txtPal").addEventListener("input", function () {
+    var v = this.value.toLowerCase().replace(/\s+/g, "");
+    if (!v) { $("avisoPal").textContent = ""; return; }
+    if (!/^[hola]+$/.test(v)) { $("avisoPal").textContent = "Solo las letras h, o, l, a."; return; }
+    if (v.length < 2) { $("avisoPal").textContent = "Hacen falta al menos dos letras."; return; }
+    $("avisoPal").textContent = "";
+    est.pal = v;
+    render();
+  });
+  $("btnLeer").addEventListener("click", function () {
+    var lim = est.chk3 ? palEf().length : 2;
+    if (est.tVis < lim) est.tVis++;
+    render();
+  });
+  $("btnVaciar").addEventListener("click", function () { est.tVis = 1; render(); });
+  function signo(v) { return v < 0 ? "−" + Math.abs(v) : String(v); }
+  $("rngBf").addEventListener("input", function () { est.bf = +this.value; $("valBf").textContent = signo(est.bf); render(); });
+  $("rngWil").addEventListener("input", function () { est.wil = +this.value; $("valWil").textContent = signo(est.wil); render(); });
+
+  // la palabra queda fija en hllllllllla mientras el chequeo del paso depende de sus numeros
+  function bloqueada() {
+    var m = modo();
+    return m === "pred" || (m === "rnn" && !est.chk2) || (m === "cinta" && !est.chk3) || (m === "olvido" && !est.chk4) ||
+      (m === "entrada" && !est.chk5) || (m === "salida" && !est.chk6) || m === "params";
+  }
+  function palEf() { return bloqueada() ? PAL0 : est.pal; }
+
+  function render() {
+    var m = modo(), pal = palEf();
+    $("escHint").textContent = HINTS[m]();
+    $("filaPal").hidden = bloqueada();
+    $("avisoPal").hidden = $("filaPal").hidden;
+    $("filaT").hidden = m !== "cinta";
+    $("filaBf").hidden = !(m === "olvido" && est.chk4);
+    $("filaWil").hidden = !(m === "entrada" && est.chk5);
+    $("filaCel").hidden = m !== "gru";
+    marcar($("segPal"), PALS.indexOf(est.pal));
+    marcar($("segCel"), est.celda === "lstm" ? 0 : 1);
+    var svg = $("esc"), r;
+    if (m === "rnn") {
+      dibujarSenal(svg, pal, !est.chk2);
+      leyenda([["--atras", "señal que llega, relativa a la del último paso"]]);
+    } else if (m === "params") {
+      r = lstm(PAL0);
+      dibujarCelda(svg, { r: r, tipo: "lstm", tVis: r.T, grifos: ["f", "i", "o"], verH: true, respuesta: true });
+      leyenda([["--gf", "olvido"], ["--gi", "entrada"], ["--go", "salida"], ["--pos", "positivo"], ["--neg", "negativo"]]);
+    } else if (m === "gru" && est.celda === "gru") {
+      r = gru(pal);
+      dibujarCelda(svg, { r: r, tipo: "gru", tVis: r.T, grifos: ["z", "r"], respuesta: true });
+      leyenda([["--gi", "actualización z"], ["--gr", "reinicio r"], ["--pos", "positivo"], ["--neg", "negativo"]]);
+    } else {
+      var op = m === "olvido" ? { bf: est.bf } : m === "entrada" ? { wil: est.wil } : {};
+      r = lstm(pal, op);
+      var o = { r: r, tipo: "lstm", tVis: r.T, grifos: ["f", "i", "o"], verH: true, respuesta: true };
+      if (m === "pred") { o.incognita = !est.chk1; o.respuesta = est.chk1; o.verH = est.chk1; }
+      if (m === "cinta") {
+        o.tVis = Math.min(est.tVis, r.T); o.grifos = ["f", "i"]; o.verH = false; o.respuesta = o.tVis === r.T; o.cur = o.tVis;
+        if (!est.chk3) o.ocultarC = 2;
+      }
+      if (m === "salida" && !est.chk6) o.ocultarH = r.T;
+      dibujarCelda(svg, o);
+      leyenda([["--gf", "olvido"], ["--gi", "entrada"], ["--go", "salida"], ["--pos", "positivo"], ["--neg", "negativo"]]);
+    }
+    panel(m, pal);
+    vivos(m, pal);
+  }
+  function filaTabla(cels) { return "<tr>" + cels.join("") + "</tr>"; }
+  function td(v, cls) { return '<td class="' + (cls || "") + '">' + v + '</td>'; }
+  function panel(m, pal) {
+    var h = "", t, r;
+    if (m === "pred") {
+      if (!est.chk1) h = '<div class="lectura-esc">Entran h, nueve l y la a. La cinta y los grifos aparecen cuando contestes la predicción.</div>';
+      else {
+        r = lstm(PAL0);
+        h = '<div class="lectura-esc">Con la <b>h</b>: entrada <span class="ki">' + f(r.i[1], 3) + '</span>, la cinta pasa a ' + f(r.c[1], 4) +
+          '.<br>Con cada <b>l</b>: olvido <span class="kf">' + f(r.f[2], 3) + '</span>, entrada <span class="ki">' + f(r.i[2], 3) + '</span>, salida <span class="ko">' + f(r.o[2], 3) + '</span>: la cinta baja despacio, de ' + f(r.c[1], 2) + ' a ' + f(r.c[10], 2) +
+          '.<br>Con la <b>a</b>: salida <span class="ko">' + f(r.o[11], 3) + '</span>. La celda muestra h₁₁ = ' + f(r.hT, 4) + ', positivo: dice <span class="si">h</span>.</div>';
+      }
+    } else if (m === "rnn") {
+      var rn = rnnSenal(pal), ls = lstm(pal);
+      h = '<div class="lectura-esc">«' + pal + '» · RNN: a h₁ le llega <span class="bw">' + (rn ? corto(rn.g[1] / rn.g[rn.T]) : "·") + '</span> de lo que le llega a h' + sub(rn ? rn.T : 1) +
+        (rn ? ' (unas ' + Math.round(rn.g[rn.T] / rn.g[1]) + ' veces menos)' : "") +
+        '<br>LSTM: a c₁ le llega ' + (est.chk2 ? '<span class="bw">' + f(ls.d[1] / ls.d[ls.T], 4) + '</span> de lo que le llega a c' + sub(ls.T) : '<span class="oc">?</span> (aparece con el chequeo)') + '</div>';
+    } else if (m === "cinta") {
+      r = lstm(pal);
+      var tv = Math.min(est.tVis, r.T), filas = "";
+      for (t = 1; t <= r.T; t++) {
+        var vis = t <= tv, oc = !est.chk3 && t === 2;
+        filas += filaTabla([td(t + " · " + pal[t - 1], t === tv ? "cur" : ""), td(vis ? f(r.f[t], 3) : "·", vis ? "" : "vacia"), td(vis ? f(r.i[t], 3) : "·", vis ? "" : "vacia"),
+          td(vis ? f(r.g[t], 4) : "·", vis ? "" : "vacia"), td(vis ? (oc ? "?" : f(r.c[t], 4)) : "·", vis ? (oc ? "oc" : "") : "vacia")]);
+      }
+      h = '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>t · entra</th><th>f</th><th>i</th><th>c̃</th><th>c</th></tr></thead><tbody>' + filas + '</tbody></table></div>';
+    } else if (m === "olvido") {
+      r = lstm(pal, { bf: est.bf });
+      h = '<div class="lectura-esc">b_f = ' + signo(est.bf) + ' → f = σ(' + signo(est.bf) + ') = <span class="kf">' + f(sig(est.bf), 4) + '</span> en cada paso' +
+        '<br>«' + pal + '»: la cinta termina en ' + f(r.c[r.T], 4) + ' · h' + sub(r.T) + ' = ' + f(r.hT, 4) + ' → dice <b>' + r.resp + '</b>' +
+        (est.chk4 ? "" : '<br>Después del chequeo vas a poder mover el sesgo.') + '</div>';
+    } else if (m === "entrada") {
+      r = lstm(pal, { wil: est.wil });
+      var il = sig(est.wil), gl = th(-1);
+      h = '<div class="lectura-esc">Con la h: i = <span class="ki">' + f(sig(4), 3) + '</span>, c̃ = ' + f(th(2), 3) + ' → escribe ' + f(sig(4) * th(2), 4) +
+        '<br>Con cada l: i = σ(' + signo(est.wil) + ') = <span class="ki">' + f(il, 4) + '</span>, c̃ ≈ ' + f(gl, 3) + ' → escribe ≈ ' + f(il * gl, 4) +
+        '<br>«' + pal + '»: h' + sub(r.T) + ' = ' + f(r.hT, 4) + ' → dice <b>' + r.resp + '</b></div>';
+    } else if (m === "salida") {
+      r = lstm(pal);
+      var fl = "";
+      for (t = 1; t <= r.T; t++) {
+        var ocH = !est.chk6 && t === r.T;
+        fl += filaTabla([td(t + " · " + pal[t - 1]), td(f(r.o[t], 3)), td(f(r.c[t], 4)), td(ocH ? "?" : f(r.h[t], 4), ocH ? "oc" : "")]);
+      }
+      h = '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>t · entra</th><th>o</th><th>c</th><th>h = o·tanh(c)</th></tr></thead><tbody>' + fl + '</tbody></table></div>';
+    } else if (m === "gru") {
+      var rl = lstm(pal), rg = gru(pal), fg = "";
+      if (est.celda === "gru") {
+        for (t = 1; t <= rg.T; t++) fg += filaTabla([td(t + " · " + pal[t - 1]), td(f(rg.z[t], 3)), td(f(1 - rg.z[t], 3)), td(f(rg.r[t], 3)), td(f(rg.n[t], 4)), td(f(rg.h[t], 4))]);
+        h = '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>t · entra</th><th>z</th><th>1 − z</th><th>r</th><th>h̃</th><th>h</th></tr></thead><tbody>' + fg + '</tbody></table></div>';
+      }
+      h += '<div class="lectura-esc">«' + pal + '» · LSTM: h' + sub(rl.T) + ' = ' + f(rl.hT, 4) + ', dice <b>' + rl.resp + '</b> · GRU: h' + sub(rg.T) + ' = ' + f(rg.hT, 4) + ', dice <b>' + rg.resp + '</b></div>';
+    } else if (m === "params") {
+      h = paramsHtml();
+    }
+    $("panel").innerHTML = h;
+    if (m === "params") ligarParams();
+  }
+  /* calculadora del paso 8 */
+  var PM = { m: 4, n: 1 };
+  function miles(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, " "); }
+  function paramsHtml() {
+    function fila(id, lab, min, max) { return '<div class="esc-fila"><span class="seg-lab" style="min-width:8em">' + lab + '</span><input type="range" id="pm' + id + '" min="' + min + '" max="' + max + '" step="1" value="' + PM[id] + '" aria-label="' + lab + '"><span class="val"><b>' + PM[id] + '</b></span></div>'; }
+    var m = PM.m, n = PM.n, ver = est.chk8, bloque = n * (m + n) + n;
+    function v(x) { return ver ? '<b>' + miles(x) + '</b>' : '<span class="oc">?</span>'; }
+    return fila("m", "entradas m", 1, 300) + fila("n", "unidades n", 1, 300) +
+      '<div class="formas" style="margin-top:8px">' +
+      '<span class="k">un bloque</span><span>n(m + n) + n = ' + miles(bloque) + '</span>' +
+      '<span class="k">LSTM</span><span>4 bloques: ' + v(4 * bloque) + ' · PyTorch, dos sesgos: ' + v(4 * (bloque + n)) + '</span>' +
+      '<span class="k">GRU</span><span>3 bloques: ' + v(3 * bloque) + ' · Keras y PyTorch, dos sesgos: ' + v(3 * (bloque + n)) + '</span>' +
+      '<span class="k">SimpleRNN</span><span>1 bloque: ' + miles(bloque) + '</span>' +
+      '</div><div class="lectura-esc">' + (ver ? "No dependen del largo de la secuencia ni del lote." : "Las cuentas de LSTM y GRU aparecen con el chequeo.") + '</div>';
+  }
+  function ligarParams() {
+    ["m", "n"].forEach(function (k) {
+      var el = $("pm" + k);
+      if (el) el.addEventListener("input", function () { PM[k] = +this.value; $("panel").innerHTML = paramsHtml(); ligarParams(); });
+    });
+  }
+  function vivos(m, pal) {
+    var r0 = lstm(PAL0);
+    // paso 3: la cuenta del ultimo paso leido
+    var rc = lstm(m === "cinta" ? pal : PAL0), t = Math.max(1, Math.min(est.tVis, rc.T)), oc = !est.chk3 && t === 2;
+    $("vivo3").innerHTML = "t = " + t + ", entra «" + rc.pal[t - 1] + "»: c" + sub(t) + " = " + f(rc.f[t], 3) + " · " + f(rc.c[t - 1], 4) + " + " + f(rc.i[t], 3) + " · (" + f(rc.g[t], 4) + ") = " + (oc ? "?" : f(rc.c[t], 4));
+    $("vivo4").innerHTML = "con la l: W_f · [h₁₀, x] + b_f = 0 + " + signo(est.bf) + " → f = σ(" + signo(est.bf) + ") = " + f(sig(est.bf), 4);
+    $("vivo5").innerHTML = "con la h: i = σ(4) = " + f(sig(4), 3) + ", c̃ = tanh(2) = " + f(th(2), 3) + " → i · c̃ = " + f(sig(4) * th(2), 4) + " · con la l: i = σ(" + signo(est.wil) + ") = " + f(sig(est.wil), 4);
+    $("vivo6").innerHTML = "con la a: o = σ(4) = " + f(r0.o[11], 3) + ", c₁₁ = " + f(r0.c[11], 4) + " → h₁₁ = " + f(r0.o[11], 3) + " · tanh(" + f(r0.c[11], 4) + ") = " + (est.chk6 ? f(r0.hT, 4) : "?");
+    var g0 = gru(PAL0);
+    $("vivo7").innerHTML = "«" + PAL0 + "», t = 2 (entra l): z = " + f(g0.z[2], 3) + ", r = " + f(g0.r[2], 3) + ", h̃ = tanh(−1 + " + f(g0.r[2], 3) + " · " + f(g0.h[1], 4) + ") = " + f(g0.n[2], 4) +
+      "<br>h₂ = " + f(1 - g0.z[2], 3) + " · " + f(g0.h[1], 4) + " + " + f(g0.z[2], 3) + " · (" + f(g0.n[2], 4) + ") = " + f(g0.h[2], 4);
+    $("vivo8").innerHTML = "celda de juguete, m = 4, n = 1: un bloque = 1 · (4 + 1) + 1 = 6 · LSTM 4 · 6 = 24 · GRU 3 · 6 = 18";
+  }
+  var HINTS = {
+    pred: function () { return est.chk1 ? "La cinta y los tres grifos, letra por letra." : "Primero la predicción."; },
+    rnn: function () { return est.chk2 ? "Prueba una palabra más larga." : "Arriba la RNN; abajo, la cinta."; },
+    cinta: function () { return "Lee la palabra de a una letra. La cinta es c."; },
+    olvido: function () { return est.chk4 ? "Mueve el sesgo de olvido." : "Primero la predicción."; },
+    entrada: function () { return est.chk5 ? "Mueve el peso de la l." : "Primero la predicción."; },
+    salida: function () { return "Arriba, lo que la celda muestra: h."; },
+    gru: function () { return "Cambia entre LSTM y GRU."; },
+    params: function () { return "Mueve las entradas y las unidades."; }
+  };
+  function entrar(i) {
+    est.paso = i;
+    var m = MODOS[i];
+    if (m === "cinta") est.tVis = est.chk3 ? Math.max(est.tVis, 1) : 1;
+    render();
+  }
+
+  /* ---------------- chequeos ---------------- */
+  var pasos;
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+  function mostrarTras(cls) { [].forEach.call(document.querySelectorAll("." + cls), function (e) { e.hidden = false; }); }
+  B.opcionMultiple(cuerpo("chk1"), {
+    pregunta: "En «hllllllllla», ¿qué tiene que hacer la memoria mientras llegan las l?",
+    opciones: ["Conservar lo que tiene y no escribir nada nuevo: las l no dicen nada sobre la primera letra", "Escribir cada l encima: lo último que llegó es lo más importante", "Borrarse, para dejar lugar a lo que viene", "Mostrar lo que guarda en cada paso, para no perderlo"],
+    correcta: 0,
+    pistas: [null, "Si cada l se escribe encima, al llegar la a la memoria solo sabe que hubo una l.", "Si se borra, al llegar la a no queda nada de la h.", "Mostrar no es guardar: la pregunta solo llega con la a. ¿Hace falta mostrar algo antes?"],
+    explicacion: "Con la primera letra: <b>escribir</b>. Con cada l: <b>conservar</b> sin escribir. Con la a: <b>mostrar</b>. Son tres decisiones distintas, y la LSTM tiene un grifo para cada una.",
+    alResolver: function () { est.chk1 = true; mostrarTras("tras-chk1"); if (est.paso === 0) render(); pasos.completar(0); }
+  });
+  B.numerico(cuerpo("chk2"), {
+    pregunta: "Por la cinta, de $c_{11}$ a $c_1$ hay 10 cruces, y cada uno multiplica por $f = 0.982$. ¿Qué fracción de la señal llega a $c_1$?",
+    respuesta: 0.834019,
+    tolerancia: 0.004,
+    pistas: ["Diez factores iguales: $0.982 \\cdot 0.982 \\cdots 0.982$.", "$0.982^{10}$. Si quieres hacerlo a mano: $0.982^2 = 0.964$, $0.964^2 = 0.929$, y así."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 0.982) < 0.002) return "Ese es un solo cruce. Son diez.";
+      if (Math.abs(v - 0.8493) < 0.003) return "Contaste nueve cruces: de $c_{11}$ a $c_1$ son diez.";
+      if (Math.abs(v - 0.82) < 0.003) return "Restaste $10 \\cdot 0.018$. Cada cruce multiplica, no resta.";
+      if (Math.abs(v - 0.0017) < 0.001 || Math.abs(v - 0.0024) < 0.001) return "Ese es el número de la RNN. Para la cinta, solo cuenta $f$.";
+      return null;
+    },
+    explicacion: "$0.982^{10} = 0.834$. En el escenario, la barra de $c_1$ marca 0.835: casi toda la señal llega. La diferencia mínima es un camino extra por $h$ que en esta celda casi no pesa. En la RNN, en cambio, llega una parte en cientos.",
+    alResolver: function () { est.chk2 = true; if (est.paso === 1) render(); pasos.completar(1); }
+  });
+  function cerrar3() { if (est.chk3 && est.chk3b) pasos.completar(2); }
+  B.numerico(cuerpo("chk3"), {
+    pregunta: "Después de la h, $c_1 = 0.9467$. Entra la primera l: $f_2 = 0.982$, $i_2 = 0.018$ y el candidato $\\tilde c_2 = -0.756$. ¿Cuánto vale $c_2$?",
+    respuesta: 0.9161,
+    tolerancia: 0.002,
+    pistas: ["Lo que se conserva: $f_2 \\cdot c_1 = 0.982 \\cdot 0.9467$.", "Lo que se escribe: $i_2 \\cdot \\tilde c_2 = 0.018 \\cdot (-0.756) = -0.0136$. Suma las dos partes."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 0.9297) < 0.002) return "Eso es solo lo que se conserva. Falta sumar lo que escribe la l, que es negativo.";
+      if (Math.abs(v + 0.0136) < 0.002) return "Eso es solo lo que escribe la l. Falta lo que se conserva de $c_1$.";
+      if (Math.abs(v - 0.9433) < 0.002) return "Revisa el signo: el candidato de la l es negativo.";
+      if (Math.abs(v + 0.7253) < 0.003 || Math.abs(v - 0.0170) < 0.002) return "Cruzaste los grifos: $f$ multiplica a la cinta vieja e $i$ al candidato.";
+      return null;
+    },
+    explicacion: "$0.9297 - 0.0136 = 0.9161$. La l deja una marca pequeña y negativa, y la cinta conserva casi todo. Ya puedes seguir leyendo la palabra.",
+    alResolver: function () { est.chk3 = true; if (est.paso === 2) render(); cerrar3(); }
+  });
+  B.opcionMultiple(cuerpo("chk3b"), {
+    pregunta: "Si $f = 0.982$ en cada paso y nada más escribe en la cinta, ¿cuánto queda del dato después de 100 pasos?",
+    opciones: ["Alrededor del 16 %: $0.982^{100} \\approx 0.16$", "Todo: en la cinta no hay pesos que multipliquen", "Nada: después de tantos pasos siempre se apaga del todo", "Alrededor del 98 %: se pierde un 0.018 una sola vez"],
+    correcta: 0,
+    pistas: [null, "No hay matrices de pesos, pero sí hay un factor en cada paso: el grifo de olvido.", "Con $f$ cerca de 1 se apaga despacio, no del todo: haz la cuenta.", "El grifo actúa en cada paso, no una sola vez."],
+    explicacion: "$0.982^{100} = 0.163$. Mucho mejor que una RNN, pero no es para siempre: el largo de la memoria lo decide $f$.",
+    alResolver: function () { est.chk3b = true; mostrarTras("tras-chk3b"); cerrar3(); }
+  });
+  B.opcionMultiple(cuerpo("chk4"), {
+    pregunta: "Si el sesgo de olvido baja a $b_f = 0$, el grifo queda en $\\sigma(0) = 0.5$ con cada letra. ¿Qué responde la celda al final de «hllllllllla»?",
+    opciones: ["o: el dato de la h se reduce a la mitad en cada paso y al final pesan más las marcas negativas de las l", "h, igual que antes, solo que con menos seguridad", "h: el olvido no cambia lo que ya se escribió", "No responde: la cinta queda exactamente en cero"],
+    correcta: 0,
+    pistas: [null, "$0.5^{10}$ es menos de una milésima. ¿Qué es más grande al final: lo que queda de la h o la última marca de una l?", "El olvido multiplica a todo lo que hay en la cinta en cada paso, también a lo que escribió la h.", "Cada l sigue escribiendo su marca, $0.018 \\cdot (-0.756)$: la cinta no queda en cero."],
+    explicacion: "Lo que queda de la h es $0.95 \\cdot 0.5^{10} \\approx 0.0009$; las marcas de las l llevan la cinta a −0.027, y con la a queda en −0.013. La celda dice o. Mueve el deslizador para verlo.",
+    alResolver: function () { est.chk4 = true; mostrarTras("tras-chk4"); if (est.paso === 3) render(); pasos.completar(3); }
+  });
+  B.opcionMultiple(cuerpo("chk5"), {
+    pregunta: "Si el peso de la l en el grifo de entrada sube de −4 a +4 (entonces $i = 0.982$ con cada l), ¿qué pasa con «hllllllllla»?",
+    opciones: ["Cada l escribe casi entero su −0.756 y en pocos pasos tapa a la h: la celda dice o", "Nada: el olvido sigue en 0.982 y conserva la h", "La celda dice h con más seguridad, porque entra más información", "La cinta se sale del intervalo [−1, 1] y la celda deja de funcionar"],
+    correcta: 0,
+    pistas: [null, "El olvido conserva lo que hay, pero la suma de cada paso agrega $0.982 \\cdot (-0.756)$: mucho más que la marca de antes.", "Entra más, sí, pero lo que entra es la l, que empuja la cinta hacia negativo.", "La cinta puede salirse de [−1, 1]; nada se rompe por eso. Lo acotado es $\\tanh(c)$."],
+    explicacion: "Con la entrada abierta, cada l suma −0.74: la cinta se vuelve negativa en dos pasos y sigue bajando, y $h_{11} = -0.98$. El grifo de entrada protege la cinta de lo que no importa.",
+    alResolver: function () { est.chk5 = true; mostrarTras("tras-chk5"); if (est.paso === 4) render(); pasos.completar(4); }
+  });
+  function cerrar6() { if (est.chk6 && est.chk6b) pasos.completar(5); }
+  B.numerico(cuerpo("chk6"), {
+    pregunta: "Al final de «hllllllllla», $c_{11} = 0.6778$ y el grifo de salida vale $o_{11} = 0.982$. ¿Cuánto vale $h_{11}$?",
+    respuesta: 0.5795,
+    tolerancia: 0.002,
+    pistas: ["$h_{11} = o_{11}\\cdot\\tanh(c_{11})$.", "$\\tanh(0.6778) = 0.5901$. Multiplica por 0.982."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 0.6656) < 0.002) return "Falta la tanh: $h = o\\cdot\\tanh(c)$, no $o\\cdot c$.";
+      if (Math.abs(v - 0.5901) < 0.002) return "Eso es $\\tanh(c_{11})$. Falta multiplicar por el grifo de salida.";
+      if (Math.abs(v - 0.0106) < 0.002) return "Usaste el grifo de salida de una l. Con la a vale 0.982.";
+      return null;
+    },
+    explicacion: "$0.982 \\cdot 0.5901 = 0.5795$: positivo, así que la celda dice h. Durante las l, el mismo cálculo daba alrededor de 0.01, porque la salida estaba casi cerrada.",
+    alResolver: function () { est.chk6 = true; if (est.paso === 5) render(); cerrar6(); }
+  });
+  B.opcionMultiple(cuerpo("chk6b"), {
+    pregunta: "Durante las l, $h_t \\approx 0.01$. ¿La celda olvidó la h?",
+    opciones: ["No: la memoria está en la cinta $c$, que sigue alrededor de 0.9 a 0.7; $h$ es lo que muestra, y el grifo de salida está casi cerrado", "Sí: $h$ es la memoria y está casi en cero", "Sí, y la recupera cuando llega la a", "No, porque $h$ y $c$ son el mismo número"],
+    correcta: 0,
+    pistas: [null, "Mira la cinta del escenario durante las l: ¿está vacía?", "Si la hubiera olvidado, la a no tendría de dónde recuperarla. ¿Dónde estaba guardada?", "Mira la tabla: $c$ y $h$ tienen valores muy distintos en cada paso."],
+    explicacion: "La LSTM separa lo que guarda ($c$) de lo que muestra ($h$). En la RNN eran lo mismo.",
+    alResolver: function () { est.chk6b = true; mostrarTras("tras-chk6b"); cerrar6(); }
+  });
+  B.opcionMultiple(cuerpo("chk7"), {
+    pregunta: "En la GRU, ¿qué hace el papel del grifo de olvido de la LSTM?",
+    opciones: ["$1 - z_t$: cuando $z_t$ es pequeño, se conserva casi todo $h_{t-1}$", "$r_t$, el de reinicio, como dice la UD4", "$z_t$: el de actualización", "Nada: la GRU no puede conservar memoria"],
+    correcta: 0,
+    pistas: [null, "El reinicio solo actúa dentro del candidato $\\tilde h_t$. Mira la última ecuación: ¿qué multiplica a $h_{t-1}$?", "$z_t$ multiplica al candidato: es el grifo de entrada. Lo que multiplica a $h_{t-1}$ es otra cosa.", "Mira el escenario con la GRU: la h se conserva durante las l."],
+    explicacion: "En $h_t = (1-z_t)\\,h_{t-1} + z_t\\,\\tilde h_t$, lo viejo se multiplica por $1 - z_t$ y lo nuevo por $z_t$: olvido y entrada atados, sumando 1. Con «hllllllllla», $z = 0.018$ durante las l y $1 - z = 0.982$.",
+    alResolver: function () { est.chk7 = true; if (est.paso === 6) render(); pasos.completar(6); }
+  });
+  B.numerico(cuerpo("chk8"), {
+    pregunta: "El cuaderno Demo 2 de la UD4 tiene una <code>LSTM(128)</code> de Keras que recibe vectores de 64 en cada paso. ¿Cuántos parámetros tiene?",
+    respuesta: 98816,
+    tolerancia: 0,
+    pistas: ["Un bloque: $128\\cdot(64 + 128) + 128$.", "Son cuatro bloques: $4\\cdot(24\\,576 + 128)$."],
+    diagnostico: function (v) {
+      if (v === 24704) return "Eso es un bloque. La LSTM tiene cuatro: $i$, $f$, $\\tilde c$ y $o$.";
+      if (v === 98432) return "Le pusiste un solo sesgo de 128 a todo. Cada bloque tiene el suyo: 4 · 128.";
+      if (v === 98304) return "Faltan los sesgos: 4 · 128 = 512.";
+      if (v === 33280 || v === 32768) return "Falta la parte recurrente: cada bloque también mira $h_{t-1}$, con 128 · 128 pesos.";
+      if (v === 99328) return "Esa es la cuenta de PyTorch, con dos sesgos por bloque. Keras usa uno.";
+      if (v === 74112) return "Esa es la GRU clásica, con tres bloques. La LSTM tiene cuatro.";
+      return null;
+    },
+    explicacion: "$4\\cdot(128\\cdot192 + 128) = 4\\cdot24\\,704 = 98\\,816$: lo que imprime el <code>model.summary()</code> de la Demo 2. Mueve los deslizadores con $m = 64$ y $n = 128$ para comprobarlo.",
+    alResolver: function () { est.chk8 = true; if (est.paso === 7) render(); pasos.completar(7); }
+  });
+
+  pasos = B.pasos($("recorrido"), {
+    concepto: C,
+    alEntrar: function (i) { entrar(i); },
+    alTerminar: function () { location.hash = "retos"; }
+  });
+  if (pasos.hecho(0)) { est.chk1 = true; mostrarTras("tras-chk1"); }
+  if (pasos.hecho(1)) est.chk2 = true;
+  if (pasos.hecho(2)) { est.chk3 = est.chk3b = true; mostrarTras("tras-chk3b"); }
+  if (pasos.hecho(3)) { est.chk4 = true; mostrarTras("tras-chk4"); }
+  if (pasos.hecho(4)) { est.chk5 = true; mostrarTras("tras-chk5"); }
+  if (pasos.hecho(5)) { est.chk6 = est.chk6b = true; mostrarTras("tras-chk6b"); }
+  if (pasos.hecho(6)) est.chk7 = true;
+  if (pasos.hecho(7)) est.chk8 = true;
+  entrar(0);
+
+  /* ---------------- hipotesis inicial ---------------- */
+  (function () {
+    var ta = $("hipotesis"), tm = null;
+    ta.value = B.nota("lstm-gru", "hipotesis");
+    function cita() {
+      var v = ta.value.trim(), el = $("citaHipo");
+      el.hidden = !v;
+      if (v) { el.textContent = ""; el.appendChild(document.createTextNode("Al principio escribiste: «" + v + "». Ahora ya lo viste: la LSTM toma tres decisiones en cada paso, cuánto conservar, cuánto escribir y cuánto mostrar, y las toma con números entre 0 y 1. ¿Tu idea se parecía? ¿Habías separado lo que se guarda de lo que se muestra?")); }
+    }
+    cita();
+    ta.addEventListener("input", function () {
+      clearTimeout(tm);
+      tm = setTimeout(function () { B.nota("lstm-gru", "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; cita(); }, 500);
+    });
+  })();
+
+  /* ---------------- marcadores de estado de retos ---------------- */
+  function pintarEstados() {
+    [].forEach.call(document.querySelectorAll("[data-reto]"), function (el) {
+      var ok = C.retoOk(el.getAttribute("data-reto"));
+      el.textContent = ok ? "resuelto" : "pendiente";
+      el.classList.toggle("ok", ok);
+    });
+  }
+  C.alCambiar(pintarEstados);
+
+  /* ---------------- reto: ojo clinico ---------------- */
+  (function () {
+    var cont = $("ojo");
+    cont.innerHTML = '<div class="ronda"></div><div class="ojo-dato"></div><p class="ojo-q"></p><div class="ojo-opts"></div>' +
+      '<div class="fb" aria-live="polite"></div><div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    var OPS = ["Conserva lo que tenía y casi no escribe", "Borra lo que tenía y escribe lo nuevo", "Se vacía: borra y no escribe", "Suma lo nuevo a lo que tenía"];
+    var ronda, aciertosO, respondida, actual;
+    function azar(a) { return a[Math.floor(Math.random() * a.length)]; }
+    function generar() {
+      var tipo = Math.floor(Math.random() * 4);
+      var fA = tipo === 0 || tipo === 3, iA = tipo === 1 || tipo === 3;
+      var ff = fA ? azar([0.95, 0.97, 0.98, 0.99]) : azar([0.01, 0.02, 0.03, 0.05]);
+      var ii = iA ? azar([0.95, 0.97, 0.98, 0.99]) : azar([0.01, 0.02, 0.03, 0.05]);
+      var cp = azar([-0.9, -0.7, -0.6, 0.5, 0.6, 0.8]), g = azar([-0.8, -0.5, 0.4, 0.7, 0.9]);
+      return { tipo: tipo, f: ff, i: ii, cp: cp, g: g, c: ff * cp + ii * g };
+    }
+    function nueva() { ronda = 0; aciertosO = 0; mostrar(); }
+    function mostrar() {
+      respondida = false;
+      actual = generar();
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 5 · aciertos " + aciertosO;
+      cont.querySelector(".ojo-dato").innerHTML = "c<sub>t−1</sub> = " + f(actual.cp, 2) + " · olvido f = " + f(actual.f, 2) + " · entrada i = " + f(actual.i, 2) + " · candidato c̃ = " + f(actual.g, 2);
+      cont.querySelector(".ojo-q").textContent = "¿Qué le pasa a la cinta en este paso?";
+      cont.querySelector(".ojo-opts").innerHTML = OPS.map(function (o, i) { return '<button type="button" class="opt" data-v="' + i + '">' + o + '</button>'; }).join("");
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+    }
+    cont.querySelector(".ojo-opts").addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || respondida) return;
+      respondida = true;
+      var ok = +b.getAttribute("data-v") === actual.tipo;
+      if (ok) aciertosO++;
+      b.classList.add(ok ? "ok" : "mal");
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (x) { x.disabled = true; if (+x.getAttribute("data-v") === actual.tipo) x.classList.add("ok"); });
+      var POR = ["El olvido está abierto y la entrada cerrada.", "El olvido está cerrado y la entrada abierta.", "Los dos grifos están cerrados.", "Los dos grifos están abiertos."];
+      cont.querySelector(".fb").innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No.</span> ') + POR[actual.tipo] + " c<sub>t</sub> = " + f(actual.f, 2) + " · " + f(actual.cp, 2) + " + " + f(actual.i, 2) + " · " + f(actual.g, 2) + " = " + f(actual.c, 4) + ".";
+      var sig2 = cont.querySelector(".sig");
+      sig2.hidden = false;
+      if (ronda === 4) {
+        var aprobo = aciertosO >= 4;
+        C.reto("ojo", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertosO + " de 5" + (aprobo ? ". Aprobado." : ". Necesitas 4 para aprobar.");
+        sig2.textContent = "Otra tanda";
+      } else sig2.textContent = "Siguiente ronda";
+    });
+    cont.querySelector(".sig").addEventListener("click", function () { if (ronda === 4) nueva(); else { ronda++; mostrar(); } });
+    nueva();
+  })();
+
+  /* ---------------- reto: construir ---------------- */
+  (function () {
+    var K = { bf: 4, wil: -4, n: 9 }, logrados = [false, false, false], avisado = false, nPista = 0;
+    function hT(n) { return lstm("h" + new Array(n + 1).join("l") + "a", { bf: K.bf, wil: K.wil }).hT; }
+    var OBJ = [
+      ["Con 9 l («hllllllllla»), haz que la celda se equivoque.", function () { return hT(9) < 0; }],
+      ["Que acierte con 60 l.", function () { return hT(60) > 0; }],
+      ["Que acierte con 150 l y con seguridad: h_T mayor que 0.5.", function () { return hT(150) > 0.5; }]
+    ];
+    var ul = $("objetivos");
+    OBJ.forEach(function (o) { var li = document.createElement("li"); li.innerHTML = '<span class="m"></span><span>' + o[0] + '</span>'; ul.appendChild(li); });
+    function plot() {
+      var pal = "h" + new Array(K.n + 1).join("l") + "a", r = lstm(pal, { bf: K.bf, wil: K.wil });
+      var po = "o" + new Array(K.n + 1).join("l") + "a", ro = lstm(po, { bf: K.bf, wil: K.wil });
+      var W = 460, H = 150, x0 = 30, y0 = 12, y1 = 132, lo = -1.2, hi = 1.2;
+      var all = r.c.concat(ro.c);
+      lo = Math.min(lo, Math.min.apply(null, all)); hi = Math.max(hi, Math.max.apply(null, all));
+      function X(t) { return x0 + (W - x0 - 8) * t / r.T; }
+      function Yv(v) { return y1 - (v - lo) / (hi - lo) * (y1 - y0); }
+      function camino(rr) { return rr.c.map(function (v, t) { return (t ? "L" : "M") + X(t).toFixed(1) + "," + Yv(v).toFixed(1); }).join(" "); }
+      var out = '<line class="eje" x1="' + x0 + '" x2="' + (W - 8) + '" y1="' + Yv(0).toFixed(1) + '" y2="' + Yv(0).toFixed(1) + '"/>';
+      out += '<text class="t labc" x="14" y="' + Yv(0).toFixed(1) + '">0</text><text class="t labc" x="14" y="' + Yv(1).toFixed(1) + '">1</text><text class="t labc" x="14" y="' + Yv(-1).toFixed(1) + '">−1</text>';
+      out += '<line class="base" x1="' + x0 + '" x2="' + (W - 8) + '" y1="' + Yv(1).toFixed(1) + '" y2="' + Yv(1).toFixed(1) + '"/><line class="base" x1="' + x0 + '" x2="' + (W - 8) + '" y1="' + Yv(-1).toFixed(1) + '" y2="' + Yv(-1).toFixed(1) + '"/>';
+      out += '<path class="linea-c o" d="' + camino(ro) + '"/><path class="linea-c" d="' + camino(r) + '"/>';
+      out += '<text class="t lab" x="' + (x0 + 4) + '" y="' + (H - 6) + '">cinta c a lo largo de la palabra · línea llena: empieza con h · cortada: con o</text>';
+      $("kSvg").setAttribute("viewBox", "0 0 " + W + " " + H);
+      $("kSvg").innerHTML = out;
+      $("kLect").innerHTML = "f = σ(" + signo(K.bf) + ") = " + f(sig(K.bf), 4) + " · entrada con la l = σ(" + signo(K.wil) + ") = " + f(sig(K.wil), 4) +
+        "<br>h + " + K.n + " l + a: h_T = " + f(r.hT, 4) + ' → dice <span class="' + (r.resp === "h" ? "si" : "no") + '">' + r.resp + '</span> · o + ' + K.n + " l + a: h_T = " + f(ro.hT, 4) + ' → dice <span class="' + (ro.resp === "o" ? "si" : "no") + '">' + ro.resp + '</span>';
+    }
+    function pintar() {
+      $("kBfV").textContent = signo(K.bf); $("kWilV").textContent = signo(K.wil); $("kNV").textContent = K.n;
+      plot();
+      OBJ.forEach(function (o, k) { if (!logrados[k] && o[1]()) logrados[k] = true; ul.children[k].classList.toggle("hecho", logrados[k]); });
+      if (!avisado && logrados.every(Boolean)) { avisado = true; C.reto("construir", true); }
+    }
+    $("kBf").addEventListener("input", function () { K.bf = +this.value; pintar(); });
+    $("kWil").addEventListener("input", function () { K.wil = +this.value; pintar(); });
+    $("kN").addEventListener("input", function () { K.n = +this.value; pintar(); });
+    var PISTAS = [
+      "Para el primero: baja el sesgo de olvido. Con f = 0.5 el dato se va a la mitad en cada paso.",
+      "Con los valores de la página, la celda aguanta hasta 44 l. Para llegar a 60 hay dos caminos: abrir más el olvido o cerrar más la entrada de la l, para que sus marcas pesen menos.",
+      "Para 150 l con seguridad hacen falta los dos a la vez: por ejemplo, sesgo de olvido 8 y peso de la l −6. Con el olvido muy abierto, la cinta acumula todas las marcas de las l; cerrar la entrada las achica."
+    ];
+    $("kPista").addEventListener("click", function () {
+      $("kPistaTxt").innerHTML = PISTAS.slice(0, nPista + 1).map(function (p, k) { return "<b>Pista " + (k + 1) + ".</b> " + p; }).join("<br>");
+      nPista = Math.min(nPista + 1, PISTAS.length - 1);
+    });
+    pintar();
+  })();
+
+  /* ---------------- reto: a mano ---------------- */
+  (function () {
+    var D;
+    function azar(a) { return a[Math.floor(Math.random() * a.length)]; }
+    function generar() {
+      D = { cp: azar([-0.8, -0.5, 0.4, 0.6, 1.2]), f: azar([0.2, 0.5, 0.8, 0.9]), i: azar([0.1, 0.5, 0.8, 1]), g: azar([-0.6, -0.5, 0.4, 0.5, 0.9]) };
+      D.a = D.f * D.cp; D.b = D.i * D.g; D.c = D.a + D.b;
+      $("manoDatos").innerHTML = '<table class="datos-mano"><tr><th>c_(t−1)</th><th>f_t</th><th>i_t</th><th>c̃_t</th></tr><tr><td>' + f(D.cp, 1) + '</td><td>' + f(D.f, 1) + '</td><td>' + f(D.i, 1) + '</td><td>' + f(D.g, 1) + '</td></tr></table>';
+    }
+    generar();
+    B.numerico($("mano"), {
+      pregunta: function () { return "¿Cuánto vale $c_t$?"; },
+      respuesta: function () { return D.c; },
+      tolerancia: 0.001,
+      pistas: [
+        function () { return "Lo que se conserva: $f_t\\,c_{t-1} = " + f(D.f, 1) + "\\cdot(" + f(D.cp, 1) + ") = " + f(D.a, 2) + "$."; },
+        function () { return "Lo que se escribe: $i_t\\,\\tilde c_t = " + f(D.i, 1) + "\\cdot(" + f(D.g, 1) + ") = " + f(D.b, 2) + "$."; },
+        function () { return "Suma las dos partes."; }
+      ],
+      diagnostico: function (v) {
+        if (Math.abs(v - (D.f * D.g + D.i * D.cp)) < 0.001 && Math.abs(D.c - (D.f * D.g + D.i * D.cp)) > 0.001) return "Cruzaste los grifos: $f$ va con la cinta vieja e $i$ con el candidato.";
+        if (Math.abs(v - D.a) < 0.001 && Math.abs(D.b) > 0.001) return "Eso es solo lo que se conserva. Falta lo que se escribe.";
+        if (Math.abs(v - D.b) < 0.001 && Math.abs(D.a) > 0.001) return "Eso es solo lo que se escribe. Falta lo que se conserva.";
+        if (Math.abs(v - (D.cp + D.b)) < 0.001 && D.f !== 1) return "La cinta vieja también se multiplica por $f_t$.";
+        return null;
+      },
+      explicacion: function () { return "$" + f(D.a, 2) + " + (" + f(D.b, 2) + ") = " + f(D.c, 2) + "$. Lo que la celda mostraría depende además del grifo de salida: $h_t = o_t\\tanh(" + f(D.c, 2) + ")$."; },
+      reintentable: true,
+      antesDeReintentar: generar,
+      alResolver: function (ok) { C.reto("mano", ok); }
+    });
+  })();
+
+  /* ---------------- reto: cazar el error ---------------- */
+  B.cazarError($("error"), {
+    variantes: [
+      {
+        intro: "Un paso de la celda de la página: entra la primera l, con $c_1 = 0.9467$, $f_2 = 0.982$, $i_2 = 0.018$, $\\tilde c_2 = -0.756$ y $o_2 = 0.018$.",
+        lineas: [
+          "f_2\\,c_1 = 0.982 \\cdot 0.9467 = 0.9297",
+          "i_2\\,\\tilde c_2 = 0.018 \\cdot (-0.756) = -0.0136",
+          "c_2 = 0.9297 - 0.0136 = 0.9161",
+          "h_2 = \\tanh(c_2) = 0.7240"
+        ],
+        erronea: 3,
+        explicacion: "Falta el grifo de salida: $h_2 = o_2\\tanh(c_2) = 0.018 \\cdot 0.7240 = 0.0130$. Con la salida cerrada, la celda guarda 0.92 y muestra 0.01."
+      },
+      {
+        intro: "Parámetros de una <code>LSTM(128)</code> de Keras que recibe vectores de 64.",
+        lineas: [
+          "\\text{pesos de un bloque: } 128\\cdot(64 + 128) = 24\\,576",
+          "\\text{cuatro bloques: } 4 \\cdot 24\\,576 = 98\\,304",
+          "\\text{sesgos: } 128",
+          "\\text{total} = 98\\,432"
+        ],
+        erronea: 2,
+        explicacion: "Cada bloque tiene su propio sesgo: $4\\cdot128 = 512$. El total es 98 816, el del <code>model.summary()</code> de la Demo 2."
+      },
+      {
+        intro: "Las ecuaciones de una GRU, con la convención de esta página.",
+        lineas: [
+          "z_t = \\sigma\\big(W_z[h_{t-1},\\, x_t] + b_z\\big)",
+          "r_t = \\sigma\\big(W_r[h_{t-1},\\, x_t] + b_r\\big)",
+          "\\tilde h_t = \\tanh\\big(W_h[r_t \\odot h_{t-1},\\, x_t] + b_h\\big)",
+          "h_t = r_t \\odot h_{t-1} + (1 - r_t) \\odot \\tilde h_t"
+        ],
+        erronea: 3,
+        explicacion: "La mezcla de lo viejo y lo nuevo la hace la actualización: $h_t = (1 - z_t)\\odot h_{t-1} + z_t\\odot\\tilde h_t$. El reinicio solo actúa dentro del candidato. Es la misma confusión de la UD4, que le atribuye al reinicio decidir cuánto de la memoria se olvida."
+      }
+    ],
+    alResolver: function (ok) { C.reto("error", ok); }
+  });
+
+  /* ---------------- retos de propiedades ---------------- */
+  function prop(id, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple($(id), cfg);
+  }
+  prop("prop1", {
+    pregunta: "¿Por qué la señal cruza muchos pasos de la cinta sin apagarse, cuando en una RNN se apaga?",
+    opciones: ["Porque de $c_{t-1}$ a $c_t$ solo se multiplica por $f_t$: en ese camino no hay matriz de pesos ni derivada de tanh", "Porque la LSTM no usa tanh", "Porque las compuertas siempre valen 1", "Porque $c_t$ está acotado entre −1 y 1"],
+    correcta: 0,
+    pistas: [null, "Usa dos: en el candidato y en $\\tanh(c_t)$. Lo que importa es que no hay ninguna en el camino de la cinta.", "El olvido puede valer 0.5 o 0.02: en el paso 4 lo bajaste. Cuando vale cerca de 1, la señal pasa.", "$c_t$ no está acotado; lo acotado es $\\tanh(c_t)$. Y eso no tiene que ver con que la señal pase."],
+    explicacion: "La derivada de $c_t$ respecto de $c_{t-1}$, por la cinta, es $f_t$. Si la red aprende a dejar $f$ cerca de 1, la señal cruza cientos de pasos. En la RNN cada cruce multiplica por $\\mathrm{diag}(1-h_t^2)\\,W_{hh}$."
+  });
+  prop("prop2", {
+    pregunta: "¿Por qué los grifos usan sigmoide y el candidato usa tanh?",
+    opciones: ["Un grifo es una fracción de apertura, entre 0 y 1; el candidato es contenido con signo, entre −1 y 1", "Por costumbre: se pueden intercambiar sin cambiar nada", "Porque la sigmoide no se satura", "Porque tanh es más rápida de calcular"],
+    correcta: 0,
+    pistas: [null, "Con tanh, un grifo podría valer −1 y cambiar el signo de toda la memoria. ¿Tiene sentido un grifo abierto «al revés»?", "La sigmoide se satura en los dos extremos; justamente por eso un grifo puede quedar bien abierto o bien cerrado.", "Cuestan casi lo mismo. La razón está en el intervalo de cada una."],
+    explicacion: "Multiplicar por un número entre 0 y 1 es dejar pasar una parte: eso es un grifo. El contenido necesita signo, para escribir h hacia positivo y o hacia negativo."
+  });
+  prop("prop3", {
+    pregunta: "Al empezar el entrenamiento, con pesos pequeños, todos los grifos valen cerca de $\\sigma(0) = 0.5$. Keras inicia el sesgo de olvido en 1 (<code>unit_forget_bias=True</code>). ¿Para qué?",
+    opciones: ["Para que el olvido empiece en $\\sigma(1) = 0.73$: la memoria dura más desde el principio y la señal recorre más pasos mientras la red aprende", "Para que la celda olvide todo al principio y empiece limpia", "Para que la compuerta de olvido no se entrene", "Porque PyTorch hace lo mismo y así los modelos coinciden"],
+    correcta: 0,
+    pistas: [null, "Un sesgo positivo abre el grifo de olvido, y abierto quiere decir que conserva.", "Es solo un valor inicial; después se entrena como cualquier sesgo.", "PyTorch inicia todos los sesgos al azar cerca de 0: si quieres el 1, lo pones a mano."],
+    explicacion: "Con $f = 0.5$, la señal a 10 pasos llega a $0.5^{10} \\approx 0.001$; con $f = 0.73$, a $0.73^{10} \\approx 0.04$. Empezar con el olvido algo abierto ayuda a que la red descubra que le conviene recordar. Es la recomendación de Jozefowicz y otros (2015)."
+  });
+  prop("prop4", {
+    pregunta: "Una LSTM y una GRU con las mismas unidades y entradas (cuenta clásica, un sesgo por bloque). ¿Qué fracción de los parámetros de la LSTM tiene la GRU?",
+    opciones: ["3/4: tres bloques contra cuatro", "1/2: dos compuertas contra cuatro", "2/3: dos compuertas contra tres", "La misma: cambia solo cómo se combinan"],
+    correcta: 0,
+    pistas: [null, "La LSTM tiene tres compuertas, no cuatro; y el candidato también tiene pesos.", "Cuenta los bloques de pesos, no las compuertas: el candidato tiene los suyos en las dos.", "La GRU tiene un bloque menos: no hay grifo de salida ni cinta aparte."],
+    explicacion: "Cada bloque cuesta $n(m+n)+n$. LSTM: 4 (i, f, c̃, o). GRU: 3 (z, r, h̃). Con la celda de juguete, 24 contra 18."
+  });
+
+  /* ---------------- formula de memoria ---------------- */
+  B.ordenar($("formula"), {
+    piezas: ["c_t", "=", "f_t \\odot c_{t-1}", "+", "i_t \\odot \\tilde c_t"],
+    distractores: ["o_t \\odot c_{t-1}", "f_t \\odot \\tilde c_t", "W_{hh}\\,c_{t-1}"],
+    soluciones: [[0, 1, 2, 3, 4], [0, 1, 4, 3, 2]],
+    explicacion: "El olvido multiplica a la cinta vieja, la entrada al candidato, y se suman. El grifo de salida no toca la cinta: solo decide cuánto se muestra en $h_t = o_t\\odot\\tanh(c_t)$.",
+    alResolver: function (ok) { C.reto("formula", ok); }
+  });
+
+  /* ---------------- vida real ---------------- */
+  (function () {
+    var CODIGO = {"py": [[null, "import numpy as np"],
+        [null, ""],
+        ["pesos", "letras = [\"h\", \"o\", \"l\", \"a\"]"],
+        [null, "# una fila por compuerta: [peso de h_(t-1), pesos de h, o, l, a]"],
+        ["pesos", "W = {\"i\": [0, 4, 4, -4, -4],     # entrada"],
+        ["pesos", "     \"f\": [0, 0, 0, 0, 0],       # olvido"],
+        ["pesos", "     \"g\": [1, 2, -2, -1, 0],     # candidato"],
+        ["pesos", "     \"o\": [0, -4, -4, -4, 4]}    # salida"],
+        ["pesos", "b = {\"i\": 0, \"f\": 4, \"g\": 0, \"o\": 0}"],
+        [null, ""],
+        ["def", "def sigmoide(z):"],
+        ["def", "    return 1 / (1 + np.exp(-z))"],
+        [null, ""],
+        ["def", "def one_hot(letra):"],
+        ["def", "    x = np.zeros(4)"],
+        ["def", "    x[letras.index(letra)] = 1"],
+        ["def", "    return x"],
+        [null, ""],
+        ["pal", "palabra = \"hllllllllla\""],
+        ["h0", "h, celda = 0.0, 0.0                               # la memoria empieza vacía"],
+        [null, "for t in range(len(palabra)):"],
+        ["v", "    v = np.concatenate(([h], one_hot(palabra[t])))   # [h_(t-1), x_t]"],
+        ["puertas", "    i = sigmoide(np.dot(W[\"i\"], v) + b[\"i\"])"],
+        ["puertas", "    f = sigmoide(np.dot(W[\"f\"], v) + b[\"f\"])"],
+        ["puertas", "    g = np.tanh(np.dot(W[\"g\"], v) + b[\"g\"])"],
+        ["puertas", "    o = sigmoide(np.dot(W[\"o\"], v) + b[\"o\"])"],
+        ["cel", "    celda = f * celda + i * g                     # la cinta: olvidar y escribir"],
+        ["hh", "    h = o * np.tanh(celda)                        # lo que muestra"],
+        ["pr", "    print(t, palabra[t], f\"f={f:.3f} i={i:.3f} o={o:.3f} c={celda:.4f} h={h:.4f}\")"],
+        ["prR", "print(\"empezó con:\", \"h\" if h > 0 else \"o\")"],
+        [null, ""],
+        [null, "# versión matricial: las cuatro compuertas apiladas en orden i, f, g, o"],
+        ["M", "M = np.array([W[k] for k in [\"i\", \"f\", \"g\", \"o\"]])"],
+        ["M", "bb = np.array([b[k] for k in [\"i\", \"f\", \"g\", \"o\"]])"],
+        ["X", "X = np.array([[one_hot(ch) for ch in w] for w in [\"hllllllllla\", \"ollllllllla\"]])"],
+        ["prX", "print(\"forma de X:\", X.shape, \"forma de M:\", M.shape)"],
+        ["H0", "Mt = M.T"],
+        ["H0", "H, Cel = np.zeros(2), np.zeros(2)"],
+        [null, "for t in range(X.shape[1]):"],
+        ["paso", "    Z = np.column_stack([H, X[:, t, :]]) @ Mt + bb   # (2, 4): una columna por compuerta"],
+        ["paso", "    iv, fv, gv, ov = sigmoide(Z[:, 0]), sigmoide(Z[:, 1]), np.tanh(Z[:, 2]), sigmoide(Z[:, 3])"],
+        ["paso", "    Cel = fv * Cel + iv * gv"],
+        ["paso", "    H = ov * np.tanh(Cel)"],
+        ["prH", "print(\"h final:\", \" \".join(f\"{x:.4f}\" for x in H))"],
+        ["prI", "print(\"igual al bucle:\", np.isclose(H[0], h))"]], "r": [["pesos", "letras <- c(\"h\", \"o\", \"l\", \"a\")"],
+        [null, "# una fila por compuerta: [peso de h_(t-1), pesos de h, o, l, a]"],
+        ["pesos", "W <- list(i = c(0, 4, 4, -4, -4),     # entrada"],
+        ["pesos", "          f = c(0, 0, 0, 0, 0),       # olvido"],
+        ["pesos", "          g = c(1, 2, -2, -1, 0),     # candidato"],
+        ["pesos", "          o = c(0, -4, -4, -4, 4))    # salida"],
+        ["pesos", "b <- list(i = 0, f = 4, g = 0, o = 0)"],
+        [null, ""],
+        ["def", "sigmoide <- function(z) 1 / (1 + exp(-z))"],
+        [null, ""],
+        ["def", "one_hot <- function(letra) {"],
+        ["def", "  x <- numeric(4)"],
+        ["def", "  x[match(letra, letras)] <- 1"],
+        ["def", "  x"],
+        [null, "}"],
+        [null, ""],
+        ["pal", "palabra <- strsplit(\"hllllllllla\", \"\")[[1]]"],
+        ["h0", "h <- 0; celda <- 0                                # la memoria empieza vacía"],
+        [null, "for (t in seq_along(palabra)) {"],
+        ["v", "  v <- c(h, one_hot(palabra[t]))                  # [h_(t-1), x_t]"],
+        ["puertas", "  i <- sigmoide(sum(W$i * v) + b$i)"],
+        ["puertas", "  f <- sigmoide(sum(W$f * v) + b$f)"],
+        ["puertas", "  g <- tanh(sum(W$g * v) + b$g)"],
+        ["puertas", "  o <- sigmoide(sum(W$o * v) + b$o)"],
+        ["cel", "  celda <- f * celda + i * g                      # la cinta: olvidar y escribir"],
+        ["hh", "  h <- o * tanh(celda)                            # lo que muestra"],
+        ["pr", "  cat(t, palabra[t], sprintf(\"f=%.3f i=%.3f o=%.3f c=%.4f h=%.4f\", f, i, o, celda, h), \"\\n\")"],
+        [null, "}"],
+        ["prR", "cat(\"empezó con:\", if (h > 0) \"h\" else \"o\", \"\\n\")"],
+        [null, ""],
+        [null, "# versión matricial: las cuatro compuertas apiladas en orden i, f, g, o"],
+        ["M", "M <- rbind(W$i, W$f, W$g, W$o)"],
+        ["M", "bb <- c(b$i, b$f, b$g, b$o)"],
+        ["X", "palabras <- c(\"hllllllllla\", \"ollllllllla\")"],
+        ["X", "X <- array(0, dim = c(2, 11, 4))"],
+        ["X", "for (k in 1:2) for (t in 1:11) X[k, t, ] <- one_hot(substr(palabras[k], t, t))"],
+        ["prX", "cat(\"forma de X:\", dim(X), \"forma de M:\", dim(M), \"\\n\")"],
+        ["H0", "Mt <- t(M)"],
+        ["H0", "H <- numeric(2); Cel <- numeric(2)"],
+        [null, "for (t in 1:dim(X)[2]) {"],
+        ["paso", "  Z <- cbind(H, X[, t, ]) %*% Mt + matrix(bb, 2, 4, byrow = TRUE)   # (2, 4): una columna por compuerta"],
+        ["paso", "  iv <- sigmoide(Z[, 1]); fv <- sigmoide(Z[, 2]); gv <- tanh(Z[, 3]); ov <- sigmoide(Z[, 4])"],
+        ["paso", "  Cel <- fv * Cel + iv * gv"],
+        ["paso", "  H <- ov * tanh(Cel)"],
+        [null, "}"],
+        ["prH", "cat(\"h final:\", sprintf(\"%.4f\", H), \"\\n\")"],
+        ["prI", "cat(\"igual al bucle:\", isTRUE(all.equal(H[1], h)), \"\\n\")"]]};
+    // salida real de python3 y Rscript, caracter por caracter (R deja un espacio antes del salto de linea)
+    var SALIDA = {"py": ["0 h f=0.982 i=0.982 o=0.018 c=0.9467 h=0.0133", "1 l f=0.982 i=0.018 o=0.018 c=0.9161 h=0.0130", "2 l f=0.982 i=0.018 o=0.018 c=0.8860 h=0.0128", "3 l f=0.982 i=0.018 o=0.018 c=0.8565 h=0.0125", "4 l f=0.982 i=0.018 o=0.018 c=0.8274 h=0.0122", "5 l f=0.982 i=0.018 o=0.018 c=0.7990 h=0.0119", "6 l f=0.982 i=0.018 o=0.018 c=0.7710 h=0.0116", "7 l f=0.982 i=0.018 o=0.018 c=0.7435 h=0.0114", "8 l f=0.982 i=0.018 o=0.018 c=0.7165 h=0.0111", "9 l f=0.982 i=0.018 o=0.018 c=0.6900 h=0.0108", "10 a f=0.982 i=0.018 o=0.982 c=0.6778 h=0.5795", "empezó con: h", "forma de X: (2, 11, 4) forma de M: (4, 5)", "h final: 0.5795 -0.7050", "igual al bucle: True"], "r": ["1 h f=0.982 i=0.982 o=0.018 c=0.9467 h=0.0133 ", "2 l f=0.982 i=0.018 o=0.018 c=0.9161 h=0.0130 ", "3 l f=0.982 i=0.018 o=0.018 c=0.8860 h=0.0128 ", "4 l f=0.982 i=0.018 o=0.018 c=0.8565 h=0.0125 ", "5 l f=0.982 i=0.018 o=0.018 c=0.8274 h=0.0122 ", "6 l f=0.982 i=0.018 o=0.018 c=0.7990 h=0.0119 ", "7 l f=0.982 i=0.018 o=0.018 c=0.7710 h=0.0116 ", "8 l f=0.982 i=0.018 o=0.018 c=0.7435 h=0.0114 ", "9 l f=0.982 i=0.018 o=0.018 c=0.7165 h=0.0111 ", "10 l f=0.982 i=0.018 o=0.018 c=0.6900 h=0.0108 ", "11 a f=0.982 i=0.018 o=0.982 c=0.6778 h=0.5795 ", "empezó con: h ", "forma de X: 2 11 4 forma de M: 4 5 ", "h final: 0.5795 -0.7050 ", "igual al bucle: TRUE "]};
+    var SAL_GRAD = {"py": ["producto de las f: 0.8340", "solo por la cinta: 0.5338", "diferencias finitas: 0.5343"], "r": ["producto de las f: 0.8340 ", "solo por la cinta: 0.5338 ", "diferencias finitas: 0.5343 "]};
+    var RV = lstm(PAL0), RV2 = lstm("ollllllllla");
+    var EV = [];
+    (function () {
+      var fase = 1, sal = 0, tv = 0, lote = null;
+      function foto(id, x) { EV.push(Object.assign({ id: id, fase: fase, sal: sal, tv: tv, lote: lote, t: null }, x || {})); }
+      foto("pesos"); foto("def");
+      fase = 2;
+      foto("pal"); foto("h0");
+      for (var t = 1; t <= RV.T; t++) {
+        foto("v", { t: t });
+        foto("puertas", { t: t });
+        tv = t; foto("cel", { t: t });
+        foto("hh", { t: t });
+        sal++; foto("pr", { t: t, nueva: true });
+      }
+      sal++; foto("prR", { nueva: true });
+      fase = 3;
+      foto("M");
+      foto("X");
+      sal++; foto("prX", { nueva: true });
+      lote = 0; foto("H0");
+      for (t = 1; t <= RV.T; t++) { lote = t; foto("paso", { t: t }); }
+      sal++; foto("prH", { nueva: true });
+      sal++; foto("prI", { nueva: true, fin: true });
+    })();
+
+    function narrar(e, ctx) {
+      var py = ctx.lang() === "py", t = e.t, ix = t != null ? ctx.ix(t - 1) : null;
+      switch (e.id) {
+        case "pesos": return "Los pesos de la celda, escritos a mano: " + (py ? "un <b>diccionario</b>" : "una <b>lista</b>") + " con una fila de cinco números por bloque. El primero multiplica a h<sub>t−1</sub>; los otros cuatro, al one-hot de h, o, l, a. El sesgo del olvido es 4: por eso f = 0.982 siempre.";
+        case "def": return "<b>sigmoide</b> da la apertura de un grifo, entre 0 y 1; <b>one_hot</b> convierte una letra en su vector de cuatro posiciones.";
+        case "pal": return py ? "La palabra es un texto: <b>palabra[t]</b> es su letra t, contando desde 0." : "<b>strsplit</b> parte el texto en letras: <b>palabra[t]</b> es la letra t, contando desde 1.";
+        case "h0": return "La memoria empieza vacía: <b>h = 0</b> y la cinta <b>celda = 0</b>.";
+        case "v": return "Paso <b>t = " + ix + "</b>, entra la <b>" + RV.pal[t - 1] + "</b>. <b>v</b> pega el estado anterior (" + f(RV.h[t - 1], 4) + ") con el one-hot: cinco números, el [h<sub>t−1</sub>, x<sub>t</sub>] de la UD4.";
+        case "puertas": return "Los cuatro bloques, cada uno un producto punto con su fila: entrada <b>" + f(RV.i[t], 3) + "</b>, olvido <b>" + f(RV.f[t], 3) + "</b>, candidato <b>" + f(RV.g[t], 4) + "</b>, salida <b>" + f(RV.o[t], 3) + "</b>.";
+        case "cel": return "La cinta: " + f(RV.f[t], 3) + " · " + f(RV.c[t - 1], 4) + " + " + f(RV.i[t], 3) + " · (" + f(RV.g[t], 4) + ") = <b>" + f(RV.c[t], 4) + "</b>." + (t === 2 ? " Es la cuenta del chequeo del paso 3." : "");
+        case "hh": return "Lo que muestra: " + f(RV.o[t], 3) + " · tanh(" + f(RV.c[t], 4) + ") = <b>" + f(RV.h[t], 4) + "</b>." + (t < RV.T ? " Con la salida cerrada, casi nada." : " Con la a, la salida se abre.");
+        case "pr": return "Imprime el paso, la letra, los tres grifos, la cinta y lo que muestra." + (t === RV.T ? " Es la última letra: la a también entra, porque es la pregunta." : "");
+        case "prR": return "h<sub>11</sub> = " + f(RV.hT, 4) + " es positivo: <b>empezó con h</b>.";
+        case "M": return "Las cuatro filas apiladas en una matriz <b>M</b> de 4 × 5, en el orden de PyTorch y Keras: i, f, g, o. Y los cuatro sesgos en un vector.";
+        case "X": return py ? "El lote: dos palabras, cada una una lista de 11 vectores one-hot. <b>np.array</b> lo vuelve un tensor." : "El lote como <b>array</b> de tres ejes, lleno con dos bucles: palabra k, paso t, y el one-hot de la letra.";
+        case "prX": return "X es <b>(2, 11, 4)</b>: lote, tiempo, letras. M es <b>(4, 5)</b>: un bloque por fila.";
+        case "H0": return "Los estados de las dos palabras empiezan en cero: un h y una cinta por palabra. M se traspone una vez, porque las palabras van en filas.";
+        case "paso": return "Paso <b>t = " + ix + "</b>: " + (py ? "<b>column_stack</b>" : "<b>cbind</b>") + " pega h con la rebanada de letras (2 × 5); un solo producto da las cuatro preactivaciones de las dos palabras (2 × 4), y cada columna es un grifo." + (py ? "" : " El sesgo va como matriz por filas: sumado como vector, R lo reciclaría por columnas.");
+        case "prH": return "Los h finales del lote: " + f(RV.hT, 4) + " para «hllllllllla» y " + f(RV2.hT, 4) + " para «ollllllllla». Las dos aciertan.";
+        case "prI": return "El de «hllllllllla» es el mismo que el del bucle: <b>" + (py ? "True" : "TRUE") + "</b>.";
+      }
+      return "";
+    }
+    var CUR = null;
+    function visual(e, anterior, ctx) {
+      var tv = e ? e.tv : 0;
+      dibujarCelda($("vrSvg"), { r: RV, tipo: "lstm", tVis: tv, grifos: ["f", "i", "o"], verH: true, respuesta: tv === RV.T, cur: e && e.fase === 2 && e.t ? e.t : null });
+      var cu = "";
+      if (e && e.fase === 2 && e.t) {
+        var t = e.t;
+        if (e.id === "v") cu = "v = [" + f(RV.h[t - 1], 4) + ", " + LET.map(function (q, k) { return k === RV.k[t] ? 1 : 0; }).join(", ") + "]";
+        else if (e.id === "puertas") cu = "i = " + f(RV.i[t], 3) + " · f = " + f(RV.f[t], 3) + " · g = " + f(RV.g[t], 4) + " · o = " + f(RV.o[t], 3);
+        else if (e.id === "cel") cu = "c = " + f(RV.f[t], 3) + " · " + f(RV.c[t - 1], 4) + " + " + f(RV.i[t], 3) + " · (" + f(RV.g[t], 4) + ") = " + f(RV.c[t], 4);
+        else if (e.id === "hh") cu = "h = " + f(RV.o[t], 3) + " · tanh(" + f(RV.c[t], 4) + ") = " + f(RV.h[t], 4);
+      }
+      $("vrCuenta").textContent = cu;
+      var lt = e && e.lote != null ? e.lote : -1;
+      var l = '<thead><tr><th>palabra</th><th>c después del paso ' + (lt > 0 ? ctx.ix(lt - 1) : "") + '</th><th>h</th></tr></thead><tbody>';
+      [["hllllllllla", RV], ["ollllllllla", RV2]].forEach(function (q) {
+        var vis = lt >= 0;
+        l += '<tr><td>' + q[0] + '</td><td class="' + (vis ? "" : "vacia") + '">' + (vis ? f(q[1].c[lt], 4) : "·") + '</td><td class="' + (vis ? "" : "vacia") + '">' + (vis ? f(q[1].h[lt], 4) : "·") + '</td></tr>';
+      });
+      $("vrLote").innerHTML = l + '</tbody>';
+      var lineas = (SALIDA[ctx.lang()] || []).slice(0, e ? e.sal : 0);
+      $("vrConsola").innerHTML = lineas.length ? lineas.map(function (ln, k) {
+        return '<span class="' + (e && e.nueva && k === lineas.length - 1 ? "nueva" : "") + '">' + ctx.esc(ln) + '</span>';
+      }).join("\n") : '<span class="vacia">Todavía no imprimió nada.</span>';
+    }
+    B.vidaReal($("vidareal"), {
+      codigo: CODIGO,
+      eventos: EV,
+      narrar: narrar,
+      vars: function (e, ctx) {
+        var v = [];
+        if (!e) return v;
+        if (e.t != null) v.push('<span>t = <b>' + ctx.ix(e.t - 1) + '</b></span>');
+        if (e.fase === 2 && e.tv > 0) v.push('<span>celda = <b>' + f(RV.c[e.tv], 4) + '</b></span>', '<span>h = <b>' + f(RV.h[e.id === "cel" ? e.tv - 1 : e.tv], 4) + '</b></span>');
+        return v;
+      },
+      visual: visual,
+      demora: function (e) { return !e ? 600 : e.id.indexOf("pr") === 0 ? 1100 : e.id === "cel" || e.id === "paso" ? 900 : 650; }
+    });
+    $("salGradPy").textContent = SAL_GRAD.py.join("\n");
+    $("salGradR").textContent = SAL_GRAD.r.join("\n");
+
+    B.numerico(cuerpo("vrPred"), {
+      pregunta: "Antes de reproducir: con <code>palabra = \"hllllllllla\"</code>, ¿cuántas veces se ejecuta la línea de la cinta, <code>celda = f * celda + i * g</code>, en el primer bucle?",
+      respuesta: 11,
+      tolerancia: 0,
+      pistas: ["El bucle recorre todas las letras de la palabra.", "Cuenta las letras: una h, nueve l y una a."],
+      diagnostico: function (v) {
+        if (v === 10) return "Aquí la a sí entra: es la pregunta, y abre el grifo de salida. En la RNN de la página anterior la última letra no entraba porque había que predecirla.";
+        if (v === 9) return "Esas son las l. También entran la h y la a.";
+        if (v === 1) return "Es una sola línea de código, pero está dentro del bucle: se ejecuta una vez por letra.";
+        return null;
+      },
+      explicacion: "Once: una por letra. La misma línea, con los mismos pesos, once veces: la celda desenrollada.",
+      alResolver: function (ok) { C.reto("codigo1", ok); }
+    });
+    prop("codigo2", {
+      pregunta: "Copias la matriz <code>M</code> a una <code>nn.LSTM</code> de PyTorch, pero apilas las filas en el orden en que las explica la UD4: olvido, entrada, candidato, salida. Las formas coinciden y no hay ningún error. ¿Qué responde la red con «hllllllllla»?",
+      opciones: [
+        "o, y también con «ollllllllla»: PyTorch toma tu fila de olvido como entrada y tu fila de entrada como olvido; el olvido se cierra con cada l y la cinta se borra",
+        "h, igual que antes: el orden de las filas no importa",
+        "PyTorch reordena las filas solo, porque conoce los nombres",
+        "Da error de forma al reproducir la primera letra"
+      ],
+      correcta: 0,
+      pistas: [null, "Cada fila va a un grifo distinto según su posición. ¿Qué grifo recibe la fila que se abre con h y o y se cierra con l?", "PyTorch solo ve una matriz de 4 × 4; los nombres los pusiste tú.", "Las dos filas tienen la misma forma: intercambiarlas no cambia ninguna forma."],
+      explicacion: "PyTorch espera los bloques en orden i, f, g, o, y Keras en i, f, c, o: los dos con la entrada primero. Con el orden cambiado, el olvido vale 0.018 con cada l y la cinta se vacía: $h_{11} = -0.0247$ con las dos palabras (se comprobó con NumPy). Ningún error avisa; solo el resultado."
+    });
+    prop("codigo3", {
+      pregunta: "<code>nn.GRU</code> de PyTorch calcula $h_t = (1 - z_t)\\odot n_t + z_t\\odot h_{t-1}$. Copias tal cual los pesos de $z$ de la GRU de esta página, donde $h_t = (1 - z_t)\\,h_{t-1} + z_t\\,\\tilde h_t$. ¿Qué pasa?",
+      opciones: [
+        "Hace lo contrario: con la h conserva el cero inicial y con cada l escribe el candidato; dice o con las dos palabras. Hay que cambiarle el signo a los pesos y al sesgo de $z$",
+        "Nada: las dos fórmulas son la misma",
+        "Da un error de forma, porque PyTorch guarda $z$ traspuesta",
+        "Funciona, pero tarda más en entrenar"
+      ],
+      correcta: 0,
+      pistas: [null, "En una fórmula $z$ multiplica al candidato; en la otra, al estado viejo.", "La forma de los pesos de $z$ es la misma en las dos convenciones: no hay error que avise.", "No es cuestión de entrenamiento: con los mismos pesos, la cuenta ya da otro resultado."],
+      explicacion: "Con la convención de PyTorch (y la de Keras, que es igual), los mismos pesos dan $h_{11} = -0.7404$ para «hllllllllla» y para «ollllllllla» (se comprobó con NumPy). Como $\\sigma(-x) = 1 - \\sigma(x)$, cambiar el signo de los pesos y del sesgo de $z$ convierte una convención en la otra. Además, PyTorch aplica el reinicio después del producto, $r_t\\odot(W_{hn}h_{t-1} + b_{hn})$: con un solo sesgo en cero, aquí da lo mismo."
+    });
+  })();
+
+  /* ---------------- tarjetas ---------------- */
+  B.tarjetas($("tarjetas"), [
+    ["¿Qué es la cinta de la LSTM?", "El estado de celda $c_t$: la memoria de largo plazo. En cada paso, $c_t = f_t\\odot c_{t-1} + i_t\\odot\\tilde c_t$."],
+    ["El grifo de olvido", "$f_t = \\sigma(W_f[h_{t-1}, x_t] + b_f)$. Cerca de 1 conserva, cerca de 0 borra. El nombre engaña: abierto quiere decir que recuerda."],
+    ["Entrada y candidato", "$\\tilde c_t$ (tanh, entre −1 y 1) es el contenido; $i_t$ (sigmoide, entre 0 y 1) decide cuánto entra."],
+    ["El grifo de salida", "$h_t = o_t\\odot\\tanh(c_t)$: la celda puede guardar mucho y mostrar casi nada. $c$ es de largo plazo; $h$, de corto plazo."],
+    ["¿Por qué la señal cruza la cinta?", "Por la cinta, $\\partial c_t/\\partial c_{t-1} = f_t$: sin pesos ni tanh. Diez pasos con $f = 0.982$: llega 0.834. En la RNN de la página anterior, unas 600 veces menos."],
+    ["La GRU", "Actualización $z_t$ y reinicio $r_t$; sin cinta aparte. $h_t = (1-z_t)h_{t-1} + z_t\\tilde h_t$. En PyTorch y Keras, $z$ multiplica al estado viejo."],
+    ["Parámetros", "LSTM $4(n(m+n)+n)$, GRU $3(n(m+n)+n)$; PyTorch suma un sesgo más por bloque. LSTM(128) sobre 64: 98 816."],
+    ["El orden de los bloques", "PyTorch: i, f, g, o. Keras: i, f, c, o. No el orden en que se explican (f, i, c, o): un error de orden no da error de forma."]
+  ]);
+
+  /* ---------------- conexiones ---------------- */
+  B.conexiones("lstm-gru");
+})();
+</script>
+</body>
+</html>

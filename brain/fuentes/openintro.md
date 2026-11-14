@@ -162,3 +162,5 @@ Tablas de distribuciones: apéndice C, normal en PDF 408-411, t en 412-415, chi-
 
 Tono: didáctico y llano, con datos reales (Pew, Gallup, estudios médicos). Reusa el caso de la librería (cap. 3), el del
 deducible del seguro (geométrica y binomial) y la encuesta solar con p = 0.88 (cap. 5) en varias secciones.
+
+> Nota (2026-11-12): `~/brain/03-Matematicas` se reorganizó. Los libros enteros están en `03-Matematicas/Libros/` y los archivos por unidad quedaron directamente en la carpeta del nivel (sin la subcarpeta del libro). Las rutas vigentes están en `biblioteca/fuentes.js`; las páginas no cambian.

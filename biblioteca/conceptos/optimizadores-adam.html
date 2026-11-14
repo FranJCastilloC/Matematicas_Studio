@@ -1,0 +1,1725 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Momentum, RMSProp y Adam</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+/* ---------- lienzos ---------- */
+.lienzo { width: 100%; height: auto; display: block; user-select: none; -webkit-user-select: none; touch-action: manipulation; }
+.lienzo .grid { stroke: var(--line-soft); stroke-width: 1; }
+.lienzo .eje { stroke: var(--ink-3); stroke-width: 1; fill: none; }
+.lienzo .tick { font: 10px var(--f-mono); fill: var(--ink-3); }
+.lienzo .eje-tit { font: 11.5px var(--f-body); fill: var(--ink-2); }
+.lienzo .nivel { fill: none; stroke: var(--ink-3); stroke-opacity: .45; stroke-width: 1; }
+.lienzo .meta { fill: none; stroke: var(--pos); stroke-width: 2; }
+.lienzo .metalab { font: 500 10.5px var(--f-mono); fill: var(--pos); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+.lienzo .inicio { fill: var(--surface); stroke: var(--ink); stroke-width: 2; }
+.lienzo .cam { fill: none; stroke-width: 1.8; stroke-opacity: .9; stroke-linejoin: round; }
+.lienzo .cam.fantasma { stroke-opacity: .28; stroke-width: 1.4; }
+.lienzo .cam.sgd { stroke: var(--ink-2); }
+.lienzo .cam.mom { stroke: var(--j); }
+.lienzo .cam.rms { stroke: var(--k); }
+.lienzo .cam.adam { stroke: var(--accent); }
+.lienzo .pt { fill-opacity: .75; }
+.lienzo .pt.sgd, .lienzo .bol.sgd { fill: var(--ink-2); }
+.lienzo .pt.mom, .lienzo .bol.mom { fill: var(--j); }
+.lienzo .pt.rms, .lienzo .bol.rms { fill: var(--k); }
+.lienzo .pt.adam, .lienzo .bol.adam { fill: var(--accent); }
+.lienzo .bol { stroke: var(--surface); stroke-width: 2.2; }
+.lienzo .fl-g { stroke: var(--ink-3); stroke-width: 2; }
+.lienzo .fl-g-h { fill: var(--ink-3); }
+.lienzo .fl-v { stroke: var(--j); stroke-width: 2.6; }
+.lienzo .fl-v-h { fill: var(--j); }
+.lienzo .fl-r { stroke: var(--k); stroke-width: 2.6; }
+.lienzo .fl-r-h { fill: var(--k); }
+.lienzo .flab { font: 500 10px var(--f-mono); fill: var(--ink-2); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.esc-head .hint { font-size: 12.5px; color: var(--ink-2); }
+.leyenda { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12.5px; color: var(--ink-2); margin-top: 6px; }
+.leyenda i { display: inline-block; width: 18px; height: 3px; vertical-align: middle; margin-right: 5px; border-radius: 2px; }
+.leyenda .l-sgd { background: var(--ink-2); }
+.leyenda .l-mom { background: var(--j); }
+.leyenda .l-rms { background: var(--k); }
+.leyenda .l-adam { background: var(--accent); }
+.leyenda .l-gris { background: var(--ink-3); }
+.controles { display: grid; gap: 8px; margin-top: 10px; }
+.controles .btn-row button { font-size: 12.5px; padding: 6px 10px; }
+.alfa-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-family: var(--f-mono); font-size: 12.5px; color: var(--ink-2); }
+.alfa-row input[type=range] { flex: 1 1 140px; min-width: 120px; accent-color: var(--accent); }
+.alfa-row b { color: var(--accent); font-weight: 500; min-width: 4.5ch; display: inline-block; }
+.lectura-esc { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); font-family: var(--f-mono); font-size: 12.5px; line-height: 1.65; color: var(--ink-2); font-variant-numeric: tabular-nums; min-height: 2em; overflow-wrap: anywhere; }
+.lectura-esc b { color: var(--ink); font-weight: 500; }
+.lectura-esc .oculto, .vivo .oculto { color: var(--accent); font-weight: 600; }
+.lectura-esc .aviso { color: var(--neg); font-family: var(--f-body); }
+.lectura-esc .bien { color: var(--ok); font-family: var(--f-body); }
+.chk-label { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; color: var(--ink-2); }
+.tabla-carrera { border-collapse: collapse; font-family: var(--f-mono); font-size: 12px; margin: 2px 0; font-variant-numeric: tabular-nums; width: 100%; }
+.tabla-carrera th, .tabla-carrera td { padding: 3px 6px; border-bottom: 1px solid var(--line-soft); text-align: left; }
+.tabla-carrera th { color: var(--ink-3); font-weight: 500; }
+.tabla-carrera .marca { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+.marca.sgd { background: var(--ink-2); } .marca.mom { background: var(--j); } .marca.rms { background: var(--k); } .marca.adam { background: var(--accent); }
+.tabla-carrera .gana { color: var(--ok); font-weight: 600; }
+
+/* ---------- vida real ---------- */
+.vr-consola { margin: 8px 0 0; padding: 10px 12px; min-height: 6em; background: var(--surface-2); border-radius: 8px; font-family: var(--f-mono); font-size: 12.5px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); }
+.vr-consola .vacia { color: var(--ink-3); font-style: italic; white-space: normal; }
+.vr-consola .nueva { color: var(--accent); font-weight: 600; }
+.vr-cuenta { font-family: var(--f-mono); font-size: 12.5px; color: var(--ink-2); margin-top: 6px; line-height: 1.6; overflow-wrap: anywhere; }
+.vr-cuenta b { color: var(--ink); font-weight: 500; }
+.salida { font-family: var(--f-mono); font-size: 12.5px; background: var(--surface-2); border-radius: 8px; padding: 8px 10px; white-space: pre-wrap; overflow-wrap: anywhere; margin: 8px 0; }
+
+/* ---------- retos propios ---------- */
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.ojo-opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
+@media (max-width: 520px) { .ojo-opts { grid-template-columns: minmax(0, 1fr); } }
+.ojo-opts .opt { text-align: center; }
+.objetivos { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.objetivos li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.objetivos .m { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.objetivos li.hecho { color: var(--ink); }
+.objetivos li.hecho .m { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 3px var(--surface); }
+.datos-mano { border-collapse: collapse; font-family: var(--f-mono); font-size: 14px; margin: 4px 0 12px; }
+.datos-mano th, .datos-mano td { padding: 4px 12px; border: 1px solid var(--line); text-align: center; }
+.datos-mano th { color: var(--ink-3); font-weight: 500; font-size: 12px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ Momentum, RMSProp y Adam</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Cálculo · Brasil vol. 2 cap. 5 y la UD4 de Deep Learning</p>
+    <h1>Momentum, RMSProp y Adam: bajar un valle estrecho sin rebotar</h1>
+    <p class="lede">
+      El descenso de gradiente usa una sola tasa para todas las direcciones. En un valle largo y estrecho eso obliga a elegir entre rebotar contra las paredes o arrastrarse por el fondo.
+      Los optimizadores de esta página le agregan dos ideas: <b>recordar hacia dónde venía bajando</b> (momentum) y <b>medir cada dirección con su propia vara</b> (RMSProp). Adam junta las dos.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> Bajas por un valle largo y estrecho con los ojos vendados. Solo sientes la pendiente bajo tus pies: muy empinada hacia las paredes, casi plana a lo largo del valle. ¿Qué harías para no rebotar de pared en pared y, a la vez, avanzar rápido por el fondo? Escríbelo como te salga.</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: daría pasos más cortos cuando..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>Cuatro bolitas en el mismo valle</h2>
+      <p>Siete pasos sobre el valle alargado de la ruta, <span data-tex="f(x, y) = x^2 + 10y^2"></span>, y al final sobre el valle curvo de Rosenbrock que dejó la página de la Hessiana. Cada paso termina con un chequeo que abre el siguiente.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="La carrera">
+          <span class="etapa">Paso 1</span>
+          <h3>Cuatro bolitas, cuatro reglas, un mismo valle</h3>
+          <p>El mapa del escenario es un valle visto desde arriba: cada óvalo une puntos a la misma altura y el fondo está en el centro, rodeado por un círculo verde, la meta. Es un valle <b>largo y estrecho</b>: las paredes de arriba y de abajo son empinadas y el fondo, de izquierda a derecha, casi plano.</p>
+          <p>Cuatro bolitas salen del mismo punto, abajo a la izquierda del fondo, y en cada paso miran la pendiente bajo sus pies. Cada una decide su paso con una regla distinta:</p>
+          <ul>
+            <li><b>Descenso simple</b> (gris): da un paso en contra de la pendiente, siempre con el mismo largo por unidad de pendiente.</li>
+            <li><b>Momentum</b> (azul): como una bola pesada, arrastra la velocidad que traía.</li>
+            <li><b>RMSProp</b> (turquesa): en cada dirección, se fija en qué tan empinado viene siendo el terreno y ajusta su paso a eso.</li>
+            <li><b>Adam</b> (violeta): hace las dos cosas a la vez.</li>
+          </ul>
+          <p>Cada una usa una tasa que le funciona bien en este valle. Gana la que primero entra en el círculo verde para no salir más.</p>
+          <div class="check" id="chk1"><p class="check-tit">Predice antes de soltarlas</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="El zigzag">
+          <span class="etapa">Paso 2</span>
+          <h3>El descenso simple: una tasa para dos pendientes</h3>
+          <p>Ahora, nombres. El valle es <span data-tex="f(x, y) = x^2 + 10y^2"></span> y su gradiente es <span data-tex="\nabla f = (2x,\ 20y)"></span>. El descenso de gradiente da el paso <span data-tex="\theta_{t+1} = \theta_t - \eta\,\nabla f(\theta_t)"></span>, y como cada coordenada solo depende de sí misma, el paso se separa en dos:</p>
+          <div class="fbloque">
+            <div data-tex="x_{t+1} = x_t - \eta\,(2x_t) = (1 - 2\eta)\,x_t \qquad y_{t+1} = y_t - \eta\,(20 y_t) = (1 - 20\eta)\,y_t" data-display></div>
+            <div class="vivo" id="vivo2"></div>
+          </div>
+          <p>Cada paso multiplica <span data-tex="x"></span> por un factor y a <span data-tex="y"></span> por otro. Si el factor de <span data-tex="y"></span> es negativo, la bolita salta de una pared a la otra: el <b>zigzag</b>. Si su valor absoluto pasa de 1, cada salto es más largo que el anterior y la bolita se escapa. Mueve <span data-tex="\eta"></span> y mira las dos cosas a la vez: lo que hace <span data-tex="y"></span> y lo lento que avanza <span data-tex="x"></span>.</p>
+          <p>Las curvaturas 2 y 20 son los eigenvalores de la <a href="hessiana.html">Hessiana</a> de este valle, y su cociente, <span data-tex="\kappa = 10"></span>, es el número de condición: la pared fija la tasa máxima, 0.1, y el fondo plano tiene que avanzar con ella aunque aguantaría una diez veces mayor. Nield entrena toda su red con una sola tasa, <code>L = 0.05</code>, y avisa que una muy chica no avanza y una muy grande se pasa <cite class="cita" data-fuente="nield7" data-pag="30" data-seccion="Example 7-11: la red completa" data-que="La tasa L = 0.05, la misma para todos los pesos, con su comentario: muy chica tarda una eternidad y muy grande se pasa del mínimo. El capítulo no trae momentum, RMSProp ni Adam." data-cuando="Al terminar este paso"></cite>.</p>
+          <div class="check" id="chk2"><p class="check-tit">Calcula</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Inercia">
+          <span class="etapa">Paso 3</span>
+          <h3>Momentum: una bola que recuerda hacia dónde iba</h3>
+          <p>Una bola pesada no frena en seco ni cambia de dirección de golpe: arrastra su velocidad. Momentum guarda una <b>velocidad</b> <span data-tex="v"></span> que acumula los gradientes, y el paso se da con ella:</p>
+          <div class="fbloque">
+            <div data-tex="v_t = \beta\, v_{t-1} + \nabla f(\theta_t) \qquad \theta_{t+1} = \theta_t - \eta\, v_t \qquad (\beta = 0.9,\ v_0 = 0)" data-display></div>
+            <div class="vivo" id="vivo3"></div>
+          </div>
+          <p>Desarrollada, la velocidad es una suma de todos los gradientes con pesos que se desvanecen: <span data-tex="v_t = g_t + 0.9\,g_{t-1} + 0.81\,g_{t-2} + \dots"></span> En la dirección <span data-tex="x"></span> todos los gradientes empujan hacia el mismo lado y se suman: la bola acelera por el fondo. En <span data-tex="y"></span> cambian de signo en cada rebote y se cancelan: el zigzag se amortigua. En el escenario, la flecha gris es el paso que daría el descenso simple y la azul, el que da momentum.</p>
+          <p>Brasil escribe la misma regla con el signo adentro, <span data-tex="v_n = \beta v_{n-1} - \eta\nabla J"></span> y <span data-tex="x_{n+1} = x_n + v_n"></span>: es la misma bola con la tasa metida en la velocidad <cite class="cita" data-fuente="brasil5v2" data-pag="104" data-pimp="302" data-seccion="5.2.1.1 Gathering Steam: The Momentum Algorithm" data-que="La bola que gana velocidad cuesta abajo, la ecuación 5.116 de la velocidad y la 5.117 de la actualización." data-cuando="Al terminar este paso"></cite>,
+            y la aplica a un peso de su red de abejas con un lote de dos datos <cite class="cita" data-fuente="brasil5v2" data-pag="108" data-pimp="306" data-seccion="Mini-lotes y ejemplo de Momentum" data-que="v1 = −0.01 · (−0.269) y el peso pasa de −0.78 a −0.778. Detalle: 0.01 · 0.269 = 0.0027, que el libro redondea a 0.002; el peso queda en −0.7773." data-cuando="Después del chequeo"></cite>.
+            En esa cuenta, <span data-tex="0.01 \cdot 0.269 = 0.0027"></span> y el libro lo redondea a 0.002, así que el peso queda en −0.7773 y no en −0.778.</p>
+          <details class="profundizar">
+            <summary>¿Por qué la velocidad llega a ser diez veces el gradiente?</summary>
+            <div>
+              <p>Si la pendiente fuera siempre la misma, <span data-tex="g"></span>, la velocidad crecería hasta que <span data-tex="v = 0.9\,v + g"></span>, es decir, <span data-tex="v = g/(1 - \beta) = 10\,g"></span>. Por eso momentum con <span data-tex="\eta = 0.01"></span> avanza por el fondo plano como un descenso simple con <span data-tex="\eta = 0.1"></span>, sin rebotar tanto en las paredes.</p>
+              <p>Otra forma de escribirlo es con un promedio: <span data-tex="m_t = \beta m_{t-1} + (1-\beta)\,g_t"></span>, que es la velocidad multiplicada por <span data-tex="1-\beta"></span>. Es el mismo algoritmo con otra tasa. PyTorch, Keras y scikit-learn usan la versión de esta página; Adam usa la del promedio.</p>
+            </div>
+          </details>
+          <div class="check" id="chk3"><p class="check-tit">Calcula</p><div class="cuerpo"></div></div>
+
+          <div class="destacado" id="destacado">
+            <p class="dest-tit">La trampa</p>
+            <h4>Si la inercia ayuda, ¿más tasa ayuda más?</h4>
+            <p>Con momentum la bola llega a moverse diez veces más que su gradiente. Antes de subir la tasa, predice.</p>
+            <div class="check" id="chk3b"><p class="check-tit">Predice</p><div class="cuerpo"></div></div>
+            <p>La inercia que acelera por el fondo también lleva a la bola a pasarse. Con <span data-tex="\eta = 0.15"></span> describe una espiral enorme alrededor del fondo antes de calmarse, y con <span data-tex="\eta = 0.2"></span> se escapa. El límite de momentum en la pared es <span data-tex="\eta < 2(1+\beta)/20 = 0.19"></span>: más alto que el 0.1 del descenso simple, pero existe. Brasil ve esto mismo en su red, una joroba en la curva de pérdida, y lo atribuye a la inercia y a una tasa grande <cite class="cita" data-fuente="brasil5v2" data-pag="109" data-pimp="307" data-seccion="Pérdida por época y joroba" data-que="La Fig 5.30 con la joroba entre las épocas 5 y 10, sus dos causas (la inercia se pasa del mínimo y la tasa la agranda) y los remedios: bajar la tasa, ajustar β o pasar a un optimizador adaptativo." data-cuando="Después de probar η = 0.15"></cite>.</p>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Una tasa por dirección">
+          <span class="etapa">Paso 4</span>
+          <h3>RMSProp: medir cada dirección con su propia vara</h3>
+          <p>El problema del paso 2 era usar la misma tasa para una pared con pendiente 20 y un fondo con pendiente 2. RMSProp divide el paso de cada coordenada por el <b>tamaño típico</b> de sus gradientes recientes: una media de sus cuadrados, con raíz.</p>
+          <div class="fbloque">
+            <div data-tex="s_t = \rho\, s_{t-1} + (1-\rho)\, g_t^2 \qquad \theta_{t+1} = \theta_t - \eta\, \frac{g_t}{\sqrt{s_t} + \varepsilon} \qquad (\rho = 0.9,\ s_0 = 0)" data-display></div>
+            <div class="vivo" id="vivo4"></div>
+          </div>
+          <p>Todo es por coordenada: <span data-tex="s"></span> tiene una entrada para <span data-tex="x"></span> y otra para <span data-tex="y"></span>. Donde los gradientes son grandes, <span data-tex="\sqrt{s}"></span> es grande y el paso se achica; donde son chicos, el paso se agranda. Si el gradiente fuera constante, <span data-tex="g/\sqrt{s}"></span> valdría 1 y cada coordenada avanzaría justo <span data-tex="\eta"></span> por paso, sin importar lo empinada que sea. El <span data-tex="\varepsilon"></span> solo está para no dividir entre cero.</p>
+          <p>Brasil llega a esta fórmula desde el descenso simple, con la misma pregunta: ¿por qué todos los parámetros con la misma tasa? En su red, un peso cambió 6 % en cien épocas y otro 68 % (el libro dice 5 % y 71 %) <cite class="cita" data-fuente="brasil5v2" data-pag="78" data-pimp="276" data-seccion="Tasas de aprendizaje por parámetro" data-que="Compara los pesos tras 1 y 100 épocas y propone una tasa personalizada por parámetro. Los cambios son 6 % (2.301 a 2.443) y 68 % (0.699 a 0.222), no 5 % y 71 %." data-cuando="Antes de leer la fórmula"></cite>,
+            y arma RMSProp en cuatro ecuaciones <cite class="cita" data-fuente="brasil5v2" data-pag="79" data-pimp="277" data-seccion="5.1.8.7 Customized Routes to Minima: RMSProp" data-que="De la 5.85 (descenso simple) a la 5.89: la suma ponderada de cuadrados, la división, la raíz y el ε. Él pone el ε dentro de la raíz, √(v + ε); aquí y en las librerías va fuera. Con ε = 1e−8 da lo mismo." data-cuando="Al terminar este paso"></cite>.
+            Él pone el <span data-tex="\varepsilon"></span> dentro de la raíz; aquí, como en las librerías, va fuera. Con <span data-tex="\varepsilon = 10^{-8}"></span> no cambia nada.</p>
+          <div class="check" id="chk4"><p class="check-tit">Calcula antes de dar el primer paso</p><div class="cuerpo"></div></div>
+          <p>El ejemplo de Brasil confirma lo del chequeo: calcula mal el gradiente (escribe 0.630 donde es 0.597) y aun así su peso queda bien, en −0.532, porque el primer paso de RMSProp no depende del gradiente <cite class="cita" data-fuente="brasil5v2" data-pag="82" data-pimp="280" data-seccion="RMSProp: ejemplo" data-que="Un paso de RMSProp sobre un peso de la red con β = 0.9, η = 0.01 y v(0) = 0: el peso pasa de −0.5 a −0.532. El gradiente es 4.694 · 0.167 · 0.761 = 0.597, no 0.630, pero el primer paso vale η/√(1 − β) = 0.0316 con cualquier gradiente." data-cuando="Después del chequeo"></cite>.</p>
+          <p>Hay un antepasado: <b>AdaGrad</b> suma <i>todos</i> los cuadrados, <span data-tex="s_t = s_{t-1} + g_t^2"></span>, sin olvidar nunca. Su paso solo puede achicarse. Es el que usa el cuaderno Demo 1 de la UD4 (la red de Karpathy), y el contenido teórico lo nombra junto a Adam <cite class="cita" data-fuente="dl4" data-pag="18" data-seccion="Hiperparámetros" data-que="La tasa de aprendizaje en prosa y los optimizadores AdaGrad (acelera al principio y frena al final) y ADAM (ajusta la tasa sola). Sin fórmulas; momentum y RMSProp no aparecen." data-cuando="Al terminar este paso"></cite>.
+            La unidad dice que AdaGrad "acelera al principio y frena al final"; lo que hace es dividir por la raíz de la suma de todos los cuadrados, así que su tasa efectiva solo baja. Prueba la casilla de AdaGrad en el escenario.</p>
+          <div class="check" id="chk4b"><p class="check-tit">Después de acercarte al fondo</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Adam">
+          <span class="etapa">Paso 5</span>
+          <h3>Adam: inercia, una vara por dirección y una corrección</h3>
+          <p>Adam lleva dos memorias por coordenada: la de momentum, escrita como promedio, y la de RMSProp. Las dos empiezan en cero, y eso las sesga hacia cero en los primeros pasos; Adam las corrige dividiendo entre <span data-tex="1 - \beta^t"></span>:</p>
+          <div class="fbloque">
+            <div data-tex="m_t = \beta_1 m_{t-1} + (1-\beta_1)\, g_t \qquad s_t = \beta_2 s_{t-1} + (1-\beta_2)\, g_t^2" data-display></div>
+            <div data-tex="\hat m_t = \frac{m_t}{1-\beta_1^{\,t}} \qquad \hat s_t = \frac{s_t}{1-\beta_2^{\,t}} \qquad \theta_{t+1} = \theta_t - \eta\, \frac{\hat m_t}{\sqrt{\hat s_t} + \varepsilon}" data-display></div>
+            <div class="vivo" id="vivo5"></div>
+          </div>
+          <p>Con <span data-tex="\beta_1 = 0.9"></span>, <span data-tex="\beta_2 = 0.999"></span> y <span data-tex="\varepsilon = 10^{-8}"></span>, los valores del artículo original. <span data-tex="\hat m"></span> dice hacia dónde viene bajando la coordenada; <span data-tex="\sqrt{\hat s}"></span>, de qué tamaño suelen ser sus gradientes. Su cociente es un número cercano a ±1 cuando el gradiente es estable y cercano a 0 cuando cambia de signo a cada rato.</p>
+          <p>Brasil la presenta como la suma de RMSProp y Momentum, con <span data-tex="v"></span> para la primera memoria y <span data-tex="s"></span> para la segunda <cite class="cita" data-fuente="brasil5v2" data-pag="111" data-pimp="309" data-seccion="5.2.2 Adaptive Moment Estimation" data-que="Las dos memorias, la ecuación 5.122 y, en la página siguiente, la corrección de sesgo: los promedios empiezan en cero y se inclinan hacia cero, sobre todo con β cerca de 1." data-cuando="Al terminar este paso"></cite>.
+            Su ejemplo numérico tiene un error que vale la pena encontrar: con su función, el gradiente respecto de <span data-tex="a"></span> es <span data-tex="-(x_1 - b)^2 = -1"></span>, no −2, y los valores "supuestos" de la iteración 1 corresponden a un gradiente de 20 <cite class="cita" data-fuente="brasil5v2" data-pag="113" data-pimp="311" data-seccion="Ejemplo de Adam: la función de éxito" data-que="Una iteración de Adam sobre el parámetro a. Con F = −[a(x1 − b)² + ...], ∂F/∂a = −1 y no −2; con g = −2 serían v2 = 1.599 y s2 = 0.404, no 3.799 y 0.799; y aun con sus números a2 = 3.998, no 3.996." data-cuando="Después del destacado, para cazar los errores"></cite>.</p>
+          <div class="check" id="chk5"><p class="check-tit">Calcula antes de dar el primer paso</p><div class="cuerpo"></div></div>
+
+          <div class="destacado">
+            <p class="dest-tit">Una confusión muy común</p>
+            <h4>Sin la corrección, ¿los primeros pasos serían más chicos o más grandes?</h4>
+            <p>Se suele decir que sin corrección "los primeros pasos son diminutos", porque <span data-tex="m_1 = 0.1\,g_1"></span> es la décima parte del gradiente. Pero <span data-tex="s"></span> también empieza en cero. Antes de apagar la corrección, predice.</p>
+            <div class="check" id="chk5b"><p class="check-tit">Predice</p><div class="cuerpo"></div></div>
+            <p>Sin corrección, el paso es <span data-tex="\eta\, m_t/\sqrt{s_t}"></span>. En el primero, <span data-tex="m_1 = 0.1\,g"></span> y <span data-tex="s_1 = 0.001\,g^2"></span>, así que <span data-tex="m_1/\sqrt{s_1} = 0.1/0.0316 = 3.16"></span>: tres veces más largo. Lo diminuto es <span data-tex="m"></span> solo; dividido entre una <span data-tex="\sqrt{s}"></span> todavía más chica, el paso sale grande. El factor llega a 6.5 hacia el paso 10 y tarda miles de pasos en volver a 1 (todavía vale 3.2 en el paso 100), porque <span data-tex="\beta_2 = 0.999"></span> olvida muy despacio. La corrección arregla las dos memorias a la vez.</p>
+          </div>
+          <div class="cita" id="citaHipo" hidden></div>
+        </section>
+
+        <section class="paso card" data-titulo="Escala y memoria">
+          <span class="etapa">Paso 6</span>
+          <h3>Lo que Adam compra: no le importa la escala</h3>
+          <p>En el paso 1 ganó el descenso simple, pero con una tasa afinada: 0.09, cuando 0.1 ya no converge. Ahora vuelve la carrera, con las mismas cuatro tasas, en valles cada vez más empinados en <span data-tex="y"></span>: <span data-tex="f(x, y) = x^2 + b\,y^2"></span>.</p>
+          <div class="fbloque">
+            <div data-tex="\frac{\hat m}{\sqrt{\hat s}} \ \text{ no cambia si todos los gradientes de una coordenada se multiplican por } c > 0" data-display></div>
+            <div class="vivo" id="vivo6"></div>
+          </div>
+          <div class="check" id="chk6"><p class="check-tit">Predice antes de mover b</p><div class="cuerpo"></div></div>
+          <p>Las dos memorias tienen un horizonte: <span data-tex="\beta_1 = 0.9"></span> recuerda, más o menos, los últimos <span data-tex="1/(1-\beta_1) = 10"></span> gradientes, y <span data-tex="\beta_2 = 0.999"></span> los últimos 1000. La dirección se decide con memoria corta y la escala con memoria larga. El gradiente de hace <span data-tex="k"></span> pasos entra en <span data-tex="m"></span> con peso <span data-tex="(1-\beta_1)\,\beta_1^{\,k}"></span>.</p>
+          <div class="check" id="chk6b"><p class="check-tit">Calcula</p><div class="cuerpo"></div></div>
+          <details class="profundizar">
+            <summary>¿Y si el valle está girado?</summary>
+            <div>
+              <p>RMSProp y Adam reescalan cada coordenada por separado: estiran o encogen el mapa a lo largo de los ejes. Si el valle es diagonal, la pared empinada mezcla <span data-tex="x"></span> e <span data-tex="y"></span>, y estirar los ejes no la endereza. El mismo valle girado 45° hace que Adam tarde 87 pasos en lugar de 77, y su camino ya depende de la escala.</p>
+              <p>Por eso, aunque uses Adam, sigue conviniendo estandarizar las entradas (la página de Descenso de gradiente estocástico lo muestra con las horas sin estandarizar, <span data-tex="\kappa \approx 132"></span>). Adam arregla escalas distintas entre parámetros; no arregla direcciones mezcladas. Para eso haría falta la Hessiana entera, como en el método de Newton.</p>
+            </div>
+          </details>
+        </section>
+
+        <section class="paso card" data-titulo="El valle curvo">
+          <span class="etapa">Paso 7</span>
+          <h3>El valle curvo de Rosenbrock y la práctica</h3>
+          <p>La página de la Hessiana terminó con Rosenbrock, <span data-tex="(1 - x)^2 + 100\,(y - x^2)^2"></span>: un valle curvo y estrecho con el fondo en (1, 1) y número de condición 2508 en el fondo. Desde (−1.2, 1), el descenso simple con <span data-tex="\eta = 0.001"></span> tardó 11329 pasos en quedar a menos de 0.01 del fondo. Aquí corren los cuatro. Elige la tasa de cada uno y suéltalos.</p>
+          <div class="fbloque">
+            <div class="vivo" id="vivo7"></div>
+          </div>
+          <p>Con las tasas de partida, momentum llega en 1027 pasos, Adam en 3790, RMSProp en 5734 y el descenso simple en 11329. Ninguno gana siempre: momentum es el más rápido aquí, Adam tolera tasas muy distintas sin escaparse, y RMSProp con tasa fija tiembla cerca del fondo. Lo que hizo popular a Adam es que, con los gradientes ruidosos de los mini-lotes y millones de pesos de escalas muy distintas, su tasa por defecto suele funcionar sin afinar nada.</p>
+          <p>Por eso es el optimizador que vas a ver en los cuadernos de Keras de la UD4 (las demos 4 y 5 de LSTM entrenan con Adam), y en las diapositivas aparece como hiperparámetro, sin fórmulas <cite class="cita" data-fuente="dl4diapo" data-pag="33" data-seccion="Hiperparámetros" data-que="La diapositiva de hiperparámetros: learning rate, AdaGrad, ADAM y regularización, en viñetas. Las fórmulas de esta página no están en la unidad." data-cuando="Antes de abrir los cuadernos de LSTM con Keras"></cite>.
+            Raschka lo usa desde el capítulo 12, con <code>torch.optim.Adam(..., lr=0.001)</code>, y promete explicarlo en el 14 <cite class="cita" data-fuente="raschka12" data-pag="29" data-pimp="397" data-seccion="Training an MLP for the Iris dataset" data-que="El MLP para Iris con nn.CrossEntropyLoss y torch.optim.Adam con learning_rate = 0.001, y el recuadro que remite al capítulo 14." data-cuando="Cuando escribas tu primer modelo en PyTorch"></cite>;
+            allí, un recuadro de pocas líneas dice que viene de RMSProp y AdaGrad y que su ventaja es elegir el tamaño del paso con promedios de los momentos del gradiente, y remite al artículo de Kingma y Ba <cite class="cita" data-fuente="raschka14" data-pag="29" data-pimp="479" data-seccion="The Adam optimizer (recuadro)" data-que="Adam como método robusto para problemas no convexos, inspirado en RMSProp y AdaGrad; el paso sale de promedios móviles de los momentos del gradiente. Sin fórmulas: remite a Kingma y Ba (2014)." data-cuando="Al terminar esta página: ya puedes leerlo sabiendo qué hay detrás"></cite>.
+            Ninguno de los dos escribe las fórmulas: son las de esta página.</p>
+          <div class="check" id="chk7"><p class="check-tit">Calcula</p><div class="cuerpo"></div></div>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+        </div>
+        <svg id="lienzo" class="lienzo" viewBox="0 0 400 215" role="img" aria-label="Mapa del valle con los caminos de los optimizadores"></svg>
+        <div class="leyenda" id="leyenda"></div>
+        <div class="controles" id="controles"></div>
+        <div class="lectura-esc" id="lecturaEsc"></div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>Los cuatro optimizadores en una sola función, con un bucle explícito por coordenada, sobre el valle <span data-tex="x^2 + 10y^2"></span> desde (−4, 1) y con las tasas de la carrera. Cada uno da 100 pasos. Se ve el primer paso de cada uno por dentro (y el segundo de Adam); después salta al final.</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir</p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="true">Python</button>
+            <button type="button" data-lang="r" aria-pressed="false">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">1 · definir</span><span data-f="2">2 · un paso por dentro</span><span data-f="3">3 · cien pasos y comparar</span>
+        </div>
+        <h3 class="mini-tit vr-tit">El camino del programa</h3>
+        <svg id="vrMapa" class="lienzo" viewBox="0 0 400 215" role="img" aria-label="El camino de cada optimizador del programa"></svg>
+        <div class="vr-cuenta" id="vrCuenta"></div>
+        <h3 class="mini-tit vr-tit">Lo que imprime</h3>
+        <div class="vr-consola" id="vrConsola"></div>
+      </div>
+    </div>
+
+    <p class="vr-nota">Python y R dan los mismos números porque no hay azar: el valle y las tasas están escritos en el código. Para comparar, Python usa <code>AdamOptimizer</code>, la pieza que <code>MLPRegressor(solver="adam")</code> llama en cada lote; difiere en 2e−9 porque scikit-learn mete la corrección de sesgo en la tasa, <span data-tex="\eta\sqrt{1-\beta_2^t}/(1-\beta_1^t)"></span>, y suma el <span data-tex="\varepsilon"></span> a <span data-tex="\sqrt{s}"></span> sin corregir. Comparar contra <code>MLPRegressor</code> entero no se puede número a número: arranca de pesos al azar, minimiza el error de una red y no el de este valle, baraja y parte en lotes. R base no trae Adam, así que se compara contra una versión vectorizada propia, que coincide hasta el redondeo (1e−16). Raschka llama a Adam con una línea en su MLP de MNIST <cite class="cita" data-fuente="raschka13" data-pag="31" data-pimp="439" data-seccion="Training a multilayer perceptron for MNIST" data-que="torch.optim.Adam(model.parameters(), lr=0.001) y 20 épocas. El texto dice 96.3 % en entrenamiento, pero la salida impresa de la época 19 es 0.9813." data-cuando="Después de reproducir el programa"></cite>.</p>
+
+    <details class="profundizar">
+      <summary>La versión sin el bucle de coordenadas, y cómo se ve en PyTorch y Keras</summary>
+      <div>
+        <p>NumPy opera sobre las dos coordenadas a la vez, así que el bucle <code>for j</code> desaparece: <code>m = b1 * m + (1 - b1) * g</code>, <code>s = b2 * s + (1 - b2) * g ** 2</code> y <code>p = p - eta * (m / (1 - b1 ** t)) / (np.sqrt(s / (1 - b2 ** t)) + eps)</code>. Es la función <code>adam_vec</code> del código de R, línea por línea.</p>
+        <p>En PyTorch (no está instalado en esta máquina: este código no se corrió) se elige el optimizador y el bucle es siempre el mismo: <code>opt = torch.optim.Adam([p], lr=0.2, betas=(0.9, 0.999), eps=1e-8)</code>, y en cada paso <code>opt.zero_grad(); f(p).backward(); opt.step()</code>. Los otros tres son <code>torch.optim.SGD([p], lr=0.09)</code>, <code>torch.optim.SGD([p], lr=0.01, momentum=0.9)</code> y <code>torch.optim.RMSprop([p], lr=0.05, alpha=0.9)</code>; ojo, en PyTorch el <span data-tex="\rho"></span> de RMSProp se llama <code>alpha</code> y vale 0.99 por defecto. En Keras (tampoco se corrió) es <code>keras.optimizers.Adam(learning_rate=0.001)</code> dentro de <code>model.compile</code>; su <code>epsilon</code> por defecto es 1e−7 y no 1e−8.</p>
+      </div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>El "sgd" de scikit-learn</h3><span class="estado" data-reto="codigo2"></span></div>
+        <p class="desc">Se corrió esto: 30 pasos en el valle desde (−4, 1) con el optimizador que usa <code>MLPRegressor(solver="sgd", learning_rate_init=0.01)</code> y, al lado, el descenso simple con <span data-tex="\eta = 0.01"></span>.</p>
+        <div class="salida">opt = SGDOptimizer(q, learning_rate_init=0.01)
+print(np.round(q[0], 4), np.round(p, 4))
+[ 5.29e-01 -3.00e-04] [-2.1819e+00  1.2000e-03]</div>
+        <div id="codigo2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Una tasa adaptativa que no se adapta</h3><span class="estado" data-reto="codigo3"></span></div>
+        <p class="desc">Dos redes iguales sobre los ocho estudiantes de la ruta de regresión, con la misma semilla, Adam y 300 épocas. Solo cambia <code>learning_rate</code>.</p>
+        <div class="salida">a = MLPRegressor((5,), solver="adam", learning_rate="constant", random_state=0, max_iter=300).fit(x, y)
+b = MLPRegressor((5,), solver="adam", learning_rate="adaptive", random_state=0, max_iter=300).fit(x, y)
+print(a.loss_, b.loss_, a.loss_ == b.loss_)
+1618.506478378169 1618.506478378169 True</div>
+        <div id="codigo3"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: la biblioteca te avisa en el índice cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>¿Quién dibujó este camino?</h3><span class="estado" data-reto="ojo"></span></div>
+        <p class="desc">Cuarenta pasos de una bolita en el valle, desde un punto al azar. Decide qué regla usó. Apruebas con 4 de 5.</p>
+        <div id="ojo"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Construir</span><h3>Doma la carrera</h3><span class="estado" data-reto="construir"></span></div>
+        <p class="desc">Elige el optimizador, su tasa y lo empinado del valle, y corre 1000 pasos desde (−4, 1). Cumple los tres objetivos.</p>
+        <svg id="mapaConstr" class="lienzo" viewBox="0 0 400 215" role="img" aria-label="Mapa del valle para el reto de construir"></svg>
+        <div class="controles" id="ctrlConstr"></div>
+        <div class="lectura-esc" id="constrVivo"></div>
+        <ul class="objetivos" id="objetivos"></ul>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>Dos pasos con inercia</h3><span class="estado" data-reto="mano"></span></div>
+        <p class="desc">Un solo parámetro, dos gradientes y momentum. Haz la cuenta en papel antes de pedir pistas.</p>
+        <div id="manoDatos"></div>
+        <div id="mano"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>El segundo paso de Adam</h3><span class="estado" data-reto="mano2"></span></div>
+        <p class="desc">Dos gradientes seguidos de un parámetro. Con calculadora: el cociente que multiplica a η en el paso 2.</p>
+        <div id="mano2Datos"></div>
+        <div id="mano2"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Alguien se equivocó</h3><span class="estado" data-reto="error"></span></div>
+        <p class="desc">Una de las líneas tiene un error. Tócala.</p>
+        <div id="error"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Dividir por la raíz</h3><span class="estado" data-reto="prop1"></span></div>
+        <div id="prop1"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Velocidad límite</h3><span class="estado" data-reto="prop2"></span></div>
+        <div id="prop2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Sin corrección</h3><span class="estado" data-reto="prop3"></span></div>
+        <div id="prop3"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Dos memorias</h3><span class="estado" data-reto="prop4"></span></div>
+        <div id="prop4"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Recordar a la fuerza es lo que fija. Arma el paso de Adam y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Fórmula de memoria</span><h3>Arma el paso de Adam pieza por pieza</h3><span class="estado" data-reto="formula"></span></div>
+        <p class="desc">La actualización de un parámetro, con las memorias ya corregidas. Hay piezas de más que no pertenecen.</p>
+        <div id="formula"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el libro</h2>
+      <p class="lecturas-intro">Ya viste las cuatro bolitas. Ahora ve a la versión técnica y comprueba que la reconoces. Brasil es el único de tus libros que escribe las fórmulas de los tres optimizadores (y trae erratas que aquí están señaladas). La UD4 solo nombra AdaGrad y Adam, sin fórmulas, y usa Adam en los cuadernos de Keras; Raschka lo usa en su código y le dedica un recuadro sin fórmulas; Nield no trae ninguno de los tres. Si abres la biblioteca con doble clic, el enlace abre el PDF en esa página.</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> El valle <i>x</i>² + 10<i>y</i>² y el punto de partida (−4, 1) son de juguete, elegidos para que las cuentas den limpias;
+    la función de Rosenbrock es el valle de prueba clásico de la optimización. Las tasas de cada optimizador se eligieron para que a cada uno le vaya bien en este valle.
+    Una bolita "llega" cuando entra en el círculo de la meta (radio 0.05 en el valle, 0.01 en Rosenbrock) y ya no sale. Los ocho estudiantes del reto de scikit-learn son los datos inventados de la ruta de regresión.
+    El código de la parte 2 se corrió en Python y en R, y la consola muestra lo que imprimió cada uno. Tu progreso se guarda solo en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+/*
+  Optimizadores sobre el valle de la ruta f(x, y) = x^2 + 10y^2 (gradiente (2x, 20y), curvaturas 2 y 20, kappa = 10), desde (-4, 1).
+  Tasas de la carrera: descenso simple 0.09, momentum 0.01 (beta 0.9), RMSProp 0.05 (rho 0.9), Adam 0.2 (0.9, 0.999, 1e-8).
+  "Llega" = entra en el circulo de radio 0.05 y ya no sale: 23, 78, 201 y 77 pasos. Con f = x^2 + b y^2 y b >= 20 el simple diverge;
+  Adam y RMSProp hacen exactamente el mismo camino para cualquier b. Adam sin correccion de sesgo: primer paso 3.16 veces mas largo, llega en 79.
+  Rosenbrock desde (-1.2, 1), radio 0.01: simple 0.001 -> 11329, momentum 0.001 -> 1027, RMSProp 0.001 -> 5734, Adam 0.01 -> 3790.
+*/
+(function () {
+  "use strict";
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var RETOS = ["ojo", "construir", "mano", "mano2", "error", "prop1", "prop2", "prop3", "prop4", "formula", "codigo1", "codigo2", "codigo3"];
+  var C = B.concepto({ id: "optimizadores-adam", retos: RETOS, pasos: 7 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  /* ---------------- utilidades ---------------- */
+  var f = B.fmt;
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+  function tx(v, d) { return f(v, d).replace("−", "-"); }
+  var NS = "http://www.w3.org/2000/svg";
+  function nodo(tag, at, padre) {
+    var e = document.createElementNS(NS, tag);
+    for (var k in at) e.setAttribute(k, at[k]);
+    if (padre) padre.appendChild(e);
+    return e;
+  }
+  function texto(padre, at, t) { var e = nodo("text", at, padre); e.textContent = t; return e; }
+  function etiq(v) { var s = Math.abs(v) < 1e-9 ? "0" : String(+v.toFixed(3)); return s.replace("-", "−"); }
+  function flecha(g, x1, y1, x2, y2, cls, cabeza) {
+    var L = Math.hypot(x2 - x1, y2 - y1);
+    if (L < 3) return;
+    nodo("line", { x1: x1, y1: y1, x2: x2, y2: y2, "class": cls }, g);
+    var ux = (x2 - x1) / L, uy = (y2 - y1) / L, s = Math.min(8, L * 0.5);
+    nodo("polygon", { points: [x2, y2, x2 - s * ux + s * 0.45 * uy, y2 - s * uy - s * 0.45 * ux, x2 - s * ux - s * 0.45 * uy, y2 - s * uy + s * 0.45 * ux].join(" "), "class": cabeza }, g);
+  }
+  function elegir(lista) { return lista[Math.floor(Math.random() * lista.length)]; }
+
+  /* ---------------- terrenos y optimizadores ---------------- */
+  var CACHE_T = {};
+  function terreno(tipo, b) {
+    var clave = tipo === "ros" ? "ros" : "q" + b;
+    if (CACHE_T[clave]) return CACHE_T[clave];
+    var T;
+    if (tipo === "ros") {
+      T = { tipo: "ros", clave: clave, tol: 0.01, p0: [-1.2, 1], opt: [1, 1], H: 15000, rx: [-1.5, 1.5], ry: [-0.35, 1.45],
+        f: function (x, y) { return (1 - x) * (1 - x) + 100 * (y - x * x) * (y - x * x); },
+        g: function (p) { var x = p[0], y = p[1]; return [-2 * (1 - x) - 400 * x * (y - x * x), 200 * (y - x * x)]; } };
+    } else {
+      T = { tipo: "q", b: b, clave: clave, tol: 0.05, p0: [-4, 1], opt: [0, 0], H: 3000, rx: [-4.6, 3.4], ry: [-2, 2],
+        f: function (x, y) { return x * x + b * y * y; },
+        g: function (p) { return [2 * p[0], 2 * b * p[1]]; } };
+    }
+    CACHE_T[clave] = T;
+    return T;
+  }
+  var NOMBRE = { sgd: "Descenso simple", mom: "Momentum", rms: "RMSProp", adam: "Adam" };
+  var ORDEN = ["sgd", "mom", "rms", "adam"];
+  var TASA = { sgd: 0.09, mom: 0.01, rms: 0.05, adam: 0.2 };
+  var TASA_ROS = { sgd: 0.001, mom: 0.001, rms: 0.001, adam: 0.01 };
+
+  function nuevo(tipo, eta, T, x) {
+    x = x || {};
+    var p0 = (x.p0 || T.p0).slice();
+    return { tipo: tipo, eta: eta, T: T, b1: 0.9, b2: 0.999, corr: x.corr !== false, olvido: x.olvido !== false,
+      p: p0.slice(), m: [0, 0], s: [0, 0], t: 0, rastro: [p0.slice()], div: false, ult: null };
+  }
+  /* un paso, con el mismo orden de operaciones que el codigo de la parte 2 */
+  function paso(o) {
+    if (o.div) return false;
+    var g = o.T.g(o.p), t = ++o.t, info = { g: g.slice(), d: [0, 0], mh: [0, 0], sh: [0, 0] };
+    for (var j = 0; j < 2; j++) {
+      var antes = o.p[j];
+      if (o.tipo === "sgd") o.p[j] = o.p[j] - o.eta * g[j];
+      else if (o.tipo === "mom") { o.m[j] = o.b1 * o.m[j] + g[j]; o.p[j] = o.p[j] - o.eta * o.m[j]; }
+      else if (o.tipo === "rms") {
+        o.s[j] = o.olvido ? 0.9 * o.s[j] + 0.1 * g[j] * g[j] : o.s[j] + g[j] * g[j];
+        o.p[j] = o.p[j] - o.eta * g[j] / (Math.sqrt(o.s[j]) + 1e-8);
+      } else {
+        o.m[j] = o.b1 * o.m[j] + (1 - o.b1) * g[j];
+        o.s[j] = o.b2 * o.s[j] + (1 - o.b2) * g[j] * g[j];
+        var mh = o.corr ? o.m[j] / (1 - Math.pow(o.b1, t)) : o.m[j];
+        var sh = o.corr ? o.s[j] / (1 - Math.pow(o.b2, t)) : o.s[j];
+        info.mh[j] = mh; info.sh[j] = sh;
+        o.p[j] = o.p[j] - o.eta * mh / (Math.sqrt(sh) + 1e-8);
+      }
+      info.d[j] = o.p[j] - antes;
+    }
+    o.ult = info;
+    o.rastro.push(o.p.slice());
+    if (!isFinite(o.p[0]) || !isFinite(o.p[1]) || Math.abs(o.p[0]) > 1e4 || Math.abs(o.p[1]) > 1e4) { o.div = true; return false; }
+    return true;
+  }
+  function reiniciar(o) { var n = nuevo(o.tipo, o.eta, o.T, { corr: o.corr, olvido: o.olvido, p0: o.rastro[0] }); for (var k in n) o[k] = n[k]; }
+  function dentro(T, p) { return Math.hypot(p[0] - T.opt[0], p[1] - T.opt[1]) < T.tol; }
+
+  /* trayectoria completa y paso de llegada: el ultimo momento en que estaba fuera, mas uno */
+  var CACHE_TR = {};
+  function trayectoria(tipo, eta, T, x) {
+    x = x || {};
+    var clave = [tipo, eta, T.clave, x.corr === false ? "nc" : "", x.olvido === false ? "ag" : ""].join("|");
+    if (CACHE_TR[clave]) return CACHE_TR[clave];
+    var o = nuevo(tipo, eta, T, x), k;
+    for (k = 0; k < T.H; k++) if (!paso(o)) break;
+    var ult = -1;
+    if (!o.div) o.rastro.forEach(function (p, i) { if (!dentro(T, p)) ult = i; });
+    var r = { pts: o.rastro, div: o.div, llega: o.div ? null : (ult === o.rastro.length - 1 ? null : ult + 1) };
+    CACHE_TR[clave] = r;
+    return r;
+  }
+
+  /* ---------------- dibujo del mapa ---------------- */
+  var idClip = 0;
+  function marcoT(T, vista) {
+    var rx = vista ? vista.rx : T.rx, ry = vista ? vista.ry : T.ry, W = 400, M = { l: 40, r: 10, t: 10, b: 30 };
+    var u = (W - M.l - M.r) / (rx[1] - rx[0]), H = Math.round(M.t + M.b + u * (ry[1] - ry[0]));
+    return { W: W, H: H, M: M, rx: rx, ry: ry, u: u,
+      sx: function (v) { return M.l + (v - rx[0]) * u; },
+      sy: function (v) { return H - M.b - (v - ry[0]) * u; } };
+  }
+  function contornos(fn, rx, ry, niveles, N) {
+    var xs = [], ys = [], V = [], i, j;
+    for (i = 0; i <= N; i++) { xs.push(rx[0] + (rx[1] - rx[0]) * i / N); ys.push(ry[0] + (ry[1] - ry[0]) * i / N); }
+    for (j = 0; j <= N; j++) { V.push([]); for (i = 0; i <= N; i++) V[j].push(fn(xs[i], ys[j])); }
+    return niveles.map(function (L) {
+      var segs = [];
+      for (j = 0; j < N; j++) for (i = 0; i < N; i++) {
+        var c = [[xs[i], ys[j], V[j][i]], [xs[i + 1], ys[j], V[j][i + 1]], [xs[i + 1], ys[j + 1], V[j + 1][i + 1]], [xs[i], ys[j + 1], V[j + 1][i]]];
+        var pts = [];
+        for (var k = 0; k < 4; k++) {
+          var a = c[k], bb = c[(k + 1) % 4];
+          if ((a[2] - L) * (bb[2] - L) < 0) { var t = (L - a[2]) / (bb[2] - a[2]); pts.push([a[0] + t * (bb[0] - a[0]), a[1] + t * (bb[1] - a[1])]); }
+        }
+        if (pts.length >= 2) segs.push([pts[0], pts[1]]);
+        if (pts.length === 4) segs.push([pts[2], pts[3]]);
+      }
+      return segs;
+    });
+  }
+  var CACHE_C = null;
+  function contornosRos() {
+    if (!CACHE_C) { var R = terreno("ros"); CACHE_C = contornos(R.f, [-1.6, 1.6], [-0.5, 1.6], [0.3, 1, 3, 10, 30, 100, 300], 90); }
+    return CACHE_C;
+  }
+  function camino(pts, F, hasta) {
+    var n = Math.min(pts.length, hasta == null ? pts.length : hasta + 1), salto = Math.max(1, Math.ceil(n / 1500)), d = "";
+    for (var i = 0; i < n; i += salto) d += (i ? "L" : "M") + F.sx(pts[i][0]).toFixed(1) + " " + F.sy(pts[i][1]).toFixed(1);
+    if ((n - 1) % salto) d += "L" + F.sx(pts[n - 1][0]).toFixed(1) + " " + F.sy(pts[n - 1][1]).toFixed(1);
+    return d;
+  }
+  /*
+    o: { vista, caminos: [{pts, hasta, tipo, fantasma, puntos}], bolas: [{p, tipo}], flechas: [{de, a, cls, cab, lab}] }
+  */
+  function dibujarMapa(svg, T, o) {
+    o = o || {};
+    var F = marcoT(T, o.vista);
+    svg.setAttribute("viewBox", "0 0 " + F.W + " " + F.H);
+    svg.innerHTML = "";
+    var id = "clipO" + (++idClip);
+    var cp = nodo("clipPath", { id: id }, nodo("defs", {}, svg));
+    nodo("rect", { x: F.M.l, y: F.M.t, width: F.W - F.M.l - F.M.r, height: F.H - F.M.t - F.M.b }, cp);
+    var g0 = nodo("g", {}, svg), v;
+    var paso = o.vista ? (o.vista.rx[1] - o.vista.rx[0] > 0.3 ? 0.1 : 0.05) : (T.tipo === "ros" ? 0.5 : 1);
+    for (v = Math.ceil(F.rx[0] / paso - 1e-9) * paso; v <= F.rx[1] + 1e-9; v += paso) {
+      nodo("line", { x1: F.sx(v), x2: F.sx(v), y1: F.sy(F.ry[0]), y2: F.sy(F.ry[1]), "class": "grid" }, g0);
+      texto(g0, { x: F.sx(v), y: F.H - F.M.b + 13, "class": "tick", "text-anchor": "middle" }, etiq(v));
+    }
+    for (v = Math.ceil(F.ry[0] / paso - 1e-9) * paso; v <= F.ry[1] + 1e-9; v += paso) {
+      nodo("line", { x1: F.sx(F.rx[0]), x2: F.sx(F.rx[1]), y1: F.sy(v), y2: F.sy(v), "class": "grid" }, g0);
+      texto(g0, { x: F.M.l - 5, y: F.sy(v) + 3.5, "class": "tick", "text-anchor": "end" }, etiq(v));
+    }
+    nodo("rect", { x: F.M.l, y: F.M.t, width: F.W - F.M.l - F.M.r, height: F.H - F.M.t - F.M.b, "class": "eje" }, g0);
+    texto(g0, { x: F.sx(F.rx[1]) - 2, y: F.H - 3, "class": "eje-tit", "text-anchor": "end" }, "x");
+    texto(g0, { x: F.M.l + 5, y: F.M.t + 13, "class": "eje-tit" }, "y");
+    var g = nodo("g", { "clip-path": "url(#" + id + ")" }, svg);
+    if (T.tipo === "ros") {
+      contornosRos().forEach(function (segs) {
+        var d = "";
+        segs.forEach(function (s) { d += "M" + F.sx(s[0][0]).toFixed(1) + " " + F.sy(s[0][1]).toFixed(1) + "L" + F.sx(s[1][0]).toFixed(1) + " " + F.sy(s[1][1]).toFixed(1); });
+        if (d) nodo("path", { d: d, "class": "nivel" }, g);
+      });
+    } else {
+      var radios = o.vista ? [0.025, 0.05, 0.075, 0.1, 0.125, 0.15, 0.175, 0.2, 0.25, 0.3] : [0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5];
+      radios.forEach(function (r) {
+        nodo("ellipse", { cx: F.sx(0), cy: F.sy(0), rx: r * F.u, ry: r / Math.sqrt(T.b) * F.u, "class": "nivel" }, g);
+      });
+    }
+    var rm = Math.max(4, T.tol * F.u);
+    nodo("circle", { cx: F.sx(T.opt[0]), cy: F.sy(T.opt[1]), r: rm, "class": "meta" }, g);
+    if (!o.vista) texto(g, { x: F.sx(T.opt[0]) + rm + 3, y: F.sy(T.opt[1]) - rm - 2, "class": "metalab" }, "meta");
+    nodo("circle", { cx: F.sx(T.p0[0]), cy: F.sy(T.p0[1]), r: 4, "class": "inicio" }, g);
+    (o.caminos || []).forEach(function (c) {
+      if (c.pts.length > 1) nodo("path", { d: camino(c.pts, F, c.hasta), "class": "cam " + c.tipo + (c.fantasma ? " fantasma" : "") }, g);
+      if (c.puntos) {
+        var n = Math.min(c.pts.length, c.hasta == null ? c.pts.length : c.hasta + 1);
+        for (var i = 1; i < n && i < 160; i++) nodo("circle", { cx: F.sx(c.pts[i][0]), cy: F.sy(c.pts[i][1]), r: 1.8, "class": "pt " + c.tipo }, g);
+      }
+    });
+    (o.flechas || []).forEach(function (a) {
+      flecha(g, F.sx(a.de[0]), F.sy(a.de[1]), F.sx(a.a[0]), F.sy(a.a[1]), a.cls, a.cab);
+      if (a.lab) texto(g, { x: F.sx(a.a[0]) + 5, y: F.sy(a.a[1]) + (a.dy || -5), "class": "flab" }, a.lab);
+    });
+    (o.bolas || []).forEach(function (b) {
+      if (isFinite(b.p[0]) && isFinite(b.p[1])) nodo("circle", { cx: F.sx(b.p[0]), cy: F.sy(b.p[1]), r: b.r || 6, "class": "bol " + b.tipo }, g);
+    });
+    return F;
+  }
+
+  /* ---------------- animacion ---------------- */
+  var animTok = 0;
+  function animar(total, unPaso, alPintar, alTerminar, cuadros) {
+    var tok = ++animTok, hechos = 0, porCuadro = Math.max(1, Math.ceil(total / (cuadros || 60)));
+    function cuadro() {
+      if (tok !== animTok) return;
+      for (var k = 0; k < porCuadro && hechos < total; k++) { hechos++; if (unPaso() === false) { hechos = total; break; } }
+      alPintar();
+      if (hechos < total) setTimeout(cuadro, total <= 12 ? 170 : 30);
+      else if (alTerminar) alTerminar();
+    }
+    cuadro();
+  }
+  function cortar() { animTok++; }
+
+  /* ---------------- controles ---------------- */
+  function controlLista(cont, nombre, lista, valor, alCambiar, etiqueta) {
+    var idx = Math.max(0, lista.indexOf(valor));
+    var div = document.createElement("div");
+    div.className = "alfa-row";
+    div.innerHTML = '<span>' + nombre + ' =</span><b></b><input type="range" min="0" step="1" aria-label="' + (etiqueta || nombre) + '">';
+    var inp = div.querySelector("input"), lab = div.querySelector("b");
+    inp.max = lista.length - 1;
+    inp.value = idx;
+    function pintar() { lab.textContent = String(lista[+inp.value]); }
+    pintar();
+    inp.addEventListener("input", function () { pintar(); alCambiar(lista[+inp.value]); });
+    cont.appendChild(div);
+    return inp;
+  }
+  function botones(cont, lista) {
+    var div = document.createElement("div");
+    div.className = "btn-row";
+    lista.forEach(function (b) {
+      var x = document.createElement("button");
+      x.type = "button";
+      x.textContent = b.t;
+      if (b.primary) x.className = "primary";
+      if (b.off) x.disabled = true;
+      x.addEventListener("click", b.fn);
+      div.appendChild(x);
+    });
+    cont.appendChild(div);
+    return div;
+  }
+  function casilla(cont, txt, valor, alCambiar, off) {
+    var l = document.createElement("label");
+    l.className = "chk-label";
+    l.innerHTML = '<input type="checkbox"> ' + txt;
+    var i = l.querySelector("input");
+    i.checked = !!valor;
+    if (off) i.disabled = true;
+    i.addEventListener("change", function () { alCambiar(i.checked); });
+    var fila = document.createElement("div");
+    fila.className = "btn-row";
+    fila.appendChild(l);
+    cont.appendChild(fila);
+    return i;
+  }
+
+  /* ---------------- la carrera (pasos 1, 6 y 7) ---------------- */
+  function carrera(T, tasas) {
+    return { T: T, tasas: tasas, k: 0, tr: ORDEN.map(function (t) { return trayectoria(t, tasas[t], T); }) };
+  }
+  function tablaCarrera(c) {
+    var mejor = Infinity;
+    c.tr.forEach(function (r) { if (r.llega != null && r.llega < mejor) mejor = r.llega; });
+    var h = '<table class="tabla-carrera"><tr><th>regla</th><th>η</th><th>estado</th></tr>';
+    ORDEN.forEach(function (t, i) {
+      var r = c.tr[i], est;
+      if (r.div && c.k >= r.pts.length - 1) est = '<span class="aviso">se escapó del valle</span>';
+      else if (r.llega != null && c.k >= r.llega) est = '<span class="' + (r.llega === mejor ? "gana" : "") + '">llegó en el paso ' + r.llega + "</span>";
+      else if (r.llega == null && !r.div && c.k >= c.T.H) est = "no llega";
+      else est = "paso " + Math.min(c.k, r.pts.length - 1);
+      h += '<tr><td><span class="marca ' + t + '"></span>' + NOMBRE[t] + "</td><td>" + c.tasas[t] + "</td><td>" + est + "</td></tr>";
+    });
+    return h + "</table>";
+  }
+  function dibujarCarrera(svg, c) {
+    dibujarMapa(svg, c.T, {
+      caminos: c.tr.map(function (r, i) { return { pts: r.pts, hasta: c.k, tipo: ORDEN[i] }; }),
+      bolas: c.tr.map(function (r, i) { return { p: r.pts[Math.min(c.k, r.pts.length - 1)], tipo: ORDEN[i] }; })
+    });
+  }
+  function correrCarrera(c, K, alPintar) {
+    var falta = K - c.k;
+    if (falta <= 0) { c.k = 0; falta = K; }
+    animar(falta, function () { c.k++; }, alPintar, null, Math.min(120, falta));
+  }
+
+  /* ---------------- estado del recorrido ---------------- */
+  var Q = terreno("q", 10);
+  var est = {
+    paso: 0, chk: {}, cerca: false,
+    c1: carrera(Q, TASA),
+    sgd: nuevo("sgd", 0.09, Q),
+    mom: nuevo("mom", 0.01, Q),
+    rms: nuevo("rms", 0.05, Q),
+    adam: nuevo("adam", 0.2, Q),
+    b: 10, c6: carrera(Q, TASA),
+    tasasRos: { sgd: 0.001, mom: 0.001, rms: 0.001, adam: 0.01 }, c7: null
+  };
+  est.c7 = carrera(terreno("ros"), est.tasasRos);
+
+  var lienzo = $("lienzo"), pasos;
+  var HINTS = [
+    "Responde la predicción y suelta las cuatro",
+    "Mueve η y da pasos",
+    "Da pasos y mira las dos flechas",
+    "Calcula, y después da pasos",
+    "Calcula, y después da pasos",
+    "Predice, y después mueve b",
+    "Elige las tasas y suelta las cuatro"
+  ];
+  var LEY4 = '<span><i class="l-sgd"></i>Descenso simple</span><span><i class="l-mom"></i>Momentum</span><span><i class="l-rms"></i>RMSProp</span><span><i class="l-adam"></i>Adam</span>';
+  var LEYENDAS = [
+    LEY4,
+    '<span><i class="l-sgd"></i>Descenso simple</span>',
+    '<span><i class="l-mom"></i>Momentum</span><span><i class="l-gris"></i>el paso sin inercia, −ηg</span>',
+    '<span><i class="l-rms"></i>RMSProp</span><span><i class="l-gris"></i>el paso del descenso simple, −ηg</span>',
+    '<span><i class="l-adam"></i>Adam</span><span>tenue: momentum y RMSProp</span>',
+    LEY4,
+    LEY4
+  ];
+  function vec(v, d) { return "(" + f(v[0], d) + ", " + f(v[1], d) + ")"; }
+  var VISTA_CERCA = { rx: [-0.3, 0.3], ry: [-0.15, 0.15] };
+
+  function render() {
+    var i = est.paso;
+    $("leyenda").innerHTML = LEYENDAS[i];
+    if (i === 0) {
+      var c = est.c1;
+      if (!est.chk[0]) {
+        dibujarMapa(lienzo, Q, { bolas: [{ p: Q.p0, tipo: "sgd", r: 5 }] });
+        $("lecturaEsc").innerHTML = "Todas salen de <b>(−4, 1)</b>. El fondo está en (0, 0).";
+      } else {
+        dibujarCarrera(lienzo, c);
+        $("lecturaEsc").innerHTML = tablaCarrera(c);
+      }
+    } else if (i === 1) {
+      var o = est.sgd, a = o.eta, ok2 = !!est.chk[1];
+      dibujarMapa(lienzo, Q, { caminos: [{ pts: o.rastro, tipo: "sgd", puntos: true }], bolas: [{ p: o.p, tipo: "sgd" }] });
+      $("vivo2").innerHTML = "η = " + a + " → factor de x: 1 − 2·" + a + " = <b>" + f(1 - 2 * a, 2) + "</b> · factor de y: 1 − 20·" + a + " = <b>" + f(1 - 20 * a, 2) + "</b>" +
+        (ok2 ? "" : '<br>y deja de acercarse a 0 desde η = <b class="oculto">?</b>');
+      $("lecturaEsc").innerHTML = "paso <b>" + o.t + "</b> · punto " + vec(o.p, 3) + (o.div ? '<br><span class="aviso">Se escapó: el factor de y vale ' + f(1 - 20 * a, 2) + ", y cada rebote es más largo que el anterior.</span>" :
+        (Math.abs(1 - 20 * a) >= 1 - 1e-9 && o.t > 0 ? '<br><span class="aviso">y rebota entre 1 y −1 sin acercarse nunca.</span>' : (dentro(Q, o.p) ? '<br><span class="bien">Dentro de la meta.</span>' : "")));
+    } else if (i === 2) {
+      var M = est.mom, ok3 = !!est.chk[2], g = Q.g(M.p), nv = [0.9 * M.m[0] + g[0], 0.9 * M.m[1] + g[1]];
+      var fl = [
+        { de: M.p, a: [M.p[0] - M.eta * g[0], M.p[1] - M.eta * g[1]], cls: "fl-g", cab: "fl-g-h" },
+        { de: M.p, a: [M.p[0] - M.eta * nv[0], M.p[1] - M.eta * nv[1]], cls: "fl-v", cab: "fl-v-h" }
+      ];
+      dibujarMapa(lienzo, Q, { caminos: [{ pts: trayectoria("sgd", 0.09, Q).pts, hasta: 60, tipo: "sgd", fantasma: true }, { pts: M.rastro, tipo: "mom", puntos: true }], bolas: [{ p: M.p, tipo: "mom" }], flechas: fl });
+      $("vivo3").innerHTML = "η = " + M.eta + " · paso t = " + M.t + " · v = " + (ok3 || M.t === 0 ? vec(M.m, 2) : '<b class="oculto">?</b>') + " · gradiente aquí: " + vec(g, 2);
+      $("lecturaEsc").innerHTML = "punto " + vec(M.p, 3) + (M.div ? '<br><span class="aviso">Se escapó: con esta tasa la inercia lo lleva cada vez más lejos.</span>' : (dentro(Q, M.p) ? '<br><span class="bien">Dentro de la meta.</span>' : "")) +
+        "<br>flecha azul: el próximo paso, −η(0.9v + g)";
+    } else if (i === 3) {
+      var R = est.rms, ok4 = !!est.chk[3], gr = Q.g(R.p);
+      var fl4 = R.div ? [] : [{ de: R.p, a: [R.p[0] - R.eta * gr[0], R.p[1] - R.eta * gr[1]], cls: "fl-g", cab: "fl-g-h" }];
+      dibujarMapa(lienzo, Q, { vista: est.cerca ? VISTA_CERCA : null, caminos: [{ pts: trayectoria("sgd", 0.09, Q).pts, hasta: 60, tipo: "sgd", fantasma: true }, { pts: R.rastro, tipo: "rms", puntos: true }], bolas: [{ p: R.p, tipo: "rms" }], flechas: fl4 });
+      var u = R.ult;
+      $("vivo4").innerHTML = (R.olvido ? "RMSProp" : "AdaGrad") + " · η = " + R.eta + " · paso t = " + R.t + " · s = " + vec(R.s, 3) +
+        (u ? "<br>último paso: Δx = <b>" + f(u.d[0], 4) + "</b>, Δy = <b>" + f(u.d[1], 4) + "</b>" : "<br>primer paso: Δx = " + (ok4 ? "<b>" + f(0.05 / Math.sqrt(0.1), 4) + "</b>" : '<b class="oculto">?</b>'));
+      $("lecturaEsc").innerHTML = "punto " + vec(R.p, 4) + (dentro(Q, R.p) ? ' <span class="bien">dentro de la meta</span>' : "") +
+        "<br>flecha gris: el paso que daría el descenso simple con la misma η";
+    } else if (i === 4) {
+      var A = est.adam, ok5 = !!est.chk[4], ua = A.ult;
+      dibujarMapa(lienzo, Q, { vista: est.cerca ? VISTA_CERCA : null, caminos: [
+        { pts: trayectoria("mom", 0.01, Q).pts, hasta: 200, tipo: "mom", fantasma: true },
+        { pts: trayectoria("rms", 0.05, Q).pts, hasta: 250, tipo: "rms", fantasma: true },
+        { pts: A.rastro, tipo: "adam", puntos: true }], bolas: [{ p: A.p, tipo: "adam" }] });
+      $("vivo5").innerHTML = "η = " + A.eta + " · corrección " + (A.corr ? "encendida" : "apagada") + " · paso t = " + A.t +
+        (ua ? "<br>m̂ = " + vec(ua.mh, 3) + " · √ŝ = (" + f(Math.sqrt(ua.sh[0]), 3) + ", " + f(Math.sqrt(ua.sh[1]), 3) + ")<br>último paso: Δx = <b>" + f(ua.d[0], 4) + "</b>, Δy = <b>" + f(ua.d[1], 4) + "</b>"
+          : "<br>primer paso: Δx = " + (ok5 ? "<b>0.2000</b>" : '<b class="oculto">?</b>'));
+      $("lecturaEsc").innerHTML = "punto " + vec(A.p, 4) + (dentro(Q, A.p) ? ' <span class="bien">dentro de la meta</span>' : "");
+    } else if (i === 5) {
+      var c6 = est.c6;
+      dibujarCarrera(lienzo, c6);
+      $("vivo6").innerHTML = "f(x, y) = x² + <b>" + est.b + "</b>y² · curvaturas 2 y " + (2 * est.b) + " · κ = " + est.b +
+        " · el descenso simple con η = 0.09 necesita η < 2/" + (2 * est.b) + " = " + f(1 / est.b, 3);
+      $("lecturaEsc").innerHTML = tablaCarrera(c6);
+    } else if (i === 6) {
+      var c7 = est.c7;
+      dibujarCarrera(lienzo, c7);
+      $("vivo7").innerHTML = "Rosenbrock desde (−1.2, 1) · meta: a menos de 0.01 de (1, 1) · tasas: " + ORDEN.map(function (t) { return NOMBRE[t] + " " + est.tasasRos[t]; }).join(", ");
+      $("lecturaEsc").innerHTML = tablaCarrera(c7);
+    }
+  }
+
+  function controles(i) {
+    var c = $("controles");
+    c.innerHTML = "";
+    if (i === 0) {
+      var off = !est.chk[0];
+      botones(c, [
+        { t: "Soltar las cuatro", primary: true, off: off, fn: function () { cortar(); correrCarrera(est.c1, 210, render); } },
+        { t: "Un paso", off: off, fn: function () { cortar(); est.c1.k++; render(); } },
+        { t: "Volver a empezar", off: off, fn: function () { cortar(); est.c1.k = 0; render(); } }
+      ]);
+    } else if (i === 1) {
+      var o = est.sgd, lista = est.chk[1] ? [0.01, 0.02, 0.05, 0.08, 0.09, 0.1, 0.11] : [0.01, 0.02, 0.05, 0.08, 0.09];
+      controlLista(c, "η", lista, o.eta, function (a) { cortar(); o.eta = a; reiniciar(o); render(); }, "Tasa de aprendizaje");
+      botones(c, [
+        { t: "1 paso", primary: true, fn: function () { cortar(); paso(o); render(); } },
+        { t: "20 pasos", fn: function () { animar(20, function () { return paso(o); }, render); } },
+        { t: "Reiniciar", fn: function () { cortar(); reiniciar(o); render(); } }
+      ]);
+    } else if (i === 2) {
+      var M = est.mom, listaM = est.chk.b3 ? [0.005, 0.01, 0.05, 0.15, 0.2] : [0.005, 0.01, 0.05];
+      controlLista(c, "η", listaM, M.eta, function (a) { cortar(); M.eta = a; reiniciar(M); render(); }, "Tasa de aprendizaje");
+      botones(c, [
+        { t: "1 paso", primary: true, fn: function () { cortar(); paso(M); render(); } },
+        { t: "20 pasos", fn: function () { animar(20, function () { return paso(M); }, render); } },
+        { t: "200 pasos", fn: function () { animar(200, function () { return paso(M); }, render); } },
+        { t: "Reiniciar", fn: function () { cortar(); reiniciar(M); render(); } }
+      ]);
+    } else if (i === 3) {
+      var R = est.rms, off4 = !est.chk[3];
+      controlLista(c, "η", [0.01, 0.05, 0.1, 0.2, 0.5], R.eta, function (a) { cortar(); R.eta = a; reiniciar(R); render(); }, "Tasa de aprendizaje");
+      casilla(c, "AdaGrad: sumar todos los cuadrados, sin olvidar", !R.olvido, function (v) { cortar(); R.olvido = !v; reiniciar(R); render(); }, off4);
+      botones(c, [
+        { t: "1 paso", primary: true, off: off4, fn: function () { cortar(); paso(R); render(); } },
+        { t: "20 pasos", off: off4, fn: function () { animar(20, function () { return paso(R); }, render); } },
+        { t: "300 pasos", off: off4, fn: function () { animar(300, function () { return paso(R); }, render); } },
+        { t: "Reiniciar", fn: function () { cortar(); reiniciar(R); render(); } },
+        { t: est.cerca ? "Ver el valle entero" : "Acercar al fondo", fn: function () { est.cerca = !est.cerca; controles(3); render(); } }
+      ]);
+    } else if (i === 4) {
+      var A = est.adam, off5 = !est.chk[4];
+      controlLista(c, "η", [0.05, 0.1, 0.2, 0.5, 1], A.eta, function (a) { cortar(); A.eta = a; reiniciar(A); render(); }, "Tasa de aprendizaje");
+      casilla(c, "Corrección de sesgo", A.corr, function (v) { cortar(); A.corr = v; reiniciar(A); render(); }, !est.chk.b5);
+      botones(c, [
+        { t: "1 paso", primary: true, off: off5, fn: function () { cortar(); paso(A); render(); } },
+        { t: "20 pasos", off: off5, fn: function () { animar(20, function () { return paso(A); }, render); } },
+        { t: "200 pasos", off: off5, fn: function () { animar(200, function () { return paso(A); }, render); } },
+        { t: "Reiniciar", fn: function () { cortar(); reiniciar(A); render(); } },
+        { t: est.cerca ? "Ver el valle entero" : "Acercar al fondo", fn: function () { est.cerca = !est.cerca; controles(4); render(); } }
+      ]);
+    } else if (i === 5) {
+      var off6 = !est.chk[5];
+      var inp = controlLista(c, "b", [10, 20, 50, 100], est.b, function (b) { cortar(); est.b = b; est.c6 = carrera(terreno("q", b), TASA); render(); }, "Lo empinado del valle en y");
+      if (off6) inp.disabled = true;
+      botones(c, [
+        { t: "Soltar las cuatro", primary: true, fn: function () { cortar(); correrCarrera(est.c6, 210, render); } },
+        { t: "Volver a empezar", fn: function () { cortar(); est.c6.k = 0; render(); } }
+      ]);
+    } else if (i === 6) {
+      var LIS = { sgd: [0.0005, 0.001, 0.002, 0.003], mom: [0.0005, 0.001, 0.002, 0.003], rms: [0.0005, 0.001, 0.002, 0.005], adam: [0.005, 0.01, 0.02, 0.05] };
+      ORDEN.forEach(function (t) {
+        controlLista(c, "η " + NOMBRE[t], LIS[t], est.tasasRos[t], function (a) { cortar(); est.tasasRos[t] = a; est.c7 = carrera(terreno("ros"), est.tasasRos); render(); }, "Tasa de " + NOMBRE[t]);
+      });
+      botones(c, [
+        { t: "Soltar las cuatro", primary: true, off: !est.chk[6], fn: function () { cortar(); correrCarrera(est.c7, 12000, render); } },
+        { t: "Volver a empezar", fn: function () { cortar(); est.c7.k = 0; render(); } }
+      ]);
+    }
+  }
+
+  function entrar(i) {
+    cortar();
+    est.paso = i;
+    if (i !== 3 && i !== 4) est.cerca = false;
+    $("escHint").textContent = HINTS[i];
+    controles(i);
+    render();
+  }
+
+  /* ---------------- chequeos ---------------- */
+  B.opcionMultiple(cuerpo("chk1"), {
+    pregunta: "Las cuatro salen juntas, cada una con su tasa. ¿Cuál entra primero en la meta para quedarse?",
+    opciones: ["El descenso simple", "Momentum", "RMSProp", "Adam"],
+    correcta: 0,
+    pistas: [null,
+      "Momentum acelera por el fondo, pero también se pasa del fondo y vuelve. ¿Cuánto le cuesta calmarse?",
+      "Cerca del fondo, RMSProp sigue dando pasos de tamaño parecido a η. ¿Puede quedarse quieto dentro de un círculo tan chico?",
+      "Adam suele ser el más cómodo, no necesariamente el más rápido en un valle limpio con la tasa bien elegida."],
+    revelarTras: 2,
+    explicacion: "Gana el más simple, con 23 pasos: Adam llega en 77, momentum en 78 y RMSProp en 201. En un valle limpio y con una tasa bien afinada, el descenso simple es muy bueno. Pero esa tasa, 0.09, está pegada al límite: el paso siguiente muestra por qué, y el paso 6 lo que pasa si el valle cambia un poco. <b>Ahora suéltalas</b> y mira la forma de cada camino.",
+    alResolver: function () { est.chk[0] = true; controles(0); render(); pasos.completar(0); }
+  });
+
+  B.numerico(cuerpo("chk2"), {
+    pregunta: "El factor de $y$ es $1 - 20\\eta$. ¿Desde qué tasa $\\eta$ la bolita deja de acercarse a $y = 0$ (el factor llega a $-1$)?",
+    respuesta: 0.1,
+    tolerancia: 0.0011,
+    pistas: ["Para que $|1 - 20\\eta| < 1$ hace falta $1 - 20\\eta > -1$.", "$20\\eta < 2$."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 0.05) < 0.0011) return "Con 0.05 el factor vale 0: $y$ llega a 0 en un solo paso. La pregunta es cuándo deja de acercarse.";
+      if (Math.abs(v - 1) < 0.0011) return "Ese es el límite de $x$, con factor $1 - 2\\eta$. La pared, con pendiente 20, manda antes.";
+      if (Math.abs(v - 0.2) < 0.0011) return "Con 0.2 el factor es $-3$: ya hace rato que diverge.";
+      return null;
+    },
+    explicacion: "$1 - 20\\eta = -1$ da $\\eta = 0.1 = 2/20$: dos dividido entre la curvatura más grande. Con 0.1 la bolita rebota entre $y = 1$ e $y = -1$ para siempre; con más, se escapa. Y con 0.09, el factor de $x$ es $0.82$: el fondo avanza con la tasa que permite la pared. <b>Ahora prueba 0.1 y 0.11</b> en el escenario.",
+    alResolver: function () { est.chk[1] = true; controles(1); render(); pasos.completar(1); }
+  });
+
+  B.numerico(cuerpo("chk3"), {
+    pregunta: "Con $\\eta = 0.01$ y $\\beta = 0.9$, desde $(-4, 1)$: el primer gradiente es $(-8, 20)$, así que $v_1 = (-8, 20)$ y la bola pasa a $(-3.92, 0.8)$. Ahí el gradiente es $(-7.84, 16)$. ¿Cuánto vale la primera coordenada de $v_2$?",
+    respuesta: -15.04,
+    tolerancia: 0.011,
+    pistas: ["$v_2 = 0.9\\,v_1 + g_2$, coordenada por coordenada.", "$0.9 \\cdot (-8) + (-7.84)$."],
+    diagnostico: function (v) {
+      if (Math.abs(v + 7.84) < 0.011) return "Ese es solo el gradiente nuevo. La velocidad suma además $0.9\\,v_1$.";
+      if (Math.abs(v + 15.84) < 0.011) return "Sumaste $v_1$ entero; se multiplica por $\\beta = 0.9$ antes.";
+      if (Math.abs(v - 15.04) < 0.011) return "El signo: los dos términos son negativos.";
+      if (Math.abs(v + 1.504) < 0.011) return "Esa sería con el promedio $(1-\\beta)$: aquí la velocidad acumula sin ese factor.";
+      return null;
+    },
+    explicacion: "$v_2 = 0.9 \\cdot (-8) - 7.84 = -15.04$: casi el doble del gradiente. En $y$: $0.9 \\cdot 20 + 16 = 34$. Las dos crecen al principio; en cuanto $y$ cruce al otro lado, su gradiente cambia de signo y empieza a restar. <b>Ahora da 20 pasos</b> y mira la flecha azul frente a la gris.",
+    alResolver: function () { est.chk[2] = true; render(); cerrar3(); }
+  });
+  B.opcionMultiple(cuerpo("chk3b"), {
+    pregunta: "Con momentum ($\\beta = 0.9$) subes la tasa a $\\eta = 0.15$, cuando el descenso simple ya se escapa con cualquier $\\eta > 0.1$. ¿Qué hace la bola?",
+    opciones: [
+      "Da vueltas enormes alrededor del fondo, pero termina llegando",
+      "Se escapa: si el descenso simple no aguanta 0.1, menos aguanta 0.15",
+      "Llega más rápido y más derecho que con 0.01",
+      "Se queda quieta: la inercia y la tasa se anulan"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "La inercia reparte el empujón en varios pasos. El límite de momentum es $2(1+\\beta)$ dividido entre la curvatura, no $2$.",
+      "Más tasa con inercia quiere decir pasarse más del fondo. ¿Más derecho?",
+      "Mientras haya pendiente, hay gradiente, y la velocidad cambia."],
+    explicacion: "Con 0.15 describe una espiral que llega hasta $x \\approx 3$ y aun así entra en la meta en 84 pasos; con 0.2 se escapa. El límite es $3.8/20 = 0.19$. <b>Ahora pruébalo</b>: aparecieron 0.15 y 0.2 en el control.",
+    alResolver: function () { est.chk.b3 = true; controles(2); render(); cerrar3(); }
+  });
+  function cerrar3() { if (est.chk[2] && est.chk.b3) pasos.completar(2); }
+
+  B.numerico(cuerpo("chk4"), {
+    pregunta: "RMSProp con $\\eta = 0.05$, $\\rho = 0.9$ y $s_0 = 0$. En $(-4, 1)$ el gradiente es $(-8, 20)$. ¿Cuánto avanza $x$ en el primer paso? (en valor absoluto, tres decimales)",
+    respuesta: 0.05 / Math.sqrt(0.1),
+    tolerancia: 0.0015,
+    pistas: ["$s_1 = 0.1 \\cdot (-8)^2 = 6.4$ y $\\sqrt{6.4} = 2.53$.", "El paso es $0.05 \\cdot 8 / 2.53$. Fíjate en que el 8 se cancela: $0.05/\\sqrt{0.1}$."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 0.4) < 0.0015) return "Ese es el paso del descenso simple, $\\eta \\cdot 8$. Falta dividir entre $\\sqrt{s_1}$.";
+      if (Math.abs(v - 0.05) < 0.0015) return "Eso sería si $s_1 = g^2$. Pero $s_1 = 0.1\\,g^2$, porque $s_0 = 0$.";
+      if (Math.abs(v - 0.0625) < 0.0015) return "Te faltó la raíz: se divide entre $\\sqrt{s_1}$, no entre $s_1$.";
+      return null;
+    },
+    explicacion: "$s_1 = 6.4$, $\\sqrt{s_1} = 2.530$ y el paso es $0.05 \\cdot 8/2.530 = 0.158$. Lo mismo en $y$: $0.05 \\cdot 20/\\sqrt{40} = 0.158$. El gradiente se cancela: el primer paso de RMSProp siempre vale $\\eta/\\sqrt{1-\\rho} = 3.16\\,\\eta$ en cada coordenada, sea la pared o el fondo. <b>Ahora da pasos</b>: el camino sale en diagonal.",
+    alResolver: function () { est.chk[3] = true; controles(3); render(); cerrar4(); }
+  });
+  B.opcionMultiple(cuerpo("chk4b"), {
+    pregunta: "Corre 300 pasos de RMSProp con $\\eta = 0.05$ y acércate al fondo. ¿Qué ves?",
+    opciones: [
+      "Tiembla alrededor del fondo con pasos de tamaño parecido a η, sin quedarse quieta",
+      "Se queda quieta en el fondo exacto",
+      "Se aleja del fondo poco a poco",
+      "Se detiene antes de llegar, en la pared"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "Cerca del fondo los gradientes son chicos, pero $\\sqrt{s}$ también: su cociente no se achica.",
+      "Cada vez que se aleja, el gradiente la empuja de vuelta.",
+      "En la pared la pendiente es grande; RMSProp no se detiene donde hay pendiente."],
+    explicacion: "Cerca del fondo, $g/\\sqrt{s}$ sigue siendo del orden de 1 porque los dos se achican juntos: los pasos no bajan de unas centésimas y la bolita tiembla. Por eso tarda 201 pasos en quedarse dentro del círculo. Momentum y Adam promedian gradientes que cambian de signo, y ese promedio sí se apaga. Con la casilla de AdaGrad pasa lo contrario: con $\\eta = 0.05$ el paso se achica tanto que no llega en 3000 pasos.",
+    alResolver: function () { est.chk.b4 = true; cerrar4(); }
+  });
+  function cerrar4() { if (est.chk[3] && est.chk.b4) pasos.completar(3); }
+
+  B.numerico(cuerpo("chk5"), {
+    pregunta: "Adam con $\\eta = 0.2$ en $(-4, 1)$, gradiente $(-8, 20)$, $t = 1$. Calcula $m_1$, $s_1$, sus versiones corregidas y el paso. ¿Cuánto avanza $x$? (en valor absoluto)",
+    respuesta: 0.2,
+    tolerancia: 0.0011,
+    pistas: ["$m_1 = 0.1 \\cdot (-8) = -0.8$ y $s_1 = 0.001 \\cdot 64 = 0.064$.", "$\\hat m_1 = -0.8/0.1 = -8$ y $\\hat s_1 = 0.064/0.001 = 64$. El paso es $0.2 \\cdot 8/\\sqrt{64}$."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 0.632) < 0.003) return "Esa es la cuenta sin corrección de sesgo: $0.2 \\cdot 0.8/\\sqrt{0.064}$. Corrige las dos memorias antes.";
+      if (Math.abs(v - 1.6) < 0.003) return "Ese es el paso del descenso simple, $\\eta \\cdot 8$. Falta dividir entre $\\sqrt{\\hat s_1}$.";
+      if (Math.abs(v - 0.025) < 0.003) return "Dividiste entre $\\hat s_1$; es entre su raíz.";
+      return null;
+    },
+    explicacion: "$\\hat m_1 = g_1$ y $\\hat s_1 = g_1^2$, así que el primer paso es $\\eta \\cdot g/|g| = \\eta$: justo 0.2, en $x$ y en $y$. El primer paso de Adam no depende del gradiente, solo de su signo. <b>Ahora da pasos</b>: sale en diagonal y después se curva hacia el fondo.",
+    alResolver: function () { est.chk[4] = true; controles(4); render(); cerrar5(); }
+  });
+  B.opcionMultiple(cuerpo("chk5b"), {
+    pregunta: "Con $\\beta_1 = 0.9$ y $\\beta_2 = 0.999$, si apagas la corrección de sesgo, el primer paso de Adam es...",
+    opciones: [
+      "Unas 3 veces más largo que con corrección",
+      "Diez veces más corto, porque m₁ es la décima parte del gradiente",
+      "Igual: la corrección solo importa después de muchos pasos",
+      "Cero, porque las memorias empiezan en cero"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "$m_1$ sí es la décima parte, pero el paso es $m_1/\\sqrt{s_1}$ y $s_1$ es la milésima parte de $g^2$.",
+      "La corrección divide entre $1 - \\beta^t$, que es lejísimos de 1 justamente al principio.",
+      "Las memorias empiezan en cero, pero se actualizan antes de dar el paso."],
+    explicacion: "$m_1/\\sqrt{s_1} = 0.1\\,g/(0.0316\\,|g|) = 3.16$: más de tres veces el paso corregido. <b>Apaga la corrección</b> en el escenario y da 20 pasos: el primero salta de $x = -4$ a $-3.37$ y la bolita se pasa del fondo hasta $x \\approx 2.2$.",
+    alResolver: function () { est.chk.b5 = true; controles(4); render(); cerrar5(); }
+  });
+  function cerrar5() { if (est.chk[4] && est.chk.b5) pasos.completar(4); }
+
+  B.opcionMultiple(cuerpo("chk6"), {
+    pregunta: "Cambias el valle de $x^2 + 10y^2$ a $x^2 + 100y^2$: la pared se hace diez veces más empinada. Con la misma $\\eta = 0.2$, ¿qué le pasa al camino de Adam?",
+    opciones: [
+      "Nada: es exactamente el mismo camino",
+      "Se escapa, como el descenso simple",
+      "Se vuelve más lento: tiene que frenar en la pared",
+      "Llega más rápido, porque el gradiente es más grande"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "En $y$, todos los gradientes se multiplican por 10. ¿Qué le pasa a $\\hat m/\\sqrt{\\hat s}$ si $\\hat m$ se multiplica por 10 y $\\hat s$ por 100?",
+      "Adam no ve el tamaño del gradiente, solo su tamaño relativo a los anteriores.",
+      "Un gradiente diez veces más grande también hace diez veces más grande $\\sqrt{\\hat s}$."],
+    explicacion: "En $y$, $\\hat m$ se multiplica por 10 y $\\sqrt{\\hat s}$ también: el cociente no cambia, y el camino es idéntico (salvo el $\\varepsilon$). RMSProp, igual. El descenso simple con 0.09 se escapa en cuanto $b \\ge 20$, y momentum con 0.01 aguanta hasta $b \\approx 190$. <b>Ahora mueve b</b> y suelta las cuatro.",
+    alResolver: function () { est.chk[5] = true; controles(5); render(); cerrar6(); }
+  });
+  B.numerico(cuerpo("chk6b"), {
+    pregunta: "¿Con qué peso entra en $m$ (con $\\beta_1 = 0.9$) el gradiente de hace 10 pasos? (cuatro decimales)",
+    respuesta: 0.1 * Math.pow(0.9, 10),
+    tolerancia: 0.00015,
+    pistas: ["El peso es $(1-\\beta_1)\\,\\beta_1^{10}$.", "$0.9^{10} = 0.3487$."],
+    diagnostico: function (v) {
+      if (Math.abs(v - Math.pow(0.9, 10)) < 0.0002) return "Falta el $(1 - \\beta_1) = 0.1$ con el que entró ese gradiente.";
+      if (Math.abs(v - 0.1 * Math.pow(0.9, 9)) < 0.0002) return "Eso es para hace 9 pasos: el exponente es 10.";
+      return null;
+    },
+    explicacion: "$0.1 \\cdot 0.9^{10} = 0.0349$, contra $0.1$ del gradiente de ahora: pesa un tercio. En $s$, con $\\beta_2 = 0.999$, el de hace 10 pasos pesa $0.001 \\cdot 0.999^{10} = 0.00099$, casi lo mismo que el de ahora. La dirección se olvida rápido; la escala, despacio.",
+    alResolver: function () { est.chk.b6 = true; cerrar6(); }
+  });
+  function cerrar6() { if (est.chk[5] && est.chk.b6) pasos.completar(5); }
+
+  B.numerico(cuerpo("chk7"), {
+    pregunta: "En Keras, <code>Adam()</code> usa por defecto <code>learning_rate = 0.001</code>. En el primer paso del entrenamiento, ¿cuánto se mueve un peso cuyo gradiente no es cero?",
+    respuesta: 0.001,
+    tolerancia: 0.00002,
+    pistas: ["Es lo que calculaste en el paso 5, con otra $\\eta$.", "$\\hat m_1 = g_1$ y $\\sqrt{\\hat s_1} = |g_1|$."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 0.00316) < 0.0001) return "Esa sería sin corrección de sesgo. Keras la aplica.";
+      return null;
+    },
+    explicacion: "Exactamente $\\eta = 0.001$, para todos los pesos, tenga el gradiente el tamaño que tenga (el $\\varepsilon$ solo importa si el gradiente es diminuto). Por eso la tasa de Adam se piensa como \"cuánto puede moverse un peso por paso\", y por eso el mismo 0.001 sirve en redes muy distintas. <b>Ahora suelta las cuatro</b> en Rosenbrock y cambia las tasas.",
+    alResolver: function () { est.chk[6] = true; controles(6); render(); pasos.completar(6); }
+  });
+
+  pasos = B.pasos($("recorrido"), {
+    concepto: C,
+    alEntrar: entrar,
+    alTerminar: function () { location.hash = "retos"; }
+  });
+  [0, 1, 4, 5, 6].forEach(function (k) { if (pasos.hecho(k)) est.chk[k] = true; });
+  if (pasos.hecho(2)) { est.chk[2] = true; est.chk.b3 = true; }
+  if (pasos.hecho(3)) { est.chk[3] = true; est.chk.b4 = true; }
+  if (pasos.hecho(4)) est.chk.b5 = true;
+  if (pasos.hecho(5)) est.chk.b6 = true;
+  entrar(0);
+
+  /* ---------------- hipotesis inicial ---------------- */
+  (function () {
+    var ta = $("hipotesis"), t = null;
+    ta.value = B.nota("optimizadores-adam", "hipotesis");
+    function cita() {
+      var v = ta.value.trim(), el = $("citaHipo");
+      el.hidden = !v;
+      if (v) { el.textContent = ""; el.appendChild(document.createTextNode("Al principio escribiste: «" + v + "». Recordar hacia dónde venías bajando (momentum) y medir cada dirección con su propia vara (RMSProp), ¿se parece a lo que pensaste?")); }
+    }
+    cita();
+    ta.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { B.nota("optimizadores-adam", "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; cita(); }, 500);
+    });
+  })();
+
+  /* ---------------- marcadores de estado de retos ---------------- */
+  function pintarEstados() {
+    [].forEach.call(document.querySelectorAll("[data-reto]"), function (el) {
+      var ok = C.retoOk(el.getAttribute("data-reto"));
+      el.textContent = ok ? "resuelto" : "pendiente";
+      el.classList.toggle("ok", ok);
+    });
+  }
+  C.alCambiar(pintarEstados);
+
+  /* ---------------- reto: ojo clinico ---------------- */
+  (function () {
+    var cont = $("ojo");
+    cont.innerHTML = '<div class="ronda"></div><svg class="lienzo" viewBox="0 0 400 215" role="img" aria-label="Camino de una bolita en el valle"></svg>' +
+      '<div class="ojo-opts"><button type="button" class="opt" data-a="sgd">Descenso simple</button><button type="button" class="opt" data-a="mom">Momentum</button>' +
+      '<button type="button" class="opt" data-a="rms">RMSProp</button><button type="button" class="opt" data-a="adam">Adam</button></div>' +
+      '<div class="fb" aria-live="polite"></div><div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    var svg = cont.querySelector("svg"), tipos, ronda, aciertos, respondida, actual;
+    var RANGO = { sgd: [0.06, 0.07, 0.08, 0.09], mom: [0.008, 0.01, 0.015, 0.02], rms: [0.04, 0.05, 0.08], adam: [0.15, 0.2, 0.3] };
+    function nueva() {
+      tipos = B.mezclar(ORDEN.concat([elegir(ORDEN)]));
+      ronda = 0; aciertos = 0;
+      mostrar();
+    }
+    function mostrar() {
+      respondida = false;
+      var t = tipos[ronda], p0 = [-(2.5 + Math.random() * 1.7), (Math.random() < 0.5 ? -1 : 1) * (0.6 + Math.random() * 0.6)];
+      var o = nuevo(t, elegir(RANGO[t]), Q, { p0: p0 });
+      for (var k = 0; k < 40; k++) if (!paso(o)) break;
+      actual = t;
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 5 · aciertos " + aciertos;
+      dibujarMapa(svg, Q, { caminos: [{ pts: o.rastro, tipo: "sgd", puntos: true }], bolas: [{ p: o.rastro[0], tipo: "sgd", r: 4 }] });
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (b) { b.disabled = false; b.className = "opt"; });
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+    }
+    var PORQUE = {
+      sgd: "Rebota entre las paredes con un zigzag regular y avanza por el fondo cada vez más despacio, sin pasarse nunca de x = 0.",
+      mom: "Gana velocidad, se pasa del fondo y vuelve: la espiral es la firma de la inercia.",
+      rms: "Arranca en diagonal, con pasos del mismo tamaño en x y en y, y al final tiembla cerca del fondo con pasos que no se achican.",
+      adam: "Arranca en diagonal como RMSProp, pero se curva suave hacia el fondo y se pasa un poco, por la inercia de m."
+    };
+    cont.querySelector(".ojo-opts").addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || respondida) return;
+      respondida = true;
+      var ok = b.getAttribute("data-a") === actual;
+      if (ok) aciertos++;
+      b.classList.add(ok ? "ok" : "mal");
+      if (!ok) cont.querySelector('[data-a="' + actual + '"]').classList.add("ok");
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (x) { x.disabled = true; });
+      cont.querySelector(".fb").innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No.</span> ') + "Era " + NOMBRE[actual] + ". " + PORQUE[actual];
+      var sig = cont.querySelector(".sig");
+      sig.hidden = false;
+      if (ronda === 4) {
+        var aprobo = aciertos >= 4;
+        C.reto("ojo", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertos + " de 5" + (aprobo ? ". Aprobado." : ". Necesitas 4 para aprobar.");
+        sig.textContent = "Otra tanda";
+      } else sig.textContent = "Siguiente ronda";
+    });
+    cont.querySelector(".sig").addEventListener("click", function () { if (ronda === 4) nueva(); else { ronda++; mostrar(); } });
+    nueva();
+  })();
+
+  /* ---------------- reto: construir ---------------- */
+  (function () {
+    var svg = $("mapaConstr"), cfg = { tipo: "sgd", eta: 0.09, b: 10 }, ult = null, logrados = [false, false, false], avisado = false;
+    var LIS = { sgd: [0.005, 0.01, 0.05, 0.09, 0.11], mom: [0.005, 0.01, 0.05, 0.15, 0.2], rms: [0.01, 0.05, 0.1, 0.2], adam: [0.01, 0.05, 0.2, 0.5] };
+    var OBJ = [
+      "Con b = 100, haz que el descenso simple llegue a la meta.",
+      "Haz que momentum se escape del valle.",
+      "Con b = 100, haz que Adam llegue en menos de 100 pasos."
+    ];
+    var ul = $("objetivos");
+    OBJ.forEach(function (t) { var li = document.createElement("li"); li.innerHTML = '<span class="m"></span><span>' + t + '</span>'; ul.appendChild(li); });
+    var c = $("ctrlConstr"), cajaTasa = document.createElement("div");
+    function pintar(msg) {
+      var T = terreno("q", cfg.b);
+      dibujarMapa(svg, T, { caminos: ult ? [{ pts: ult.pts, hasta: 1000, tipo: cfg.tipoUlt }] : [], bolas: ult ? [{ p: ult.pts[Math.min(1000, ult.pts.length - 1)], tipo: cfg.tipoUlt }] : [] });
+      if (msg != null) $("constrVivo").innerHTML = msg;
+      ul.querySelectorAll("li").forEach(function (li, i) { li.classList.toggle("hecho", logrados[i]); });
+    }
+    function ponerTasa() {
+      cajaTasa.innerHTML = "";
+      if (LIS[cfg.tipo].indexOf(cfg.eta) < 0) cfg.eta = LIS[cfg.tipo][1];
+      controlLista(cajaTasa, "η", LIS[cfg.tipo], cfg.eta, function (v) { cfg.eta = v; }, "Tasa de aprendizaje");
+    }
+    var fila = document.createElement("div");
+    fila.className = "btn-row";
+    ORDEN.forEach(function (t) {
+      var x = document.createElement("button");
+      x.type = "button"; x.textContent = NOMBRE[t]; x.setAttribute("aria-pressed", t === cfg.tipo ? "true" : "false");
+      x.addEventListener("click", function () {
+        cfg.tipo = t;
+        [].forEach.call(fila.children, function (y) { y.setAttribute("aria-pressed", y === x ? "true" : "false"); y.classList.toggle("primary", y === x); });
+        ponerTasa();
+      });
+      if (t === cfg.tipo) x.className = "primary";
+      fila.appendChild(x);
+    });
+    c.appendChild(fila);
+    c.appendChild(cajaTasa);
+    ponerTasa();
+    controlLista(c, "b", [10, 20, 50, 100], cfg.b, function (v) { cfg.b = v; pintar(); }, "Lo empinado del valle en y");
+    botones(c, [{ t: "Correr 1000 pasos", primary: true, fn: correr }]);
+    function correr() {
+      var T = terreno("q", cfg.b);
+      ult = trayectoria(cfg.tipo, cfg.eta, { tipo: "q", b: cfg.b, clave: T.clave + "c", tol: T.tol, p0: T.p0, opt: T.opt, H: 1000, g: T.g });
+      cfg.tipoUlt = cfg.tipo;
+      var msg;
+      if (ult.div) msg = '<span class="aviso">' + NOMBRE[cfg.tipo] + " con η = " + cfg.eta + " se escapó en el paso " + (ult.pts.length - 1) + ".</span>";
+      else if (ult.llega == null) msg = NOMBRE[cfg.tipo] + " con η = " + cfg.eta + " no se quedó dentro de la meta en 1000 pasos.";
+      else msg = NOMBRE[cfg.tipo] + " con η = " + cfg.eta + ' y b = ' + cfg.b + ': <span class="bien">llegó en el paso ' + ult.llega + "</span>.";
+      if (cfg.b === 100 && cfg.tipo === "sgd" && ult.llega != null) logrados[0] = true;
+      if (cfg.tipo === "mom" && ult.div) logrados[1] = true;
+      if (cfg.b === 100 && cfg.tipo === "adam" && ult.llega != null && ult.llega < 100) logrados[2] = true;
+      pintar(msg);
+      if (!avisado && logrados.every(Boolean)) { avisado = true; C.reto("construir", true); }
+    }
+    pintar("Elige y corre.");
+  })();
+
+  /* ---------------- reto: a mano, momentum ---------------- */
+  (function () {
+    var D;
+    function generar() {
+      var th0 = elegir([1, 2, 3, 5]), g1 = elegir([2, 4, 6, -2, -4]), g2 = elegir([1, 2, 3, -1, -2, -3]), eta = elegir([0.1, 0.05]);
+      var v1 = g1, th1 = th0 - eta * v1, v2 = 0.9 * v1 + g2, th2 = th1 - eta * v2;
+      D = { th0: th0, g1: g1, g2: g2, eta: eta, th1: th1, v2: v2, th2: th2 };
+      $("manoDatos").innerHTML = '<table class="datos-mano"><tr><th>θ₀</th><th>g₁ (en θ₀)</th><th>g₂ (en θ₁)</th><th>η</th><th>β</th></tr><tr><td>' + th0 + '</td><td>' + g1 + '</td><td>' + g2 + '</td><td>' + eta + '</td><td>0.9</td></tr></table>' +
+        '<p class="desc">Regla: v_t = β v_{t−1} + g_t, θ_{t+1} = θ_t − η v_t, con v₀ = 0.</p>';
+    }
+    generar();
+    B.numerico($("mano"), {
+      pregunta: "¿Cuánto vale $\\theta_2$?",
+      respuesta: function () { return D.th2; },
+      tolerancia: 0.0011,
+      pistas: [
+        function () { return "Primer paso: $v_1 = " + D.g1 + "$ y $\\theta_1 = " + D.th0 + " - " + D.eta + " \\cdot " + tx(D.g1, 0) + " = " + tx(D.th1, 2) + "$."; },
+        function () { return "$v_2 = 0.9 \\cdot " + tx(D.g1, 0) + " + " + tx(D.g2, 0) + " = " + tx(D.v2, 1) + "$. Ahora $\\theta_2 = \\theta_1 - \\eta v_2$."; }
+      ],
+      diagnostico: function (v) {
+        if (Math.abs(v - (D.th1 - D.eta * D.g2)) < 0.0011) return "Ese sería el descenso simple: en el segundo paso se usa $v_2$, que arrastra $0.9\\,v_1$.";
+        if (Math.abs(v - (D.th1 + D.eta * D.v2)) < 0.0011) return "Sumaste el paso; se resta.";
+        if (Math.abs(v - (D.th1 - D.eta * (D.g1 + D.g2))) < 0.0011) return "Sumaste $v_1$ entero: se multiplica por $\\beta = 0.9$.";
+        return null;
+      },
+      explicacion: function () { return "$\\theta_1 = " + tx(D.th1, 2) + "$, $v_2 = " + tx(D.v2, 1) + "$ y $\\theta_2 = " + tx(D.th1, 2) + " - " + D.eta + " \\cdot " + tx(D.v2, 1) + " = " + tx(D.th2, 3) + "$."; },
+      reintentable: true,
+      textoReintentar: "Otro ejercicio",
+      antesDeReintentar: generar,
+      alResolver: function (ok) { C.reto("mano", ok); }
+    });
+  })();
+
+  /* ---------------- reto: a mano, segundo paso de Adam ---------------- */
+  (function () {
+    var D;
+    function generar() {
+      var g1 = elegir([4, 6, 8, -4, -6]), g2 = elegir([1, 2, 3, -1, -2]);
+      var m2 = 0.9 * 0.1 * g1 + 0.1 * g2, s2 = 0.999 * 0.001 * g1 * g1 + 0.001 * g2 * g2;
+      var mh = m2 / (1 - 0.81), sh = s2 / (1 - 0.999 * 0.999);
+      D = { g1: g1, g2: g2, m2: m2, s2: s2, mh: mh, sh: sh, r: mh / Math.sqrt(sh), rn: m2 / Math.sqrt(s2) };
+      $("mano2Datos").innerHTML = '<table class="datos-mano"><tr><th>g₁</th><th>g₂</th><th>β₁</th><th>β₂</th></tr><tr><td>' + g1 + '</td><td>' + g2 + '</td><td>0.9</td><td>0.999</td></tr></table>' +
+        '<p class="desc">Las memorias empiezan en cero. Ignora ε.</p>';
+    }
+    generar();
+    B.numerico($("mano2"), {
+      pregunta: "¿Cuánto vale $\\hat m_2/\\sqrt{\\hat s_2}$? (dos decimales)",
+      respuesta: function () { return D.r; },
+      tolerancia: 0.011,
+      pistas: [
+        function () { return "$m_2 = 0.9 \\cdot 0.1 \\cdot " + tx(D.g1, 0) + " + 0.1 \\cdot " + tx(D.g2, 0) + " = " + tx(D.m2, 2) + "$ y $s_2 = 0.999 \\cdot 0.001 \\cdot " + (D.g1 * D.g1) + " + 0.001 \\cdot " + (D.g2 * D.g2) + " = " + tx(D.s2, 5) + "$."; },
+        function () { return "Corrige: $\\hat m_2 = m_2/(1 - 0.81) = " + tx(D.mh, 3) + "$ y $\\hat s_2 = s_2/(1 - 0.998001) = " + tx(D.sh, 3) + "$."; }
+      ],
+      diagnostico: function (v) {
+        if (Math.abs(v - D.rn) < 0.011) return "Esa es sin corrección de sesgo: divide $m_2$ entre $1 - 0.9^2$ y $s_2$ entre $1 - 0.999^2$.";
+        if (Math.abs(v - D.mh / D.sh) < 0.011) return "Te faltó la raíz de $\\hat s_2$.";
+        if (Math.abs(v - (D.m2 / 0.1) / Math.sqrt(D.s2 / 0.001)) < 0.011) return "Usaste $1 - \\beta$ en vez de $1 - \\beta^t$ con $t = 2$.";
+        return null;
+      },
+      explicacion: function () { return "$\\hat m_2 = " + tx(D.mh, 3) + "$, $\\sqrt{\\hat s_2} = " + tx(Math.sqrt(D.sh), 3) + "$ y el cociente es $" + tx(D.r, 3) + "$. " + (D.g1 * D.g2 > 0 ? "Los dos gradientes van hacia el mismo lado: el cociente queda cerca de 1." : "Los gradientes cambiaron de signo: el cociente se achica, y el paso también."); },
+      reintentable: true,
+      textoReintentar: "Otro ejercicio",
+      antesDeReintentar: generar,
+      alResolver: function (ok) { C.reto("mano2", ok); }
+    });
+  })();
+
+  /* ---------------- reto: cazar el error ---------------- */
+  B.cazarError($("error"), {
+    variantes: [
+      {
+        intro: "Momentum con $\\beta = 0.9$, $\\eta = 0.1$, $\\theta_0 = 1$, $g_1 = 4$ y $g_2 = 2$. Alguien dio dos pasos:",
+        lineas: ["v_1 = 0.9 \\cdot 0 + 4 = 4", "\\theta_1 = 1 - 0.1 \\cdot 4 = 0.6", "v_2 = 0.9 \\cdot 4 + 2 = 5.6", "\\theta_2 = 0.6 - 0.1 \\cdot 2 = 0.4"],
+        erronea: 3,
+        explicacion: "El segundo paso se da con la velocidad, no con el gradiente: $\\theta_2 = 0.6 - 0.1 \\cdot 5.6 = 0.04$. Usar $g_2$ es volver al descenso simple."
+      },
+      {
+        intro: "RMSProp con $\\rho = 0.9$, $\\eta = 0.01$, $s_0 = 0$ y un gradiente $g_1 = 6$. Alguien dio el primer paso:",
+        lineas: ["s_1 = 0.9 \\cdot 0 + 0.1 \\cdot 6 = 0.6", "\\sqrt{s_1} = 0.775", "\\Delta\\theta = -0.01 \\cdot 6 / 0.775 = -0.0775"],
+        erronea: 0,
+        explicacion: "La memoria guarda el cuadrado del gradiente: $s_1 = 0.1 \\cdot 36 = 3.6$, $\\sqrt{s_1} = 1.897$ y $\\Delta\\theta = -0.0316$, que es $\\eta/\\sqrt{0.1}$, como siempre en el primer paso."
+      },
+      {
+        intro: "Adam con $\\beta_1 = 0.9$ y dos gradientes iguales, $g_1 = g_2 = 2$. Alguien corrigió la primera memoria en $t = 2$:",
+        lineas: ["m_1 = 0.1 \\cdot 2 = 0.2", "m_2 = 0.9 \\cdot 0.2 + 0.1 \\cdot 2 = 0.38", "\\hat m_2 = 0.38 / (1 - 0.9) = 3.8"],
+        erronea: 2,
+        explicacion: "La corrección usa $\\beta_1^t$: $\\hat m_2 = 0.38/(1 - 0.81) = 2$, justo el gradiente, como debe ser si los dos fueron 2. Dividir siempre entre $1 - \\beta_1$ infla la memoria diez veces cuando ya está llena."
+      }
+    ],
+    alResolver: function (ok) { C.reto("error", ok); }
+  });
+
+  /* ---------------- retos: propiedades ---------------- */
+  function prop(id, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple($(id), cfg);
+  }
+  prop("prop1", {
+    pregunta: "RMSProp y Adam dividen el paso de cada coordenada entre $\\sqrt{s}$. ¿Para qué?",
+    opciones: ["Para que el largo del paso no dependa de la escala de los gradientes de esa coordenada", "Para que el paso sea siempre más chico que el del descenso simple", "Para no dividir entre cero", "Para que todas las coordenadas lleguen al mismo tiempo al fondo"],
+    correcta: 0,
+    pistas: [null, "En el fondo plano el paso de RMSProp es más grande que el del descenso simple.", "Eso lo hace el ε, no la raíz.", "Ayuda, pero no lo garantiza: lo que logra es otra cosa."],
+    explicacion: "$g/\\sqrt{s}$ es el gradiente medido en unidades de su propio tamaño típico: cerca de ±1 si es estable. Así una pared empinada y un fondo plano reciben pasos del mismo orden, $\\eta$."
+  });
+  prop("prop2", {
+    pregunta: "Momentum con $\\beta = 0.9$ baja por una pendiente constante $g$. Después de muchos pasos, su velocidad vale...",
+    opciones: ["$10\\,g$", "$g$", "$0.9\\,g$", "Crece sin límite"],
+    correcta: 0,
+    pistas: [null, "Eso sería el descenso simple. La velocidad acumula.", "La velocidad suma $g$ en cada paso; no puede quedar por debajo de $g$.", "En cada paso se pierde el 10 % de la velocidad: llega a un equilibrio."],
+    explicacion: "En equilibrio $v = 0.9\\,v + g$, así que $v = g/(1 - 0.9) = 10\\,g$. Por eso momentum con tasa $\\eta$ avanza por un fondo de pendiente constante como un descenso simple con $10\\,\\eta$."
+  });
+  prop("prop3", {
+    pregunta: "Con $\\beta_1 = 0.9$ y $\\beta_2 = 0.999$, sin corrección de sesgo, los primeros pasos de Adam son...",
+    opciones: ["Más largos que con corrección, porque s empieza más sesgada hacia cero que m", "Más cortos, porque m empieza en cero", "Iguales: la corrección es un detalle cosmético", "Cero hasta que las memorias se llenan"],
+    correcta: 0,
+    pistas: [null, "m sí empieza chica, pero el paso es m dividido entre la raíz de s.", "En el primer paso, sin corrección, el cociente vale 3.16 en lugar de 1.", "Las memorias se actualizan antes del primer paso."],
+    explicacion: "$m_1 = 0.1\\,g$ y $\\sqrt{s_1} = 0.0316\\,|g|$: el cociente es 3.16. Lo diminuto es $m$ sola; el paso, sin corregir, sale más de tres veces más largo, y la diferencia dura miles de pasos por lo lento que olvida $\\beta_2$."
+  });
+  prop("prop4", {
+    pregunta: "¿Qué recuerda cada memoria de Adam con los valores por defecto?",
+    opciones: ["m, unos 10 gradientes (la dirección); s, unos 1000 (la escala)", "Las dos, unos 10 gradientes", "m, unos 1000; s, unos 10", "Las dos recuerdan todos los gradientes desde el principio"],
+    correcta: 0,
+    pistas: [null, "El horizonte es $1/(1-\\beta)$, y $\\beta_2 = 0.999$.", "Al revés: $\\beta_1 = 0.9$ es el que olvida rápido.", "Eso es AdaGrad, que suma todo sin olvidar."],
+    explicacion: "$1/(1 - 0.9) = 10$ y $1/(1 - 0.999) = 1000$. La dirección tiene que reaccionar rápido a los cambios; la escala conviene medirla con mucha historia para que no salte."
+  });
+
+  /* ---------------- formula de memoria ---------------- */
+  B.ordenar($("formula"), {
+    piezas: ["\\theta_{t+1}", "=", "\\theta_t", "-", "\\eta", "\\dfrac{\\hat m_t}{\\sqrt{\\hat s_t} + \\varepsilon}"],
+    distractores: ["+", "\\dfrac{\\hat m_t}{\\hat s_t + \\varepsilon}", "\\dfrac{\\sqrt{\\hat s_t}}{\\hat m_t}", "\\nabla f(\\theta_{t+1})"],
+    soluciones: [[0, 1, 2, 3, 4, 5]],
+    explicacion: "El paso es la tasa por el cociente entre la memoria corregida de los gradientes y la raíz de la de sus cuadrados. Sin la raíz, el paso dependería otra vez de la escala; el signo menos es el de siempre: se baja.",
+    alResolver: function (ok) { C.reto("formula", ok); }
+  });
+
+  /* ---------------- vida real ---------------- */
+  (function () {
+    var CODIGO = {
+      py: [
+        ["import", "import numpy as np"],
+        ["import", "from sklearn.neural_network._stochastic_optimizers import AdamOptimizer"],
+        [null, ""],
+        ["grad", "def grad(p):                               # f(x, y) = x^2 + 10 y^2"],
+        ["grad", "    return np.array([2 * p[0], 20 * p[1]])"],
+        [null, ""],
+        ["def", "def optimizar(metodo, eta, pasos=100):"],
+        ["p0", "    p = np.array([-4.0, 1.0])              # el punto de partida"],
+        ["m0", "    m = np.zeros(2)                        # memoria de los gradientes"],
+        ["s0", "    s = np.zeros(2)                        # memoria de los cuadrados"],
+        ["hiper", "    b1, b2, eps = 0.9, 0.999, 1e-8"],
+        ["fort", "    for t in range(1, pasos + 1):"],
+        ["g", "        g = grad(p)"],
+        ["forj", "        for j in range(2):                 # cada coordenada por separado"],
+        ["ifsgd", "            if metodo == \"sgd\":"],
+        ["sgd", "                p[j] = p[j] - eta * g[j]"],
+        ["ifmom", "            elif metodo == \"momentum\":"],
+        ["momm", "                m[j] = b1 * m[j] + g[j]"],
+        ["momp", "                p[j] = p[j] - eta * m[j]"],
+        ["ifrms", "            elif metodo == \"rmsprop\":"],
+        ["rmss", "                s[j] = 0.9 * s[j] + 0.1 * g[j] ** 2"],
+        ["rmsp", "                p[j] = p[j] - eta * g[j] / (np.sqrt(s[j]) + eps)"],
+        ["ifadam", "            else:                          # adam"],
+        ["adm", "                m[j] = b1 * m[j] + (1 - b1) * g[j]"],
+        ["ads", "                s[j] = b2 * s[j] + (1 - b2) * g[j] ** 2"],
+        ["admh", "                mhat = m[j] / (1 - b1 ** t)       # corrección de sesgo"],
+        ["adsh", "                shat = s[j] / (1 - b2 ** t)"],
+        ["adp", "                p[j] = p[j] - eta * mhat / (np.sqrt(shat) + eps)"],
+        ["ret", "    return p"],
+        [null, ""],
+        ["formet", "for metodo, eta in [(\"sgd\", 0.09), (\"momentum\", 0.01), (\"rmsprop\", 0.05), (\"adam\", 0.2)]:"],
+        ["llamar", "    p = optimizar(metodo, eta)"],
+        ["print", "    print(metodo, round(p[0], 4), round(p[1], 4))"],
+        [null, ""],
+        ["cmpdef", "q = [np.array([-4.0, 1.0])]                # Adam de scikit-learn, el de MLPRegressor"],
+        ["cmpdef", "adam = AdamOptimizer(q, learning_rate_init=0.2)"],
+        ["cmprun", "for t in range(100):"],
+        ["cmprun", "    adam.update_params(q, [grad(q[0])])"],
+        ["cmpprint", "print(np.round(q[0], 4), np.abs(q[0] - optimizar(\"adam\", 0.2)).max())"]
+      ],
+      r: [
+        ["grad", "grad <- function(p) {                      # f(x, y) = x^2 + 10 y^2"],
+        ["grad", "  c(2 * p[1], 20 * p[2])"],
+        ["grad", "}"],
+        [null, ""],
+        ["def", "optimizar <- function(metodo, eta, pasos = 100) {"],
+        ["p0", "  p <- c(-4, 1)                            # el punto de partida"],
+        ["m0", "  m <- c(0, 0)                             # memoria de los gradientes"],
+        ["s0", "  s <- c(0, 0)                             # memoria de los cuadrados"],
+        ["hiper", "  b1 <- 0.9; b2 <- 0.999; eps <- 1e-8"],
+        ["fort", "  for (t in 1:pasos) {"],
+        ["g", "    g <- grad(p)"],
+        ["forj", "    for (j in 1:2) {                       # cada coordenada por separado"],
+        ["ifsgd", "      if (metodo == \"sgd\") {"],
+        ["sgd", "        p[j] <- p[j] - eta * g[j]"],
+        ["ifmom", "      } else if (metodo == \"momentum\") {"],
+        ["momm", "        m[j] <- b1 * m[j] + g[j]"],
+        ["momp", "        p[j] <- p[j] - eta * m[j]"],
+        ["ifrms", "      } else if (metodo == \"rmsprop\") {"],
+        ["rmss", "        s[j] <- 0.9 * s[j] + 0.1 * g[j]^2"],
+        ["rmsp", "        p[j] <- p[j] - eta * g[j] / (sqrt(s[j]) + eps)"],
+        ["ifadam", "      } else {                             # adam"],
+        ["adm", "        m[j] <- b1 * m[j] + (1 - b1) * g[j]"],
+        ["ads", "        s[j] <- b2 * s[j] + (1 - b2) * g[j]^2"],
+        ["admh", "        mhat <- m[j] / (1 - b1^t)          # corrección de sesgo"],
+        ["adsh", "        shat <- s[j] / (1 - b2^t)"],
+        ["adp", "        p[j] <- p[j] - eta * mhat / (sqrt(shat) + eps)"],
+        [null, "      }"],
+        [null, "    }"],
+        [null, "  }"],
+        ["ret", "  p"],
+        [null, "}"],
+        [null, ""],
+        ["formet", "metodos <- c(\"sgd\", \"momentum\", \"rmsprop\", \"adam\")"],
+        ["formet", "tasas <- c(0.09, 0.01, 0.05, 0.2)"],
+        ["formet", "for (k in 1:4) {"],
+        ["llamar", "  p <- optimizar(metodos[k], tasas[k])"],
+        ["print", "  cat(metodos[k], round(p, 4), \"\\n\")"],
+        [null, "}"],
+        [null, ""],
+        ["cmpdef", "adam_vec <- function(eta, pasos = 100) {   # Adam sin el bucle de coordenadas"],
+        ["cmpdef", "  p <- c(-4, 1); m <- c(0, 0); s <- c(0, 0)"],
+        ["cmpdef", "  for (t in 1:pasos) {"],
+        ["cmpdef", "    g <- grad(p)"],
+        ["cmpdef", "    m <- 0.9 * m + 0.1 * g"],
+        ["cmpdef", "    s <- 0.999 * s + 0.001 * g^2"],
+        ["cmpdef", "    p <- p - eta * (m / (1 - 0.9^t)) / (sqrt(s / (1 - 0.999^t)) + 1e-8)"],
+        ["cmpdef", "  }"],
+        ["cmpdef", "  p"],
+        ["cmpdef", "}"],
+        ["cmprun", "q <- adam_vec(0.2)"],
+        ["cmpprint", "cat(round(q, 4), max(abs(q - optimizar(\"adam\", 0.2))), \"\\n\")"]
+      ]
+    };
+    var SALIDA = {
+      py: ["sgd -0.0 0.0", "momentum -0.0169 -0.0029", "rmsprop -0.0373 0.0245", "adam 0.0168 -0.0045", "[ 0.0168 -0.0045] 2.1702847297078165e-09"],
+      r: ["sgd 0 0 ", "momentum -0.0169 -0.0029 ", "rmsprop -0.0373 0.0245 ", "adam 0.0168 -0.0045 ", "0.0168 -0.0045 1.387779e-16 "]
+    };
+    var MET = [["sgd", "sgd", 0.09], ["momentum", "mom", 0.01], ["rmsprop", "rms", 0.05], ["adam", "adam", 0.2]];
+    var COND = { sgd: "ifsgd", mom: "ifmom", rms: "ifrms", adam: "ifadam" };
+    var LINEAS = { sgd: ["sgd"], mom: ["momm", "momp"], rms: ["rmss", "rmsp"], adam: ["adm", "ads", "admh", "adsh", "adp"] };
+    var RUTAS = {};
+    var EV = [];
+    (function construir() {
+      var consola = 0, hechos = [];
+      function foto(id, x) {
+        EV.push(Object.assign({ id: id, fase: 1, met: null, tipo: null, t: 0, j: null, p: null, m: null, s: null, g: null, mhat: null, shat: null, eta: null, k: 0, consola: consola, hechos: hechos.slice() }, x || {}));
+      }
+      foto("import"); foto("grad"); foto("def");
+      MET.forEach(function (mt) {
+        var nombre = mt[0], tipo = mt[1], eta = mt[2], p = [-4, 1], m = [0, 0], s = [0, 0], ruta = [p.slice()];
+        var base = { met: nombre, tipo: tipo, eta: eta, fase: 2 };
+        function F(id, x) { foto(id, Object.assign({}, base, { p: p.slice(), m: m.slice(), s: s.slice(), k: ruta.length - 1 }, x || {})); }
+        F("formet"); F("llamar"); F("p0"); F("m0"); F("s0"); F("hiper");
+        var detalle = tipo === "adam" ? 2 : 1;
+        for (var t = 1; t <= 100; t++) {
+          var g = [2 * p[0], 20 * p[1]], fino = t <= detalle;
+          if (fino) { F("fort", { t: t }); F("g", { t: t, g: g.slice() }); }
+          for (var j = 0; j < 2; j++) {
+            var mh = null, sh = null;
+            if (fino) { F("forj", { t: t, g: g.slice(), j: j }); F(COND[tipo], { t: t, g: g.slice(), j: j }); }
+            if (tipo === "sgd") { p[j] = p[j] - eta * g[j]; }
+            else if (tipo === "mom") {
+              m[j] = 0.9 * m[j] + g[j]; if (fino) F("momm", { t: t, g: g.slice(), j: j });
+              p[j] = p[j] - eta * m[j];
+            } else if (tipo === "rms") {
+              s[j] = 0.9 * s[j] + 0.1 * g[j] * g[j]; if (fino) F("rmss", { t: t, g: g.slice(), j: j });
+              p[j] = p[j] - eta * g[j] / (Math.sqrt(s[j]) + 1e-8);
+            } else {
+              m[j] = 0.9 * m[j] + (1 - 0.9) * g[j]; if (fino) F("adm", { t: t, g: g.slice(), j: j });
+              s[j] = 0.999 * s[j] + (1 - 0.999) * g[j] * g[j]; if (fino) F("ads", { t: t, g: g.slice(), j: j });
+              mh = m[j] / (1 - Math.pow(0.9, t)); if (fino) F("admh", { t: t, g: g.slice(), j: j, mhat: mh });
+              sh = s[j] / (1 - Math.pow(0.999, t)); if (fino) F("adsh", { t: t, g: g.slice(), j: j, mhat: mh, shat: sh });
+              p[j] = p[j] - eta * mh / (Math.sqrt(sh) + 1e-8);
+            }
+            if (j === 1) ruta.push(p.slice());
+            if (fino) F(LINEAS[tipo][LINEAS[tipo].length - 1], { t: t, g: g.slice(), j: j, mhat: mh, shat: sh });
+          }
+        }
+        RUTAS[tipo] = ruta;
+        F("fort", { t: 100, salto: true, fase: 3, k: 100 });
+        F("ret", { t: 100, fase: 3, k: 100 });
+        consola++;
+        F("print", { t: 100, fase: 3, k: 100, consola: consola });
+        hechos.push(tipo);
+      });
+      foto("cmpdef", { fase: 3, consola: consola, hechos: hechos.slice() });
+      foto("cmprun", { fase: 3, consola: consola, hechos: hechos.slice() });
+      consola++;
+      foto("cmpprint", { fase: 3, consola: consola, hechos: hechos.slice(), fin: true });
+    })();
+    function n4(v) { return f(v, 4); }
+    function par(v, d) { return "(" + f(v[0], d) + ", " + f(v[1], d) + ")"; }
+    function narrar(e, ctx) {
+      var py = ctx.lang() === "py", ix = ctx.ix, j = e.j;
+      var xy = j === 0 ? "x" : "y";
+      switch (e.id) {
+        case "import": return py ? "Carga NumPy y <b>AdamOptimizer</b>, la pieza de scikit-learn que hace el paso de Adam dentro de MLPRegressor. Está en un módulo privado (con guion bajo): sirve para comparar, no para usar en un proyecto." : "R no necesita importar nada.";
+        case "grad": return "Define el gradiente del valle: <b>(2x, 20y)</b>." + (py ? "" : " En R el vector empieza en 1: p[1] es x y p[2] es y.");
+        case "def": return "Define la función que corre cualquiera de los cuatro optimizadores. Todavía no ejecuta nada.";
+        case "formet": return "Empieza la vuelta de <b>" + e.met + "</b>, con η = <b>" + e.eta + "</b>.";
+        case "llamar": return "Llama a la función con " + e.met + " y " + e.eta + ".";
+        case "p0": return "El punto de partida, <b>(−4, 1)</b>, el de la carrera.";
+        case "m0": return "La memoria de los gradientes, en cero. " + (e.tipo === "mom" ? "Aquí va a ser la velocidad." : e.tipo === "adam" ? "Aquí va a ser m, el promedio." : "Este método no la usa.");
+        case "s0": return "La memoria de los cuadrados, en cero. " + (e.tipo === "rms" || e.tipo === "adam" ? "La va a usar para medir la escala." : "Este método no la usa.");
+        case "hiper": return "β₁ = 0.9, β₂ = 0.999 y ε = 1e−8, los valores del artículo de Adam.";
+        case "fort":
+          if (e.salto) return "Saltamos al final: los pasos " + (e.tipo === "adam" ? 3 : 2) + " a 100 hacen lo mismo. Mira el camino completo en el mapa.";
+          return "Paso <b>t = " + e.t + "</b> de 100.";
+        case "g": return "El gradiente en " + par(e.p, 4) + ": <b>" + par(e.g, 4) + "</b>.";
+        case "forj": return "Coordenada <b>j = " + ix(j) + "</b> (" + xy + "): gradiente " + n4(e.g[j]) + ".";
+        case "ifsgd": return "El método es sgd: entra en la primera rama.";
+        case "ifmom": return "No es sgd; es momentum: entra en la segunda rama.";
+        case "ifrms": return "No es sgd ni momentum; es rmsprop: tercera rama.";
+        case "ifadam": return "No es ninguno de los tres: entra al " + (py ? "else" : "último else") + ", el de Adam.";
+        case "sgd": return xy + " pasa a " + n4(e.p[j]) + ": restó η·g = " + e.eta + " × " + n4(e.g[j]) + ".";
+        case "momm": return "La velocidad en " + xy + ": 0.9·m + g = <b>" + n4(e.m[j]) + "</b>." + (e.t === 1 ? " En el primer paso es el gradiente mismo." : "");
+        case "momp": return xy + " = " + xy + " − " + e.eta + " × " + n4(e.m[j]) + " = <b>" + n4(e.p[j]) + "</b>.";
+        case "rmss": return "La memoria de cuadrados en " + xy + ": 0.1 × " + n4(e.g[j]) + "² = <b>" + n4(e.s[j]) + "</b>.";
+        case "rmsp": return xy + " avanza " + e.eta + " × " + n4(e.g[j]) + " / √" + n4(e.s[j]) + " y queda en <b>" + n4(e.p[j]) + "</b>. Un paso de " + n4(e.eta / Math.sqrt(0.1)) + ", igual en x y en y.";
+        case "adm": return "m en " + xy + ": 0.9·m + 0.1·g = <b>" + n4(e.m[j]) + "</b>." + (e.t === 1 ? " Es la décima parte del gradiente: el sesgo hacia cero." : "");
+        case "ads": return "s en " + xy + ": 0.999·s + 0.001·g² = <b>" + n4(e.s[j]) + "</b>.";
+        case "admh": return "Corrige m dividiendo entre 1 − 0.9^" + e.t + " = " + f(1 - Math.pow(0.9, e.t), 2) + ": <b>m̂ = " + n4(e.mhat) + "</b>." + (e.t === 1 ? " Vuelve a ser el gradiente." : "");
+        case "adsh": return "Corrige s dividiendo entre 1 − 0.999^" + e.t + ": <b>ŝ = " + f(e.shat, 2) + "</b>, y √ŝ = " + n4(Math.sqrt(e.shat)) + ".";
+        case "adp": return xy + " avanza 0.2 × " + n4(e.mhat) + " / " + n4(Math.sqrt(e.shat)) + " = " + n4(e.eta * e.mhat / Math.sqrt(e.shat)) + " y queda en <b>" + n4(e.p[j]) + "</b>." + (e.t === 1 ? " El primer paso mide justo η." : "");
+        case "ret": return "Devuelve el punto tras 100 pasos: <b>" + par(e.p, 4) + "</b>.";
+        case "print": return "Imprime: " + ctx.esc((py ? SALIDA.py : SALIDA.r)[e.consola - 1].trim()) + "." + (e.tipo === "sgd" ? (py ? " El −0.0 es un número negativo diminuto que se redondeó a cero." : "") : e.tipo === "rms" ? " RMSProp sigue temblando cerca del fondo." : "");
+        case "cmpdef": return py ? "Prepara el Adam de scikit-learn con la misma tasa, 0.2, y los demás valores por defecto (0.9, 0.999, 1e−8)." : "Define Adam vectorizado: las dos coordenadas a la vez, sin el bucle de j.";
+        case "cmprun": return py ? "Cien pasos con <b>update_params</b>, que suma el paso de Adam a los parámetros." : "Corre la versión vectorizada con η = 0.2.";
+        case "cmpprint": return py ? "Mismo punto y una diferencia máxima de <b>2.17e−09</b>: scikit-learn escribe la corrección dentro de la tasa y el ε le queda en otro lugar." : "Mismo punto y una diferencia de <b>1.39e−16</b>: solo el orden de las operaciones.";
+      }
+      return "";
+    }
+    function visual(e, anterior, ctx) {
+      var py = ctx.lang() === "py", cam = [], bolas = [];
+      var hechos = e ? e.hechos : [];
+      hechos.forEach(function (t) { cam.push({ pts: RUTAS[t], tipo: t, fantasma: !(e && e.fin) }); });
+      if (e && e.tipo && hechos.indexOf(e.tipo) < 0) {
+        var r = RUTAS[e.tipo], k = Math.min(e.k, r.length - 1);
+        cam.push({ pts: r, hasta: k, tipo: e.tipo, puntos: k <= 3 });
+        bolas.push({ p: e.p && k < 100 && !e.salto ? e.p : r[k], tipo: e.tipo });
+      }
+      dibujarMapa($("vrMapa"), Q, { caminos: cam, bolas: bolas });
+      $("vrCuenta").innerHTML = !e || !e.tipo ? "Todavía no corrió ningún optimizador." :
+        "método <b>" + e.met + "</b> · η = " + e.eta + " · t = <b>" + e.t + "</b>" + (e.j !== null ? " · j = <b>" + ctx.ix(e.j) + "</b>" : "") +
+        "<br>p = <b>" + par(e.p, 4) + "</b> · m = " + par(e.m, 4) + " · s = " + par(e.s, 4);
+      var lineas = (py ? SALIDA.py : SALIDA.r).slice(0, e ? e.consola : 0);
+      var nueva = e && (e.id === "print" || e.id === "cmpprint");
+      $("vrConsola").innerHTML = lineas.length
+        ? lineas.map(function (l, k) { return '<span' + (nueva && k === lineas.length - 1 ? ' class="nueva"' : '') + '>' + ctx.esc(l) + '</span>'; }).join("\n")
+        : '<span class="vacia">Todavía no imprimió nada.</span>';
+    }
+    B.vidaReal($("vidareal"), {
+      codigo: CODIGO,
+      eventos: EV,
+      narrar: narrar,
+      vars: function (e, ctx) {
+        if (!e || !e.tipo) return ["<span>metodo = <b>sin empezar</b></span>"];
+        var v = ["<span>metodo = <b>" + e.met + "</b></span>", "<span>t = <b>" + e.t + "</b></span>"];
+        if (e.j !== null) v.push('<span class="vj">j = <b>' + ctx.ix(e.j) + "</b></span>");
+        if (e.g && e.j !== null) v.push("<span>g[j] = <b>" + n4(e.g[e.j]) + "</b></span>");
+        v.push('<span class="vk">p = <b>' + par(e.p, 4) + "</b></span>");
+        return v;
+      },
+      visual: visual,
+      demora: function (e) {
+        if (!e) return 600;
+        return e.salto ? 1500 : e.id === "print" || e.id === "cmpprint" ? 1400 : e.id === "forj" || e.id.indexOf("if") === 0 ? 450 : 850;
+      }
+    });
+
+    B.numerico(cuerpo("vrPred"), {
+      pregunta: "En la llamada con Adam, ¿cuántas veces se ejecuta la línea <code>p[j] = p[j] - eta * mhat / (np.sqrt(shat) + eps)</code>?",
+      respuesta: 200,
+      tolerancia: 0,
+      pistas: ["Está dentro de dos bucles: el de los pasos y el de las coordenadas.", "100 pasos, y en cada uno, 2 coordenadas."],
+      diagnostico: function (v) {
+        if (v === 100) return "Esos son los pasos. En cada paso, la línea corre una vez por coordenada.";
+        if (v === 2) return "Eso es un paso. Hay 100.";
+        if (v === 800) return "Esa sería la cuenta con los cuatro métodos, pero la línea solo está en la rama de Adam.";
+        return null;
+      },
+      explicacion: "100 pasos por 2 coordenadas: <b>200</b>. Y como las otras tres ramas no se tocan cuando el método es Adam, el resto de las líneas de actualización corre 0 veces en esa llamada. Ahora dale a reproducir.",
+      alResolver: function (ok) { C.reto("codigo1", ok); }
+    });
+    prop("codigo2", {
+      pregunta: "<code>MLPRegressor(solver=\"sgd\")</code> llama a <code>SGDOptimizer</code>. Con la misma tasa, en 30 pasos dejó la bolita en $x = 0.529$ (se pasó del fondo) cuando el descenso simple seguía en $x = -2.18$. ¿Por qué?",
+      opciones: [
+        "Por defecto lleva momentum = 0.9 y además de Nesterov: no es el descenso simple",
+        "scikit-learn multiplica la tasa por 10 sin avisar",
+        "Baraja los datos, y eso cambia el camino",
+        "Usa Adam aunque le digas sgd"
+      ],
+      correcta: 0,
+      pistas: [null,
+        "La tasa es la misma; lo que cambia es que acumula. ¿Qué método acumula?",
+        "Aquí no hay datos que barajar: es el mismo valle.",
+        "Adam no se pasaría tanto del fondo en 30 pasos con esa tasa."],
+      explicacion: "Los valores por defecto de <code>MLPRegressor</code> son <code>momentum=0.9</code> y <code>nesterovs_momentum=True</code>. Su velocidad avanza diez veces más por el fondo y por eso se pasó de $x = 0$. Para el descenso simple hay que pedir <code>momentum=0</code>.",
+      reintentable: true
+    });
+    prop("codigo3", {
+      pregunta: "Con Adam, <code>learning_rate=\"adaptive\"</code> y <code>\"constant\"</code> dieron exactamente la misma pérdida, 1618.5065. ¿Por qué?",
+      opciones: [
+        "El parámetro learning_rate solo se usa con solver=\"sgd\"; con Adam se ignora sin avisar",
+        "Adam ya es adaptativo, así que adaptive lo apaga para no adaptar dos veces",
+        "Con 300 épocas la tasa todavía no tuvo tiempo de cambiar",
+        "Es casualidad de la semilla"
+      ],
+      correcta: 0,
+      pistas: [null,
+        "No es que se apague: el parámetro ni siquiera se lee. Busca en la documentación \"Only used when\".",
+        "Con 'adaptive', la tasa se divide entre 5 cada vez que la pérdida se estanca dos épocas; en 300 épocas pasaría seguro.",
+        "Con otras semillas también coinciden."],
+      explicacion: "La documentación lo dice: <code>learning_rate</code> es \"Only used when solver='sgd'\". Con Adam, lo que sí se usa es <code>learning_rate_init</code>: con 0.01 en lugar de 0.001, la misma red baja a 92.68. Y la pérdida de 1618 con la tasa por defecto muestra que 300 épocas con 0.001 no alcanzan en datos sin escalar.",
+      reintentable: true
+    });
+  })();
+
+  /* ---------------- tarjetas ---------------- */
+  B.tarjetas($("tarjetas"), [
+    ["¿Por qué el descenso simple zigzaguea en un valle estrecho?", "Una sola tasa tiene que servir para la pared empinada y para el fondo plano: si es grande para el fondo, rebota en la pared; si es chica para la pared, el fondo avanza despacio."],
+    ["¿Cuál es la regla de momentum?", "$v_t = \\beta v_{t-1} + g_t$ y $\\theta_{t+1} = \\theta_t - \\eta v_t$. Acumula los gradientes: se suman donde coinciden y se cancelan donde cambian de signo."],
+    ["¿Cuál es la regla de RMSProp?", "$s_t = \\rho s_{t-1} + (1-\\rho) g_t^2$ y $\\theta_{t+1} = \\theta_t - \\eta\\, g_t/(\\sqrt{s_t} + \\varepsilon)$, por coordenada."],
+    ["¿Qué junta Adam?", "La memoria de momentum (como promedio, $m$) y la de RMSProp ($s$), las dos con corrección de sesgo: paso $\\eta\\,\\hat m/(\\sqrt{\\hat s} + \\varepsilon)$."],
+    ["¿Para qué es la corrección de sesgo?", "Las memorias empiezan en cero. Sin corregir, $s$ queda mucho más chica que $m$ al principio y los primeros pasos salen unas 3 veces más largos."],
+    ["¿Cuánto mide el primer paso de Adam?", "Exactamente $\\eta$ en cada coordenada con gradiente no nulo: $\\hat m_1 = g_1$ y $\\sqrt{\\hat s_1} = |g_1|$."],
+    ["¿Qué le pasa a Adam si una coordenada tiene gradientes diez veces más grandes?", "Nada: $\\hat m$ y $\\sqrt{\\hat s}$ crecen igual y su cociente no cambia. El descenso simple, en cambio, necesitaría una tasa diez veces más chica."],
+    ["¿Qué no arregla Adam?", "Un valle girado: reescala cada coordenada por separado y no endereza direcciones mezcladas. Estandarizar sigue ayudando."]
+  ]);
+
+  /* ---------------- conexiones ---------------- */
+  B.conexiones("optimizadores-adam");
+})();
+</script>
+</body>
+</html>

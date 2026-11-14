@@ -1,0 +1,1789 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Retropropagación</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+/* naranja: todo lo que viaja hacia atras (gradientes). Azul (--j): lo que viaja hacia adelante. */
+:root { --atras: #c2610c; --atras-soft: #fbecdc; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --atras: #f2a15c; --atras-soft: #33230f; } }
+:root[data-theme="dark"] { --atras: #f2a15c; --atras-soft: #33230f; }
+@media (min-width: 981px) { .escenario { max-height: calc(100vh - 80px); overflow-y: auto; } }
+
+/* ---------- diagrama de la red ---------- */
+.red-svg { width: 100%; height: auto; display: block; }
+.red-svg .ar { stroke: var(--ink-3); stroke-linecap: round; fill: none; stroke-opacity: .55; }
+.red-svg .ar.sel { stroke: var(--accent); stroke-opacity: 1; }
+.red-svg .ar.cero { stroke-dasharray: 3 4; stroke-opacity: .35; }
+.red-svg .ra { stroke: var(--atras); stroke-linecap: round; fill: none; stroke-dasharray: 6 4; }
+.red-svg .ra.fluye { animation: fluye 1s linear infinite; }
+@keyframes fluye { to { stroke-dashoffset: 20; } }
+.red-svg .nd { fill: var(--surface); stroke: var(--ink-3); stroke-width: 1.6; }
+.red-svg .nd.fw { stroke: var(--j); stroke-width: 2.4; }
+.red-svg .nd.sel { stroke: var(--accent); stroke-width: 3; }
+.red-svg .t { font: 12.5px var(--f-mono); fill: var(--ink); text-anchor: middle; dominant-baseline: central; }
+.red-svg .t.fw { fill: var(--j); font-weight: 600; }
+.red-svg .t.bw { fill: var(--atras); font-weight: 600; }
+.red-svg .t.oc { fill: var(--accent); font-weight: 600; }
+.red-svg .t.ch { font-size: 10.5px; fill: var(--ink-2); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+.red-svg .t.ch.sel { fill: var(--accent); font-weight: 600; }
+.red-svg .t.lab { font: 11.5px var(--f-body); fill: var(--ink-2); }
+.red-svg .t.peso { font-size: 10.5px; paint-order: stroke; stroke: var(--surface); stroke-width: 3.5px; fill: var(--ink-2); }
+.red-svg .t.peso.sel { fill: var(--accent); font-weight: 600; }
+.red-svg .t.grad { font-size: 10.5px; paint-order: stroke; stroke: var(--surface); stroke-width: 3.5px; fill: var(--atras); font-weight: 600; }
+.red-svg .caja { fill: var(--surface-2); stroke: var(--line); }
+.red-svg .caja-bw { fill: var(--atras-soft); stroke: var(--atras); stroke-width: 1.2; }
+
+/* ---------- controles y lecturas ---------- */
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.esc-head .hint { font-size: 12.5px; color: var(--ink-2); }
+.esc-fila { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; margin-top: 10px; }
+.esc-fila .seg-lab { margin-left: 0; }
+.seg.multi { flex-wrap: wrap; }
+.seg.multi button { flex: 1 1 auto; }
+.panel { margin-top: 10px; display: grid; gap: 8px; }
+.lectura-esc { font-family: var(--f-mono); font-size: 12.5px; color: var(--ink-2); line-height: 1.7; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.lectura-esc b { color: var(--ink); font-weight: 500; }
+.lectura-esc .fw { color: var(--j); font-weight: 600; }
+.lectura-esc .bw { color: var(--atras); font-weight: 600; }
+.lectura-esc .oc { color: var(--accent); font-weight: 600; }
+.lectura-esc .si { color: var(--ok); font-weight: 600; }
+.lectura-esc .no { color: var(--bad); font-weight: 600; }
+.bloq { opacity: .45; pointer-events: none; }
+.leyenda { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: var(--ink-2); margin-top: 4px; }
+.leyenda i { display: inline-block; width: 14px; height: 0; vertical-align: 3px; margin-right: 5px; border-top: 2.5px solid var(--j); }
+.leyenda i.bw { border-top: 2.5px dashed var(--atras); }
+
+/* ---------- tablas ---------- */
+.tabla { width: 100%; border-collapse: collapse; font-family: var(--f-mono); font-size: 12px; font-variant-numeric: tabular-nums; margin-top: 6px; }
+.tabla th { font-weight: 500; color: var(--ink-3); font-size: 11px; text-align: right; padding: 4px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.tabla td { text-align: right; padding: 3px 6px; border-bottom: 1px solid var(--line-soft); color: var(--ink-2); white-space: nowrap; }
+.tabla td:first-child, .tabla th:first-child { text-align: left; }
+.tabla td.bw { color: var(--atras); font-weight: 600; }
+.tabla td.fw { color: var(--j); }
+.tabla td.oc { color: var(--accent); font-weight: 600; }
+.tabla td.cur { background: var(--accent-soft); color: var(--ink); font-weight: 600; }
+.tabla td.mal { color: var(--bad); font-weight: 600; }
+.tabla td.bien { color: var(--ok); }
+.tabla td.vacia { color: var(--ink-3); }
+.tabla tr.sel td { background: var(--accent-soft); }
+.tabla-wrap { overflow-x: auto; }
+
+/* ---------- curvas ---------- */
+.curva-svg { width: 100%; height: auto; display: block; margin-top: 6px; }
+.curva-svg .marco { fill: none; stroke: var(--line); }
+.curva-svg .tick { font: 10px var(--f-mono); fill: var(--ink-3); }
+.curva-svg .tickl { stroke: var(--line-soft); }
+.curva-svg .eje-tit { font: 11px var(--f-body); fill: var(--ink-2); }
+.curva-svg .linea { fill: none; stroke: var(--j); stroke-width: 2.2; }
+.curva-svg .tang { stroke: var(--atras); stroke-width: 2; stroke-dasharray: 6 4; }
+.curva-svg .pt { fill: var(--accent); stroke: var(--surface); stroke-width: 2; }
+.curva-svg .meta { stroke: var(--ok); stroke-dasharray: 3 4; }
+
+/* ---------- textos ---------- */
+.tras[hidden] { display: none; }
+pre.codigo-bloque { margin: 8px 0; padding: 10px 12px; background: var(--surface-2); border-radius: 8px; font-family: var(--f-mono); font-size: 12.5px; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* ---------- retos ---------- */
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.ojo-q { margin: 8px 0 0; font-size: 14px; }
+.ojo-dato { font-family: var(--f-mono); font-size: 13px; margin-top: 8px; line-height: 1.8; overflow-wrap: anywhere; }
+.ojo-dato .bw { color: var(--atras); font-weight: 600; }
+.ojo-dato .fw { color: var(--j); font-weight: 600; }
+.ojo-opts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
+.ojo-opts .opt { text-align: center; }
+.objetivos { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.objetivos li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.objetivos .m { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.objetivos li.hecho { color: var(--ink); }
+.objetivos li.hecho .m { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 3px var(--surface); }
+.datos-mano { border-collapse: collapse; font-family: var(--f-mono); font-size: 13px; margin: 4px 0 12px; }
+.datos-mano th, .datos-mano td { padding: 4px 8px; border: 1px solid var(--line); text-align: center; white-space: nowrap; }
+.datos-mano th { color: var(--ink-3); font-weight: 500; font-size: 11.5px; }
+
+/* ---------- vida real ---------- */
+.consola { margin-top: 10px; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); font-family: var(--f-mono); font-size: 12px; color: var(--ink-2); white-space: pre-wrap; overflow-wrap: anywhere; min-height: 2.4em; }
+.consola .nueva { color: var(--ink); font-weight: 600; }
+.consola .vacia { color: var(--ink-3); }
+.vr-cuenta { font-family: var(--f-mono); font-size: 12px; color: var(--ink-2); margin-top: 8px; min-height: 1.4em; overflow-wrap: anywhere; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ Retropropagación</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Aprendizaje automático · Redes neuronales · SM142004 UD4, Raschka cap. 11 y Nield cap. 7</p>
+    <h1>Retropropagación</h1>
+    <p class="lede">
+      Una red se equivoca y tiene muchos números que podría mover. La retropropagación reparte la culpa: recorre la red
+      <b>de la salida hacia la entrada</b>, capa por capa, y le dice a cada peso cuánto y hacia dónde moverse. Es la regla de la
+      cadena aplicada con orden, guardando cada resultado para reusarlo. Aquí la vas a ver como dos pasadas sobre la misma red de juguete:
+      los valores van hacia adelante, en azul; los errores vuelven hacia atrás, en naranja. Al final la vas a comprobar contra la fuerza bruta
+      y la vas a usar para enseñarle el XOR.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> La red debía decir 1 y dijo 0.55. Tiene nueve números que puedes mover. ¿Cómo decidirías cuál mover, hacia dónde y cuánto, sin probar uno por uno? Escríbelo como te salga.</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: movería primero los pesos que..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>De un empujón a ciegas a la pasada hacia atrás</h2>
+      <p>Ocho pasos. Cada uno termina con un chequeo que abre el siguiente. Equivocarte aquí no resta nada: es parte del método.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="Culpa">
+          <span class="etapa">Paso 1</span>
+          <h3>La red se equivocó: ¿de quién es la culpa?</h3>
+          <p>En el escenario está la red de juguete de esta ruta, la de <a href="red-multicapa.html">Red multicapa y propagación hacia adelante</a>, con la entrada (1, 0). El XOR pide un <b>1</b> y la red dice <b>0.549</b>. La caja de la derecha mide qué tan lejos quedó: es la pérdida de entropía cruzada, que con objetivo 1 vale <span data-tex="L = -\ln(0.549) = 0.599"></span>. Si la red acertara de lleno, valdría 0.</p>
+          <p>Para que aprenda hay que mover sus nueve números: seis pesos (las líneas) y tres sesgos (debajo de cada neurona). La forma más bruta de saber cuál mover es empujar uno un poquito y mirar qué le pasa a la pérdida. Antes de probar, apuesta.</p>
+          <p>La teoría de la UD4 lo cuenta así, en una frase: los pesos se ajustan "distribuyendo el error entre las conexiones" <cite class="cita" data-fuente="dl4" data-pag="14" data-seccion="Backpropagation" data-que="Solo prosa: Bryson y Ho en 1969, la función de pérdidas, distribuir el error entre las conexiones, la tasa de aprendizaje y que no garantiza el óptimo global. No hay regla de la cadena, ni fórmulas, ni un ejemplo." data-cuando="Al terminar este paso"></cite>. No hay fórmulas ni un ejemplo; el único lugar de la unidad donde se calcula un gradiente es el cuaderno de la Demo 1 de las diapositivas de LSTM, la red de caracteres escrita con NumPy. Esta página es la matemática que esa frase resume.</p>
+          <div class="check" id="chk1">
+            <p class="check-tit">Predice antes de tocar</p>
+            <div class="cuerpo"></div>
+          </div>
+          <p class="tras tras-chk1" hidden>Ahora empuja tú: el escenario se abrió. Elige un número, súbelo o bájalo 0.1 y mira cuánto cambia L. Prueba los nueve. Dos de ellos no mueven nada, y el que más mueve no es un peso.</p>
+        </section>
+
+        <section class="paso card" data-titulo="Una curva">
+          <span class="etapa">Paso 2</span>
+          <h3>La pérdida como función de un solo peso</h3>
+          <p>Deja quietos ocho números y mueve solo uno. La pérdida pasa a depender de una sola variable: es una curva, y la puedes dibujar. El escenario la dibuja para el número que elijas, con el punto donde está ahora.</p>
+          <p>La recta naranja punteada es la tangente en ese punto. Su pendiente es la <b>derivada parcial</b> de la pérdida respecto de ese número, <span data-tex="\partial L/\partial w"></span>. Te dice lo que hacía el empujón, sin empujar:</p>
+          <div class="fbloque">
+            <div data-tex="\Delta L \approx \frac{\partial L}{\partial w}\,\Delta w" data-display></div>
+            <div class="vivo" id="vivo2"></div>
+          </div>
+          <p>Nueve números, nueve curvas, nueve pendientes. Juntas forman el <b>gradiente</b>, el vector que usa el <a href="descenso-gradiente.html">descenso de gradiente</a>. El problema es conseguirlas. Empujando hacen falta al menos nueve pasadas extra por la red, y la red de dígitos de Raschka tiene 39 760 números: 39 760 pasadas para dar un solo paso. La retropropagación las saca todas con <b>una</b> pasada hacia atrás. Raschka la presenta justo así, como una forma eficiente de calcular todas las derivadas parciales a la vez <cite class="cita" data-fuente="raschka11" data-pag="28" data-pimp="362" data-seccion="Developing your understanding of backpropagation" data-que="La idea en dos párrafos: Rumelhart y colegas (1986), calcular de forma eficiente las derivadas parciales de una pérdida que no es convexa, y la regla de la cadena para una composición de cinco funciones." data-cuando="Al terminar este paso"></cite>.</p>
+          <div class="check" id="chk2"><p class="check-tit">Calcula con la pendiente</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="La salida">
+          <span class="etapa">Paso 3</span>
+          <h3>El primer eslabón: el error de la salida</h3>
+          <p>La pasada hacia atrás empieza por el final. La pérdida depende de la salida <span data-tex="a_2"></span>, que es la sigmoide de <span data-tex="z_2"></span>. Por la regla de la cadena, el primer eslabón es:</p>
+          <div class="fbloque">
+            <div data-tex="\delta_2 = \frac{\partial L}{\partial z_2} = \frac{\partial L}{\partial a_2}\cdot\frac{\partial a_2}{\partial z_2} = \left(-\frac{1}{a_2}\right)\cdot a_2(1-a_2) = a_2 - 1" data-display></div>
+            <div class="vivo" id="vivo3"></div>
+          </div>
+          <p>Con objetivo 0 la cuenta da <span data-tex="a_2"></span>, así que en general <span data-tex="\delta_2 = a_2 - y"></span>: <b>lo que dijo menos lo que debía decir</b>. Por qué la sigmoide y la entropía cruzada se simplifican tan bien está en <a href="cadena-multivariable.html">Regla de la cadena multivariable</a>. A <span data-tex="\delta"></span> lo vamos a llamar <b>el error</b> de la neurona; en el escenario es el número naranja debajo de ella. Su signo dice hacia dónde debería moverse <span data-tex="z_2"></span> para bajar la pérdida: negativo, hacia arriba. Desde aquí puedes cambiar la esquina del XOR.</p>
+          <p>Brasil hace esta misma cadena para un peso de salida de su red de abejas, con la derivada de la sigmoide escrita como <span data-tex="\hat y(1-\hat y)"></span> <cite class="cita" data-fuente="brasil5v2" data-pag="66" data-pimp="264" data-seccion="5.1.8.5, cadena para un peso de salida (ec. 5.74 a 5.78)" data-que="La regla de la cadena aplicada a un peso de la capa de salida, eslabón por eslabón, con la derivada de la sigmoide ŷ(1 − ŷ) y la entropía cruzada. En la página 71 usa 4.950 y 0.161 donde van 4.694 y 0.167; el −0.506 final no cambia al redondear." data-cuando="Al terminar este paso"></cite>. Raschka la hace con la pérdida cuadrática, y por eso su primer eslabón es <span data-tex="2(a-y)"></span> y le queda el factor <span data-tex="a(1-a)"></span> sin cancelar <cite class="cita" data-fuente="raschka11" data-pag="31" data-pimp="365" data-seccion="Training neural networks via backpropagation" data-que="Las tres derivadas de un peso de salida con la pérdida MSE: 2(a − y), a(1 − a) y a^(h), multiplicadas. Ojo: en la línea de la derivada escribe la sigmoide como 1/(1 + e^z), sin el signo menos; el resultado a(1 − a) sí está bien." data-cuando="Después del chequeo"></cite>.</p>
+          <div class="check" id="chk3"><p class="check-tit">Calcula antes de mirar</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Hacia atrás">
+          <span class="etapa">Paso 4</span>
+          <h3>El error vuelve por los mismos pesos</h3>
+          <p>Ahora la capa oculta. La neurona <span data-tex="j"></span> entrega <span data-tex="a_{1j}"></span>, y la salida la recibe multiplicada por su peso <span data-tex="w^{(2)}_j"></span>. Ese mismo peso es el que lleva la culpa de vuelta: si la neurona pesaba mucho en la salida, carga con mucho del error. Después la culpa cruza la sigmoide de la neurona y se multiplica por su pendiente, <span data-tex="\sigma'(z) = a(1-a)"></span>:</p>
+          <div class="fbloque">
+            <div data-tex="\delta_{1j} = \underbrace{w^{(2)}_j\,\delta_2}_{\partial L/\partial a_{1j}}\cdot\underbrace{a_{1j}(1-a_{1j})}_{\sigma'(z_{1j})} \qquad\text{todas juntas:}\qquad \boldsymbol{\delta}_1 = \big(W_2^\top\delta_2\big)\odot\sigma'(\mathbf{z}_1)" data-display></div>
+            <div class="vivo" id="vivo4"></div>
+          </div>
+          <p>Fíjate en lo que no hizo falta: nada de volver a calcular la cadena desde L. El <span data-tex="\delta_2"></span> ya estaba hecho y se reusa. Eso es lo que hace eficiente a la retropropagación: cada capa recibe el error de la siguiente, lo multiplica por dos cosas y lo pasa a la anterior. Es la regla de la cadena generalizada de OpenStax, recorrida de la salida hacia la entrada <cite class="cita" data-fuente="calc3u4" data-pag="80" data-pimp="412" data-seccion="4.5, Theorem 4.10 (generalized chain rule)" data-que="La regla de la cadena para varias variables intermedias: una suma de productos, un término por cada camino. Es la versión general de lo que hace este paso." data-cuando="Cuando quieras la versión formal"></cite>.</p>
+          <details class="profundizar">
+            <summary>¿Y si la neurona oculta alimenta a varias salidas?</summary>
+            <div>
+              <p>Entonces su culpa llega por varios caminos, uno por salida, y se suman: <span data-tex="\delta_{1j} = \sigma'(z_{1j})\sum_k w^{(2)}_{kj}\,\delta_{2k}"></span>. Es la suma de caminos de la regla de la cadena multivariable, y en forma matricial es justo <span data-tex="W_2^\top\boldsymbol{\delta}_2"></span>. Raschka la dibuja con dos salidas <cite class="cita" data-fuente="raschka11" data-pag="32" data-pimp="366" data-seccion="Training neural networks via backpropagation, Figure 11.13" data-que="Un peso oculto que llega a la pérdida por las dos salidas: dos caminos que se suman, con δ^(out). Errata: la fórmula expandida escribe ∂L/∂w^(out) a la izquierda, pero es el peso oculto ∂L/∂w^(h), como dicen la figura y la línea siguiente." data-cuando="Al leer este recuadro"></cite>. Brasil hace la capa oculta de su red de abejas con tanh, cuya derivada es <span data-tex="1-\tanh^2"></span>, en las páginas impresas 271 a 273.</p>
+            </div>
+          </details>
+          <div class="check" id="chk4"><p class="check-tit">Calcula antes de mirar</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Cada peso">
+          <span class="etapa">Paso 5</span>
+          <h3>El gradiente de cada peso: el error de destino por lo que entra</h3>
+          <p>Con los errores de todas las neuronas, el gradiente de cada peso sale con una sola multiplicación. Un peso une dos neuronas: hacia adelante transporta un valor (azul) y llega a una neurona que tiene su error (naranja). Su gradiente es el producto:</p>
+          <div class="fbloque">
+            <div data-tex="\frac{\partial L}{\partial w} = \underbrace{\delta_{\text{destino}}}_{\text{naranja}}\times\underbrace{\text{lo que entra por }w}_{\text{azul}} \qquad \frac{\partial L}{\partial w^{(1)}_{jk}} = \delta_{1j}\,x_k \qquad \frac{\partial L}{\partial w^{(2)}_{j}} = \delta_2\,a_{1j} \qquad \frac{\partial L}{\partial b} = \delta" data-display></div>
+          </div>
+          <p>Un sesgo es un peso cuya entrada vale siempre 1: su gradiente es el error de su neurona, tal cual. Y un peso cuya entrada vale 0 recibe gradiente 0: en este ejemplo no participó, así que no tiene culpa. El escenario escribe el gradiente de cada línea en naranja y la tabla los junta. Nield arma estas mismas cuatro cadenas con letras, una por tipo de parámetro, y en esa versión escalar están bien <cite class="cita" data-fuente="nield7" data-pag="29" data-seccion="Example 7-10 y las cuatro cadenas" data-que="dC/dW2, dC/dB2, dC/dW1 y dC/dB1 como productos de derivadas, con la derivada de ReLU (Z1 > 0). Usa costo cuadrático, así que su primer eslabón es 2A2 − 2y. En la página escribe DA2 con D mayúscula donde va dA2." data-cuando="Al terminar este paso"></cite>.</p>
+          <div class="check" id="chk5"><p class="check-tit">Calcula con lo que ves</p><div class="cuerpo"></div></div>
+          <div class="cita" id="citaHipo" hidden></div>
+        </section>
+
+        <section class="paso card" data-titulo="Un paso">
+          <span class="etapa">Paso 6</span>
+          <h3>Bajar la pérdida: un paso de descenso</h3>
+          <p>Con el gradiente completo, cada número se mueve un poco en contra de su pendiente. Con tasa <span data-tex="\eta = 0.5"></span>:</p>
+          <div class="fbloque">
+            <div data-tex="w \leftarrow w - \eta\,\frac{\partial L}{\partial w}" data-display></div>
+            <div class="vivo" id="vivo6"></div>
+          </div>
+          <p>Gradiente negativo, el número sube; positivo, baja; cero, se queda. Es la misma regla de la página de <a href="descenso-estocastico.html">Descenso de gradiente estocástico</a> con un solo ejemplo. La UD6 de Matemáticas la escribe así, <span data-tex="w = w - \eta\,\partial J/\partial w"></span>, pero no dice cómo se obtiene <span data-tex="\partial J/\partial w"></span> en una red <cite class="cita" data-fuente="ud6" data-pag="10" data-seccion="3.2 Funcionamiento: gradiente descendente" data-que="La regla de actualización con la tasa de aprendizaje η. Sin regla de la cadena ni errores por capa: lo que falta es justo lo que viste en los pasos 3 a 5. Una página antes escribe la entropía cruzada binaria para un problema de tres clases." data-cuando="Al terminar este paso"></cite>. Eso es lo que viste en los pasos 3 a 5.</p>
+          <div class="check" id="chk6"><p class="check-tit">Calcula antes de dar el paso</p><div class="cuerpo"></div></div>
+          <p class="tras tras-chk6" hidden>El botón se abrió. Dale una vez y mira la pérdida: de 0.599 a 0.429. Dale varias más: con un solo ejemplo, la red aprende enseguida a decir 1 para (1, 0). Es la misma cuenta que imprime el programa de la vida real.</p>
+
+          <div class="destacado" id="destacado">
+            <p class="dest-tit">Una trampa muy común</p>
+            <h4>¿Puedo actualizar W₂ apenas tengo su gradiente?</h4>
+            <p>Es tentador: calculas <span data-tex="\partial L/\partial W_2"></span>, actualizas <span data-tex="W_2"></span> y sigues hacia atrás. Pero el paso 4 usa <span data-tex="W_2"></span> para llevar el error a la capa oculta. ¿Con cuál, la vieja o la nueva?</p>
+            <div class="check" id="chk6b"><p class="check-tit">Predice antes de seguir</p><div class="cuerpo"></div></div>
+            <div class="tras tras-chk6b" hidden>
+              <p>Con la nueva, <span data-tex="W_2 = (1.1403,\ -0.8817)"></span>, los errores ocultos salen <span data-tex="(-0.1208,\ 0.0991)"></span> en lugar de <span data-tex="(-0.1059,\ 0.1124)"></span>. No es un redondeo: es el gradiente de otra red, una que no hizo esta pasada hacia adelante. El orden correcto es <b>todos los gradientes primero, todas las actualizaciones después</b>. En el paso 7 vas a ver que el gradient check caza este error.</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Comprobar">
+          <span class="etapa">Paso 7</span>
+          <h3>Gradient check: comparar con la fuerza bruta</h3>
+          <p>¿Cómo sabes que tu retropropagación está bien? Contra la idea del paso 1: empujar. Para cada número calculas la pérdida un poco a la derecha y un poco a la izquierda, y divides:</p>
+          <div class="fbloque">
+            <div data-tex="\frac{\partial L}{\partial w} \approx \frac{L(w+h) - L(w-h)}{2h}" data-display></div>
+            <div class="vivo" id="vivo7"></div>
+          </div>
+          <p>Esta diferencia <b>centrada</b> se equivoca en algo del tamaño de <span data-tex="h^2"></span>; la de un solo lado, <span data-tex="(L(w+h) - L(w))/h"></span>, en algo del tamaño de <span data-tex="h"></span>. Es lenta (dos pasadas por número), pero no se puede equivocar en la regla de la cadena porque no la usa. Por eso se usa para revisar, nunca para entrenar.</p>
+          <p>El escenario pone las dos columnas lado a lado. Elige un error típico y mira cómo salta la diferencia: olvidar <span data-tex="\sigma'"></span>, usar la <span data-tex="W_2"></span> ya actualizada, o el código de Nield, que en el paso 8 vas a ver por qué falla. El gradient check no aparece en la UD4 ni en los capítulos de Nield y Raschka; Nield, en cambio, recomienda no hacer estas cuentas a mano y dejárselas a la diferenciación automática <cite class="cita" data-fuente="nield7" data-pag="30" data-seccion="Recuadro: diferenciación automática" data-que="Desenredar derivadas a mano es tedioso; JAX, de Google, las calcula solo y es casi idéntico a NumPy. Es lo que hacen PyTorch y TensorFlow por detrás." data-cuando="Al terminar este paso"></cite>, que es lo que hacen PyTorch y Keras.</p>
+          <div class="check" id="chk7"><p class="check-tit">Calcula con lo que ves</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="El XOR">
+          <span class="etapa">Paso 8</span>
+          <h3>Todo el lote: entrenar el XOR</h3>
+          <p>Hasta aquí, un ejemplo. Para aprender el XOR hacen falta las cuatro esquinas. Cada una tiene su pasada hacia adelante y hacia atrás, y el gradiente del lote es el <b>promedio</b> de los cuatro (la pérdida del lote es el promedio de las cuatro pérdidas). Una actualización por pasada completa al lote es una <b>época</b>. Con el lote como matriz, una fila por ejemplo, todo se escribe en cuatro líneas:</p>
+          <div class="fbloque">
+            <div data-tex="\Delta_2 = \hat{Y} - Y \qquad \frac{\partial L}{\partial W_2} = \tfrac{1}{N}\Delta_2^\top A_1 \qquad \Delta_1 = (\Delta_2 W_2)\odot A_1\odot(1-A_1) \qquad \frac{\partial L}{\partial W_1} = \tfrac{1}{N}\Delta_1^\top X" data-display></div>
+          </div>
+          <p>Es la forma del código de Raschka, con la misma traspuesta que en la pasada hacia adelante <cite class="cita" data-fuente="raschka11" data-pag="16" data-pimp="350" data-seccion="Implementing a multilayer perceptron: backward" data-que="El método backward para la capa oculta: d_loss__a_h = np.dot(delta_out, self.weight_out), por la derivada de la sigmoide, y el gradiente con np.dot((...).T, x), con las formas en comentarios. Una página antes divide el gradiente de la salida por n pero no por t = 10, aunque la pérdida que reporta sí lo hace: es como usar una tasa diez veces mayor." data-cuando="Al terminar este paso"></cite>. El producto <span data-tex="\odot"></span> es elemento a elemento, y es justo lo que se rompe en el código de Nield: allí la multiplicación de la capa oculta es de matrices, así que suma las neuronas en un solo número y las tres reciben la misma corrección <cite class="cita" data-fuente="nield7" data-pag="31" data-seccion="Example 7-11: backward_prop" data-que="La retropropagación con matrices. La capa de salida está bien; en la oculta, dC_dA1 de 1 × 3 por dA1_dZ1 de 3 × 1 da un solo número, y dC_dW1 sale de 1 × 3: por broadcasting, las tres neuronas reciben la misma actualización. La red igual aprende ese problema fácil, lo que esconde el error." data-cuando="Después del chequeo"></cite>. Sus fórmulas escalares de la página 29 estaban bien: el error está al pasarlas a matrices.</p>
+          <div class="check" id="chk8"><p class="check-tit">Predice antes de entrenar</p><div class="cuerpo"></div></div>
+          <div class="tras tras-chk8" hidden>
+            <p>La meseta no es un mínimo. Al principio las dos neuronas ocultas hacen casi lo mismo y el gradiente es pequeño en todas direcciones; poco a poco se diferencian, y cuando una aprende a encenderse solo con (1, 0) y la otra a apagarse solo con (0, 1), la pérdida cae de golpe. Mira los pesos al final: no son los del paso 7 de la página de red multicapa, pero resuelven el XOR igual. Hay muchas soluciones.</p>
+            <p>Si las dos neuronas arrancaran <b>idénticas</b>, recibirían el mismo error y los mismos gradientes en cada época, y seguirían idénticas para siempre: la red se comportaría como si tuviera una sola. Por eso los pesos iniciales se eligen al azar, para romper la simetría <cite class="cita" data-fuente="raschka13" data-pag="5" data-pimp="413" data-seccion="Inicialización: romper la simetría" data-que="Los pesos se inicializan al azar para romper la simetría; si no, la red no supera a una de una sola capa. Después, el recuadro de Xavier (Glorot)." data-cuando="Después de este paso"></cite>. Lo puedes comprobar en el reto de construir. Brasil entrena su red de abejas época por época con esta misma regla <cite class="cita" data-fuente="brasil5v2" data-pag="75" data-pimp="273" data-seccion="Una época de SGD y 100 épocas (tabla 5.12)" data-que="Una época completa de descenso estocástico a mano y el resultado tras 100 épocas. Sus tablas usan la convención traspuesta de los pesos (la del cálculo a mano es la otra), así que esos números no salen de su ecuación 5.44." data-cuando="Cuando quieras ver otra red entrenando"></cite>.</p>
+          </div>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+        </div>
+        <div class="esc-fila" id="filaEntrada">
+          <span class="seg-lab">Esquina</span>
+          <div class="seg" id="segEntrada" role="group" aria-label="Entrada de la red"></div>
+        </div>
+        <svg id="red" class="red-svg" role="img" aria-label="La red 2-2-1 con los valores hacia adelante y los errores hacia atrás"></svg>
+        <div class="leyenda" id="leyenda"><span><i></i>hacia adelante: valores</span><span><i class="bw"></i>hacia atrás: errores y gradientes</span></div>
+        <div class="esc-fila" id="filaParam">
+          <span class="seg-lab">Número</span>
+          <div class="seg multi" id="segParam" role="group" aria-label="Número de la red"></div>
+        </div>
+        <div class="panel" id="panel"></div>
+        <div id="xorBox" hidden>
+          <svg id="xorCurva" class="curva-svg" role="img" aria-label="Pérdida del lote por época"></svg>
+          <div class="esc-fila" id="xorBotones">
+            <button type="button" data-n="10">+10 épocas</button>
+            <button type="button" data-n="100">+100</button>
+            <button type="button" data-n="500">+500</button>
+            <button type="button" class="primary" data-n="hasta">Hasta 2000</button>
+            <button type="button" class="ghost" data-n="0">Reiniciar</button>
+          </div>
+          <div class="lectura-esc" id="xorLectura"></div>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>El programa hace todo el recorrido: la pasada hacia atrás con bucles para el ejemplo (1, 0), el gradient check, un paso de descenso comparado con <code>MLPClassifier</code> (Python) y con <code>nnet</code> (R), y al final 2000 épocas sobre el XOR. Los nueve números viven en un solo vector <code>p</code>, en el mismo orden de la tabla del paso 5.</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir <span class="estado" data-reto="codigo1"></span></p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="true">Python</button>
+            <button type="button" data-lang="r" aria-pressed="false">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">1 · hacia atrás</span><span data-f="2">2 · gradient check</span><span data-f="3">3 · un paso y la librería</span><span data-f="4">4 · el XOR</span>
+        </div>
+        <h3 class="mini-tit vr-tit">Los nueve números</h3>
+        <div class="tabla-wrap"><table class="tabla" id="vrTabla"></table></div>
+        <div class="vr-cuenta" id="vrCuenta"></div>
+        <h3 class="mini-tit vr-tit">Lo que imprime</h3>
+        <div class="consola" id="vrConsola"></div>
+      </div>
+    </div>
+
+    <p class="vr-nota">En la práctica nadie escribe la pasada hacia atrás: PyTorch y Keras la hacen solas con diferenciación automática, y en scikit-learn queda escondida dentro de <code>fit</code> y <code>partial_fit</code>. Para comparar un solo paso hubo que apagar lo que <code>MLPClassifier</code> agrega por defecto (momentum y regularización) y cargarle los pesos en <code>coefs_</code> e <code>intercepts_</code>, como hace Nield al final de su capítulo <cite class="cita" data-fuente="nield7" data-pag="34" data-seccion="Example 7-13: MLPClassifier" data-que="MLPClassifier con solver sgd, una capa oculta de 3 neuronas y learning_rate_init = 0.05, y los atributos coefs_ e intercepts_ donde quedan los pesos." data-cuando="Después de reproducir el programa hasta el final"></cite>. En R, <code>nnet</code> no entrena con descenso de gradiente (usa BFGS), así que no puede dar "un paso"; con <code>maxit = 0</code> sirve para confirmar la pérdida antes y después. El gradiente se compara con <code>approx_fprime</code> de SciPy y con <code>grad</code> del paquete numDeriv.</p>
+
+    <details class="profundizar">
+      <summary>La versión con matrices para todo el lote (se corrió en Python y R)</summary>
+      <div>
+        <p>Python, a continuación del programa:</p>
+        <pre class="codigo-bloque">W1, b1, W2, b2 = partes(p)
+A1 = sigmoide(X @ W1.T + b1)                # 4 x 2: una fila por ejemplo
+A2 = sigmoide(A1 @ W2 + b2)                 # 4 salidas
+D2 = (A2 - Y) / 4                           # error de la salida, ya promediado
+D1 = np.outer(D2, W2) * A1 * (1 - A1)       # 4 x 2: error de cada neurona oculta
+Gm = np.concatenate([(D1.T @ X).ravel(), D1.sum(axis=0), D2 @ A1, [D2.sum()]])
+print("matrices:", np.round(Gm, 6))
+print("coincide con los bucles:", np.allclose(Gm, sum(gradiente(p, X[n], Y[n]) for n in range(4)) / 4))</pre>
+        <pre class="codigo-bloque">matrices: [ 0.003034 -0.002321  0.00384   0.006732  0.004782  0.001583  0.00491
+ -0.002217  0.00424 ]
+coincide con los bucles: True</pre>
+        <p>R:</p>
+        <pre class="codigo-bloque">r &lt;- partes(p)
+A1 &lt;- sigmoide(X %*% t(r$W1) + matrix(r$b1, 4, 2, byrow = TRUE))   # 4 x 2
+A2 &lt;- as.vector(sigmoide(A1 %*% r$W2 + r$b2))                       # 4 salidas
+D2 &lt;- (A2 - Y) / 4                            # error de la salida, ya promediado
+D1 &lt;- outer(D2, r$W2) * A1 * (1 - A1)         # 4 x 2: error de cada neurona oculta
+Gm &lt;- c(t(t(D1) %*% X), colSums(D1), as.vector(D2 %*% A1), sum(D2))
+cat("matrices:", round(Gm, 6), "\n")
+cat("coincide con los bucles:", isTRUE(all.equal(Gm, Reduce(`+`, lapply(1:4, function(n) gradiente(p, X[n, ], Y[n]))) / 4)), "\n")</pre>
+        <pre class="codigo-bloque">matrices: 0.003034 -0.002321 0.00384 0.006732 0.004782 0.001583 0.00491 -0.002217 0.00424
+coincide con los bucles: TRUE </pre>
+        <p>Es el gradiente del lote en la época 0, con los pesos de juguete. Fíjate en lo chico que es (todos por debajo de 0.007): es la meseta del paso 8 vista desde los números. <code>D1</code> usa <code>*</code>, elemento a elemento; con <code>@</code> ahí tendrías el error de Nield.</p>
+      </div>
+    </details>
+
+    <details class="profundizar">
+      <summary>La misma cuenta en PyTorch y Keras (no se corrió: no están instalados en esta máquina)</summary>
+      <div>
+        <pre class="codigo-bloque">import torch
+p = torch.tensor([0.5, -0.5, 0.3, 0.8, 0.0, -0.2, 1.0, -1.0, 0.1], dtype=torch.float64, requires_grad=True)
+W1, b1, W2, b2 = p[0:4].view(2, 2), p[4:6], p[6:8], p[8]
+x = torch.tensor([1.0, 0.0], dtype=torch.float64)
+a2 = torch.sigmoid(W2 @ torch.sigmoid(W1 @ x + b1) + b2)
+L = torch.nn.functional.binary_cross_entropy(a2, torch.tensor(1.0, dtype=torch.float64))
+L.backward()        # la pasada hacia atrás, automática
+print(p.grad)       # deberían salir los nueve números de gradiente(p, x, y)
+
+import tensorflow as tf
+with tf.GradientTape() as cinta:              # graba la pasada hacia adelante
+    perdida = tf.keras.losses.binary_crossentropy(y, red(x))
+grads = cinta.gradient(perdida, red.trainable_variables)   # y la recorre hacia atrás
+tf.keras.optimizers.SGD(0.5).apply_gradients(zip(grads, red.trainable_variables))</pre>
+        <p><code>backward()</code> y <code>GradientTape</code> guardan el grafo de cómputo de la pasada hacia adelante y lo recorren al revés, multiplicando derivadas locales: es esta página automatizada. El cuaderno DL02 de la UD4 entrena su red de MNIST con <code>tf.GradientTape</code> justo así.</p>
+      </div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>El momentum que nadie pidió</h3><span class="estado" data-reto="codigo2"></span></div>
+        <div id="codigo2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>La pérdida por defecto de nnet</h3><span class="estado" data-reto="codigo3"></span></div>
+        <div id="codigo3"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: la biblioteca te avisa en el índice cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>¿Sube, baja o se queda?</h3><span class="estado" data-reto="ojo"></span></div>
+        <p class="desc">Cinco pesos de redes al azar. Ves el error de la neurona a la que llega cada uno y lo que entra por él. Decide qué le hace el paso de descenso, sin calcular. Apruebas con 4 de 5.</p>
+        <div id="ojo"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Construir</span><h3>Entrena tú</h3><span class="estado" data-reto="construir"></span></div>
+        <p class="desc">Elige la tasa y cómo arrancan los pesos, y entrena el XOR hasta cumplir los tres objetivos. Cada vez que cambias algo, el entrenamiento vuelve a la época 0.</p>
+        <div class="esc-fila"><span class="seg-lab">Tasa η</span><div class="seg" id="kEta" role="group" aria-label="Tasa de aprendizaje"></div></div>
+        <div class="esc-fila"><span class="seg-lab">Arranque</span><div class="seg" id="kInit" role="group" aria-label="Pesos iniciales"></div></div>
+        <svg id="kCurva" class="curva-svg" role="img" aria-label="Pérdida por época del reto"></svg>
+        <div class="esc-fila" id="kBotones">
+          <button type="button" data-n="100">+100 épocas</button>
+          <button type="button" data-n="500">+500</button>
+          <button type="button" class="primary" data-n="2000">+2000</button>
+        </div>
+        <div class="lectura-esc" id="kVivo"></div>
+        <ul class="objetivos" id="objetivos"></ul>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>Un gradiente con lápiz</h3><span class="estado" data-reto="mano"></span></div>
+        <p class="desc">Una red 2-2-1 con ReLU en la capa oculta, salida sin activación y pérdida <span data-tex="L = \tfrac12(\hat y - y)^2"></span>, así que <span data-tex="\delta_2 = \hat y - y"></span> y la derivada de ReLU es 1 o 0. Números enteros. Haz la pasada hacia adelante y hacia atrás en papel.</p>
+        <div id="manoDatos"></div>
+        <div id="mano"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Alguien se equivocó</h3><span class="estado" data-reto="error"></span></div>
+        <p class="desc">Una de las líneas tiene un error. Tócala.</p>
+        <div id="error"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>¿Por qué no empujar?</h3><span class="estado" data-reto="prop1"></span></div>
+        <div id="prop1"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Neuronas gemelas</h3><span class="estado" data-reto="prop2"></span></div>
+        <div id="prop2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Otra pérdida, otro eslabón</h3><span class="estado" data-reto="prop3"></span></div>
+        <div id="prop3"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>La meseta</h3><span class="estado" data-reto="prop4"></span></div>
+        <div id="prop4"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>El gradiente de un sesgo</h3><span class="estado" data-reto="prop5"></span></div>
+        <div id="prop5"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Recordar a la fuerza es lo que fija. Arma la fórmula del error de la capa oculta y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Fórmula de memoria</span><h3>El error de la capa oculta</h3><span class="estado" data-reto="formula"></span></div>
+        <p class="desc">Cómo llega el error de la salida a la capa oculta, para todas sus neuronas a la vez. Hay piezas de más que no pertenecen. No mires arriba.</p>
+        <div id="formula"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el libro</h2>
+      <p class="lecturas-intro">Ya viste el error viajar hacia atrás, lo comprobaste empujando y entrenaste el XOR. Ahora ve a la versión técnica y reconócela. Cada libro usa su pérdida: Brasil y esta página, entropía cruzada (primer eslabón <i>a − y</i>); Nield y Raschka, la cuadrática (primer eslabón <i>2(a − y)</i> por la derivada de la sigmoide). La UD4 no trae fórmulas. Si abres la biblioteca con doble clic, el enlace abre el PDF en esa página.</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> Las cuatro esquinas son la tabla del XOR. Los pesos de la red de juguete son los de toda la ruta de redes
+    neuronales (ver Neurona, perceptrón y XOR), elegidos a mano, y la tasa 0.5 también; todas las cifras del recorrido y de la vida real
+    se calcularon con python3 y Rscript. Los arranques "iguales" y "ceros" del reto de construir, las redes del ojo clínico y del reto a
+    mano son inventados o se generan al azar. Tu progreso se guarda en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+/*
+  Ejemplo comun de la ruta de redes neuronales (perceptron.html): red de juguete 2-2-1 con sigmoide,
+  p = [W1 por filas, b1, W2, b2] = [0.5, -0.5, 0.3, 0.8, 0, -0.2, 1, -1, 0.1], x = (1, 0), y = 1, eta = 0.5.
+  Esta pagina (calculado con python3 y Rscript):
+    gradiente en (1, 0): dW1 = [[-0.105937, 0], [0.112416, 0]], db1 = (-0.105937, 0.112416),
+                         dW2 = (-0.280598, -0.236655), db2 = -0.450790
+    gradient check (h = 1e-5, centrado): diferencia maxima 4.5e-12
+    un paso: perdida 0.599274 -> 0.428671 (MLPClassifier sgd con momentum = 0 y alpha = 0 coincide; nnet confirma la perdida)
+    si W2 se actualiza antes de propagar: dz1 = (-0.120800, 0.099114) en vez de (-0.105937, 0.112416)
+    olvidar sigma': dz1 = (-0.450790, 0.450790); codigo de Nield: las dos filas de dW1 = (0.006479, 0)
+  Las otras esquinas: (0,0) dz2 = 0.537389; (0,1) dz2 = -0.541930, dz1 = (-0.127356, 0.123985);
+    (1,1) dz2 = 0.472291, dz1 = (0.118073, -0.097056).
+  XOR, lote completo de 4, promedio de gradientes, eta = 0.5, desde los pesos de juguete:
+    perdida media en las epocas 0, 500, 1000, 1500, 2000: 0.6975, 0.691, 0.4071, 0.047, 0.0218
+    salidas a las 2000 epocas: 0.021, 0.971, 0.982, 0.018. Gradiente del lote en la epoca 0:
+    [0.003034, -0.002321, 0.00384, 0.006732, 0.004782, 0.001583, 0.00491, -0.002217, 0.00424].
+  Arranque simetrico (filas iguales) se queda simetrico; con eta = 2, perdida 0.022 a las 500 epocas.
+*/
+(function () {
+  "use strict";
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var RETOS = ["ojo", "construir", "mano", "error", "prop1", "prop2", "prop3", "prop4", "prop5", "formula", "codigo1", "codigo2", "codigo3"];
+  var C = B.concepto({ id: "retropropagacion", retos: RETOS, pasos: 8 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  /* ---------------- utilidades y la red ---------------- */
+  var f = B.fmt;
+  function n(v) {
+    if (Math.abs(v - Math.round(v)) < 1e-9) return f(Math.round(v), 0);
+    if (Math.abs(v * 10 - Math.round(v * 10)) < 1e-9) return f(v, 1);
+    return f(v, 2);
+  }
+  function par(v) { return v < 0 ? "(" + f(v, 4) + ")" : f(v, 4); }
+  function tx(v, d) { return f(v, d == null ? 4 : d).replace("−", "-"); }
+  function sig(z) { return 1 / (1 + Math.exp(-z)); }
+  function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+  function mostrarTras(cls) { [].forEach.call(document.querySelectorAll("." + cls), function (e) { e.hidden = false; }); }
+
+  var PUNTOS = [[0, 0], [0, 1], [1, 0], [1, 1]], XOR = [0, 1, 1, 0];
+  function esq(q) { return "(" + q[0] + ", " + q[1] + ")"; }
+  var JUG = [0.5, -0.5, 0.3, 0.8, 0, -0.2, 1, -1, 0.1];
+  var ETA = 0.5;
+  // nombres de los nueve numeros, en el orden del vector p del codigo
+  var NOM = ["x₁ → arriba", "x₂ → arriba", "x₁ → abajo", "x₂ → abajo", "sesgo arriba", "sesgo abajo", "arriba → salida", "abajo → salida", "sesgo salida"];
+  var COD = ["W1[0,0]", "W1[0,1]", "W1[1,0]", "W1[1,1]", "b1[0]", "b1[1]", "W2[0]", "W2[1]", "b2"];
+
+  function adelante(p, x) {
+    var z1 = [p[0] * x[0] + p[1] * x[1] + p[4], p[2] * x[0] + p[3] * x[1] + p[5]];
+    var a1 = [sig(z1[0]), sig(z1[1])];
+    var z2 = p[6] * a1[0] + p[7] * a1[1] + p[8];
+    return { z1: z1, a1: a1, z2: z2, a2: sig(z2) };
+  }
+  function perdida(p, x, y) { var a = adelante(p, x).a2; return -(y * Math.log(a) + (1 - y) * Math.log(1 - a)); }
+  // bug: null, "sigma" (olvidar sigma'), "orden" (W2 ya actualizada), "nield" (producto de matrices en la capa oculta)
+  function atras(p, x, y, bug) {
+    var r = adelante(p, x), dz2 = r.a2 - y;
+    var W2 = [p[6], p[7]];
+    if (bug === "orden") W2 = [p[6] - ETA * dz2 * r.a1[0], p[7] - ETA * dz2 * r.a1[1]];
+    var da1 = [W2[0] * dz2, W2[1] * dz2];
+    var sp = [r.a1[0] * (1 - r.a1[0]), r.a1[1] * (1 - r.a1[1])];
+    var dz1 = bug === "sigma" ? da1.slice() : [da1[0] * sp[0], da1[1] * sp[1]];
+    if (bug === "nield") { var t = da1[0] * sp[0] + da1[1] * sp[1]; dz1 = [t, t]; }
+    var g = [dz1[0] * x[0], dz1[0] * x[1], dz1[1] * x[0], dz1[1] * x[1], dz1[0], dz1[1], dz2 * r.a1[0], dz2 * r.a1[1], dz2];
+    return { r: r, dz2: dz2, da1: da1, sp: sp, dz1: dz1, g: g };
+  }
+  function entrada(i, p, x) { // lo que entra por el numero i (azul)
+    var r = adelante(p, x);
+    return [x[0], x[1], x[0], x[1], 1, 1, r.a1[0], r.a1[1], 1][i];
+  }
+  function destino(i) { return i === 0 || i === 1 || i === 4 ? "d1a" : i === 2 || i === 3 || i === 5 ? "d1b" : "d2"; }
+  // entrenamiento del XOR con el lote completo (mismo orden de sumas que el programa)
+  function epoca(q, eta) {
+    var G = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+    for (var m = 0; m < 4; m++) {
+      var g = atras(q, PUNTOS[m], XOR[m]).g;
+      for (var i = 0; i < 9; i++) G[i] = G[i] + g[i];
+    }
+    for (i = 0; i < 9; i++) q[i] = q[i] - eta * G[i] / 4;
+  }
+  function perdidaLote(q) { var s = 0; for (var m = 0; m < 4; m++) s += perdida(q, PUNTOS[m], XOR[m]); return s / 4; }
+  function historial(q0, eta, N) {
+    var q = q0.slice(), h = [], ps = [];
+    for (var e = 0; e <= N; e++) { h.push(perdidaLote(q)); ps.push(null); if (e % 50 === 0) ps[e] = q.slice(); if (e < N) epoca(q, eta); }
+    ps[N] = q.slice();
+    return { h: h, ps: ps, fin: q };
+  }
+  function pesosEn(H, e) { // pesos al comienzo de la epoca e (reconstruidos desde la foto anterior)
+    var b = e - (e % 50), q = H.ps[b].slice();
+    for (var k = b; k < e; k++) epoca(q, H.eta);
+    return q;
+  }
+
+  /* ---------------- curva de perdida por epoca (paso 8 y reto) ---------------- */
+  function dibujarCurva(svg, h, hasta, maxE, op) {
+    op = op || {};
+    var W = 360, H = 190, L0 = 40, R0 = 12, T0 = 12, B0 = 30;
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    var ymax = op.ymax || 0.75;
+    function sx(e) { return L0 + e / maxE * (W - L0 - R0); }
+    function sy(v) { return T0 + (1 - Math.min(v, ymax) / ymax) * (H - T0 - B0); }
+    var s = '<rect class="marco" x="' + L0 + '" y="' + T0 + '" width="' + (W - L0 - R0) + '" height="' + (H - T0 - B0) + '"/>';
+    [0, 0.25, 0.5, 0.75].forEach(function (v) {
+      if (v > ymax + 1e-9) return;
+      s += '<line class="tickl" x1="' + L0 + '" x2="' + (W - R0) + '" y1="' + sy(v).toFixed(1) + '" y2="' + sy(v).toFixed(1) + '"/>';
+      s += '<text class="tick" x="' + (L0 - 5) + '" y="' + (sy(v) + 3).toFixed(1) + '" text-anchor="end">' + n(v) + '</text>';
+    });
+    var paso = maxE <= 1000 ? 250 : maxE <= 3000 ? 500 : 1000;
+    for (var e = 0; e <= maxE; e += paso) s += '<text class="tick" x="' + sx(e).toFixed(1) + '" y="' + (H - B0 + 13) + '" text-anchor="middle">' + e + '</text>';
+    s += '<text class="eje-tit" x="' + (W - R0) + '" y="' + (H - 3) + '" text-anchor="end">época</text>';
+    s += '<text class="eje-tit" x="' + (L0 + 4) + '" y="' + (T0 + 12) + '">pérdida del lote</text>';
+    if (op.meta) s += '<line class="meta" x1="' + L0 + '" x2="' + (W - R0) + '" y1="' + sy(op.meta).toFixed(1) + '" y2="' + sy(op.meta).toFixed(1) + '"/>';
+    if (hasta >= 0) {
+      var pts = [], pasoD = Math.max(1, Math.floor(hasta / 400));
+      for (e = 0; e <= hasta; e += pasoD) pts.push(sx(e).toFixed(1) + "," + sy(h[e]).toFixed(1));
+      pts.push(sx(hasta).toFixed(1) + "," + sy(h[hasta]).toFixed(1));
+      s += '<polyline class="linea" points="' + pts.join(" ") + '"/>';
+      s += '<circle class="pt" r="4.5" cx="' + sx(hasta).toFixed(1) + '" cy="' + sy(h[hasta]).toFixed(1) + '"/>';
+    }
+    svg.innerHTML = s;
+  }
+
+  /* ---------------- estado del recorrido ---------------- */
+  var est = {
+    paso: 0, xi: 2, sel: 6, emp: null, prob: {}, pp: JUG.slice(), pasosDados: [], bug: null, hI: 1,
+    chk1: false, chk2: false, chk3: false, chk4: false, chk5: false, chk6: false, chk6b: false, chk7: false, chk8: false,
+    xorE: 0
+  };
+  var MODOS = ["empujar", "curva", "salida", "oculta", "pesos", "paso", "check", "xor"];
+  function modo() { return MODOS[est.paso]; }
+  var HS = [0.1, 0.01, 0.001, 0.00001];
+  var HX = null; // historial del XOR con eta = 0.5, se calcula al entrar al paso 8
+  function pesosActuales() {
+    var m = modo();
+    if (m === "paso") return est.pp;
+    if (m === "xor") return pesosEn(HX, est.xorE);
+    return JUG;
+  }
+  function xActual() { var m = modo(); return m === "empujar" || m === "curva" ? PUNTOS[2] : PUNTOS[est.xi]; }
+  function yActual() { var m = modo(); return m === "empujar" || m === "curva" ? 1 : XOR[est.xi]; }
+
+  /* ---------------- diagrama de la red ---------------- */
+  var IN = [[38, 78], [38, 192]], HID = [[170, 78], [170, 192]], OUT = [292, 135], LB = [376, 135];
+  function borde(a, b, ra, rb) {
+    var dx = b[0] - a[0], dy = b[1] - a[1], L = Math.sqrt(dx * dx + dy * dy);
+    return [a[0] + dx / L * ra, a[1] + dy / L * ra, b[0] - dx / L * rb, b[1] - dy / L * rb, -dy / L, dx / L];
+  }
+  function dibujarRed() {
+    var m = modo(), p = pesosActuales(), x = xActual(), y = yActual();
+    var pv = p.slice();
+    if (m === "empujar" && est.emp) pv[est.emp.i] += est.emp.d;
+    var bw = atras(pv, x, y), r = bw.r;
+    var nivel = { empujar: 0, curva: 0, salida: 1, oculta: 2, pesos: 3, paso: 3, check: 3, xor: 0 }[m];
+    var selI = m === "empujar" || m === "curva" ? est.sel : -1;
+    var ocD2 = m === "salida" && !est.chk3 && est.xi === 3;
+    var ocD1b = m === "oculta" && !est.chk4;
+    var ocG7 = m === "pesos" && !est.chk5;
+    var s = '<defs><marker id="flA" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--atras)"/></marker></defs>';
+    var j, k, e, w, cls, idx;
+    // lineas de los pesos
+    var aristas = [];
+    for (j = 0; j < 2; j++) for (k = 0; k < 2; k++) aristas.push({ i: j * 2 + k, a: IN[k], b: HID[j], ra: 19, rb: 25, capa: 1 });
+    for (j = 0; j < 2; j++) aristas.push({ i: 6 + j, a: HID[j], b: OUT, ra: 25, rb: 25, capa: 2 });
+    aristas.forEach(function (ar) {
+      e = borde(ar.a, ar.b, ar.ra, ar.rb);
+      w = pv[ar.i];
+      cls = "ar" + (ar.i === selI ? " sel" : "") + (Math.abs(w) < 1e-9 ? " cero" : "");
+      var ancho = ar.i === selI ? 3.4 : 1.2 + Math.min(Math.abs(w), 4) * 0.9;
+      s += '<line class="' + cls + '" stroke-width="' + ancho.toFixed(2) + '" x1="' + e[0].toFixed(1) + '" y1="' + e[1].toFixed(1) + '" x2="' + e[2].toFixed(1) + '" y2="' + e[3].toFixed(1) + '"/>';
+      // la culpa que vuelve, en naranja, paralela a la linea
+      if ((ar.capa === 2 && nivel >= 2) || (ar.capa === 1 && nivel >= 3)) {
+        var o = 6, gw = nivel >= 3 ? Math.abs(bw.g[ar.i]) : Math.abs(bw.da1[ar.i - 6]);
+        var anchoB = 1.2 + Math.min(gw * 8, 3.5);
+        s += '<line class="ra fluye" marker-end="url(#flA)" stroke-width="' + anchoB.toFixed(2) + '" x1="' + (e[2] + e[4] * o).toFixed(1) + '" y1="' + (e[3] + e[5] * o).toFixed(1) + '" x2="' + (e[0] + e[4] * o).toFixed(1) + '" y2="' + (e[1] + e[5] * o).toFixed(1) + '"/>';
+      }
+    });
+    // salida -> perdida
+    s += '<line class="ar" stroke-width="1.4" x1="' + (OUT[0] + 25) + '" y1="' + OUT[1] + '" x2="' + (LB[0] - 32) + '" y2="' + LB[1] + '"/>';
+    if (nivel >= 1) s += '<line class="ra fluye" marker-end="url(#flA)" stroke-width="2" x1="' + (LB[0] - 32) + '" y1="' + (OUT[1] + 7) + '" x2="' + (OUT[0] + 27) + '" y2="' + (OUT[1] + 7) + '"/>';
+    // rotulos de los pesos y de sus gradientes
+    aristas.forEach(function (ar) {
+      var t = ar.capa === 1 ? 0.33 : 0.5, desp = ar.capa === 1 ? (ar.i === 0 || ar.i === 3 ? -10 : 0) : (ar.i === 6 ? -12 : 12);
+      if (ar.capa === 1 && (ar.i === 1 || ar.i === 2)) desp = ar.i === 1 ? -6 : 6;
+      var tx0 = ar.a[0] + (ar.b[0] - ar.a[0]) * t, ty0 = ar.a[1] + (ar.b[1] - ar.a[1]) * t + desp;
+      s += '<text class="t peso' + (ar.i === selI ? " sel" : "") + '" x="' + tx0.toFixed(1) + '" y="' + ty0.toFixed(1) + '">' + n(pv[ar.i]) + '</text>';
+      if (nivel >= 3 || (nivel === 2 && ar.capa === 2)) {
+        var gtxt;
+        if (nivel >= 3) gtxt = ar.i === 7 && ocG7 ? "?" : f(bw.g[ar.i], 3);
+        else gtxt = "→ " + f(bw.da1[ar.i - 6], 3);
+        var gy = ty0 + (ar.capa === 2 ? (ar.i === 6 ? -13 : 13) : 12);
+        s += '<text class="t grad' + (gtxt === "?" ? " oc" : "") + '" x="' + tx0.toFixed(1) + '" y="' + gy.toFixed(1) + '">' + gtxt + '</text>';
+      }
+    });
+    // entradas
+    for (k = 0; k < 2; k++) {
+      s += '<circle class="nd" cx="' + IN[k][0] + '" cy="' + IN[k][1] + '" r="19"/>';
+      s += '<text class="t fw" x="' + IN[k][0] + '" y="' + IN[k][1] + '">' + x[k] + '</text>';
+      s += '<text class="t lab" x="' + IN[k][0] + '" y="' + (IN[k][1] - 30) + '">' + (k ? "x₂" : "x₁") + '</text>';
+    }
+    // capa oculta
+    for (j = 0; j < 2; j++) {
+      var c = HID[j], selB = selI === 4 + j;
+      s += '<circle class="nd fw' + (selB ? " sel" : "") + '" cx="' + c[0] + '" cy="' + c[1] + '" r="25"/>';
+      s += '<text class="t fw" x="' + c[0] + '" y="' + c[1] + '">' + f(r.a1[j], 3) + '</text>';
+      s += '<text class="t ch' + (selB ? " sel" : "") + '" x="' + c[0] + '" y="' + (c[1] - 35) + '">b = ' + n(pv[4 + j]) + '</text>';
+      if (nivel >= 2) {
+        var oc = j === 1 && ocD1b;
+        s += '<rect class="caja-bw" x="' + (c[0] - 34) + '" y="' + (c[1] + 30) + '" width="68" height="18" rx="5"/>';
+        s += '<text class="t ' + (oc ? "oc" : "bw") + '" x="' + c[0] + '" y="' + (c[1] + 39.5) + '">δ = ' + (oc ? "?" : f(bw.dz1[j], 3)) + '</text>';
+      }
+    }
+    // salida
+    var selS = selI === 8;
+    s += '<circle class="nd fw' + (selS ? " sel" : "") + '" cx="' + OUT[0] + '" cy="' + OUT[1] + '" r="25"/>';
+    s += '<text class="t fw" x="' + OUT[0] + '" y="' + OUT[1] + '">' + f(r.a2, 3) + '</text>';
+    s += '<text class="t ch' + (selS ? " sel" : "") + '" x="' + OUT[0] + '" y="' + (OUT[1] - 35) + '">b = ' + n(pv[8]) + '</text>';
+    s += '<text class="t lab" x="' + OUT[0] + '" y="' + (OUT[1] - 52) + '">ŷ</text>';
+    if (nivel >= 1) {
+      s += '<rect class="caja-bw" x="' + (OUT[0] - 34) + '" y="' + (OUT[1] + 30) + '" width="68" height="18" rx="5"/>';
+      s += '<text class="t ' + (ocD2 ? "oc" : "bw") + '" x="' + OUT[0] + '" y="' + (OUT[1] + 39.5) + '">δ = ' + (ocD2 ? "?" : f(bw.dz2, 3)) + '</text>';
+    }
+    // perdida
+    s += '<rect class="caja" x="' + (LB[0] - 32) + '" y="' + (LB[1] - 28) + '" width="62" height="56" rx="8"/>';
+    s += '<text class="t lab" x="' + (LB[0] - 1) + '" y="' + (LB[1] - 15) + '">pérdida</text>';
+    s += '<text class="t" x="' + (LB[0] - 1) + '" y="' + (LB[1] + 2) + '">' + f(perdida(pv, x, y), 3) + '</text>';
+    s += '<text class="t ch" x="' + (LB[0] - 1) + '" y="' + (LB[1] + 18) + '">y = ' + y + '</text>';
+    s += '<text class="t lab" x="38" y="252">entrada</text><text class="t lab" x="170" y="252">capa oculta</text><text class="t lab" x="292" y="252">salida</text>';
+    $("red").setAttribute("viewBox", "0 0 414 262");
+    $("red").innerHTML = s;
+  }
+
+  /* ---------------- paneles por modo ---------------- */
+  function filaTabla(celdas) { return "<tr>" + celdas.map(function (c) { return typeof c === "string" ? "<td>" + c + "</td>" : '<td class="' + c[1] + '">' + c[0] + "</td>"; }).join("") + "</tr>"; }
+  function panelEmpujar() {
+    var p = JUG, x = PUNTOS[2], L0 = perdida(p, x, 1), h = "";
+    h += '<div class="esc-fila' + (est.chk1 ? "" : " bloq") + '"><button type="button" data-emp="-0.1">Bajar 0.1</button><button type="button" data-emp="0.1">Subir 0.1</button><button type="button" class="ghost" data-emp="0">Soltar</button></div>';
+    if (!est.chk1) h += '<div class="lectura-esc">Responde la predicción para poder empujar.</div>';
+    else {
+      if (est.emp) {
+        var pv = p.slice(); pv[est.emp.i] += est.emp.d;
+        var L1 = perdida(pv, x, 1);
+        h += '<div class="lectura-esc">Empujaste <b>' + NOM[est.emp.i] + '</b> ' + (est.emp.d > 0 ? "+" : "−") + '0.1: la pérdida pasó de <b>' + f(L0, 4) + '</b> a <b>' + f(L1, 4) + '</b>, un cambio de <b class="' + (L1 < L0 - 1e-12 ? "si" : L1 > L0 + 1e-12 ? "no" : "") + '">' + f(L1 - L0, 4) + '</b>.</div>';
+      } else h += '<div class="lectura-esc">Elige un número arriba y empújalo.</div>';
+      var ks = Object.keys(est.prob);
+      if (ks.length) {
+        var t = '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>número</th><th>sube 0.1: ΔL</th></tr></thead><tbody>';
+        for (var i = 0; i < 9; i++) if (est.prob[i] != null) t += '<tr' + (i === est.sel ? ' class="sel"' : "") + '><td>' + NOM[i] + '</td><td>' + f(est.prob[i], 4) + '</td></tr>';
+        h += t + '</tbody></table></div><div class="lectura-esc">Probaste ' + ks.length + ' de 9. Cada fila te costó una pasada extra por la red.</div>';
+      }
+    }
+    $("panel").innerHTML = h;
+  }
+  function panelCurva() {
+    var p = JUG, x = PUNTOS[2], i = est.sel, v0 = p[i], g = atras(p, x, 1).g[i];
+    var W = 360, H = 200, L0x = 42, R0 = 12, T0 = 12, B0 = 30, a = v0 - 3, b = v0 + 3;
+    var vals = [], ymin = Infinity, ymax = -Infinity, k, u;
+    for (k = 0; k <= 120; k++) {
+      u = a + (b - a) * k / 120;
+      var q = p.slice(); q[i] = u;
+      var Lq = perdida(q, x, 1);
+      vals.push([u, Lq]); ymin = Math.min(ymin, Lq); ymax = Math.max(ymax, Lq);
+    }
+    ymin = Math.max(0, ymin - 0.05); ymax = ymax + 0.05;
+    if (ymax - ymin < 0.4) { var mid = (ymax + ymin) / 2; ymin = Math.max(0, mid - 0.2); ymax = ymin + 0.4; }
+    function sx(t) { return L0x + (t - a) / (b - a) * (W - L0x - R0); }
+    function sy(t) { return T0 + (1 - (t - ymin) / (ymax - ymin)) * (H - T0 - B0); }
+    var s = '<rect class="marco" x="' + L0x + '" y="' + T0 + '" width="' + (W - L0x - R0) + '" height="' + (H - T0 - B0) + '"/>';
+    for (k = Math.ceil(a); k <= b; k++) s += '<line class="tickl" x1="' + sx(k).toFixed(1) + '" x2="' + sx(k).toFixed(1) + '" y1="' + T0 + '" y2="' + (H - B0) + '"/><text class="tick" x="' + sx(k).toFixed(1) + '" y="' + (H - B0 + 13) + '" text-anchor="middle">' + k + '</text>';
+    var pasoY = (ymax - ymin) > 1 ? 0.5 : 0.1;
+    for (u = Math.ceil(ymin / pasoY) * pasoY; u <= ymax; u += pasoY) s += '<text class="tick" x="' + (L0x - 5) + '" y="' + (sy(u) + 3).toFixed(1) + '" text-anchor="end">' + n(u) + '</text>';
+    s += '<polyline class="linea" points="' + vals.map(function (q) { return sx(q[0]).toFixed(1) + "," + sy(q[1]).toFixed(1); }).join(" ") + '"/>';
+    var L0 = perdida(p, x, 1), d = 1.4;
+    s += '<line class="tang" x1="' + sx(v0 - d).toFixed(1) + '" y1="' + sy(L0 - g * d).toFixed(1) + '" x2="' + sx(v0 + d).toFixed(1) + '" y2="' + sy(L0 + g * d).toFixed(1) + '"/>';
+    s += '<circle class="pt" r="5" cx="' + sx(v0).toFixed(1) + '" cy="' + sy(L0).toFixed(1) + '"/>';
+    s += '<text class="eje-tit" x="' + (W - R0) + '" y="' + (H - 3) + '" text-anchor="end">valor de ' + NOM[i] + '</text>';
+    s += '<text class="eje-tit" x="' + (L0x + 4) + '" y="' + (T0 + 12) + '">pérdida L</text>';
+    $("panel").innerHTML = '<svg class="curva-svg" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="La pérdida como función de un número">' + s + '</svg>' +
+      '<div class="lectura-esc">Ahora vale <b>' + n(v0) + '</b> y la pérdida <b>' + f(L0, 4) + '</b>. Pendiente de la tangente: <span class="bw">' + f(g, 4) + '</span>.' +
+      (Math.abs(g) < 1e-12 ? " La curva es plana: este número no toca nada con la entrada (1, 0)." : "") + '</div>';
+  }
+  function panelSalida() {
+    var x = xActual(), y = yActual(), bw = atras(JUG, x, y), a = bw.r.a2, oc = !est.chk3 && est.xi === 3;
+    var dLda = y === 1 ? -1 / a : 1 / (1 - a);
+    $("panel").innerHTML = '<div class="lectura-esc">Con ' + esq(x) + ' y objetivo <b>' + y + '</b>: ∂L/∂a₂ = ' + (y === 1 ? "−1/a₂" : "1/(1 − a₂)") + ' = ' + (oc ? '<span class="oc">?</span>' : f(dLda, 4)) +
+      '<br>∂a₂/∂z₂ = a₂(1 − a₂) = ' + f(a, 4) + ' × ' + f(1 - a, 4) + ' = ' + f(a * (1 - a), 4) +
+      '<br>δ₂ = ' + (oc ? '<span class="oc">?</span> (resuelve el chequeo)' : '<span class="bw">' + f(bw.dz2, 4) + '</span> = a₂ − y = ' + f(a, 4) + ' − ' + y) + '</div>';
+  }
+  function panelOculta() {
+    var x = xActual(), y = yActual(), bw = atras(JUG, x, y), h = "";
+    ["arriba", "abajo"].forEach(function (nm, j) {
+      var oc = j === 1 && !est.chk4;
+      h += '<div class="lectura-esc">Neurona de ' + nm + ': w = ' + n(JUG[6 + j]) + ', ' + n(JUG[6 + j]) + ' × ' + f(bw.dz2, 4) + ' = <span class="bw">' + f(bw.da1[j], 4) + '</span>; σ′ = ' + f(bw.r.a1[j], 4) + ' × ' + f(1 - bw.r.a1[j], 4) + ' = ' + f(bw.sp[j], 4) +
+        '; δ = ' + (oc ? '<span class="oc">?</span>' : '<span class="bw">' + f(bw.dz1[j], 4) + '</span>') + '</div>';
+    });
+    $("panel").innerHTML = h;
+  }
+  function tablaGrad(p, x, y, extra) {
+    var bw = atras(p, x, y), D = { d1a: bw.dz1[0], d1b: bw.dz1[1], d2: bw.dz2 };
+    var t = '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>número</th><th>valor</th><th>δ destino</th><th>entra</th><th>gradiente</th>' + (extra ? extra.th : "") + '</tr></thead><tbody>';
+    for (var i = 0; i < 9; i++) {
+      var oc = modo() === "pesos" && i === 7 && !est.chk5;
+      t += '<tr><td>' + NOM[i] + '</td><td>' + n(p[i]) + '</td><td class="bw">' + f(D[destino(i)], 4) + '</td><td class="fw">' + f(entrada(i, p, x), 4) + '</td>' +
+        (oc ? '<td class="oc">?</td>' : '<td class="bw">' + f(bw.g[i], 4) + '</td>') + (extra ? extra.td(i, bw) : "") + '</tr>';
+    }
+    return t + '</tbody></table></div>';
+  }
+  function panelPesos() { $("panel").innerHTML = tablaGrad(JUG, xActual(), yActual()); }
+  function panelPaso() {
+    var p = est.pp, x = xActual(), y = yActual(), bw = atras(p, x, y);
+    var nuevo = p.map(function (v, i) { return v - ETA * bw.g[i]; });
+    var ocNuevo = !est.chk6;
+    var h = tablaGrad(p, x, y, { th: "<th>después</th>", td: function (i) { return ocNuevo && i === 6 ? '<td class="oc">?</td>' : "<td>" + f(nuevo[i], 4) + "</td>"; } });
+    h += '<div class="esc-fila"><button type="button" class="primary" id="btnPaso"' + (est.chk6 ? "" : " disabled") + '>Un paso de descenso</button><button type="button" class="ghost" id="btnPasoReset">Volver a los pesos de juguete</button></div>';
+    var L0 = perdida(p, x, y), L1 = perdida(nuevo, x, y);
+    h += '<div class="lectura-esc">Con ' + esq(x) + ': pérdida ahora <b>' + f(L0, 4) + '</b>' + (ocNuevo ? "." : ', después del paso <b class="si">' + f(L1, 4) + '</b>.') +
+      (est.pasosDados.length ? '<br>Pasos dados: ' + est.pasosDados.length + ' · pérdidas: ' + est.pasosDados.slice(-6).map(function (v) { return f(v, 3); }).join(" → ") : "") + '</div>';
+    $("panel").innerHTML = h;
+    $("btnPaso").addEventListener("click", function () {
+      est.pp = nuevo; if (!est.pasosDados.length) est.pasosDados.push(L0);
+      est.pasosDados.push(perdida(est.pp, x, y)); render();
+    });
+    $("btnPasoReset").addEventListener("click", function () { est.pp = JUG.slice(); est.pasosDados = []; render(); });
+  }
+  var BUGS = [[null, "Ninguno"], ["sigma", "Olvidar σ′"], ["orden", "W₂ ya actualizada"], ["nield", "Código de Nield"]];
+  function panelCheck() {
+    var p = JUG, x = xActual(), y = yActual(), h = HS[est.hI], bw = atras(p, x, y, est.bug), peor = 0;
+    var t = '<div class="esc-fila"><span class="seg-lab">h</span><div class="seg" id="segH" role="group" aria-label="Tamaño de h">' +
+      HS.map(function (v, i) { return '<button type="button" data-h="' + i + '" aria-pressed="' + (i === est.hI) + '">' + (v < 0.001 ? "1e-5" : v) + '</button>'; }).join("") + '</div></div>';
+    t += '<div class="esc-fila"><span class="seg-lab">Error</span><div class="seg multi" id="segBug" role="group" aria-label="Error a propósito">' +
+      BUGS.map(function (b, i) { return '<button type="button" data-b="' + i + '" aria-pressed="' + (b[0] === est.bug) + '">' + b[1] + '</button>'; }).join("") + '</div></div>';
+    t += '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>número</th><th>retropropagación</th><th>(L(+h) − L(−h))/2h</th><th>diferencia</th></tr></thead><tbody>';
+    for (var i = 0; i < 9; i++) {
+      var q1 = p.slice(), q2 = p.slice(); q1[i] += h; q2[i] -= h;
+      var num = (perdida(q1, x, y) - perdida(q2, x, y)) / (2 * h), dif = Math.abs(num - bw.g[i]);
+      peor = Math.max(peor, dif);
+      var oc = !est.chk7;
+      t += '<tr' + (i === 6 ? ' class="sel"' : "") + '><td>' + NOM[i] + '</td><td class="bw">' + f(bw.g[i], 6) + '</td>' +
+        (oc ? '<td class="oc">?</td><td class="oc">?</td>' : '<td>' + f(num, 6) + '</td><td class="' + (dif > 1e-4 ? "mal" : "bien") + '">' + dif.toExponential(1) + '</td>') + '</tr>';
+    }
+    t += '</tbody></table></div>';
+    var q1b = p.slice(), q2b = p.slice(); q1b[6] += h; q2b[6] -= h;
+    t += '<div class="lectura-esc">Fila marcada, ' + NOM[6] + ' con h = ' + (h < 0.001 ? "0.00001" : h) + ': L(w + h) = <b>' + f(perdida(q1b, x, y), 6) + '</b>, L(w − h) = <b>' + f(perdida(q2b, x, y), 6) + '</b>.' +
+      (est.chk7 ? '<br>Diferencia máxima: <b class="' + (peor > 1e-4 ? "no" : "si") + '">' + peor.toExponential(1) + '</b>' + (peor > 1e-4 ? ": la retropropagación tiene un error." : ": la retropropagación está bien.") : "") + '</div>';
+    $("panel").innerHTML = t;
+    $("segH").addEventListener("click", function (ev) { var b = ev.target.closest("button"); if (!b) return; est.hI = +b.getAttribute("data-h"); render(); });
+    $("segBug").addEventListener("click", function (ev) { var b = ev.target.closest("button"); if (!b) return; est.bug = BUGS[+b.getAttribute("data-b")][0]; render(); });
+  }
+  function panelXor() {
+    $("panel").innerHTML = "";
+    var e = est.xorE, q = pesosEn(HX, e);
+    dibujarCurva($("xorCurva"), HX.h, est.chk8 ? e : -1, 3000);
+    var ys = PUNTOS.map(function (pt) { return adelante(q, pt).a2; });
+    $("xorLectura").innerHTML = est.chk8 ? 'Época <b>' + e + '</b> · pérdida del lote <b>' + f(HX.h[e], 4) + '</b><br>salidas en (0,0), (0,1), (1,0), (1,1): ' +
+      ys.map(function (v, i) { return '<b class="' + ((v > 0.5 ? 1 : 0) === XOR[i] ? "si" : "no") + '">' + f(v, 3) + '</b>'; }).join(", ") + ' · pide 0, 1, 1, 0' +
+      '<br>pesos: W₁ = [' + f(q[0], 2) + ', ' + f(q[1], 2) + '; ' + f(q[2], 2) + ', ' + f(q[3], 2) + '], b₁ = (' + f(q[4], 2) + ', ' + f(q[5], 2) + '), W₂ = (' + f(q[6], 2) + ', ' + f(q[7], 2) + '), b₂ = ' + f(q[8], 2)
+      : "Responde la predicción para poder entrenar.";
+    $("xorBotones").classList.toggle("bloq", !est.chk8);
+  }
+  $("xorBotones").addEventListener("click", function (ev) {
+    var b = ev.target.closest("button"); if (!b || !est.chk8) return;
+    var v = b.getAttribute("data-n");
+    if (v === "0") est.xorE = 0;
+    else if (v === "hasta") est.xorE = 2000;
+    else est.xorE = Math.min(3000, est.xorE + (+v));
+    render();
+  });
+
+  /* ---------------- selectores del escenario ---------------- */
+  (function () {
+    var seg = $("segEntrada");
+    PUNTOS.forEach(function (q, i) {
+      var b = document.createElement("button");
+      b.type = "button"; b.textContent = esq(q) + " → " + XOR[i]; b.setAttribute("data-i", i);
+      b.addEventListener("click", function () { est.xi = i; render(); });
+      seg.appendChild(b);
+    });
+    var sp = $("segParam");
+    NOM.forEach(function (nm, i) {
+      var b = document.createElement("button");
+      b.type = "button"; b.textContent = nm; b.setAttribute("data-i", i);
+      b.addEventListener("click", function () {
+        est.sel = i;
+        if (modo() === "empujar") est.emp = null;
+        render();
+      });
+      sp.appendChild(b);
+    });
+  })();
+  $("panel").addEventListener("click", function (ev) {
+    var b = ev.target.closest("[data-emp]");
+    if (!b || !est.chk1) return;
+    var d = +b.getAttribute("data-emp");
+    if (d === 0) est.emp = null;
+    else {
+      est.emp = { i: est.sel, d: d };
+      if (d > 0) { var q = JUG.slice(); q[est.sel] += 0.1; est.prob[est.sel] = perdida(q, PUNTOS[2], 1) - perdida(JUG, PUNTOS[2], 1); }
+    }
+    render();
+  });
+
+  /* ---------------- render y pasos ---------------- */
+  var HINTS = {
+    empujar: function () { return est.chk1 ? "Elige un número y empújalo. La caja de la pérdida se recalcula." : "Primero la predicción."; },
+    curva: function () { return "Elige un número: la curva es la pérdida si solo él se mueve."; },
+    salida: function () { return "El naranja debajo de la salida es su error δ₂. Cambia la esquina."; },
+    oculta: function () { return "El error vuelve por los pesos de salida hasta cada neurona oculta."; },
+    pesos: function () { return "En naranja, el gradiente de cada línea: δ de destino por lo que entra."; },
+    paso: function () { return est.chk6 ? "Dale al botón y mira bajar la pérdida." : "Resuelve el chequeo para abrir el botón."; },
+    check: function () { return est.chk7 ? "Cambia h o mete un error a propósito." : "Las columnas de la fuerza bruta se abren con el chequeo."; },
+    xor: function () { return est.chk8 ? "Entrena por tramos y mira la curva." : "Primero la predicción."; }
+  };
+  function render() {
+    var m = modo();
+    $("escHint").textContent = HINTS[m]();
+    $("filaEntrada").hidden = m === "empujar" || m === "curva";
+    $("filaParam").hidden = !(m === "empujar" || m === "curva");
+    $("xorBox").hidden = m !== "xor";
+    $("leyenda").hidden = m === "xor" || m === "empujar" || m === "curva";
+    [].forEach.call($("segEntrada").children, function (b) { b.setAttribute("aria-pressed", +b.getAttribute("data-i") === est.xi ? "true" : "false"); });
+    [].forEach.call($("segParam").children, function (b) { b.setAttribute("aria-pressed", +b.getAttribute("data-i") === est.sel ? "true" : "false"); });
+    if (m === "xor") { est.xi = Math.min(est.xi, 3); }
+    dibujarRed();
+    ({ empujar: panelEmpujar, curva: panelCurva, salida: panelSalida, oculta: panelOculta, pesos: panelPesos, paso: panelPaso, check: panelCheck, xor: panelXor })[m]();
+    vivos();
+  }
+  function vivos() {
+    var p = JUG, x = PUNTOS[2], g = atras(p, x, 1).g[est.sel];
+    $("vivo2").innerHTML = "para " + NOM[est.sel] + ": ∂L/∂w = " + f(g, 4) + "; un empujón de +0.1 cambiaría L en unos " + (est.chk2 ? f(g * 0.1, 4) : "?");
+    var x3 = PUNTOS[est.xi], b3 = atras(p, x3, XOR[est.xi]), oc3 = !est.chk3 && est.xi === 3;
+    $("vivo3").innerHTML = "con " + esq(x3) + " y objetivo " + XOR[est.xi] + ": δ₂ = " + f(b3.r.a2, 4) + " − " + XOR[est.xi] + " = " + (oc3 ? "?" : f(b3.dz2, 4));
+    $("vivo4").innerHTML = "con " + esq(x3) + ": δ₁ = (" + f(b3.dz1[0], 4) + ", " + (!est.chk4 ? "?" : f(b3.dz1[1], 4)) + ")";
+    var b6 = atras(est.pp, PUNTOS[est.xi], XOR[est.xi]);
+    $("vivo6").innerHTML = "arriba → salida: " + n(est.pp[6]) + " − 0.5 × (" + f(b6.g[6], 4) + ") = " + (est.chk6 ? f(est.pp[6] - ETA * b6.g[6], 4) : "?");
+    var h = HS[est.hI], q1 = JUG.slice(), q2 = JUG.slice(); q1[6] += h; q2[6] -= h;
+    $("vivo7").innerHTML = "arriba → salida, h = " + (h < 0.001 ? "0.00001" : h) + ": (" + f(perdida(q1, x3, XOR[est.xi]), 6) + " − " + f(perdida(q2, x3, XOR[est.xi]), 6) + ") / " + ["0.2", "0.02", "0.002", "0.00002"][est.hI] + " = " +
+      (est.chk7 ? f((perdida(q1, x3, XOR[est.xi]) - perdida(q2, x3, XOR[est.xi])) / (2 * h), 6) : "?");
+  }
+  function entrar(i) {
+    est.paso = i;
+    var m = MODOS[i];
+    if (m === "empujar" || m === "curva") est.emp = null;
+    if (m === "salida" && !est.chk3) est.xi = 3;
+    if ((m === "oculta" || m === "pesos") && !(m === "oculta" ? est.chk4 : est.chk5)) est.xi = 2;
+    if (m === "check" && !est.chk7) { est.xi = 2; est.hI = 1; est.bug = null; }
+    if (m === "xor" && !HX) { HX = historial(JUG, ETA, 3000); HX.eta = ETA; }
+    if (refrescos[i]) refrescos[i]();
+    render();
+  }
+  var refrescos = {};
+
+  /* ---------------- chequeos ---------------- */
+  var pasos;
+  B.opcionMultiple(cuerpo("chk1"), {
+    pregunta: "Vas a empujar un número 0.1 hacia arriba, con la entrada (1, 0). ¿Cuál de estos tres mueve más la pérdida?",
+    opciones: ["El peso de la neurona de arriba a la salida (vale 1)", "El peso de $x_1$ a la neurona de arriba (vale 0.5)", "El peso de $x_2$ a la neurona de abajo (vale 0.8)", "Los tres por igual: todos están en la misma red"],
+    correcta: 0,
+    pistas: [null, "Ese peso está antes de una sigmoide de la capa oculta, y su efecto llega a la salida multiplicado por otros números. ¿Cuántos eslabones lo separan de la pérdida?", "¿Cuánto vale $x_2$ en este ejemplo? Lo que viaja por ese peso es $x_2$ por el peso.", "Cada número está en un lugar distinto de la cadena: unos tocan la salida directo, otros pasan por más curvas."],
+    explicacion: "El peso de salida toca $z_2$ directo, con $a_1 = 0.62$ como palanca: subirlo 0.1 baja la pérdida 0.028. El de $x_1$ cambia $a_1$ apenas (la sigmoide lo achica a un cuarto) y eso se diluye otra vez en la salida: unas 0.011. El de $x_2$ no hace nada, porque $x_2 = 0$. Cada número tiene su propio poder sobre la pérdida, y la retropropagación los calcula todos a la vez.",
+    alResolver: function () { est.chk1 = true; mostrarTras("tras-chk1"); if (est.paso === 0) render(); pasos.completar(0); }
+  });
+  var chk2 = B.numerico(cuerpo("chk2"), {
+    pregunta: "Elige el peso de la neurona de arriba a la salida. La pendiente de su curva es −0.2806. Si lo subes 0.1, ¿cuánto cambia la pérdida, más o menos? (Con signo.)",
+    respuesta: -0.02806,
+    tolerancia: 0.004,
+    pistas: ["Usa $\\Delta L \\approx \\frac{\\partial L}{\\partial w}\\,\\Delta w$.", "$-0.2806 \\times 0.1$."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 0.02806) < 0.004) return "El tamaño está bien, pero la pendiente es negativa: subir el peso baja la pérdida.";
+      if (Math.abs(v + 0.2806) < 0.01) return "Esa es la pendiente. El cambio es la pendiente por el empujón, 0.1.";
+      return null;
+    },
+    explicacion: "$-0.2806 \\times 0.1 = -0.0281$. El empujón de verdad del paso 1 dio $-0.0276$: la recta tangente aproxima la curva, no la iguala, y con empujones más chicos la aproximación mejora.",
+    alResolver: function () { est.chk2 = true; vivos(); pasos.completar(1); }
+  });
+  B.numerico(cuerpo("chk3"), {
+    pregunta: "La esquina (1, 1) tiene objetivo 0 y la red dice $a_2 = 0.4723$ (en azul, en el escenario). ¿Cuánto vale su error $\\delta_2$?",
+    respuesta: 0.472291,
+    tolerancia: 0.002,
+    pistas: ["$\\delta_2 = a_2 - y$.", "Aquí $y = 0$."],
+    diagnostico: function (v) {
+      if (Math.abs(v + 0.527709) < 0.003) return "Usaste $y = 1$. En (1, 1) el XOR pide 0.";
+      if (Math.abs(v - 1 / (1 - 0.472291)) < 0.01) return "Ese es solo $\\partial L/\\partial a_2$. Falta multiplicar por $a_2(1-a_2)$.";
+      return null;
+    },
+    explicacion: "$\\delta_2 = 0.4723 - 0 = 0.4723$, positivo: la red dijo demasiado, $z_2$ tiene que bajar. Con objetivo 1 sale negativo, con objetivo 0 positivo. Prueba las cuatro esquinas.",
+    alResolver: function () { est.chk3 = true; if (est.paso === 2) render(); pasos.completar(2); }
+  });
+  B.numerico(cuerpo("chk4"), {
+    pregunta: "Con (1, 0): $\\delta_2 = -0.4508$, el peso de la neurona de abajo a la salida es $-1$ y esa neurona entrega $a = 0.5250$. ¿Cuánto vale su error $\\delta$?",
+    respuesta: 0.112416,
+    tolerancia: 0.002,
+    pistas: ["Primero $w\\,\\delta_2 = (-1)(-0.4508)$.", "Después multiplica por $a(1-a) = 0.5250 \\times 0.4750 = 0.2494$."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 0.450790) < 0.003) return "Te faltó la derivada de la sigmoide, $a(1-a)$. El error tiene que cruzar la curva de la neurona.";
+      if (Math.abs(v + 0.112416) < 0.002) return "Revisa el signo: el peso es $-1$ y $\\delta_2$ es negativo.";
+      if (Math.abs(v - 0.450790 * 0.525) < 0.003) return "Multiplicaste por $a$; la derivada de la sigmoide es $a(1-a)$.";
+      return null;
+    },
+    explicacion: "$(-1)(-0.4508) \\times 0.2494 = 0.1124$. Positivo: la neurona de abajo empuja la salida hacia abajo (su peso es $-1$), así que su culpa es por estar demasiado encendida.",
+    alResolver: function () { est.chk4 = true; if (est.paso === 3) render(); pasos.completar(3); }
+  });
+  B.numerico(cuerpo("chk5"), {
+    pregunta: "Con (1, 0), ¿cuál es el gradiente del peso que va de la neurona de abajo a la salida? (En el escenario está como ?.)",
+    respuesta: -0.236655,
+    tolerancia: 0.002,
+    pistas: ["Ese peso llega a la salida: su δ de destino es $\\delta_2 = -0.4508$.", "Lo que entra por él es lo que entrega la neurona de abajo, $a = 0.5250$."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 0.112416 * 0.525) < 0.003 || Math.abs(v - 0.112416) < 0.002) return "Ese es el error de la neurona de abajo. El peso llega a la salida: usa $\\delta_2$.";
+      if (Math.abs(v + 0.450790) < 0.002) return "Ese es $\\delta_2$ solo, el gradiente del sesgo. Falta multiplicar por lo que entra.";
+      if (Math.abs(v - 0.236655) < 0.002) return "El signo: $\\delta_2$ es negativo.";
+      return null;
+    },
+    explicacion: "$-0.4508 \\times 0.5250 = -0.2367$. Negativo: subir ese peso baja la pérdida. Igual que en el paso 2 con el de arriba, $-0.4508 \\times 0.6225 = -0.2806$.",
+    alResolver: function () { est.chk5 = true; if (est.paso === 4) render(); pasos.completar(4); }
+  });
+  function cerrarPaso6() { if (est.chk6 && est.chk6b) pasos.completar(5); }
+  B.numerico(cuerpo("chk6"), {
+    pregunta: "El peso de arriba a la salida vale 1 y su gradiente es −0.2806. Con $\\eta = 0.5$, ¿cuánto vale después del paso?",
+    respuesta: 1.140299,
+    tolerancia: 0.002,
+    pistas: ["$w - \\eta\\,\\partial L/\\partial w$.", "$1 - 0.5 \\times (-0.2806)$: menos por menos."],
+    diagnostico: function (v) { if (Math.abs(v - 0.859701) < 0.002) return "Así sumaste el gradiente: el paso va en contra. Menos por menos da más."; return null; },
+    explicacion: "$1 - 0.5(-0.2806) = 1.1403$. Sube, porque su pendiente era negativa. El botón ya está abierto.",
+    alResolver: function () { est.chk6 = true; mostrarTras("tras-chk6"); if (est.paso === 5) render(); cerrarPaso6(); }
+  });
+  B.opcionMultiple(cuerpo("chk6b"), {
+    pregunta: "Para llevar el error a la capa oculta ($\\delta_{1j} = w^{(2)}_j\\,\\delta_2\\,\\sigma'$), ¿qué $W_2$ hay que usar?",
+    opciones: ["La vieja, la que usó la pasada hacia adelante", "La nueva, porque ya es mejor", "Da igual, cambia muy poco", "El promedio de las dos"],
+    correcta: 0,
+    pistas: [null, "El gradiente es la pendiente de la pérdida en el punto donde estás. ¿Con qué pesos se calculó esa pérdida?", "Cambia lo suficiente para que el gradient check lo detecte. Y con tasas grandes, cambia mucho.", "No hay ninguna cuenta de la regla de la cadena que dé un promedio."],
+    explicacion: "La regla de la cadena deriva la función que evaluaste, con los pesos que usaste. Todos los gradientes se calculan con los pesos viejos y después se actualiza todo junto.",
+    alResolver: function () { est.chk6b = true; mostrarTras("tras-chk6b"); cerrarPaso6(); }
+  });
+  var chk7 = B.numerico(cuerpo("chk7"), {
+    pregunta: function () {
+      var h = 0.01, q1 = JUG.slice(), q2 = JUG.slice(); q1[6] += h; q2[6] -= h;
+      return "Con (1, 0) y $h = 0.01$, para el peso de arriba a la salida: $L(w+h) = " + tx(perdida(q1, PUNTOS[2], 1), 6) + "$ y $L(w-h) = " + tx(perdida(q2, PUNTOS[2], 1), 6) + "$. ¿Cuánto da la diferencia centrada?";
+    },
+    respuesta: function () { var h = 0.01, q1 = JUG.slice(), q2 = JUG.slice(); q1[6] += h; q2[6] -= h; return (perdida(q1, PUNTOS[2], 1) - perdida(q2, PUNTOS[2], 1)) / (2 * h); },
+    tolerancia: 0.002,
+    pistas: ["Resta las dos pérdidas, en ese orden.", "Divide por $2h = 0.02$."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 0.2806) < 0.003) return "El signo: $L(w+h)$ es la más chica, así que la resta es negativa.";
+      if (Math.abs(v + 0.5612) < 0.005) return "Dividiste por $h$; la distancia entre los dos puntos es $2h$.";
+      return null;
+    },
+    explicacion: "$(0.596473 - 0.602085)/0.02 = -0.2806$, lo mismo que dio la retropropagación hasta el cuarto decimal. Las columnas se abrieron: prueba ahora los errores a propósito.",
+    alResolver: function () { est.chk7 = true; if (est.paso === 6) render(); pasos.completar(6); }
+  });
+  refrescos[6] = function () { chk7.refrescar(); };
+  B.opcionMultiple(cuerpo("chk8"), {
+    pregunta: "Vas a entrenar el XOR desde los pesos de juguete, con el lote de 4 y $\\eta = 0.5$. La pérdida arranca en 0.6975. ¿Qué crees que pasa en las primeras 500 épocas?",
+    opciones: ["Casi nada: llega apenas a 0.691, y después cae de golpe", "Baja de forma pareja, un poco en cada época", "Baja rápido al principio y después cada vez más lento", "Se queda en 0.69 para siempre: la red no puede"],
+    correcta: 0,
+    pistas: [null, "En el recuadro de la vida real, el gradiente del lote en la época 0 es diminuto: todos sus números están por debajo de 0.007.", "Eso pasa cerca de un mínimo. Aquí la red empieza lejos de cualquier solución, en un lugar casi plano.", "La red tiene dos neuronas ocultas: alcanza para el XOR. Es cuestión de paciencia."],
+    explicacion: "La pérdida casi no se mueve en 500 épocas (0.6975 a 0.691), cae entre la 500 y la 1500, y a las 2000 vale 0.0218. Ahora entrena tú con los botones.",
+    alResolver: function () { est.chk8 = true; mostrarTras("tras-chk8"); if (est.paso === 7) render(); pasos.completar(7); }
+  });
+
+  pasos = B.pasos($("recorrido"), {
+    concepto: C,
+    alEntrar: function (i) { entrar(i); },
+    alTerminar: function () { location.hash = "retos"; }
+  });
+  // lo que ya resolvio en otra visita
+  if (pasos.hecho(0)) { est.chk1 = true; mostrarTras("tras-chk1"); }
+  if (pasos.hecho(1)) est.chk2 = true;
+  if (pasos.hecho(2)) est.chk3 = true;
+  if (pasos.hecho(3)) est.chk4 = true;
+  if (pasos.hecho(4)) est.chk5 = true;
+  if (pasos.hecho(5)) { est.chk6 = est.chk6b = true; mostrarTras("tras-chk6"); mostrarTras("tras-chk6b"); }
+  if (pasos.hecho(6)) est.chk7 = true;
+  if (pasos.hecho(7)) { est.chk8 = true; mostrarTras("tras-chk8"); }
+  entrar(0);
+
+  /* ---------------- hipotesis inicial ---------------- */
+  (function () {
+    var ta = $("hipotesis"), t = null;
+    ta.value = B.nota("retropropagacion", "hipotesis");
+    function cita() {
+      var v = ta.value.trim(), el = $("citaHipo");
+      el.hidden = !v;
+      if (v) { el.textContent = ""; el.appendChild(document.createTextNode("Al principio escribiste: «" + v + "». Compáralo con la regla de este paso: el error de la neurona de destino por lo que entra. ¿Pensabas en empujar uno por uno, o en repartir el error hacia atrás?")); }
+    }
+    cita();
+    ta.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { B.nota("retropropagacion", "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; cita(); }, 500);
+    });
+  })();
+
+  /* ---------------- marcadores de estado de retos ---------------- */
+  function pintarEstados() {
+    [].forEach.call(document.querySelectorAll("[data-reto]"), function (el) {
+      var ok = C.retoOk(el.getAttribute("data-reto"));
+      el.textContent = ok ? "resuelto" : "pendiente";
+      el.classList.toggle("ok", ok);
+    });
+  }
+  C.alCambiar(pintarEstados);
+
+  /* ---------------- reto: ojo clinico ---------------- */
+  (function () {
+    var cont = $("ojo");
+    cont.innerHTML = '<div class="ronda"></div><div class="ojo-dato"></div><p class="ojo-q"></p><div class="ojo-opts"></div>' +
+      '<div class="fb" aria-live="polite"></div><div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    function azar(a) { return a[Math.floor(Math.random() * a.length)]; }
+    var OPS = ["Lo sube", "Lo baja", "No lo toca"];
+    var ronda, aciertos, respondida, actual;
+    function generar() {
+      var p = [], i;
+      for (i = 0; i < 9; i++) p.push(azar([-2, -1.5, -1, -0.5, 0.5, 1, 1.5, 2]));
+      var xi = Math.floor(Math.random() * 4), x = PUNTOS[xi], y = XOR[xi];
+      var bw = atras(p, x, y), cand = [];
+      for (i = 0; i < 9; i++) cand.push(i);
+      // a veces se fuerza un peso cuya entrada vale 0
+      var ceros = cand.filter(function (k) { return k < 4 && x[k % 2] === 0; });
+      var k2 = ceros.length && Math.random() < 0.3 ? azar(ceros) : azar(cand);
+      var D = { d1a: bw.dz1[0], d1b: bw.dz1[1], d2: bw.dz2 }[destino(k2)];
+      var ent = entrada(k2, p, x), g = bw.g[k2];
+      var ok = Math.abs(g) < 1e-12 ? 2 : g < 0 ? 0 : 1;
+      var dest = destino(k2) === "d2" ? "la salida" : destino(k2) === "d1a" ? "la neurona oculta de arriba" : "la neurona oculta de abajo";
+      var queEntra = k2 >= 4 && k2 !== 6 && k2 !== 7 ? "1 (es un sesgo)" : f(ent, 3);
+      return { k: k2, ok: ok, D: D, ent: ent, g: g, texto: 'Red al azar, esquina ' + esq(x) + ' con objetivo ' + y + '. El número <b>' + NOM[k2] + '</b> llega a ' + dest + '.<br>' +
+        'error de destino δ = <span class="bw">' + f(D, 3) + '</span> · lo que entra por él = <span class="fw">' + queEntra + '</span>' };
+    }
+    function nueva() { ronda = 0; aciertos = 0; mostrar(); }
+    function mostrar() {
+      respondida = false;
+      actual = generar();
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 5 · aciertos " + aciertos;
+      cont.querySelector(".ojo-dato").innerHTML = actual.texto;
+      cont.querySelector(".ojo-q").textContent = "¿Qué le hace el paso de descenso a este número?";
+      cont.querySelector(".ojo-opts").innerHTML = OPS.map(function (o, i) { return '<button type="button" class="opt" data-v="' + i + '">' + o + '</button>'; }).join("");
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+    }
+    cont.querySelector(".ojo-opts").addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || respondida) return;
+      respondida = true;
+      var ok = +b.getAttribute("data-v") === actual.ok;
+      if (ok) aciertos++;
+      b.classList.add(ok ? "ok" : "mal");
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (x) { x.disabled = true; if (+x.getAttribute("data-v") === actual.ok) x.classList.add("ok"); });
+      cont.querySelector(".fb").innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No.</span> ') +
+        "Gradiente = δ × entrada = " + f(actual.D, 3) + " × " + f(actual.ent, 3) + " = " + f(actual.g, 3) + ". " +
+        (actual.ok === 2 ? "Entra un 0: este número no participó y no se mueve." : actual.ok === 0 ? "Gradiente negativo: el paso lo sube." : "Gradiente positivo: el paso lo baja.") +
+        " Solo importan los signos: mismo signo, baja; signos distintos, sube.";
+      var sig2 = cont.querySelector(".sig");
+      sig2.hidden = false;
+      if (ronda === 4) {
+        var aprobo = aciertos >= 4;
+        C.reto("ojo", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertos + " de 5" + (aprobo ? ". Aprobado." : ". Necesitas 4 para aprobar.");
+        sig2.textContent = "Otra tanda";
+      } else sig2.textContent = "Siguiente ronda";
+    });
+    cont.querySelector(".sig").addEventListener("click", function () { if (ronda === 4) nueva(); else { ronda++; mostrar(); } });
+    nueva();
+  })();
+
+  /* ---------------- reto: construir ---------------- */
+  (function () {
+    var ETAS = [0.1, 0.5, 1, 2, 5];
+    var INITS = [["Juguete", JUG], ["Iguales", [0.5, 0.5, 0.5, 0.5, 0, 0, 1, 1, 0]], ["Ceros", [0, 0, 0, 0, 0, 0, 0, 0, 0]]];
+    var k = { eta: 0.5, init: 0, q: JUG.slice(), e: 0, h: [] }, avisado = false, logrados = [false, false, false];
+    var OBJ = [
+      ["La pérdida del lote por debajo de 0.05.", function () { return k.h[k.e] < 0.05; }],
+      ["Lo mismo en 500 épocas o menos, contadas desde el último cambio.", function () { return k.h[k.e] < 0.05 && k.e <= 500; }],
+      ["Arranca con los pesos iguales, entrena al menos 2000 épocas y comprueba que las dos neuronas ocultas siguen siendo gemelas (pérdida por encima de 0.3).", function () {
+        return k.init === 1 && k.e >= 2000 && Math.abs(k.q[0] - k.q[2]) < 1e-9 && Math.abs(k.q[1] - k.q[3]) < 1e-9 && k.h[k.e] > 0.3;
+      }]
+    ];
+    var ul = $("objetivos");
+    OBJ.forEach(function (o) { var li = document.createElement("li"); li.innerHTML = '<span class="m"></span><span>' + o[0] + '</span>'; ul.appendChild(li); });
+    function seg(el, items, actual, fn) {
+      el.innerHTML = "";
+      items.forEach(function (it, i) {
+        var b = document.createElement("button");
+        b.type = "button"; b.textContent = it; b.setAttribute("aria-pressed", i === actual ? "true" : "false");
+        b.addEventListener("click", function () { fn(i); [].forEach.call(el.children, function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); }); });
+        el.appendChild(b);
+      });
+    }
+    function reiniciar() { k.q = INITS[k.init][1].slice(); k.e = 0; k.h = [perdidaLote(k.q)]; pintar(); }
+    seg($("kEta"), ETAS.map(String), 1, function (i) { k.eta = ETAS[i]; reiniciar(); });
+    seg($("kInit"), INITS.map(function (x) { return x[0]; }), 0, function (i) { k.init = i; reiniciar(); });
+    $("kBotones").addEventListener("click", function (ev) {
+      var b = ev.target.closest("button"); if (!b) return;
+      var N = +b.getAttribute("data-n");
+      for (var t = 0; t < N && k.e < 6000; t++) { epoca(k.q, k.eta); k.e++; k.h.push(perdidaLote(k.q)); }
+      pintar();
+    });
+    function pintar() {
+      var maxE = k.e <= 1000 ? 1000 : k.e <= 3000 ? 3000 : 6000;
+      dibujarCurva($("kCurva"), k.h, k.e, maxE, { meta: 0.05 });
+      var ys = PUNTOS.map(function (pt) { return f(adelante(k.q, pt).a2, 3); });
+      $("kVivo").innerHTML = "η = <b>" + k.eta + "</b>, arranque <b>" + INITS[k.init][0].toLowerCase() + "</b> · época <b>" + k.e + "</b> · pérdida <b>" + f(k.h[k.e], 4) + "</b><br>salidas: " + ys.join(", ") + " · pide 0, 1, 1, 0" +
+        "<br>filas de W₁: (" + f(k.q[0], 2) + ", " + f(k.q[1], 2) + ") y (" + f(k.q[2], 2) + ", " + f(k.q[3], 2) + ")";
+      OBJ.forEach(function (o, i) { if (!logrados[i] && o[1]()) logrados[i] = true; ul.children[i].classList.toggle("hecho", logrados[i]); });
+      if (!avisado && logrados.every(Boolean)) { avisado = true; C.reto("construir", true); }
+    }
+    reiniciar();
+  })();
+
+  /* ---------------- reto: a mano ---------------- */
+  (function () {
+    var D;
+    function azar(a) { return a[Math.floor(Math.random() * a.length)]; }
+    function generar() {
+      for (var t = 0; t < 800; t++) {
+        var x = [azar([1, 2, -1, 3]), azar([1, 2, -1, -2])];
+        var W = [[azar([-2, -1, 1, 2]), azar([-2, -1, 1, 2])], [azar([-2, -1, 1, 2]), azar([-2, -1, 1, 2])]];
+        var b = [azar([-1, 0, 1]), azar([-1, 0, 1])], v = [azar([-2, -1, 1, 2]), azar([-2, -1, 1, 2])], c = azar([-1, 0, 1]), y = azar([0, 1, 2, -1]);
+        var z = [W[0][0] * x[0] + W[0][1] * x[1] + b[0], W[1][0] * x[0] + W[1][1] * x[1] + b[1]];
+        if (z[0] === 0 || z[1] === 0) continue;
+        var a = z.map(function (u) { return Math.max(0, u); }), yh = v[0] * a[0] + v[1] * a[1] + c, e = yh - y;
+        if (e === 0) continue;
+        var j = Math.random() < 0.8 ? (z[0] > 0 ? 0 : 1) : (z[0] > 0 ? 1 : 0), kk = azar([0, 1]);
+        var act = z[j] > 0 ? 1 : 0, g = e * v[j] * act * x[kk];
+        var sinRelu = e * v[j] * x[kk], signo = -g;
+        if (act && sinRelu === g && g === 0) continue;
+        D = { x: x, W: W, b: b, v: v, c: c, y: y, z: z, a: a, yh: yh, e: e, j: j, k: kk, act: act, g: g, sinRelu: sinRelu, signo: signo };
+        break;
+      }
+      $("manoDatos").innerHTML = '<table class="datos-mano"><tr><th>x</th><th>W₁ (fila = neurona)</th><th>b₁</th><th>W₂</th><th>b₂</th><th>y</th></tr>' +
+        '<tr><td>(' + D.x.join(", ") + ')</td><td>[' + n(D.W[0][0]) + ', ' + n(D.W[0][1]) + ']<br>[' + n(D.W[1][0]) + ', ' + n(D.W[1][1]) + ']</td><td>(' + n(D.b[0]) + ', ' + n(D.b[1]) + ')</td><td>(' + n(D.v[0]) + ', ' + n(D.v[1]) + ')</td><td>' + n(D.c) + '</td><td>' + n(D.y) + '</td></tr></table>';
+    }
+    generar();
+    function quien() { return "el peso de $x_" + (D.k + 1) + "$ a la neurona oculta " + (D.j ? "de abajo" : "de arriba") + " ($w^{(1)}_{" + (D.j + 1) + (D.k + 1) + "}$)"; }
+    B.numerico($("mano"), {
+      pregunta: function () { return "¿Cuánto vale $\\partial L/\\partial w$ para " + quien() + "?"; },
+      respuesta: function () { return D.g; },
+      tolerancia: 0.001,
+      pistas: [
+        function () { return "Adelante: $\\mathbf{z}_1 = (" + D.z[0] + ", " + D.z[1] + ")$, $\\mathbf{a}_1 = (" + D.a[0] + ", " + D.a[1] + ")$, $\\hat y = " + D.yh + "$."; },
+        function () { return "Atrás: $\\delta_2 = \\hat y - y = " + D.e + "$. La neurona " + (D.j ? "de abajo" : "de arriba") + " tiene $z = " + D.z[D.j] + "$, así que la derivada de ReLU vale " + D.act + "."; },
+        function () { return "$\\delta_{1" + (D.j + 1) + "} = w^{(2)}_" + (D.j + 1) + "\\,\\delta_2 \\cdot " + D.act + " = " + (D.v[D.j] * D.e * D.act) + "$, y el gradiente es eso por $x_" + (D.k + 1) + " = " + D.x[D.k] + "$."; }
+      ],
+      diagnostico: function (v) {
+        if (!D.act && Math.abs(v - D.sinRelu) < 0.001) return "Esa neurona está apagada ($z \\le 0$): la derivada de ReLU es 0 y no le llega culpa.";
+        if (Math.abs(v - D.signo) < 0.001 && D.g !== 0) return "El signo: $\\delta_2 = \\hat y - y$, no $y - \\hat y$.";
+        if (Math.abs(v - D.e * D.v[D.j] * D.act) < 0.001 && D.x[D.k] !== 1) return "Ese es el error de la neurona. Falta multiplicar por lo que entra por el peso, $x_" + (D.k + 1) + "$.";
+        if (Math.abs(v - D.e * D.x[D.k] * D.act) < 0.001 && D.v[D.j] !== 1) return "Te faltó el peso de salida $w^{(2)}$: el error vuelve multiplicado por él.";
+        return null;
+      },
+      explicacion: function () {
+        return "$\\hat y = " + D.yh + "$, $\\delta_2 = " + D.e + "$, $\\delta_{1" + (D.j + 1) + "} = " + D.v[D.j] + "\\cdot" + D.e + "\\cdot" + D.act + " = " + (D.v[D.j] * D.e * D.act) + "$ y $\\partial L/\\partial w = " + (D.v[D.j] * D.e * D.act) + "\\cdot" + D.x[D.k] + " = " + D.g + "$." +
+          (D.act ? "" : " La neurona estaba apagada: con ReLU, una neurona apagada no aprende en ese ejemplo.");
+      },
+      reintentable: true,
+      antesDeReintentar: generar,
+      alResolver: function (ok) { C.reto("mano", ok); }
+    });
+  })();
+
+  /* ---------------- reto: cazar el error ---------------- */
+  B.cazarError($("error"), {
+    variantes: [
+      {
+        intro: "La pasada hacia atrás de la red de juguete con $\\mathbf{x} = (1, 0)$ e $y = 1$.",
+        lineas: [
+          "\\mathbf{a}_1 = (0.6225,\\ 0.5250),\\quad a_2 = 0.5492",
+          "\\delta_2 = a_2 - y = -0.4508",
+          "\\partial L/\\partial W_2 = \\delta_2\\,\\mathbf{a}_1 = (-0.2806,\\ -0.2367)",
+          "\\boldsymbol{\\delta}_1 = W_2^\\top\\delta_2 = (1\\cdot(-0.4508),\\ -1\\cdot(-0.4508)) = (-0.4508,\\ 0.4508)",
+          "\\partial L/\\partial w^{(1)}_{j1} = \\delta_{1j}\\,x_1 = (-0.4508,\\ 0.4508)"
+        ],
+        erronea: 3,
+        explicacion: "Falta la derivada de la sigmoide oculta: $\\boldsymbol{\\delta}_1 = (W_2^\\top\\delta_2)\\odot\\mathbf{a}_1\\odot(1-\\mathbf{a}_1) = (-0.1059,\\ 0.1124)$. Sin ella los gradientes de la capa oculta salen unas cuatro veces más grandes. La última línea está bien hecha sobre el número equivocado."
+      },
+      {
+        intro: "Alguien programó la retropropagación de la red de juguete, con $\\mathbf{x} = (1, 0)$ e $y = 1$, en este orden.",
+        lineas: [
+          "\\delta_2 = a_2 - y = -0.4508",
+          "\\partial L/\\partial W_2 = \\delta_2\\,\\mathbf{a}_1 = (-0.2806,\\ -0.2367)",
+          "W_2 \\leftarrow W_2 - 0.5\\,\\partial L/\\partial W_2 = (1.1403,\\ -0.8817)",
+          "\\boldsymbol{\\delta}_1 = (W_2^\\top\\delta_2)\\odot\\sigma'(\\mathbf{z}_1) = (1.1403\\cdot(-0.4508)\\cdot 0.2350,\\ \\ldots) = (-0.1208,\\ 0.0991)",
+          "W_1 \\leftarrow W_1 - 0.5\\,\\boldsymbol{\\delta}_1\\mathbf{x}^\\top"
+        ],
+        erronea: 3,
+        explicacion: "Usa la $W_2$ que ya se actualizó en la línea 3. El error oculto se calcula con la vieja, $(1,\\ -1)$, la que produjo la salida: $(-0.1059,\\ 0.1124)$. La línea 3 en sí está bien; el problema es usar su resultado antes de tiempo. Lo correcto: todos los gradientes primero, todas las actualizaciones después."
+      },
+      {
+        intro: "El código de Nield (cap. 7) pasado a la red 2-2-1, con las formas de cada matriz. $\\mathbf{x}$ es una columna de $2\\times 1$.",
+        lineas: [
+          "\\partial C/\\partial A_1 = \\delta_2\\,W_2:\\quad 1\\times 2",
+          "\\partial A_1/\\partial Z_1 = \\sigma'(Z_1):\\quad 2\\times 1",
+          "\\partial C/\\partial Z_1 = (\\partial C/\\partial A_1)\\,@\\,(\\partial A_1/\\partial Z_1):\\quad (1\\times 2)(2\\times 1) = 1\\times 1",
+          "\\partial C/\\partial W_1 = (\\partial C/\\partial Z_1)\\,@\\,\\mathbf{x}^\\top:\\quad 1\\times 2",
+          "W_1 \\leftarrow W_1 - \\eta\\,\\partial C/\\partial W_1\\quad\\text{(se resta a cada fila)}"
+        ],
+        erronea: 2,
+        explicacion: "El producto de matrices suma las dos neuronas en un solo número. Cada neurona tiene su propio error, así que ahí va un producto <b>elemento a elemento</b>, $(\\partial C/\\partial A_1)^\\top\\odot\\sigma'(Z_1)$, de $2\\times 1$. Con el error de Nield, las dos filas de $W_1$ reciben la misma corrección, $(0.0065,\\ 0)$, en lugar de $(-0.1059,\\ 0)$ y $(0.1124,\\ 0)$. Las formas igual cuadran gracias al broadcasting: por eso nadie lo nota."
+      }
+    ],
+    alResolver: function (ok) { C.reto("error", ok); }
+  });
+
+  /* ---------------- retos de propiedades ---------------- */
+  function prop(id, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple($(id), cfg);
+  }
+  prop("prop1", {
+    pregunta: "La red de Raschka, 784-50-10, tiene 39 760 números. ¿Por qué no se entrena calculando cada derivada con diferencias, empujando cada número?",
+    opciones: ["Haría falta una pasada por la red por cada número (79 520 con diferencias centradas) en cada paso; la retropropagación cuesta como una pasada hacia adelante más una hacia atrás", "Porque las diferencias dan un resultado distinto de la derivada", "Porque con diferencias no se puede calcular el gradiente de un sesgo", "Porque las diferencias solo sirven para redes de una capa"],
+    correcta: 0,
+    pistas: [null, "En el paso 7 coincidieron hasta el décimo decimal con h pequeño.", "Un sesgo se empuja igual que un peso: es un número más.", "El gradient check del paso 7 funcionó con una red de dos capas."],
+    explicacion: "Las diferencias funcionan y sirven para revisar, pero cuestan dos pasadas por número. La retropropagación reusa los errores de cada capa y saca los 39 760 gradientes con un costo parecido al de evaluar la red dos veces."
+  });
+  prop("prop2", {
+    pregunta: "Arrancas una red con las dos neuronas ocultas idénticas: mismos pesos de entrada, mismo sesgo y mismo peso hacia la salida. ¿Qué pasa al entrenar?",
+    opciones: ["Reciben siempre el mismo error y los mismos gradientes: siguen idénticas, como si fueran una", "Se separan solas en pocas épocas", "Se separan si la tasa es grande", "La red no puede ni empezar: el gradiente da error"],
+    correcta: 0,
+    pistas: [null, "Si hacen la misma cuenta, ¿pueden recibir culpas distintas? Mira la fórmula del paso 4.", "La tasa multiplica dos gradientes iguales por el mismo número.", "El gradiente se calcula sin problema; lo que pasa es otra cosa."],
+    explicacion: "$\\delta_{1j} = w^{(2)}_j\\delta_2\\sigma'(z_{1j})$ da lo mismo para las dos, y los gradientes de sus pesos también: después del paso siguen iguales. Por eso los pesos iniciales se eligen al azar. Compruébalo en el reto de construir con el arranque de pesos iguales."
+  });
+  prop("prop3", {
+    pregunta: "Nield usa el costo cuadrático $C = (a_2 - y)^2$ con salida sigmoide, en lugar de la entropía cruzada. ¿Cuánto vale $\\partial C/\\partial z_2$?",
+    opciones: ["$2(a_2 - y)\\,a_2(1 - a_2)$", "$a_2 - y$", "$2(a_2 - y)$", "$(a_2 - y)^2\\,a_2(1-a_2)$"],
+    correcta: 0,
+    pistas: [null, "Eso es con la entropía cruzada, donde $a(1-a)$ se cancela. Aquí no se cancela.", "Eso es $\\partial C/\\partial a_2$. Falta cruzar la sigmoide.", "Derivar $(a_2-y)^2$ respecto de $a_2$ baja el exponente: $2(a_2 - y)$."],
+    explicacion: "$\\partial C/\\partial a_2 = 2(a_2 - y)$ y $\\partial a_2/\\partial z_2 = a_2(1-a_2)$. Ese factor se achica cuando la sigmoide se satura, justo cuando la red está muy equivocada; con la entropía cruzada desaparece. Raschka usa la misma pérdida cuadrática en su capítulo."
+  });
+  prop("prop4", {
+    pregunta: "Entrenando el XOR, la pérdida pasa de 0.6975 a 0.691 en 500 épocas. ¿Qué significa?",
+    opciones: ["Que el gradiente es pequeño ahí, no que se llegó a un mínimo: hay que seguir", "Que la red llegó a un mínimo y no va a mejorar", "Que la tasa es demasiado grande", "Que la retropropagación está mal programada"],
+    correcta: 0,
+    pistas: [null, "En el paso 8 la pérdida cayó a 0.0218 a las 2000 épocas desde ese mismo lugar.", "Con una tasa demasiado grande la pérdida salta o sube; aquí casi no se mueve.", "El gradient check del paso 7 la dio por buena con estos mismos pesos."],
+    explicacion: "Un gradiente chico dice que el terreno es casi plano, no que es el fondo. Las mesetas son comunes al principio, cuando las neuronas ocultas todavía hacen casi lo mismo. Es el tema de la página siguiente de la ruta, El gradiente que se desvanece."
+  });
+  prop("prop5", {
+    pregunta: "¿Cuánto vale el gradiente del sesgo de una neurona, en un ejemplo?",
+    opciones: ["El error $\\delta$ de esa neurona, tal cual", "Cero, porque el sesgo no multiplica ninguna entrada", "El error por el valor del sesgo", "La suma de los gradientes de los pesos que llegan a la neurona"],
+    correcta: 0,
+    pistas: [null, "El sesgo sí cambia la salida: súbelo y $z$ sube lo mismo.", "$z = \\ldots + b$: ¿cuánto cambia $z$ si $b$ sube 1? No depende de cuánto vale $b$.", "Con la entrada (1, 0) eso daría lo mismo por casualidad, pero con (1, 1) no."],
+    explicacion: "$z = \\mathbf{w}\\cdot\\mathbf{x} + b$, así que $\\partial z/\\partial b = 1$: el sesgo es un peso cuya entrada vale siempre 1. Su gradiente es $\\delta\\cdot 1$. En la tabla del paso 5, las tres filas de sesgos repiten los tres errores."
+  });
+
+  /* ---------------- formula de memoria ---------------- */
+  B.ordenar($("formula"), {
+    piezas: ["\\boldsymbol{\\delta}_1", "=", "\\big(", "W_2^\\top", "\\boldsymbol{\\delta}_2", "\\big)", "\\odot", "\\sigma'(\\mathbf{z}_1)"],
+    distractores: ["W_1", "\\mathbf{x}", "+", "\\eta"],
+    soluciones: [[0, 1, 2, 3, 4, 5, 6, 7]],
+    explicacion: "El error de la salida vuelve por los pesos de salida traspuestos (cada neurona oculta recibe el suyo, sumando caminos si hay varias salidas) y se multiplica, neurona por neurona, por la pendiente de su activación. Con $\\boldsymbol{\\delta}_1$, el gradiente de $W_1$ es $\\boldsymbol{\\delta}_1\\mathbf{x}^\\top$.",
+    alResolver: function (ok) { C.reto("formula", ok); }
+  });
+
+  /* ---------------- vida real ---------------- */
+  (function () {
+    var CODIGO = {
+      py: [
+        [null, "import numpy as np"],
+        [null, "from scipy.optimize import approx_fprime"],
+        [null, "from sklearn.neural_network import MLPClassifier"],
+        [null, ""],
+        ["def", "def sigmoide(z):"],
+        ["def", "    return 1 / (1 + np.exp(-z))"],
+        [null, ""],
+        [null, "# los 9 parámetros de la red de juguete en un vector: W1 (por filas), b1, W2, b2"],
+        ["p", "p = np.array([0.5, -0.5, 0.3, 0.8, 0.0, -0.2, 1.0, -1.0, 0.1])"],
+        [null, ""],
+        ["def", "def partes(p):"],
+        ["def", "    return p[0:4].reshape(2, 2), p[4:6], p[6:8], p[8]"],
+        [null, ""],
+        ["def", "def salida(p, x):"],
+        ["def", "    W1, b1, W2, b2 = partes(p)"],
+        ["def", "    a1 = sigmoide(W1 @ x + b1)"],
+        ["def", "    return a1, sigmoide(W2 @ a1 + b2)"],
+        [null, ""],
+        ["def", "def perdida(p, x, y):"],
+        ["def", "    a2 = salida(p, x)[1]"],
+        ["def", "    return -(y * np.log(a2) + (1 - y) * np.log(1 - a2))"],
+        [null, ""],
+        ["def", "def gradiente(p, x, y):"],
+        ["g_partes", "    W1, b1, W2, b2 = partes(p)"],
+        ["g_fwd", "    a1, a2 = salida(p, x)                       # hacia adelante"],
+        ["g_dz2", "    dz2 = a2 - y                                # error de la salida"],
+        ["g_ini", "    dW2 = np.zeros(2)"],
+        ["g_ini", "    dz1 = np.zeros(2)"],
+        ["g_ini", "    dW1 = np.zeros((2, 2))"],
+        [null, "    for j in range(2):                          # cada neurona oculta"],
+        ["g_dW2", "        dW2[j] = dz2 * a1[j]                    # error por lo que entra"],
+        ["g_dz1", "        dz1[j] = W2[j] * dz2 * a1[j] * (1 - a1[j])"],
+        [null, "        for k in range(2):                      # cada entrada"],
+        ["g_dW1", "            dW1[j, k] = dz1[j] * x[k]"],
+        ["g_ret", "    return np.concatenate([dW1.ravel(), dz1, dW2, [dz2]])"],
+        [null, ""],
+        [null, "# un ejemplo: x = (1, 0) con objetivo 1"],
+        ["xy", "x = np.array([1.0, 0.0])"],
+        ["xy", "y = 1.0"],
+        ["g_call", "g = gradiente(p, x, y)"],
+        ["pr_g", "print(\"dW1 y db1:\", np.round(g[0:6], 6) + 0.0)"],
+        ["pr_g2", "print(\"dW2 y db2:\", np.round(g[6:9], 6))"],
+        [null, ""],
+        [null, "# gradient check: diferencias centradas, un parámetro a la vez"],
+        ["h", "h = 1e-5"],
+        ["h", "peor = 0.0"],
+        [null, "for i in range(9):"],
+        ["e", "    e = np.zeros(9)"],
+        ["e", "    e[i] = h"],
+        ["num", "    num = (perdida(p + e, x, y) - perdida(p - e, x, y)) / (2 * h)"],
+        ["peor", "    peor = max(peor, abs(num - g[i]))"],
+        ["pr_dif", "print(\"diferencia máxima:\", f\"{peor:.1e}\")"],
+        ["pr_lib", "print(\"scipy coincide:\", np.allclose(approx_fprime(p, perdida, 1e-7, x, y), g, atol=1e-6))"],
+        [null, ""],
+        [null, "# un paso de descenso con tasa 0.5"],
+        ["eta", "eta = 0.5"],
+        ["p1", "p1 = p - eta * g"],
+        ["pr_L", "print(\"pérdida:\", round(perdida(p, x, y), 6), \"->\", round(perdida(p1, x, y), 6))"],
+        [null, ""],
+        [null, "# el mismo paso en scikit-learn: SGD sin momentum y sin regularización"],
+        ["sk", "red = MLPClassifier(hidden_layer_sizes=(2,), activation=\"logistic\", solver=\"sgd\","],
+        ["sk", "                    learning_rate_init=eta, momentum=0, alpha=0, batch_size=1)"],
+        ["sk", "red.partial_fit([x], [1], classes=[0, 1])      # solo para crear la red"],
+        ["sk_set", "red.coefs_ = [p[0:4].reshape(2, 2).T.copy(), p[6:8].reshape(2, 1).copy()]"],
+        ["sk_set", "red.intercepts_ = [p[4:6].copy(), p[8:9].copy()]"],
+        ["sk_paso", "red.partial_fit([x], [1])                       # un paso desde nuestros pesos"],
+        ["pr_sk", "sk = np.concatenate([red.coefs_[0].T.ravel(), red.intercepts_[0],"],
+        ["pr_sk", "                     red.coefs_[1].ravel(), red.intercepts_[1]])"],
+        ["pr_sk", "print(\"sklearn coincide:\", np.allclose(sk, p1))"],
+        [null, ""],
+        [null, "# entrenar el XOR: el lote de 4, promedio de los gradientes, 2000 épocas"],
+        ["xor", "X = np.array([[0.0, 0.0], [0.0, 1.0], [1.0, 0.0], [1.0, 1.0]])"],
+        ["xor", "Y = np.array([0.0, 1.0, 1.0, 0.0])"],
+        ["xor", "q = p.copy()"],
+        [null, "for epoca in range(2001):"],
+        [null, "    if epoca % 500 == 0:"],
+        ["pr_ep", "        L = np.mean([perdida(q, X[n], Y[n]) for n in range(4)])"],
+        ["pr_ep", "        print(\"época\", epoca, \"pérdida\", round(L, 4))"],
+        ["G", "    G = np.zeros(9)"],
+        [null, "    for n in range(4):"],
+        ["G", "        G = G + gradiente(q, X[n], Y[n])"],
+        ["G", "    q = q - eta * G / 4"],
+        ["pr_fin", "print(\"salidas:\", np.round([salida(q, X[n])[1] for n in range(4)], 3))"]
+      ],
+      r: [
+        [null, "library(nnet)"],
+        [null, "library(numDeriv)"],
+        ["def", "sigmoide <- function(z) 1 / (1 + exp(-z))"],
+        [null, ""],
+        [null, "# los 9 parámetros de la red de juguete en un vector: W1 (por filas), b1, W2, b2"],
+        ["p", "p <- c(0.5, -0.5, 0.3, 0.8, 0, -0.2, 1, -1, 0.1)"],
+        [null, ""],
+        ["def", "partes <- function(p) list(W1 = matrix(p[1:4], 2, 2, byrow = TRUE),"],
+        ["def", "                           b1 = p[5:6], W2 = p[7:8], b2 = p[9])"],
+        [null, ""],
+        ["def", "salida <- function(p, x) {"],
+        ["def", "  r <- partes(p)"],
+        ["def", "  a1 <- as.vector(sigmoide(r$W1 %*% x + r$b1))"],
+        ["def", "  list(a1 = a1, a2 = sigmoide(sum(r$W2 * a1) + r$b2))"],
+        [null, "}"],
+        [null, ""],
+        ["def", "perdida <- function(p, x, y) {"],
+        ["def", "  a2 <- salida(p, x)$a2"],
+        ["def", "  -(y * log(a2) + (1 - y) * log(1 - a2))"],
+        [null, "}"],
+        [null, ""],
+        ["def", "gradiente <- function(p, x, y) {"],
+        ["g_partes", "  r <- partes(p)"],
+        ["g_fwd", "  s <- salida(p, x)                            # hacia adelante"],
+        ["g_dz2", "  dz2 <- s$a2 - y                              # error de la salida"],
+        ["g_ini", "  dW2 <- numeric(2)"],
+        ["g_ini", "  dz1 <- numeric(2)"],
+        ["g_ini", "  dW1 <- matrix(0, 2, 2)"],
+        [null, "  for (j in 1:2) {                             # cada neurona oculta"],
+        ["g_dW2", "    dW2[j] <- dz2 * s$a1[j]                    # error por lo que entra"],
+        ["g_dz1", "    dz1[j] <- r$W2[j] * dz2 * s$a1[j] * (1 - s$a1[j])"],
+        [null, "    for (k in 1:2) {                           # cada entrada"],
+        ["g_dW1", "      dW1[j, k] <- dz1[j] * x[k]"],
+        [null, "    }"],
+        [null, "  }"],
+        ["g_ret", "  c(t(dW1), dz1, dW2, dz2)"],
+        [null, "}"],
+        [null, ""],
+        [null, "# un ejemplo: x = (1, 0) con objetivo 1"],
+        ["xy", "x <- c(1, 0)"],
+        ["xy", "y <- 1"],
+        ["g_call", "g <- gradiente(p, x, y)"],
+        ["pr_g", "cat(\"dW1 y db1:\", round(g[1:6], 6), \"\\n\")"],
+        ["pr_g2", "cat(\"dW2 y db2:\", round(g[7:9], 6), \"\\n\")"],
+        [null, ""],
+        [null, "# gradient check: diferencias centradas, un parámetro a la vez"],
+        ["h", "h <- 1e-5"],
+        ["h", "peor <- 0"],
+        [null, "for (i in 1:9) {"],
+        ["e", "  e <- numeric(9)"],
+        ["e", "  e[i] <- h"],
+        ["num", "  num <- (perdida(p + e, x, y) - perdida(p - e, x, y)) / (2 * h)"],
+        ["peor", "  peor <- max(peor, abs(num - g[i]))"],
+        [null, "}"],
+        ["pr_dif", "cat(\"diferencia máxima:\", format(peor, digits = 2), \"\\n\")"],
+        ["pr_lib", "cat(\"numDeriv coincide:\", isTRUE(all.equal(grad(function(v) perdida(v, x, y), p), g)), \"\\n\")"],
+        [null, ""],
+        [null, "# un paso de descenso con tasa 0.5"],
+        ["eta", "eta <- 0.5"],
+        ["p1", "p1 <- p - eta * g"],
+        ["pr_L", "cat(\"pérdida:\", round(perdida(p, x, y), 6), \"->\", round(perdida(p1, x, y), 6), \"\\n\")"],
+        [null, ""],
+        [null, "# nnet guarda los pesos por neurona: su sesgo y después sus entradas"],
+        ["sk", "a_nnet <- function(p) c(p[5], p[1:2], p[6], p[3:4], p[9], p[7:8])"],
+        ["sk_set", "antes <- nnet(t(x), y, size = 2, Wts = a_nnet(p), entropy = TRUE, maxit = 0, trace = FALSE)"],
+        ["sk_paso", "despues <- nnet(t(x), y, size = 2, Wts = a_nnet(p1), entropy = TRUE, maxit = 0, trace = FALSE)"],
+        ["pr_sk", "cat(\"nnet:\", round(antes$value, 6), \"->\", round(despues$value, 6), \"\\n\")"],
+        [null, ""],
+        [null, "# entrenar el XOR: el lote de 4, promedio de los gradientes, 2000 épocas"],
+        ["xor", "X <- matrix(c(0, 0, 0, 1, 1, 0, 1, 1), ncol = 2, byrow = TRUE)"],
+        ["xor", "Y <- c(0, 1, 1, 0)"],
+        ["xor", "q <- p"],
+        [null, "for (epoca in 0:2000) {"],
+        [null, "  if (epoca %% 500 == 0) {"],
+        ["pr_ep", "    L <- mean(sapply(1:4, function(n) perdida(q, X[n, ], Y[n])))"],
+        ["pr_ep", "    cat(\"época\", epoca, \"pérdida\", round(L, 4), \"\\n\")"],
+        [null, "  }"],
+        ["G", "  G <- numeric(9)"],
+        [null, "  for (n in 1:4) {"],
+        ["G", "    G <- G + gradiente(q, X[n, ], Y[n])"],
+        [null, "  }"],
+        ["G", "  q <- q - eta * G / 4"],
+        [null, "}"],
+        ["pr_fin", "cat(\"salidas:\", round(sapply(1:4, function(n) salida(q, X[n, ])$a2), 3), \"\\n\")"]
+      ]
+    };
+    // salida real de python3 y Rscript, caracter por caracter (R deja un espacio antes del salto de linea)
+    var SALIDA = {
+      py: ["dW1 y db1: [-0.105937  0.        0.112416  0.       -0.105937  0.112416]", "dW2 y db2: [-0.280598 -0.236655 -0.45079 ]", "diferencia máxima: 4.5e-12", "scipy coincide: True",
+        "pérdida: 0.599274 -> 0.428671", "sklearn coincide: True", "época 0 pérdida 0.6975", "época 500 pérdida 0.691", "época 1000 pérdida 0.4071", "época 1500 pérdida 0.047", "época 2000 pérdida 0.0218", "salidas: [0.021 0.971 0.982 0.018]"],
+      r: ["dW1 y db1: -0.105937 0 0.112416 0 -0.105937 0.112416 ", "dW2 y db2: -0.280598 -0.236655 -0.45079 ", "diferencia máxima: 4.5e-12 ", "numDeriv coincide: TRUE ",
+        "pérdida: 0.599274 -> 0.428671 ", "nnet: 0.599274 -> 0.428671 ", "época 0 pérdida 0.6975 ", "época 500 pérdida 0.691 ", "época 1000 pérdida 0.4071 ", "época 1500 pérdida 0.047 ", "época 2000 pérdida 0.0218 ", "salidas: 0.021 0.971 0.982 0.018 "]
+    };
+    var P = JUG, X0 = PUNTOS[2], BW = atras(P, X0, 1), P1 = P.map(function (v, i) { return v - ETA * BW.g[i]; });
+    /* eventos: una foto por linea ejecutada */
+    var EV = [];
+    (function () {
+      var fase = 1, sal = 0, G = [null, null, null, null, null, null, null, null, null], NUM = G.slice(), NUEVO = G.slice(), cur = -1, peor = 0, XL = [];
+      var dz1 = [null, null], dW2 = [null, null];
+      function foto(id, x) {
+        EV.push(Object.assign({ id: id, fase: fase, sal: sal, G: G.slice(), NUM: NUM.slice(), NUEVO: NUEVO.slice(), cur: cur, peor: peor, XL: XL.slice(), j: null, k: null, i: null }, x || {}));
+      }
+      foto("def"); foto("p"); foto("xy"); foto("g_call");
+      foto("g_partes"); foto("g_fwd"); foto("g_dz2"); foto("g_ini");
+      for (var j = 0; j < 2; j++) {
+        dW2[j] = BW.dz2 * BW.r.a1[j]; G[6 + j] = dW2[j]; cur = 6 + j;
+        foto("g_dW2", { j: j });
+        dz1[j] = BW.dz1[j]; G[4 + j] = dz1[j]; cur = 4 + j;
+        foto("g_dz1", { j: j });
+        for (var k = 0; k < 2; k++) { G[j * 2 + k] = BW.g[j * 2 + k]; cur = j * 2 + k; foto("g_dW1", { j: j, k: k }); }
+      }
+      G[8] = BW.dz2; cur = 8;
+      foto("g_ret");
+      cur = -1;
+      sal++; foto("pr_g", { nueva: true });
+      sal++; foto("pr_g2", { nueva: true });
+      fase = 2;
+      foto("h");
+      for (var i = 0; i < 9; i++) {
+        var h = 1e-5, q1 = P.slice(), q2 = P.slice(); q1[i] += h; q2[i] -= h;
+        var Lm = perdida(q1, X0, 1), Ln = perdida(q2, X0, 1), num = (Lm - Ln) / (2 * h);
+        cur = i;
+        foto("e", { i: i });
+        NUM[i] = num;
+        foto("num", { i: i, Lm: Lm, Ln: Ln });
+        peor = Math.max(peor, Math.abs(num - BW.g[i]));
+        foto("peor", { i: i, dif: Math.abs(num - BW.g[i]) });
+      }
+      cur = -1;
+      sal++; foto("pr_dif", { nueva: true });
+      sal++; foto("pr_lib", { nueva: true });
+      fase = 3;
+      foto("eta");
+      NUEVO = P1.slice();
+      foto("p1");
+      sal++; foto("pr_L", { nueva: true });
+      foto("sk"); foto("sk_set"); foto("sk_paso");
+      sal++; foto("pr_sk", { nueva: true });
+      fase = 4;
+      foto("xor");
+      var H = historial(P, ETA, 2000);
+      [0, 500, 1000, 1500, 2000].forEach(function (ep, t) {
+        XL.push([ep, H.h[ep]]);
+        sal++; foto("pr_ep", { nueva: true, ep: ep });
+        if (ep < 2000) foto("G", { bloque: [ep, ep + 499] });
+      });
+      sal++; foto("pr_fin", { nueva: true, fin: true, ys: PUNTOS.map(function (q) { return adelante(H.fin, q).a2; }) });
+    })();
+
+    function narrar(e, ctx) {
+      var py = ctx.lang() === "py", ix = ctx.ix;
+      switch (e.id) {
+        case "def": return "Define la sigmoide y tres funciones de ayuda: <b>partes</b> desarma el vector de 9 números en W1, b1, W2 y b2; <b>salida</b> hace la pasada hacia adelante (con matrices, como en la página de red multicapa); <b>perdida</b> da la entropía cruzada de un ejemplo.";
+        case "p": return "Los nueve números de la red de juguete en un solo vector, en el orden de la tabla del paso 5.";
+        case "xy": return "El ejemplo del recorrido: <b>x = (1, 0)</b>, objetivo <b>1</b>.";
+        case "g_call": return "Llama a <b>gradiente</b>. Ahí adentro está la retropropagación entera, con bucles.";
+        case "g_partes": return "Desarma el vector: hace falta W2 para llevar el error hacia atrás.";
+        case "g_fwd": return "Primero la pasada hacia adelante, guardando lo que la de atrás va a necesitar: a1 = (" + f(BW.r.a1[0], 4) + ", " + f(BW.r.a1[1], 4) + ") y a2 = <b>" + f(BW.r.a2, 4) + "</b>.";
+        case "g_dz2": return "El error de la salida: dz2 = a2 − y = " + f(BW.r.a2, 4) + " − 1 = <b>" + f(BW.dz2, 4) + "</b>. Es el δ₂ del paso 3.";
+        case "g_ini": return "Lugares vacíos para los gradientes de W2, los errores de la capa oculta y los gradientes de W1.";
+        case "g_dW2": return "Neurona oculta <b>j = " + ix(e.j) + "</b>. El gradiente de su peso hacia la salida es el error de la salida por lo que entra: " + f(BW.dz2, 4) + " × " + f(BW.r.a1[e.j], 4) + " = <b>" + f(BW.g[6 + e.j], 4) + "</b>.";
+        case "g_dz1": return "Su error: el de la salida, de vuelta por su peso (" + n(P[6 + e.j]) + "), por la pendiente de su sigmoide (" + f(BW.sp[e.j], 4) + "): <b>" + f(BW.dz1[e.j], 4) + "</b>. Usa W2 sin actualizar.";
+        case "g_dW1": return "Peso de la entrada <b>k = " + ix(e.k) + "</b> a esa neurona: " + f(BW.dz1[e.j], 4) + " × " + X0[e.k] + " = <b>" + f(BW.g[e.j * 2 + e.k], 4) + "</b>." + (X0[e.k] === 0 ? " La entrada vale 0: gradiente 0." : "");
+        case "g_ret": return "Junta los nueve en el mismo orden que p. Los errores de la capa oculta son a la vez los gradientes de sus sesgos, y dz2 el del sesgo de salida.";
+        case "pr_g": return "Imprime los seis de la capa oculta." + (py ? " El <b>+ 0.0</b> convierte el −0.0 de NumPy en 0." : "");
+        case "pr_g2": return "Y los tres de la salida: los números del paso 5.";
+        case "h": return "El gradient check: h muy chico y una variable para la peor diferencia.";
+        case "e": return "Número <b>i = " + ix(e.i) + "</b> (" + COD[e.i] + "): un vector con h solo en esa posición, para empujar ese número y ninguno más.";
+        case "num": return "Dos pasadas hacia adelante, una con +h y otra con −h: (" + f(e.Lm, 8) + " − " + f(e.Ln, 8) + ") / 0.00002 = <b>" + f(NUM_[e.i], 6) + "</b>.";
+        case "peor": return "Contra la retropropagación, " + f(BW.g[e.i], 6) + ": diferencia " + e.dif.toExponential(1) + ".";
+        case "pr_dif": return "La peor diferencia de los nueve: <b>4.5e-12</b>. Es ruido de redondeo: la retropropagación está bien.";
+        case "pr_lib": return py ? "SciPy hace lo mismo con <b>approx_fprime</b> (diferencias hacia adelante, con su propio h): coincide." : "<b>grad</b>, de numDeriv, deriva con extrapolación de Richardson: coincide.";
+        case "eta": return "La tasa del recorrido.";
+        case "p1": return "Un paso de descenso para los nueve números a la vez: p − 0.5 × g. Es la columna de la derecha de la tabla.";
+        case "pr_L": return "La pérdida baja de <b>0.599274</b> a <b>0.428671</b>, como en el paso 6.";
+        case "sk": return py ? "Un <b>MLPClassifier</b> igual a nuestra red, con SGD, un ejemplo por paso, <b>momentum = 0</b> y <b>alpha = 0</b>. El primer <b>partial_fit</b> solo sirve para que exista (inicia pesos al azar y da un paso con ellos)." : "Una función que reordena p como lo quiere <b>nnet</b>: por neurona, su sesgo y después sus pesos.";
+        case "sk_set": return py ? "Le pisa los pesos con los nuestros. scikit-learn los guarda como entrada × salida: van traspuestos." : "<b>nnet</b> con nuestros pesos, <b>entropy = TRUE</b> para que mida la entropía cruzada, y <b>maxit = 0</b> para que no entrene.";
+        case "sk_paso": return py ? "Ahora sí, un paso de SGD desde nuestros pesos." : "Lo mismo con los pesos después del paso. nnet no puede dar un paso de SGD (entrena con BFGS), pero sí medir la pérdida.";
+                case "pr_sk": return py ? "Desarma lo que quedó en scikit-learn (otra vez traspuesto, en el orden de p) y lo compara: el paso de scikit-learn y el nuestro dan los mismos nueve números." : "nnet mide la misma pérdida antes y después: <b>0.599274</b> y <b>0.428671</b>.";
+        case "xor": return "Las cuatro esquinas del XOR y una copia de p para entrenar.";
+        case "pr_ep": return "Época <b>" + e.ep + "</b>: pérdida media del lote <b>" + f(XL_(e), 4) + "</b>." + (e.ep === 500 ? " Casi no se movió: la meseta del paso 8." : e.ep === 1000 ? " Ya está cayendo." : "");
+        case "G": return "Épocas " + e.bloque[0] + " a " + e.bloque[1] + ", de un tirón: en cada una, el gradiente de las cuatro esquinas con la misma función, sumado, y un paso con el promedio (G / 4).";
+        case "pr_fin": return "Las salidas finales: cerca de 0, 1, 1, 0. La red aprendió el XOR con la retropropagación que acabas de ver.";
+      }
+      return "";
+    }
+    var NUM_ = [];
+    for (var i0 = 0; i0 < 9; i0++) { var qa = P.slice(), qb = P.slice(); qa[i0] += 1e-5; qb[i0] -= 1e-5; NUM_.push((perdida(qa, X0, 1) - perdida(qb, X0, 1)) / 2e-5); }
+    function XL_(e) { return e.XL[e.XL.length - 1][1]; }
+    function visual(e, anterior, ctx) {
+      var py = ctx.lang() === "py";
+      var h = '<thead><tr><th>p[i]</th><th>número</th><th>valor</th><th>gradiente</th><th>diferencias</th><th>después del paso</th></tr></thead><tbody>';
+      function c(cur, v, d, cls) { return '<td class="' + (cur ? "cur" : v === null || v === undefined ? "vacia" : cls || "") + '">' + (v === null || v === undefined ? "·" : f(v, d)) + '</td>'; }
+      for (var i = 0; i < 9; i++) {
+        var cur = !!(e && e.cur === i);
+        h += '<tr><td>' + ctx.ix(i) + '</td><td>' + NOM[i] + '</td><td>' + n(P[i]) + '</td>' + c(cur, e ? e.G[i] : null, 6, "bw") + c(cur, e ? e.NUM[i] : null, 6) + c(cur, e ? e.NUEVO[i] : null, 4) + '</tr>';
+      }
+      $("vrTabla").innerHTML = h + '</tbody>';
+      var cu = "";
+      if (e) {
+        if (e.id === "g_dW2") cu = "dW2[" + ctx.ix(e.j) + "] = " + f(BW.dz2, 4) + " × " + f(BW.r.a1[e.j], 4) + " = " + f(BW.g[6 + e.j], 4);
+        else if (e.id === "g_dz1") cu = "dz1[" + ctx.ix(e.j) + "] = " + n(P[6 + e.j]) + " × " + f(BW.dz2, 4) + " × " + f(BW.r.a1[e.j], 4) + " × " + f(1 - BW.r.a1[e.j], 4) + " = " + f(BW.dz1[e.j], 4);
+        else if (e.id === "g_dW1") cu = "dW1[" + ctx.ix(e.j) + ", " + ctx.ix(e.k) + "] = " + f(BW.dz1[e.j], 4) + " × " + X0[e.k] + " = " + f(BW.g[e.j * 2 + e.k], 4);
+        else if (e.id === "num") cu = "(" + f(e.Lm, 8) + " − " + f(e.Ln, 8) + ") / 0.00002 = " + f(NUM_[e.i], 6);
+        else if (e.id === "peor") cu = "|" + f(NUM_[e.i], 6) + " − (" + f(BW.g[e.i], 6) + ")| = " + e.dif.toExponential(1) + " · peor hasta ahora: " + e.peor.toExponential(1);
+        else if (e.id === "g_dz2") cu = "dz2 = " + f(BW.r.a2, 4) + " − 1 = " + f(BW.dz2, 4);
+        else if (e.fase === 4 && e.XL.length) cu = "pérdida del lote por época: " + e.XL.map(function (t) { return t[0] + " → " + f(t[1], 4); }).join(" · ");
+        if (e.fin) cu += " · salidas: " + e.ys.map(function (v) { return f(v, 3); }).join(", ");
+      }
+      $("vrCuenta").textContent = cu;
+      var lineas = SALIDA[ctx.lang()].slice(0, e ? e.sal : 0);
+      $("vrConsola").innerHTML = lineas.length ? lineas.map(function (l, k) {
+        return '<span class="' + (e && e.nueva && k === lineas.length - 1 ? "nueva" : "") + '">' + ctx.esc(l) + '</span>';
+      }).join("\n") : '<span class="vacia">Todavía no imprimió nada.</span>';
+    }
+    B.vidaReal($("vidareal"), {
+      codigo: CODIGO,
+      eventos: EV,
+      narrar: narrar,
+      vars: function (e, ctx) {
+        var v = [];
+        if (!e) return v;
+        if (e.j !== null) v.push('<span class="' + (e.j ? "vk" : "vj") + '">j = <b>' + ctx.ix(e.j) + '</b></span>');
+        if (e.k !== null) v.push('<span>k = <b>' + ctx.ix(e.k) + '</b></span>');
+        if (e.i !== null) v.push('<span>i = <b>' + ctx.ix(e.i) + '</b></span>');
+        if (e.fase >= 2 && e.peor) v.push('<span>peor = <b>' + e.peor.toExponential(1) + '</b></span>');
+        if (e.ep != null) v.push('<span>epoca = <b>' + e.ep + '</b></span>');
+        return v;
+      },
+      visual: visual,
+      demora: function (e) { return !e ? 600 : e.id === "e" || e.id === "peor" ? 380 : e.id === "num" ? 650 : e.id === "G" ? 1100 : e.id.indexOf("pr_") === 0 ? 1300 : 900; }
+    });
+
+    B.numerico(cuerpo("vrPred"), {
+      pregunta: "Antes de reproducir: en el gradient check (el bucle <code>for i</code>), ¿cuántas veces se llama a la función <code>perdida</code>?",
+      respuesta: 18,
+      tolerancia: 0,
+      pistas: ["¿Cuántas vueltas da el bucle? Una por número de la red.", "En cada vuelta, la línea de <code>num</code> llama a <code>perdida</code> dos veces: con +h y con −h."],
+      diagnostico: function (v) {
+        if (v === 9) return "Una vuelta por número, sí, pero en cada vuelta hay dos llamadas: +h y −h.";
+        if (v === 2) return "Esas son las llamadas de una vuelta. ¿Cuántas vueltas da el bucle?";
+        return null;
+      },
+      explicacion: "$9 \\times 2 = 18$ pasadas hacia adelante para revisar nueve números. La llamada a <code>gradiente</code> los sacó a todos con una pasada hacia adelante y una hacia atrás. Con 39 760 números serían 79 520 pasadas: por eso el gradient check sirve para revisar y no para entrenar.",
+      alResolver: function (ok) { C.reto("codigo1", ok); }
+    });
+    prop("codigo2", {
+      pregunta: "En el programa de Python borras <code>momentum=0</code> del <code>MLPClassifier</code> y dejas el valor por defecto. ¿Qué imprime la línea de la comparación?",
+      opciones: [
+        "<code>sklearn coincide: False</code>: el peso de arriba a la salida queda en 1.3557 y no en 1.1403",
+        "<code>sklearn coincide: True</code>: con un solo paso el momentum no hace nada",
+        "Un error, porque el momentum necesita varios pasos",
+        "<code>sklearn coincide: True</code>, pero más lento"
+      ],
+      correcta: 0,
+      pistas: [null, "El primer <code>partial_fit</code>, el que crea la red, ya dio un paso con pesos al azar. ¿Dónde queda guardado ese paso?", "El momentum funciona desde el primer paso: arranca con velocidad cero.", "Lo que cambia no es la velocidad del programa sino los números."],
+      explicacion: "El valor por defecto es <code>momentum=0.9</code> (y además Nesterov). El optimizador recuerda la velocidad del paso que dio el primer <code>partial_fit</code> con pesos al azar y la suma a nuestro paso. Lo comprobamos corriéndolo: el peso de arriba a la salida queda en 1.3557. Hay otro valor por defecto escondido: <code>alpha=0.0001</code>, una penalización L2. Con <code>momentum=0</code> pero <code>alpha</code> por defecto, la diferencia es de una diezmilésima y la comparación también da <code>False</code>."
+    });
+    prop("codigo3", {
+      pregunta: "En el programa de R quitas <code>entropy = TRUE</code> de las dos llamadas a <code>nnet</code>. ¿Qué imprime?",
+      opciones: [
+        "<code>nnet: 0.203211 -> 0.12154</code>: mide otra pérdida, la suma de cuadrados",
+        "<code>nnet: 0.599274 -> 0.428671</code>: la pérdida es la misma",
+        "Un error, porque falta la pérdida",
+        "<code>nnet: 0.599274 -> 0.599274</code>: sin entropía no ve el cambio"
+      ],
+      correcta: 0,
+      pistas: [null, "¿Qué pérdida usa <code>nnet</code> si no le dices nada? Piensa en una regresión.", "<code>nnet</code> siempre tiene una pérdida por defecto.", "Los pesos sí cambiaron entre las dos llamadas: algo tiene que cambiar."],
+      explicacion: "Por defecto <code>nnet</code> ajusta por mínimos cuadrados: $(1 - 0.5492)^2 = 0.2032$ antes y $(1 - 0.6514)^2 = 0.1215$ después (lo comprobamos con Rscript). La pérdida también baja, pero no es la que derivamos. Con salida sigmoide y clases 0 y 1, la que corresponde es la entropía cruzada: <code>entropy = TRUE</code>."
+    });
+  })();
+
+  /* ---------------- tarjetas ---------------- */
+  B.tarjetas($("tarjetas"), [
+    ["¿Qué hace la retropropagación?", "Calcula el gradiente de la pérdida respecto de todos los pesos con una pasada hacia atrás: la regla de la cadena, de la salida a la entrada, reusando el error de cada capa."],
+    ["El error de la salida con sigmoide y entropía cruzada", "$\\delta_2 = \\partial L/\\partial z_2 = a_2 - y$: lo que dijo menos lo que debía decir."],
+    ["¿Cómo llega el error a una capa oculta?", "$\\boldsymbol{\\delta}_1 = (W_2^\\top\\boldsymbol{\\delta}_2)\\odot\\sigma'(\\mathbf{z}_1)$: por los mismos pesos, y por la pendiente de la activación."],
+    ["El gradiente de un peso", "El error de la neurona a la que llega por lo que entra por él: $\\partial L/\\partial w_{jk} = \\delta_j\\,a_k$. El de un sesgo es $\\delta_j$."],
+    ["¿En qué orden se actualiza?", "Primero todos los gradientes, con los pesos de la pasada hacia adelante; después todas las actualizaciones."],
+    ["¿Qué es el gradient check?", "Comparar cada derivada con $(L(w+h) - L(w-h))/2h$. Sirve para revisar el código, no para entrenar: cuesta dos pasadas por número."],
+    ["¿Por qué los pesos iniciales al azar?", "Si dos neuronas arrancan iguales, reciben los mismos gradientes y siguen iguales para siempre."],
+    ["Una meseta en la pérdida", "Gradiente chico no es mínimo. En el XOR la pérdida casi no se mueve 500 épocas y después cae de golpe."]
+  ]);
+
+  /* ---------------- conexiones ---------------- */
+  B.conexiones("retropropagacion");
+})();
+</script>
+</body>
+</html>

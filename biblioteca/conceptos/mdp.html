@@ -1,0 +1,1785 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Proceso de Markov y MDP</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+/* ---------- el mundo de cuadricula ---------- */
+.mundo-svg { width: 100%; height: auto; display: block; user-select: none; -webkit-user-select: none; }
+.mundo-svg.tocable { cursor: pointer; }
+.mundo-svg .celda { fill: var(--surface); stroke: var(--line); stroke-width: 1.5; }
+.mundo-svg .celda.queso { fill: color-mix(in oklab, var(--pos) 13%, var(--surface)); stroke: var(--pos); }
+.mundo-svg .celda.trampa { fill: color-mix(in oklab, var(--neg) 13%, var(--surface)); stroke: var(--neg); }
+.mundo-svg .celda.muro { fill: var(--surface-2); stroke: var(--ink-3); }
+.mundo-svg .celda.marcada { stroke: var(--accent); stroke-width: 3; }
+.mundo-svg .rayado { stroke: var(--ink-3); stroke-width: 3; opacity: .4; }
+.mundo-svg .num { font: 11px var(--f-mono); fill: var(--ink-3); }
+.mundo-svg .num.grande { font: 600 15px var(--f-mono); fill: var(--ink); }
+.mundo-svg .muro-lab { font: 500 12px var(--f-mono); fill: var(--ink-3); text-anchor: middle; }
+.mundo-svg .etq { font: 500 12.5px var(--f-mono); fill: var(--ink-2); text-anchor: middle; paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+.mundo-svg .etq.pos { fill: var(--pos); }
+.mundo-svg .etq.neg { fill: var(--neg); }
+.mundo-svg .queso-dib { fill: color-mix(in oklab, var(--pos) 55%, var(--surface)); stroke: var(--pos); stroke-width: 1.5; stroke-linejoin: round; }
+.mundo-svg .queso-hoyo { fill: var(--surface); }
+.mundo-svg .trampa-dib { fill: none; stroke: var(--neg); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+.mundo-svg .rob-cuerpo { fill: var(--ink); }
+.mundo-svg .rob-ojo { fill: var(--surface); }
+.mundo-svg .rob-ant { stroke: var(--ink); stroke-width: 2.5; stroke-linecap: round; }
+.mundo-svg .rob-boca { stroke: var(--surface); stroke-width: 2; stroke-linecap: round; }
+.mundo-svg .fle { stroke: var(--ink-2); fill: none; stroke-linecap: round; opacity: .75; }
+.mundo-svg .mk-fl { fill: var(--ink-2); }
+.mundo-svg .intento { stroke: var(--accent); stroke-width: 2.2; stroke-dasharray: 5 4; fill: none; }
+.mundo-svg .mk-in { fill: var(--accent); }
+.mundo-svg .pol { stroke: var(--j); stroke-width: 3.5; stroke-linecap: round; }
+.mundo-svg .mk-po { fill: var(--j); }
+.mundo-svg .camino { fill: none; stroke: var(--k); stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; opacity: .7; }
+.mundo-svg .plab { font: 600 12.5px var(--f-mono); fill: var(--ink); paint-order: stroke; stroke: var(--surface); stroke-width: 4px; text-anchor: middle; }
+.mundo-svg .plab.acc { fill: var(--accent); font-weight: 500; }
+.mundo-svg .oculto { font: 700 24px var(--f-mono); fill: var(--accent); text-anchor: middle; paint-order: stroke; stroke: var(--surface); stroke-width: 4px; }
+
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.esc-head .hint { font-size: 12.5px; color: var(--ink-2); }
+.panel { margin-top: 10px; font-size: 13.5px; color: var(--ink-2); }
+.panel p { margin: 6px 0; }
+.panel b { color: var(--ink); font-weight: 500; }
+.acciones { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 6px 0 8px; }
+.acciones .seg button { font-size: 12px; padding: 6px 9px; }
+.mini-lab { font-family: var(--f-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); }
+.ptabla { border-collapse: collapse; font-family: var(--f-mono); font-size: 12px; font-variant-numeric: tabular-nums; margin: 6px 0; }
+.ptabla th { font-weight: 500; color: var(--ink-3); font-size: 11px; padding: 3px 6px; border-bottom: 1px solid var(--line); text-align: center; white-space: nowrap; }
+.ptabla td { padding: 3px 6px; border-bottom: 1px solid var(--line-soft); text-align: center; color: var(--ink-2); white-space: nowrap; }
+.ptabla td.lleno { color: var(--ink); font-weight: 500; background: var(--accent-soft); }
+.ptabla td.q { color: var(--pos); }
+.ptabla td.t { color: var(--neg); }
+.ptabla td.izq { text-align: left; }
+.ptabla tr.suma td { border-top: 1px solid var(--line); color: var(--ink); }
+.barras { display: grid; gap: 5px; margin-top: 8px; }
+.barra-f { display: grid; grid-template-columns: 116px minmax(0, 1fr) 58px; align-items: center; gap: 8px; font-size: 12px; color: var(--ink-2); }
+.barra-f .pista-b { height: 9px; background: var(--surface-2); border-radius: 3px; overflow: hidden; }
+.barra-f .pista-b i { display: block; height: 100%; border-radius: 3px; transition: width .25s; background: var(--ink-3); }
+.barra-f i.pos { background: var(--pos); }
+.barra-f i.neg { background: var(--neg); }
+.barra-f b { font-family: var(--f-mono); font-weight: 500; text-align: right; font-variant-numeric: tabular-nums; }
+.bitacora { font-family: var(--f-mono); font-size: 12px; line-height: 1.6; max-height: 170px; overflow-y: auto; background: var(--surface-2); border-radius: 8px; padding: 8px 10px; margin-top: 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.bitacora:empty { display: none; }
+.tupla { font-family: var(--f-mono); font-size: 12.5px; line-height: 1.7; }
+.tupla span { color: var(--ink-3); }
+.btn-row.compacta { margin-top: 6px; }
+.btn-row.compacta button { font-size: 12.5px; padding: 6px 10px; }
+
+/* ---------- vida real ---------- */
+.vr-salida { margin: 6px 0 0; padding: 8px 10px; background: var(--surface-2); border-radius: 8px; font-family: var(--f-mono); font-size: 12.5px; line-height: 1.6; min-height: 2.4em; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); }
+.vr-salida .nueva { background: var(--accent-soft); }
+
+/* ---------- retos propios ---------- */
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.ojo-opts { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
+.ojo-opts .opt { text-align: center; padding-left: 4px; padding-right: 4px; }
+.objetivos { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.objetivos li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.objetivos .m { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.objetivos li.hecho { color: var(--ink); }
+.objetivos li.hecho .m { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 3px var(--surface); }
+.reto .mundo-svg { max-width: 420px; margin: 6px 0; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ Proceso de Markov y MDP</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Aprendizaje automático · aprendizaje por refuerzo · UD6 de SM142004 · Raschka cap. 19</p>
+    <h1>Proceso de Markov y MDP: el tablero sobre el que decide un agente</h1>
+    <p class="lede">
+      Un robot quiere llegar a un queso. Elige hacia dónde moverse, pero el suelo resbala: a veces termina en otra casilla, y una de ellas es una trampa.
+      Para que una computadora pueda razonar sobre esto hay que escribir el problema con cinco piezas: <b>estados, acciones, transiciones, recompensas y descuento</b>.
+      Eso es un proceso de decisión de Markov, y es el tablero de todo el aprendizaje por refuerzo.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> Tienes que explicarle a una computadora el problema del robot que busca el queso en un suelo que resbala. ¿Qué cosas tendrías que escribirle para que pueda decidir bien? Escríbelo como te salga, aunque esté incompleto.</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: le diría dónde está el queso y..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>Del robot que resbala a la tupla (S, A, P, R, γ)</h2>
+      <p>Siete pasos. Cada uno termina con un chequeo que abre el siguiente. El primero está pensado para que falles: así se recuerda mejor.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="Predicción">
+          <span class="etapa">Paso 1</span>
+          <h3>Un robot, un queso y un suelo que resbala</h3>
+          <p>Mira el escenario. Es una cuadrícula de 3 filas por 4 columnas. Arriba a la derecha está el <b>queso</b>. Justo debajo, una <b>trampa</b>. En el centro hay un <b>muro</b> que no se puede atravesar. El robot empieza abajo a la izquierda.</p>
+          <p>El robot está ahora en la casilla que queda a la izquierda de la trampa, y pide moverse <b>hacia arriba</b> (la flecha punteada). Pero el suelo está mojado: casi siempre va adonde quiere, y de vez en cuando patina hacia uno de los dos costados.</p>
+          <div class="check" id="chk1"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+          <p id="txt1" hidden>Ahora compruébalo con el botón <b>Probar 100 veces</b> del escenario. Cada vez que lo tocas, el robot repite el mismo intento 100 veces desde la misma casilla. Los números bailan un poco, pero rondan 80, 10 y 10.</p>
+        </section>
+
+        <section class="paso card" data-titulo="De cadena a decisión">
+          <span class="etapa">Paso 2</span>
+          <h3>De una cadena de Markov a un problema de decisión</h3>
+          <p>En la página de <a href="cadenas-markov.html">cadenas de Markov</a> una ficha saltaba entre estados siguiendo flechas con probabilidades <b>fijas</b>. Nadie decidía nada: el clima de mañana dependía solo del de hoy.</p>
+          <p>Aquí hay algo nuevo: el robot <b>elige una acción</b>, y cada acción trae su propio juego de flechas. Toca cualquier casilla para poner ahí al robot y cambia la acción con los botones. Mira cómo cambian las flechas: el grosor es la probabilidad de cada destino. Si una flecha vuelve al mismo sitio, es que el robot chocó con el borde o con el muro y se quedó donde estaba.</p>
+          <p>Raschka arma la misma escena del lado de la cadena: un estudiante que salta entre estudiar, jugar, ir a la biblioteca y dormir, con una tabla de probabilidades fijas y ninguna acción
+            <cite class="cita" data-fuente="raschka19" data-pag="7" data-pimp="679" data-seccion="Visualization of a Markov process" data-que="El proceso de Markov del estudiante: grafo con cuatro estados (A, B, C y T, el terminal) y la tabla de transiciones donde cada fila suma 1. Es una cadena: no hay acciones ni recompensas." data-cuando="Al terminar este paso, para ver la diferencia con el robot"></cite>.
+            El material del máster dibuja el bucle completo: el agente manda una acción, el entorno le devuelve un estado nuevo y una recompensa
+            <cite class="cita" data-fuente="rl6diapo" data-pag="6" data-seccion="Tema 1: ciclo agente-entorno" data-que="La figura del ciclo: el agente envía la acción, el entorno responde con el siguiente estado y la recompensa. La figura escribe Enviroment, sin la n." data-cuando="Al terminar este paso"></cite>.</p>
+          <div class="check" id="chk2"><p class="check-tit">Calcula con el escenario</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Estados y acciones">
+          <span class="etapa">Paso 3</span>
+          <h3>Ponerle nombre a todo: estados y acciones</h3>
+          <p>Para escribir el problema hay que numerar las casillas. Aquí van de izquierda a derecha y de arriba abajo: la casilla de la fila <i>f</i> y la columna <i>c</i> (contando desde 0) es la <span data-tex="s = 4f + c"></span>. El queso es la 3, la trampa la 7, el inicio la 8 y el muro ocupa la 5.</p>
+          <div class="fbloque">
+            <div data-tex="\mathcal{S} = \{0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 11\} \qquad \mathcal{A} = \{\text{arriba}, \text{abajo}, \text{izquierda}, \text{derecha}\}" data-display></div>
+          </div>
+          <p>El muro <b>no es un estado</b>: el robot nunca puede estar ahí. El queso y la trampa sí son estados, pero <b>terminales</b>: al llegar, el episodio termina y ya no se decide nada más. Toca una casilla para ver qué tipo de estado es.</p>
+          <p>Raschka usa una cuadrícula parecida, de 5 × 6, con oro y trampas, pero numera desde abajo a la izquierda. Si comparas, ojo con eso: es solo una convención
+            <cite class="cita" data-fuente="raschka19" data-pag="22" data-pimp="694" data-seccion="A grid world example" data-que="La cuadrícula del capítulo: 30 estados numerados desde abajo a la izquierda, oro en el 16, trampas en 10, 15 y 22, cuatro acciones, y chocar con el borde deja el estado igual." data-cuando="Al terminar este paso"></cite>.</p>
+          <div class="check" id="chk3"><p class="check-tit">Antes de seguir</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Transiciones">
+          <span class="etapa">Paso 4</span>
+          <h3>Las transiciones: una tabla de probabilidades por cada acción</h3>
+          <p>Lo que hace el mundo cuando el robot elige una acción se escribe como una probabilidad condicional:</p>
+          <div class="fbloque">
+            <div data-tex="P(s' \mid s, a) = \Pr(S_{t+1} = s' \mid S_t = s,\; A_t = a)" data-display></div>
+            <div class="vivo" id="vivoP"></div>
+          </div>
+          <p>Para cada par (estado, acción) hay una fila de probabilidades sobre los destinos, y <b>cada fila suma 1</b>: algo tiene que pasar. Es la matriz de transición de la cadena de Markov, pero ahora hay una matriz distinta por cada acción. El escenario muestra la fila del par que elijas.</p>
+          <p>Prueba el botón <b>Suelo seco</b>. Sin resbalones el mundo es <b>determinista</b>: cada fila tiene un 1 y el resto ceros. Con el suelo mojado es <b>estocástico</b>. Raschka lo dice así: la dinámica es determinista cuando las probabilidades valen 0 o 1
+            <cite class="cita" data-fuente="raschka19" data-pag="6" data-pimp="678" data-seccion="The mathematical formulation of Markov decision processes" data-que="Determinista contra estocástico, y el árbol de métodos según si conoces la dinámica o no. Ojo: escribe que es determinista si ciertas acciones se toman siempre o nunca, pero lo que vale 0 o 1 es la probabilidad del resultado, no la de tomar la acción." data-cuando="Al terminar este paso"></cite>.
+            Y Liu muestra una tabla real de transiciones de un lago congelado donde el agente patina con probabilidad 1/3 hacia cada lado
+            <cite class="cita" data-fuente="liu15" data-pag="11" data-pimp="457" data-seccion="Simulating the FrozenLake environment" data-que="La tabla P[6] de FrozenLake: cada acción lleva a tres destinos con probabilidad 0.333. Es exactamente lo que dibuja el escenario, con otros números." data-cuando="Después de resolver el chequeo"></cite>.</p>
+          <details class="profundizar">
+            <summary>La versión del libro: p(s', r | s, a)</summary>
+            <div>
+              <p>Raschka escribe la dinámica completa como una sola probabilidad conjunta del siguiente estado y de la recompensa, <span data-tex="p(s', r \mid s, a)"></span>, y saca la transición sumando sobre las recompensas: <span data-tex="p(s' \mid s, a) = \sum_{r} p(s', r \mid s, a)"></span>
+                <cite class="cita" data-fuente="raschka19" data-pag="5" data-pimp="677" data-seccion="The mathematical formulation of Markov decision processes" data-que="La secuencia S0, A0, R1, S1, A1, R2... y la definición de la dinámica p(s', r | s, a) como probabilidad conjunta." data-cuando="Cuando quieras ver la notación formal"></cite>.</p>
+              <p>En el mundo del robot la recompensa queda fija en cuanto sabes a qué casilla llegaste, así que las dos formas dicen lo mismo.</p>
+            </div>
+          </details>
+          <div class="check" id="chk4"><p class="check-tit">Calcula con el escenario</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Recompensa">
+          <span class="etapa">Paso 5</span>
+          <h3>La recompensa: un número por cada paso</h3>
+          <p>Después de cada paso el mundo le da al robot un número. Aquí lo decide la casilla a la que llega: <b style="color:var(--pos)">+10</b> si llega al queso, <b style="color:var(--neg)">−10</b> si cae en la trampa, y <b>−1</b> en cualquier otro caso, también si choca y se queda donde estaba. El −1 es el costo de moverse: sin él, al robot le daría igual tardar mucho.</p>
+          <div class="fbloque">
+            <div data-tex="R(s, a, s') = \begin{cases} +10 & s' = 3 \text{ (queso)} \\ -10 & s' = 7 \text{ (trampa)} \\ -1 & \text{en otro caso} \end{cases} \qquad R(s,a) = \sum_{s'} P(s' \mid s, a)\, R(s, a, s')" data-display></div>
+          </div>
+          <p>La segunda fórmula es la <b>recompensa esperada</b> de elegir <i>a</i> en <i>s</i>, antes de saber adónde vas a caer. Toca una casilla y una acción: el escenario arma la cuenta.</p>
+          <p>El material del máster define la recompensa como una "señal numérica" del entorno y pide diseñarla clara y coherente
+            <cite class="cita" data-fuente="rl6" data-pag="10" data-seccion="3.4.1 Recompensa" data-que="La recompensa como señal numérica que da el entorno, y las pautas de diseño: clara, coherente, con penalizaciones. En la misma página, el estado." data-cuando="Al terminar este paso"></cite>.
+            Y como el queso y la trampa terminan el episodio, esto es una <b>tarea episódica</b>: Raschka distingue entre las que terminan y las continuas, como un robot de limpieza que nunca para
+            <cite class="cita" data-fuente="raschka19" data-pag="7" data-pimp="679" data-seccion="Episodic versus continuing tasks" data-que="Trayectoria, estado terminal y la diferencia entre tareas episódicas y continuas. El capítulo solo usa episódicas." data-cuando="Al terminar este paso"></cite>.</p>
+          <details class="profundizar">
+            <summary>¿R(s, a, s') o R(s, a)? El material usa las dos sin avisar</summary>
+            <div>
+              <p>La teoría de la UD6 define la recompensa con tres argumentos, al hacer <i>a</i> en <i>s</i> y pasar a <i>s'</i>
+                <cite class="cita" data-fuente="rl6" data-pag="13" data-seccion="4.3 MDP" data-que="Los elementos del MDP y la tupla (S, A, P, R, γ), con R definida al hacer a en s y pasar a s'. En la misma página, la política π(a|s)." data-cuando="Al leer este recuadro"></cite>,
+                y en la página siguiente la ecuación de Bellman usa <span data-tex="R(s,a)"></span> sin decir de dónde sale. Sale de la fórmula de arriba: es el promedio de <span data-tex="R(s,a,s')"></span> pesado por las transiciones. Las diapositivas agregan una tercera versión, <span data-tex="R(s)"></span> o <span data-tex="R(s,s')"></span>, para el proceso sin acciones. Son la misma idea con distinto nivel de detalle.</p>
+            </div>
+          </details>
+          <div class="check" id="chk5"><p class="check-tit">Calcula con el escenario</p><div class="cuerpo"></div></div>
+
+          <div class="destacado" id="destacado">
+            <p class="dest-tit">Una confusión muy común</p>
+            <h4>La recompensa no es el objetivo</h4>
+            <p>El robot no sabe que "lo que quieres" es el queso. Solo intenta que la suma de recompensas (con un descuento que se estudia en la página de retorno) sea lo más grande posible. Si la recompensa está mal diseñada, el robot hace exactamente lo que le pediste, que no es lo que querías.</p>
+            <p>Raschka lo cuenta con el ajedrez: capturar la reina no da recompensa inmediata, pero deja un estado valioso. Recompensa, retorno y valor son tres cosas distintas
+              <cite class="cita" data-fuente="raschka19" data-pag="11" data-pimp="683" data-seccion="The difference between the reward, return, and value function" data-que="El recuadro que separa recompensa (un paso), retorno (la suma de un episodio) y valor (la esperanza sobre todos los episodios), con el ejemplo del ajedrez." data-cuando="Después de probar los tres diseños"></cite>.</p>
+            <div class="check" id="chk5b"><p class="check-tit">Predice antes de tocar los botones</p><div class="cuerpo"></div></div>
+            <div class="acciones" style="margin-top:14px">
+              <span class="mini-lab">Recompensa por paso</span>
+              <div class="seg" id="segDisenio" role="group" aria-label="Recompensa por paso">
+                <button type="button" data-p="-1" disabled>−1</button>
+                <button type="button" data-p="0" disabled>0</button>
+                <button type="button" data-p="2" disabled>+2</button>
+              </div>
+              <button type="button" id="btnEpDisenio" disabled>Ver un episodio</button>
+            </div>
+            <div class="zcuenta" id="disenioTxt"></div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Política">
+          <span class="etapa">Paso 6</span>
+          <h3>La política: una flecha por casilla</h3>
+          <p>Lo que el robot decide hacer en cada casilla es su <b>política</b>. La más simple es una flecha por estado: <span data-tex="\pi(s) = a"></span>. También puede ser aleatoria, una probabilidad para cada acción, <span data-tex="\pi(a \mid s)"></span>.</p>
+          <p>En el escenario están las flechas de la política del <b>camino seguro</b>: subir por la izquierda y llegar al queso por arriba. Toca una casilla para girar su flecha. Después simula episodios: el robot sigue tus flechas, y el suelo hace el resto.</p>
+          <p>La teoría de la UD6 la define con la misma notación en la página 13, la misma del recuadro del paso 5, y las diapositivas separan las políticas deterministas, <span data-tex="\pi(s)=a"></span>, de las estocásticas
+            <cite class="cita" data-fuente="rl6diapo" data-pag="26" data-seccion="Tema 4: DRL" data-que="Políticas deterministas π(s) = a y estocásticas π(a|s), en la diapositiva de aprendizaje profundo por refuerzo." data-cuando="Cuando llegues a gradiente de política"></cite>.</p>
+          <div class="check" id="chk6"><p class="check-tit">Antes de seguir</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Propiedad de Markov">
+          <span class="etapa">Paso 7</span>
+          <h3>La propiedad de Markov y la tupla completa</h3>
+          <p>Toda la construcción descansa en una suposición: para saber qué puede pasar después, <b>basta con el estado y la acción de ahora</b>. Cómo llegó el robot hasta ahí no importa. En el escenario hay dos historias distintas que terminan en la casilla 2: las flechas que salen de ella son las mismas.</p>
+          <div class="fbloque">
+            <div data-tex="\Pr(S_{t+1} \mid S_t, A_t) = \Pr(S_{t+1} \mid S_0, A_0, S_1, A_1, \dots, S_t, A_t)" data-display></div>
+          </div>
+          <p>Con eso, el problema queda escrito con cinco piezas, la tupla del MDP:</p>
+          <div class="fbloque">
+            <div data-tex="(\mathcal{S}, \mathcal{A}, P, R, \gamma)" data-display></div>
+            <div class="vivo">S: 11 estados (2 terminales) · A: 4 acciones · P: 36 filas que suman 1 · R: +10, −10 o −1 · γ = 0.9</div>
+          </div>
+          <p>La última pieza, <span data-tex="\gamma"></span>, es el <b>descuento</b>: cuánto vale una recompensa que llega un paso más tarde. Para toda esta ruta es <span data-tex="\gamma = 0.9"></span>, y se estudia en la página de retorno y funciones de valor.</p>
+          <p>La UD6 presenta todo como una escalera: cadena de Markov, proceso con recompensas (MRP, la tupla <span data-tex="(\mathcal{S}, P, R, \gamma)"></span>) y MDP con acciones
+            <cite class="cita" data-fuente="rl6" data-pag="12" data-seccion="4.1 Propiedad de Markov · 4.2 MRP" data-que="La propiedad de Markov en palabras (memoria cero, sin fórmula), cadenas de Markov, el MRP y el papel de γ: cerca de 0 prioriza lo inmediato, cerca de 1 el largo plazo." data-cuando="Al terminar este paso"></cite>
+            <cite class="cita" data-fuente="rl6diapo" data-pag="17" data-seccion="Tema 2: MDP" data-que="La diapositiva del MDP: S, A, P(s'|s,a), R(s,a,s') y γ, con la tupla (S, A, P, R, γ). Dice Funión en lugar de Función." data-cuando="Para repasar antes del examen"></cite>.
+            Dos detalles del texto: dice que el proceso de Markov "amplía" la cadena de Markov, pero en la literatura (Sutton y Barto) son lo mismo; lo que amplía la cadena es el MRP. Y en las conclusiones lo llama "Marco de Decisión de Markov": es <b>Proceso</b>.</p>
+          <p>En la otra materia, la UD3 de SM142001 llega al MDP desde la teoría de la decisión: decidir muchas veces seguidas, cada decisión con su pérdida esperada
+            <cite class="cita" data-fuente="ud3" data-pag="19" data-seccion="Decisiones secuenciales y MDP" data-que="La suma de pérdidas esperadas a lo largo del tiempo y un recuadro con la definición verbal de MDP, sin estados, transiciones ni recompensas escritas." data-cuando="Si vienes de la teoría de la decisión"></cite>.</p>
+          <div class="cita" id="citaHipo" hidden></div>
+          <details class="profundizar">
+            <summary>¿Y si el estado no alcanza?</summary>
+            <div>
+              <p>La propiedad de Markov no es una ley del mundo: es una exigencia sobre lo que llamas estado. Si algo que importa para el futuro no está en el estado, el problema deja de ser de Markov, y la solución casi siempre es meter ese algo en el estado. Por eso en los juegos de Atari se usan varios fotogramas seguidos como estado: con uno solo no se ve hacia dónde va la pelota.</p>
+              <p>Cuando el agente directamente no puede ver todo el estado se habla de un MDP parcialmente observable (POMDP). No aparece en el material del máster.</p>
+            </div>
+          </details>
+          <div class="check" id="chk7"><p class="check-tit">Antes de seguir</p><div class="cuerpo"></div></div>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+        </div>
+        <svg id="mundo" role="img" aria-label="Cuadrícula de 3 por 4 con el robot, el queso, la trampa y el muro"></svg>
+        <div class="panel" id="panel"></div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>El mundo del robot escrito como programa: la transición, la recompensa, el resbalón y la política. Primero un episodio con números al azar escritos a mano, para seguirlo con el dedo; después 10 000 episodios con semilla; y al final la cuenta exacta, usando que una política fija convierte el MDP en una cadena de Markov.</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir</p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="true">Python</button>
+            <button type="button" data-lang="r" aria-pressed="false">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">1 · el mundo</span><span data-f="2">2 · un episodio</span><span data-f="3">3 · 10 000 episodios</span><span data-f="4">4 · exacto</span>
+        </div>
+        <svg id="vrMundo" role="img" aria-label="El robot recorriendo la cuadrícula durante el episodio"></svg>
+        <div class="vr-cuenta" id="vrCuenta"></div>
+        <h3 class="mini-tit vr-tit">Lo que imprime el programa</h3>
+        <pre class="vr-salida" id="vrSalida"></pre>
+      </div>
+    </div>
+
+    <p class="vr-nota">No hay una función de librería que "haga un MDP": cada entorno escribe su propia <code>mover</code> y su propia <code>recompensa</code>. Raschka lo hace igual para su cuadrícula, guardando las transiciones en un diccionario <code>P[s][a]</code>, y Liu lee la tabla ya hecha de FrozenLake. La verificación de este programa es otra: la simulación de 10 000 episodios tiene que acercarse a la probabilidad exacta, que sale de resolver un sistema lineal con <code>np.linalg.solve</code> en Python y <code>solve</code> en R.</p>
+
+    <details class="profundizar">
+      <summary>¿Por qué un sistema lineal da la probabilidad exacta?</summary>
+      <div>
+        <p>Con la política fija, el robot en cada casilla tiene sus flechas fijas: es una cadena de Markov con dos estados que la atrapan, el queso y la trampa. Llama <span data-tex="h(s)"></span> a la probabilidad de terminar en el queso saliendo de <span data-tex="s"></span>. Desde cualquier casilla no terminal, das un paso y vuelves a preguntar lo mismo desde donde caíste:</p>
+        <div data-tex="h(s) = P(\text{queso} \mid s) + \sum_{s' \text{ no terminal}} P(s' \mid s)\, h(s') \quad\Longrightarrow\quad (I - Q)\,h = b" data-display></div>
+        <p><span data-tex="Q"></span> son las transiciones entre las 9 casillas no terminales y <span data-tex="b"></span> la probabilidad de ir directo al queso. Es la misma idea de la ecuación de Bellman, que viene dos páginas más adelante.</p>
+      </div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Misma semilla, otro resultado</h3><span class="estado" data-reto="codigo2"></span></div>
+        <div id="codigo2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Una política que nunca termina</h3><span class="estado" data-reto="codigo3"></span></div>
+        <div id="codigo3"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: la biblioteca te avisa en el índice cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>¿Se queda donde está?</h3><span class="estado" data-reto="ojo"></span></div>
+        <p class="desc">El robot pide la acción de la flecha punteada sobre suelo mojado. Sin calcular nada, ¿con qué probabilidad termina en la misma casilla? Cinco rondas, apruebas con 4.</p>
+        <div id="ojo"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Construir</span><h3>Diseña la política</h3><span class="estado" data-reto="construir"></span></div>
+        <p class="desc">Toca las casillas para girar las flechas. Las barras dicen, saliendo del inicio con suelo mojado, la probabilidad exacta de terminar en el queso, en la trampa o de no terminar nunca. Cumple los tres objetivos (se marcan solos).</p>
+        <svg id="mundoConstr" role="img" aria-label="Cuadrícula para diseñar una política"></svg>
+        <div class="barras" id="constrBarras"></div>
+        <div class="btn-row compacta"><button type="button" id="constrReset">Volver al camino seguro</button></div>
+        <ul class="objetivos" id="objetivos"></ul>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>La recompensa esperada</h3><span class="estado" data-reto="mano"></span></div>
+        <p class="desc">Con suelo mojado, calcula <span data-tex="R(s,a)"></span> para el par de la figura. Hazlo en papel antes de pedir pistas.</p>
+        <svg id="mundoMano" role="img" aria-label="Cuadrícula con el robot y la acción que pide"></svg>
+        <div id="mano"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Alguien se equivocó</h3><span class="estado" data-reto="error"></span></div>
+        <p class="desc">Una de las líneas tiene un error. Tócala. Mundo de siempre, suelo mojado.</p>
+        <div id="error"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Lo que suma 1</h3><span class="estado" data-reto="prop1"></span></div>
+        <div id="prop1"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Sin memoria</h3><span class="estado" data-reto="prop2"></span></div>
+        <div id="prop2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Después del queso</h3><span class="estado" data-reto="prop3"></span></div>
+        <div id="prop3"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Suelo seco</h3><span class="estado" data-reto="prop4"></span></div>
+        <div id="prop4"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Quién decide qué</h3><span class="estado" data-reto="prop5"></span></div>
+        <div id="prop5"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Recordar a la fuerza es lo que fija. Arma la definición de la transición de memoria y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Fórmula de memoria</span><h3>Arma la transición pieza por pieza</h3><span class="estado" data-reto="formula"></span></div>
+        <p class="desc">Hay piezas de más que no pertenecen. No mires arriba.</p>
+        <div id="formula"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el libro</h2>
+      <p class="lecturas-intro">Ya armaste el tablero con las manos. Ahora ve a la versión técnica y comprueba que la reconoces. Ten en cuenta que la UD6 no trae ningún ejemplo con números: ni una matriz de transición ni una cuadrícula. Los números están en Raschka (el estudiante y la cuadrícula) y en Liu (FrozenLake). Si abres la biblioteca con doble clic, el enlace abre el PDF en esa página.</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> El mundo del robot es inventado, en la línea de las cuadrículas de Raschka (cap. 19) y del FrozenLake de Liu (cap. 15).
+    Es el mismo mundo en toda la ruta de aprendizaje por refuerzo, para que los números se reconozcan de una página a otra. Las simulaciones del escenario usan azar del navegador y cambian cada vez; las del programa usan los números y la semilla que se ven en el código. Tu progreso se guarda solo en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+(function () {
+  "use strict";
+  /*
+    EL MUNDO COMUN DE LA RUTA DE APRENDIZAJE POR REFUERZO: "el robot y el queso"
+    (lo fija esta pagina, mdp.html; lo reutilizan retorno-valor, bellman, montecarlo-td, q-learning y gradiente-politica)
+
+    Cuadricula de 3 filas x 4 columnas. Casilla s = 4 * fila + columna, filas de arriba abajo y columnas de izquierda
+    a derecha, contando desde 0 (en R se usan las mismas etiquetas 0..11; los vectores indexados por estado llevan s + 1):
+
+          col 0   col 1   col 2   col 3
+      f0    0       1       2       3      <- 3 = QUESO (+10, terminal)
+      f1    4     [ 5 ]     6       7      <- 5 = MURO (no es estado), 7 = TRAMPA (-10, terminal)
+      f2    8       9      10      11      <- 8 = INICIO
+
+    Estados: S = {0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 11} (11 estados; 3 y 7 terminales). No terminales: 0, 1, 2, 4, 6, 8, 9, 10, 11.
+    Acciones: arriba, abajo, izq, der (en el codigo: "arriba", "abajo", "izq", "der").
+    Chocar con el borde o con el muro: el robot se queda en la misma casilla (y paga la recompensa de paso).
+    Recompensa R(s, a, s'): la decide la casilla de llegada: +10 si s' = 3, -10 si s' = 7, -1 en cualquier otro caso
+      (incluido quedarse por chocar). Al entrar en 3 o 7 el episodio termina; V(3) = V(7) = 0.
+    Descuento: gamma = 0.9.
+    Version determinista: la accion elegida se cumple siempre (con choque si corresponde).
+    Version con resbalon ("suelo mojado"): 0.8 la accion elegida, 0.1 cada costado (perpendiculares):
+      arriba -> costados (izq, der); abajo -> (der, izq); izq -> (abajo, arriba); der -> (arriba, abajo).
+      En el codigo: u < 0.8 la elegida, 0.8 <= u < 0.9 el primer costado, u >= 0.9 el segundo.
+    Politica del "camino seguro" (la del codigo de esta pagina):
+      0 der, 1 der, 2 der, 4 arriba, 6 arriba, 8 arriba, 9 izq, 10 izq, 11 izq.
+      Con resbalon, desde el inicio llega al queso con probabilidad exacta 0.9863 (np.linalg.solve).
+      Simulacion con 10 000 episodios: Python default_rng(0) da 0.9856; R set.seed(0) da 0.9872.
+    Episodio a mano de esta pagina: u = [0.35, 0.93, 0.12, 0.84, 0.50, 0.27, 0.61]
+      8 -arriba-> 4 | 4 pide arriba, resbala a der, choca con el muro -> 4 | 4 -arriba-> 0 | 0 pide der, resbala arriba,
+      choca con el borde -> 0 | 0 -der-> 1 | 1 -der-> 2 | 2 -der-> 3 queso. Recompensas: seis -1 y un +10, suma 4.
+
+    V* calculados con iteracion de valor (gamma = 0.9, hasta que el cambio maximo < 1e-12):
+      Determinista (6 barridos):           Con resbalon 0.8/0.1/0.1 (40 barridos):
+        6.2000  8.0000 10.0000  0(Q)         4.5121  6.7488  9.0751  0(Q)
+        4.5800  muro    8.0000  0(T)         2.7423  muro    5.0924  0(T)
+        3.1220  4.5800  6.2000  4.5800       1.1923  1.2282  2.7876  0.1177
+      Politica optima (las dos versiones): 0 der, 1 der, 2 der, 4 arriba, 6 arriba, 8 arriba, 9 der, 10 arriba, 11 izq.
+      En la determinista, en 8 empatan arriba y der (3.122 las dos); con resbalon gana arriba (1.1923 contra 0.2384).
+      Con resbalon, en 6 conviene arriba (5.0924) aunque arriesga 0.1 de trampa; izq (contra el muro) vale 3.7341.
+  */
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var RETOS = ["ojo", "construir", "mano", "error", "formula", "prop1", "prop2", "prop3", "prop4", "prop5", "codigo1", "codigo2", "codigo3"];
+  var C = B.concepto({ id: "mdp", retos: RETOS, pasos: 7 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  var f = B.fmt;
+  function p1(v) { return f(v, 1); }
+
+  /* ---------------- el mundo ---------------- */
+  var FILAS = 3, COLS = 4, MURO = 5, QUESO = 3, TRAMPA = 7, INICIO = 8, GAMMA = 0.9;
+  var ACC = ["arriba", "der", "abajo", "izq"];
+  var NOMBRE = { arriba: "arriba", der: "derecha", abajo: "abajo", izq: "izquierda" };
+  var MOV = { arriba: [-1, 0], abajo: [1, 0], izq: [0, -1], der: [0, 1] };
+  var LADOS = { arriba: ["izq", "der"], abajo: ["der", "izq"], izq: ["abajo", "arriba"], der: ["arriba", "abajo"] };
+  var NOTERM = [0, 1, 2, 4, 6, 8, 9, 10, 11];
+  var ESTADOS = [0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 11];
+  function terminal(s) { return s === QUESO || s === TRAMPA; }
+  function mover(s, a) {
+    var fila = Math.floor(s / COLS), col = s % COLS, f2 = fila + MOV[a][0], c2 = col + MOV[a][1];
+    if (f2 < 0 || f2 >= FILAS || c2 < 0 || c2 >= COLS || COLS * f2 + c2 === MURO) return s;
+    return COLS * f2 + c2;
+  }
+  function recompensa(s2, paso) { return s2 === QUESO ? 10 : s2 === TRAMPA ? -10 : (paso == null ? -1 : paso); }
+  // ramas: [destino, probabilidad, accion que de verdad ocurre]
+  function ramas(s, a, resbala) {
+    if (resbala === false) return [[mover(s, a), 1, a]];
+    return [[mover(s, a), 0.8, a], [mover(s, LADOS[a][0]), 0.1, LADOS[a][0]], [mover(s, LADOS[a][1]), 0.1, LADOS[a][1]]];
+  }
+  function redondo(x) { return Math.round(x * 1e6) / 1e6; }
+  // transiciones agrupadas por destino: [[destino, probabilidad], ...]
+  function trans(s, a, resbala) {
+    var m = {}, orden = [];
+    ramas(s, a, resbala).forEach(function (r) { if (!(r[0] in m)) { m[r[0]] = 0; orden.push(r[0]); } m[r[0]] += r[1]; });
+    return orden.map(function (d) { return [d, redondo(m[d])]; });
+  }
+  function resbalar(a, u) { return u < 0.8 ? a : u < 0.9 ? LADOS[a][0] : LADOS[a][1]; }
+  function pQuedarse(s, a) { var p = 0; trans(s, a, true).forEach(function (t) { if (t[0] === s) p = t[1]; }); return p; }
+  function rEsperada(s, a) { var x = 0; ramas(s, a, true).forEach(function (r) { x += r[1] * recompensa(r[0]); }); return redondo(x); }
+  function fila(s) { return Math.floor(s / COLS); }
+
+  var SEGURA = { 0: "der", 1: "der", 2: "der", 4: "arriba", 6: "arriba", 8: "arriba", 9: "izq", 10: "izq", 11: "izq" };
+  var CORTA = { 0: "der", 1: "der", 2: "der", 4: "arriba", 6: "arriba", 8: "der", 9: "der", 10: "arriba", 11: "izq" };
+  function copiaPol(p) { return Object.assign({}, p); }
+
+  // probabilidad exacta (por iteracion de la cadena) de terminar en el queso, en la trampa o de no terminar
+  function absorcion(pol, desde) {
+    var d = [], i, it;
+    for (i = 0; i < 12; i++) d.push(0);
+    d[desde] = 1;
+    for (it = 0; it < 4000; it++) {
+      var nd = d.map(function () { return 0; });
+      nd[QUESO] = d[QUESO]; nd[TRAMPA] = d[TRAMPA];
+      for (i = 0; i < NOTERM.length; i++) {
+        var s = NOTERM[i];
+        if (d[s] > 0) trans(s, pol[s], true).forEach(function (t) { nd[t[0]] += d[s] * t[1]; });
+      }
+      d = nd;
+    }
+    return { queso: d[QUESO], trampa: d[TRAMPA], sigue: Math.max(0, 1 - d[QUESO] - d[TRAMPA]) };
+  }
+  // la mejor politica para una recompensa de paso dada (iteracion de valor: se explica en la pagina de Bellman)
+  function qsa(s, a, V, paso) { var x = 0; ramas(s, a, true).forEach(function (r) { x += r[1] * (recompensa(r[0], paso) + GAMMA * V[r[0]]); }); return x; }
+  function mejorPolitica(paso) {
+    var V = [], i, it;
+    for (i = 0; i < 12; i++) V.push(0);
+    for (it = 0; it < 500; it++) {
+      var V2 = V.slice();
+      NOTERM.forEach(function (s) { V2[s] = Math.max.apply(null, ACC.map(function (a) { return qsa(s, a, V, paso); })); });
+      V = V2;
+    }
+    var pol = {};
+    NOTERM.forEach(function (s) {
+      var mej = null, mv = -Infinity;
+      ACC.forEach(function (a) { var v = qsa(s, a, V, paso); if (v > mv + 1e-9) { mv = v; mej = a; } });
+      pol[s] = mej;
+    });
+    return pol;
+  }
+  function episodio(pol, desde, maxPasos, paso) {
+    var s = desde, cam = [s], log = [], total = 0;
+    for (var t = 0; t < maxPasos && !terminal(s); t++) {
+      var a = pol[s], real = resbalar(a, Math.random()), s2 = mover(s, real), r = recompensa(s2, paso);
+      total += r;
+      log.push({ s: s, a: a, real: real, s2: s2, r: r });
+      cam.push(s2);
+      s = s2;
+    }
+    return { cam: cam, log: log, total: total, fin: s, termino: terminal(s) };
+  }
+
+  /* ---------------- dibujo de la cuadricula ---------------- */
+  var NS = "http://www.w3.org/2000/svg", nMundos = 0;
+  function nodo(tag, at, padre) {
+    var e = document.createElementNS(NS, tag);
+    for (var k in at) e.setAttribute(k, at[k]);
+    if (padre) padre.appendChild(e);
+    return e;
+  }
+  function texto(padre, at, t) { var e = nodo("text", at, padre); e.textContent = t; return e; }
+  var LADO = 100, X0 = 20, Y0 = 14;
+  function cx(s) { return X0 + (s % COLS) * LADO + LADO / 2; }
+  function cy(s) { return Y0 + fila(s) * LADO + LADO / 2; }
+  var PANT = { arriba: [0, -1], abajo: [0, 1], izq: [-1, 0], der: [1, 0] };
+  function senal(v) { return v > 0 ? "+" + v : v < 0 ? "−" + Math.abs(v) : "0"; }
+
+  function crearMundo(svg, o) {
+    var id = "mdpm" + (++nMundos);
+    svg.setAttribute("viewBox", "0 0 440 328");
+    svg.classList.add("mundo-svg");
+    var defs = nodo("defs", {}, svg);
+    var pat = nodo("pattern", { id: id + "h", width: 9, height: 9, patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)" }, defs);
+    nodo("line", { x1: 0, y1: 0, x2: 0, y2: 9, "class": "rayado" }, pat);
+    ["fl", "in", "po"].forEach(function (k) {
+      var m = nodo("marker", { id: id + k, viewBox: "0 0 10 10", refX: 7, refY: 5, markerWidth: k === "po" ? 9 : 10, markerHeight: k === "po" ? 9 : 10, markerUnits: "userSpaceOnUse", orient: "auto" }, defs);
+      nodo("path", { d: "M0,0 L10,5 L0,10 z", "class": "mk-" + k }, m);
+    });
+    var gCel = nodo("g", {}, svg), gCam = nodo("g", {}, svg), gPol = nodo("g", {}, svg);
+    var gFle = nodo("g", {}, svg), gEtq = nodo("g", {}, svg), gRob = nodo("g", {}, svg), gLab = nodo("g", {}, svg);
+    var st = Object.assign({
+      robot: null, accion: null, flechas: false, intencion: false, politica: null, numGrande: false,
+      recompensas: false, pasoR: -1, camino: [], resbala: true, ocultar: null, etiquetas: null, marcar: [], tocable: false
+    }, o.estado || {});
+
+    function dibQueso(g, x, y) {
+      nodo("path", { d: "M" + (x - 24) + "," + (y + 14) + " L" + (x + 24) + "," + (y + 14) + " L" + (x + 24) + "," + (y - 8) + " L" + (x - 24) + "," + (y + 2) + " Z", "class": "queso-dib" }, g);
+      nodo("circle", { cx: x + 10, cy: y + 4, r: 4, "class": "queso-hoyo" }, g);
+      nodo("circle", { cx: x - 6, cy: y + 8, r: 3, "class": "queso-hoyo" }, g);
+      nodo("circle", { cx: x + 17, cy: y - 2, r: 2.2, "class": "queso-hoyo" }, g);
+    }
+    function dibTrampa(g, x, y) {
+      nodo("path", { d: "M" + (x - 24) + "," + (y + 12) + " L" + (x + 24) + "," + (y + 12), "class": "trampa-dib" }, g);
+      nodo("path", { d: "M" + (x - 22) + "," + (y + 12) + " A22,22 0 0,1 " + (x + 22) + "," + (y + 12), "class": "trampa-dib" }, g);
+      nodo("path", { d: "M" + (x - 16) + "," + (y + 12) + " L" + (x - 11) + "," + (y + 2) + " L" + (x - 6) + "," + (y + 12) + " L" + (x - 1) + "," + (y + 2) + " L" + (x + 4) + "," + (y + 12) + " L" + (x + 9) + "," + (y + 2) + " L" + (x + 14) + "," + (y + 12), "class": "trampa-dib" }, g);
+    }
+    function dibRobot(g, x, y) {
+      var r = nodo("g", { transform: "translate(" + x + "," + y + ")" }, g);
+      nodo("line", { x1: 0, y1: -13, x2: 0, y2: -21, "class": "rob-ant" }, r);
+      nodo("circle", { cx: 0, cy: -23, r: 3.2, "class": "rob-cuerpo" }, r);
+      nodo("rect", { x: -15, y: -13, width: 30, height: 26, rx: 6, "class": "rob-cuerpo" }, r);
+      nodo("circle", { cx: -6, cy: -3, r: 3.2, "class": "rob-ojo" }, r);
+      nodo("circle", { cx: 6, cy: -3, r: 3.2, "class": "rob-ojo" }, r);
+      nodo("line", { x1: -5, y1: 6, x2: 5, y2: 6, "class": "rob-boca" }, r);
+    }
+    function flecha(g, x1, y1, x2, y2, cls, mk, w) {
+      return nodo("line", { x1: x1, y1: y1, x2: x2, y2: y2, "class": cls, "marker-end": "url(#" + id + mk + ")", "stroke-width": w || null }, g);
+    }
+
+    function render() {
+      [gCel, gCam, gPol, gFle, gEtq, gRob, gLab].forEach(function (g) { g.textContent = ""; });
+      svg.classList.toggle("tocable", !!st.tocable);
+      for (var s = 0; s < 12; s++) {
+        var x = X0 + (s % COLS) * LADO, y = Y0 + fila(s) * LADO;
+        var cls = "celda" + (s === MURO ? " muro" : "") + (s === QUESO ? " queso" : "") + (s === TRAMPA ? " trampa" : "") + (st.marcar.indexOf(s) >= 0 ? " marcada" : "");
+        nodo("rect", { x: x + 2, y: y + 2, width: LADO - 4, height: LADO - 4, rx: 8, "class": cls }, gCel);
+        if (s === MURO) {
+          nodo("rect", { x: x + 2, y: y + 2, width: LADO - 4, height: LADO - 4, rx: 8, fill: "url(#" + id + "h)" }, gCel);
+          texto(gCel, { x: x + LADO / 2, y: y + LADO / 2 + 4, "class": "muro-lab" }, "muro");
+          continue;
+        }
+        texto(gCel, { x: x + 9, y: y + (st.numGrande ? 22 : 18), "class": "num" + (st.numGrande ? " grande" : "") }, s);
+        if (s === QUESO) dibQueso(gCel, cx(s), cy(s) - 6);
+        if (s === TRAMPA) dibTrampa(gCel, cx(s), cy(s) - 8);
+        var etq = null, ecls = "etq";
+        if (st.etiquetas && st.etiquetas[s] != null) etq = st.etiquetas[s];
+        else if (st.recompensas) { var rv = recompensa(s, st.pasoR); etq = senal(rv); ecls += rv > 0 ? " pos" : rv < 0 ? " neg" : ""; }
+        else if (s === QUESO) { etq = "+10"; ecls += " pos"; }
+        else if (s === TRAMPA) { etq = "−10"; ecls += " neg"; }
+        else if (s === INICIO) etq = "inicio";
+        if (etq != null) texto(gEtq, { x: x + LADO / 2, y: y + LADO - 10, "class": ecls }, etq);
+      }
+      if (st.camino && st.camino.length > 1) {
+        var pts = st.camino.map(function (s, k) { var off = ((k * 7) % 13) - 6; return (cx(s) + off) + "," + (cy(s) + off); });
+        nodo("polyline", { points: pts.join(" "), "class": "camino" }, gCam);
+      }
+      if (st.politica) NOTERM.forEach(function (s) {
+        var a = st.politica[s];
+        if (!a) return;
+        var d = PANT[a];
+        flecha(gPol, cx(s) + d[0] * 18, cy(s) + d[1] * 18, cx(s) + d[0] * 40, cy(s) + d[1] * 40, "pol", "po");
+      });
+      var rb = st.robot;
+      if (rb != null && st.accion && !terminal(rb)) {
+        var a = st.accion, d = PANT[a];
+        if (st.intencion) {
+          flecha(gFle, cx(rb) + d[0] * 24, cy(rb) + d[1] * 24, cx(rb) + d[0] * 76, cy(rb) + d[1] * 76, "intento", "in");
+          texto(gLab, { x: cx(rb) + d[0] * 50 + (d[0] ? 0 : 30), y: cy(rb) + d[1] * 50 + (d[1] ? 4 : -10), "class": "plab acc" }, "pide " + NOMBRE[a]);
+        }
+        var oculto = st.ocultar && st.ocultar(rb, a);
+        if (oculto) texto(gLab, { x: cx(rb) + 30, y: cy(rb) - 22, "class": "oculto" }, "?");
+        else if (st.flechas) trans(rb, a, st.resbala).forEach(function (t) {
+          var s2 = t[0], p = t[1], w = 1.5 + 9 * p;
+          if (s2 === rb) {
+            var lx = cx(rb), ly = cy(rb);
+            nodo("path", { d: "M" + (lx - 12) + "," + (ly - 26) + " C" + (lx - 34) + "," + (ly - 52) + " " + (lx + 34) + "," + (ly - 52) + " " + (lx + 12) + "," + (ly - 26), "class": "fle", "stroke-width": w, "marker-end": "url(#" + id + "fl)" }, gFle);
+            texto(gLab, { x: lx, y: ly - 44, "class": "plab" }, p1(p));
+          } else {
+            var ux = cx(s2) - cx(rb), uy = cy(s2) - cy(rb), n = Math.hypot(ux, uy);
+            ux /= n; uy /= n;
+            flecha(gFle, cx(rb) + ux * 26, cy(rb) + uy * 26, cx(s2) - ux * 30, cy(s2) - uy * 30, "fle", "fl", w);
+            texto(gLab, { x: (cx(rb) + cx(s2)) / 2 + uy * 14, y: (cy(rb) + cy(s2)) / 2 - ux * 14 + 4, "class": "plab" }, p1(p));
+          }
+        });
+      }
+      if (rb != null) dibRobot(gRob, cx(rb), cy(rb) + (terminal(rb) ? 18 : 0));
+    }
+    svg.addEventListener("click", function (e) {
+      if (!st.tocable || !o.alTocar) return;
+      var r = svg.getBoundingClientRect();
+      var x = (e.clientX - r.left) / r.width * 440, y = (e.clientY - r.top) / r.height * 328;
+      var c = Math.floor((x - X0) / LADO), fl = Math.floor((y - Y0) / LADO);
+      if (c < 0 || c >= COLS || fl < 0 || fl >= FILAS) return;
+      o.alTocar(COLS * fl + c);
+    });
+    render();
+    return {
+      set: function (c) {
+        Object.keys(c).forEach(function (k) { st[k] = c[k]; });
+        render();
+      },
+      estado: function () { return st; }
+    };
+  }
+
+  /* ---------------- estado del recorrido ---------------- */
+  var est = {
+    paso: 0, robot: 8, accion: "arriba", resbala: true, chk1: false, chk2: false, chk4: false, chk5: false, chk5b: false,
+    pol: copiaPol(SEGURA), disenio: null, verDisenio: false, epDisenio: null, ultimo: null, stats: null, historia: "A", info: null, prueba: null
+  };
+  var pasos, chk2, chk4, chk5, animacion = null;
+  var HIST = { A: [8, 4, 0, 1, 2], B: [8, 9, 10, 6, 2] };
+
+  function ocultar(s, a) {
+    return (s === 8 && a === "izq" && !est.chk2) || (s === 6 && a === "izq" && !est.chk4);
+  }
+  var mundo = crearMundo($("mundo"), { alTocar: tocar });
+
+  function parar() { if (animacion) { clearInterval(animacion); animacion = null; } }
+
+  function tocar(s) {
+    var p = est.paso;
+    if (p === 1 || p === 3 || p === 4) {
+      if (s === MURO) return;
+      est.robot = s;
+      if (p === 4) est.verDisenio = false;
+      entrar(p);
+    } else if (p === 2) {
+      est.info = s;
+      entrar(p);
+    } else if (p === 5) {
+      if (terminal(s) || s === MURO) return;
+      parar();
+      var i = ACC.indexOf(est.pol[s]);
+      est.pol[s] = ACC[(i + 1) % 4];
+      est.ultimo = null; est.stats = null;
+      entrar(p);
+    }
+  }
+
+  var HINTS = [
+    "El robot pide arriba desde la casilla 6",
+    "Toca una casilla y elige la acción",
+    "Toca una casilla para ver qué tipo de estado es",
+    "Toca una casilla y elige la acción; prueba el suelo seco",
+    "Toca una casilla y elige la acción",
+    "Toca una casilla para girar su flecha",
+    "Elige una historia: las flechas de la casilla 2 no cambian"
+  ];
+
+  function botonesAccion(actual) {
+    return '<div class="acciones"><span class="mini-lab">Acción</span><div class="seg" id="segAcc" role="group" aria-label="Acción">' +
+      ACC.map(function (a) { return '<button type="button" data-a="' + a + '" aria-pressed="' + (a === actual) + '">' + NOMBRE[a] + '</button>'; }).join("") +
+      '</div></div>';
+  }
+  function cablearAcciones() {
+    var g = $("segAcc");
+    if (!g) return;
+    g.addEventListener("click", function (e) {
+      var b = e.target.closest("button");
+      if (!b) return;
+      est.accion = b.getAttribute("data-a");
+      if (est.paso === 4) est.verDisenio = false;
+      entrar(est.paso);
+    });
+  }
+  function descripcion(s, a, resbala) {
+    if (terminal(s)) return "La casilla " + s + " es terminal: ahí el episodio ya terminó y no se elige nada.";
+    if (ocultar(s, a)) return "Esta combinación es la del chequeo. Respóndelo primero y después la ves.";
+    return "Desde <b>" + s + "</b> pidiendo <b>" + NOMBRE[a] + "</b>: " + trans(s, a, resbala).map(function (t) {
+      return (t[0] === s ? "se queda en " + s : "va a " + t[0]) + " con <b>" + p1(t[1]) + "</b>";
+    }).join(", ") + ".";
+  }
+  function filaP(s, a, resbala) {
+    var oc = ocultar(s, a), tr = terminal(s) ? [] : trans(s, a, resbala), m = {};
+    tr.forEach(function (t) { m[t[0]] = t[1]; });
+    var h = '<div class="tabla-wrap"><table class="ptabla"><thead><tr><th>s\'</th>' + ESTADOS.map(function (k) { return "<th>" + k + "</th>"; }).join("") + '<th>suma</th></tr></thead><tbody><tr><td class="izq">P</td>';
+    ESTADOS.forEach(function (k) {
+      var v = m[k];
+      h += '<td class="' + (v ? "lleno" : "") + (k === QUESO ? " q" : k === TRAMPA ? " t" : "") + '">' + (oc ? "?" : v ? p1(v) : "·") + '</td>';
+    });
+    var suma = 0; tr.forEach(function (t) { suma += t[1]; });
+    h += '<td>' + (oc ? "?" : terminal(s) ? "—" : p1(suma)) + '</td></tr></tbody></table></div>';
+    return h;
+  }
+  function barra(etq, v, tope, cls, txt) {
+    return '<div class="barra-f"><span>' + etq + '</span><span class="pista-b"><i class="' + (cls || "") + '" style="width:' + (tope > 0 ? Math.min(100, v / tope * 100) : 0).toFixed(1) + '%"></i></span><b>' + txt + '</b></div>';
+  }
+
+  function entrar(i) {
+    est.paso = i;
+    parar();
+    $("escHint").textContent = HINTS[i];
+    var base = { robot: null, accion: null, flechas: false, intencion: false, politica: null, numGrande: false, recompensas: false, pasoR: -1, camino: [], resbala: true, ocultar: ocultar, etiquetas: null, marcar: [], tocable: false };
+    var pan = $("panel"), h = "";
+    if (i === 0) {
+      mundo.set(Object.assign(base, { robot: 6, accion: "arriba", intencion: true, flechas: est.chk1 }));
+      if (!est.chk1) h = "<p>Responde la predicción. Después vas a poder probar el intento 100 veces.</p>";
+      else {
+        h = '<div class="btn-row compacta"><button type="button" class="primary" id="btnProbar">Probar 100 veces</button></div><div id="probarRes"></div>';
+      }
+      pan.innerHTML = h;
+      if (est.chk1) { $("btnProbar").addEventListener("click", probar100); pintarPrueba(); }
+      return;
+    }
+    if (i === 1 || i === 3) {
+      if (est.robot === MURO) est.robot = 8;
+      mundo.set(Object.assign(base, { robot: est.robot, accion: est.accion, flechas: true, intencion: true, tocable: true, resbala: i === 3 ? est.resbala : true }));
+      h = botonesAccion(est.accion);
+      if (i === 3) h += '<div class="acciones"><span class="mini-lab">Suelo</span><div class="seg" id="segSuelo" role="group" aria-label="Suelo">' +
+        '<button type="button" data-r="1" aria-pressed="' + est.resbala + '">Suelo mojado</button><button type="button" data-r="0" aria-pressed="' + !est.resbala + '">Suelo seco</button></div></div>';
+      h += "<p>" + descripcion(est.robot, est.accion, i === 3 ? est.resbala : true) + "</p>";
+      if (i === 3) h += '<p class="mini-lab">Fila P(s\' | s = ' + est.robot + ', a = ' + NOMBRE[est.accion] + ')</p>' + filaP(est.robot, est.accion, est.resbala);
+      pan.innerHTML = h;
+      cablearAcciones();
+      if (i === 3) $("segSuelo").addEventListener("click", function (e) {
+        var b = e.target.closest("button");
+        if (!b) return;
+        est.resbala = b.getAttribute("data-r") === "1";
+        entrar(3);
+      });
+      if (i === 3) {
+        var oc = ocultar(est.robot, est.accion);
+        $("vivoP").innerHTML = terminal(est.robot) ? "La casilla " + est.robot + " es terminal: no tiene fila." : oc ? "P(· | " + est.robot + ", " + NOMBRE[est.accion] + ") = ?" :
+          trans(est.robot, est.accion, est.resbala).map(function (t) { return "P(" + t[0] + " | " + est.robot + ", " + NOMBRE[est.accion] + ") = " + p1(t[1]); }).join(" · ");
+      }
+      return;
+    }
+    if (i === 2) {
+      var s = est.info;
+      mundo.set(Object.assign(base, { numGrande: true, tocable: true, marcar: s != null ? [s] : [] }));
+      h = '<p class="tupla">S = {0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 11}<br><span>terminales:</span> 3 (queso) y 7 (trampa)<br><span>no es estado:</span> 5 (muro)</p>';
+      if (s != null) h += "<p>" + (s === MURO ? "La 5 es el <b>muro</b>: no es un estado. El robot nunca está ahí; si intenta entrar, choca y se queda donde estaba."
+        : s === QUESO ? "La 3 es el <b>queso</b>: estado terminal. Al llegar recibe +10 y el episodio termina."
+        : s === TRAMPA ? "La 7 es la <b>trampa</b>: estado terminal. Al caer recibe −10 y el episodio termina."
+        : "La " + s + " (fila " + fila(s) + ", columna " + (s % COLS) + ") es un estado <b>no terminal</b>: aquí el robot elige una de las 4 acciones." + (s === INICIO ? " Es el inicio de cada episodio." : "")) + "</p>";
+      pan.innerHTML = h;
+      return;
+    }
+    if (i === 4) {
+      if (est.verDisenio && est.disenio != null) {
+        var pol = mejorPolitica(est.disenio);
+        mundo.set(Object.assign(base, { politica: pol, recompensas: true, pasoR: est.disenio, robot: est.epDisenio ? est.epDisenio.fin : INICIO, camino: est.epDisenio ? est.epDisenio.cam : [], tocable: true }));
+        pan.innerHTML = "<p>Flechas: la mejor política si cada paso da <b>" + senal(est.disenio) + "</b>. Toca una casilla para volver a las transiciones.</p>";
+        return;
+      }
+      if (est.robot === MURO) est.robot = 6;
+      mundo.set(Object.assign(base, { robot: est.robot, accion: est.accion, flechas: true, intencion: true, recompensas: true, tocable: true }));
+      h = botonesAccion(est.accion);
+      var s4 = est.robot, a4 = est.accion;
+      if (terminal(s4)) h += "<p>La casilla " + s4 + " es terminal: no hay acción ni recompensa después.</p>";
+      else if (ocultar(s4, a4)) h += "<p>Esta combinación es la de un chequeo anterior. Respóndelo primero.</p>";
+      else if (s4 === 2 && a4 === "der" && !est.chk5) h += "<p>Esta es la combinación del chequeo: haz la cuenta tú. El escenario muestra los destinos, pero la tabla queda oculta hasta que respondas.</p>";
+      else {
+        var rs = ramas(s4, a4, true), tot = 0;
+        h += '<div class="tabla-wrap"><table class="ptabla"><thead><tr><th>va hacia</th><th>s\'</th><th>P</th><th>R(s,a,s\')</th><th>P · R</th></tr></thead><tbody>';
+        rs.forEach(function (r) {
+          var rv = recompensa(r[0]); tot += r[1] * rv;
+          h += '<tr><td class="izq">' + NOMBRE[r[2]] + (r[0] === s4 ? " (choca)" : "") + '</td><td>' + r[0] + '</td><td>' + p1(r[1]) + '</td><td class="' + (rv > 0 ? "q" : rv < -1 ? "t" : "") + '">' + senal(rv) + '</td><td>' + f(r[1] * rv) + '</td></tr>';
+        });
+        h += '<tr class="suma"><td class="izq" colspan="4">R(' + s4 + ', ' + NOMBRE[a4] + ')</td><td><b>' + f(redondo(tot)) + '</b></td></tr></tbody></table></div>';
+      }
+      pan.innerHTML = h;
+      cablearAcciones();
+      return;
+    }
+    if (i === 5) {
+      var ult = est.ultimo;
+      mundo.set(Object.assign(base, { politica: est.pol, tocable: true, robot: ult ? ult.fin : INICIO, camino: ult ? ult.cam : [] }));
+      h = '<div class="btn-row compacta"><button type="button" id="polSegura">Camino seguro</button><button type="button" id="polCorta">Camino corto</button></div>' +
+        '<div class="btn-row compacta"><button type="button" class="primary" id="btnEp">Simular un episodio</button><button type="button" id="btnEp100">Simular 100</button></div>' +
+        '<div id="polStats"></div><div class="bitacora" id="bitacora"></div>';
+      pan.innerHTML = h;
+      $("polSegura").addEventListener("click", function () { est.pol = copiaPol(SEGURA); est.ultimo = null; est.stats = null; entrar(5); });
+      $("polCorta").addEventListener("click", function () { est.pol = copiaPol(CORTA); est.ultimo = null; est.stats = null; entrar(5); });
+      $("btnEp").addEventListener("click", animarEpisodio);
+      $("btnEp100").addEventListener("click", function () {
+        var q = 0, t = 0, n = 0, largo = 0;
+        for (var k = 0; k < 100; k++) {
+          var e = episodio(est.pol, INICIO, 200);
+          if (e.fin === QUESO) q++; else if (e.fin === TRAMPA) t++; else n++;
+          largo += e.log.length;
+        }
+        est.stats = { q: q, t: t, n: n, largo: largo / 100 };
+        pintarStats();
+      });
+      pintarStats();
+      if (ult) pintarBitacora(ult, ult.log.length);
+      return;
+    }
+    if (i === 6) {
+      var hs = HIST[est.historia];
+      mundo.set(Object.assign(base, { robot: 2, accion: "der", flechas: true, intencion: true, camino: hs }));
+      pan.innerHTML = '<div class="btn-row compacta"><button type="button" id="histA" class="' + (est.historia === "A" ? "on" : "") + '">Historia A: 8, 4, 0, 1, 2</button>' +
+        '<button type="button" id="histB" class="' + (est.historia === "B" ? "on" : "") + '">Historia B: 8, 9, 10, 6, 2</button></div>' +
+        "<p>" + descripcion(2, "der", true) + " Con las dos historias. Para el mundo, el pasado ya está resumido en la casilla.</p>";
+      $("histA").addEventListener("click", function () { est.historia = "A"; entrar(6); });
+      $("histB").addEventListener("click", function () { est.historia = "B"; entrar(6); });
+    }
+  }
+
+  /* paso 1: probar 100 veces */
+  function probar100() {
+    var r = { a2: 0, queda: 0, trampa: 0 };
+    for (var k = 0; k < 100; k++) {
+      var s2 = mover(6, resbalar("arriba", Math.random()));
+      if (s2 === 2) r.a2++; else if (s2 === 6) r.queda++; else r.trampa++;
+    }
+    est.prueba = r;
+    pintarPrueba();
+  }
+  function pintarPrueba() {
+    var el = $("probarRes");
+    if (!el) return;
+    var r = est.prueba;
+    if (!r) { el.innerHTML = ""; return; }
+    el.innerHTML = '<div class="barras">' +
+      barra("llega a la 2", r.a2, 100, "", r.a2) +
+      barra("choca, se queda", r.queda, 100, "", r.queda) +
+      barra("cae en la trampa", r.trampa, 100, "neg", r.trampa) + "</div>";
+  }
+
+  /* paso 6: simular episodios */
+  function pintarStats() {
+    var el = $("polStats");
+    if (!el) return;
+    var s = est.stats;
+    el.innerHTML = s ? '<div class="barras">' +
+      barra("queso", s.q, 100, "pos", s.q) + barra("trampa", s.t, 100, "neg", s.t) + barra("sin terminar", s.n, 100, "", s.n) +
+      '</div><p>De 100 episodios desde el inicio (cortados a 200 pasos). Duración media: <b>' + f(s.largo, 1) + '</b> pasos.</p>' : "";
+  }
+  function pintarBitacora(ep, hasta) {
+    var el = $("bitacora");
+    if (!el) return;
+    var lin = ep.log.slice(0, hasta).map(function (l, k) {
+      return "t=" + k + "  " + l.s + " pide " + l.a + (l.real !== l.a ? ", resbala a " + l.real : "") + (l.s2 === l.s ? ", choca" : "") + " -> " + l.s2 + "  r = " + (l.r > 0 ? "+" : "") + l.r;
+    });
+    var suma = 0; ep.log.slice(0, hasta).forEach(function (l) { suma += l.r; });
+    if (hasta >= ep.log.length) lin.push(ep.fin === QUESO ? "Llegó al queso. Suma de recompensas: " + suma : ep.fin === TRAMPA ? "Cayó en la trampa. Suma de recompensas: " + suma : "Se cortó a los " + ep.log.length + " pasos sin terminar.");
+    el.textContent = lin.join("\n");
+    el.scrollTop = el.scrollHeight;
+  }
+  function animarEpisodio() {
+    parar();
+    var ep = episodio(est.pol, INICIO, 60), k = 0;
+    est.ultimo = ep;
+    mundo.set({ robot: INICIO, camino: [INICIO] });
+    pintarBitacora(ep, 0);
+    animacion = setInterval(function () {
+      k++;
+      if (est.paso !== 5) { parar(); return; }
+      mundo.set({ robot: ep.cam[k], camino: ep.cam.slice(0, k + 1) });
+      pintarBitacora(ep, k);
+      if (k >= ep.log.length) parar();
+    }, 380);
+  }
+
+  /* destacado del paso 5: disenio de la recompensa */
+  function activarDisenio() {
+    [].forEach.call($("segDisenio").children, function (b) { b.disabled = false; });
+    $("btnEpDisenio").disabled = false;
+  }
+  $("segDisenio").addEventListener("click", function (e) {
+    var b = e.target.closest("button");
+    if (!b || b.disabled) return;
+    est.disenio = +b.getAttribute("data-p");
+    est.epDisenio = null;
+    est.verDisenio = true;
+    [].forEach.call(this.children, function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+    textoDisenio();
+    if (est.paso === 4) entrar(4);
+  });
+  $("btnEpDisenio").addEventListener("click", function () {
+    if (est.disenio == null) { est.disenio = -1; [].forEach.call($("segDisenio").children, function (x) { x.setAttribute("aria-pressed", x.getAttribute("data-p") === "-1" ? "true" : "false"); }); }
+    est.epDisenio = episodio(mejorPolitica(est.disenio), INICIO, 40, est.disenio);
+    est.verDisenio = true;
+    textoDisenio();
+    if (est.paso === 4) entrar(4);
+  });
+  function textoDisenio() {
+    var p = est.disenio, ep = est.epDisenio, t;
+    t = p === -1 ? "Con <b>−1</b> por paso, cada paso cuesta: la mejor política busca el queso por el camino que menos arriesga."
+      : p === 0 ? "Con <b>0</b> por paso, igual va al queso: el descuento hace que +10 pronto valga más que +10 tarde. Pero ya no tiene apuro por sí mismo."
+      : "Con <b>+2</b> por paso, quedarse dando vueltas para siempre vale 2 + 0.9 · 2 + 0.9² · 2 + ... = 20, más que el +10 del queso. La mejor política <b>evita el queso</b>: mira las flechas que chocan a propósito contra el borde.";
+    if (ep) t += "<br>Episodio: " + (ep.fin === QUESO ? "llegó al queso en " + ep.log.length + " pasos, suma " + ep.total + "." : ep.fin === TRAMPA ? "cayó en la trampa en " + ep.log.length + " pasos." : "40 pasos y sigue dando vueltas, suma " + ep.total + " y subiendo.");
+    $("disenioTxt").innerHTML = t;
+  }
+
+  /* ---------------- chequeos de cada paso ---------------- */
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+
+  B.opcionMultiple(cuerpo("chk1"), {
+    pregunta: "Si el robot repite este intento muchas veces desde la misma casilla, ¿cuántas veces cae en la trampa?",
+    opciones: [
+      "Nunca: la trampa está a un costado y el robot pidió ir hacia arriba",
+      "Más o menos 1 de cada 10 veces",
+      "Más o menos 2 de cada 10 veces",
+      "La mitad de las veces"
+    ],
+    correcta: 1,
+    pistas: ["Pidió arriba, sí. Pero el suelo lo puede desviar hacia un costado. ¿Qué hay a su derecha?", null,
+      "Patina hacia cada costado por separado. Uno de los dos costados es el muro.",
+      "Casi siempre va adonde quiere. Patinar es lo raro."],
+    explicacion: "Va adonde quiere 8 de cada 10 veces. Las otras 2 patina: 1 hacia la izquierda, donde está el muro (choca y se queda), y 1 hacia la derecha, <b>directo a la trampa</b>. La trampa no está en el camino, pero está al costado. Este riesgo es lo que vas a escribir como probabilidades de transición.",
+    alResolver: function () { est.chk1 = true; $("txt1").hidden = false; if (est.paso === 0) entrar(0); pasos.completar(0); }
+  });
+
+  chk2 = B.numerico(cuerpo("chk2"), {
+    pregunta: "El robot está en el inicio (casilla 8) y pide <b>izquierda</b>. En el escenario esa combinación está oculta. ¿Con qué probabilidad termina en la misma casilla 8?",
+    respuesta: 0.9,
+    tolerancia: 0.001,
+    pistas: ["Hacia la izquierda está el borde. Y los costados de izquierda son abajo y arriba.",
+      "Izquierda (0.8) choca con el borde. Abajo (0.1) también choca. Arriba (0.1) llega a la casilla 4."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 0.8) < 0.001) return "Contaste el choque de la acción elegida. Falta uno de los costados, que también choca.";
+      if (Math.abs(v - 1) < 0.001) return "Uno de los costados sí lo saca de ahí: arriba está la casilla 4.";
+      if (Math.abs(v) < 0.001) return "Chocar con el borde no lo mueve: se queda donde estaba.";
+      return null;
+    },
+    explicacion: "0.8 de la izquierda (borde) más 0.1 de abajo (borde) = <b>0.9</b>. Solo el costado de arriba lo saca, con 0.1. Ahora elige izquierda en el escenario y mira la flecha que vuelve sobre sí misma: es la más gruesa.",
+    alResolver: function () { est.chk2 = true; if (est.paso === 1) entrar(1); pasos.completar(1); }
+  });
+
+  B.numerico(cuerpo("chk3"), {
+    pregunta: "Para describir el mundo completo hay que dar una fila de probabilidades por cada par (estado donde se decide, acción). ¿Cuántas filas son?",
+    respuesta: 36,
+    tolerancia: 0,
+    pistas: ["¿En cuántos estados el robot elige algo? En los terminales el episodio ya terminó.",
+      "Son 9 estados no terminales, y en cada uno hay 4 acciones."],
+    diagnostico: function (v) {
+      if (v === 48) return "Contaste las 12 casillas. El muro no es un estado, y en el queso y la trampa ya no se elige nada.";
+      if (v === 44) return "El muro ya no, bien. Pero en los dos estados terminales el episodio terminó: no hay acción.";
+      if (v === 9 || v === 11) return "Esos son estados. Cada uno tiene 4 acciones, y cada par necesita su fila.";
+      return null;
+    },
+    explicacion: "9 estados no terminales por 4 acciones: <b>36 filas</b>. En un mundo de verdad (un robot real, un videojuego) el número de pares es enorme, y por eso más adelante se cambian las tablas por redes neuronales.",
+    alResolver: function () { pasos.completar(2); }
+  });
+
+  chk4 = B.numerico(cuerpo("chk4"), {
+    pregunta: "Con suelo mojado: ¿cuánto vale $P(s' = 6 \\mid s = 6,\\; a = \\text{izquierda})$? En el escenario esa combinación está oculta.",
+    respuesta: 0.8,
+    tolerancia: 0.001,
+    pistas: ["¿Qué hay a la izquierda de la casilla 6?", "A la izquierda está el muro. Los costados de izquierda son abajo (casilla 10) y arriba (casilla 2)."],
+    diagnostico: function (v) {
+      if (Math.abs(v) < 0.001) return "Pedir ir contra el muro no lo hace atravesarlo: choca y se queda.";
+      if (Math.abs(v - 0.1) < 0.001 || Math.abs(v - 0.2) < 0.001) return "Los costados sí lo mueven (a 10 y a 2). El que lo deja en 6 es la acción elegida, que choca con el muro.";
+      if (Math.abs(v - 1) < 0.001) return "Eso sería con suelo seco. Con suelo mojado los costados lo sacan de ahí.";
+      return null;
+    },
+    explicacion: "La izquierda choca con el muro y lo deja en 6: <b>0.8</b>. Arriba lo lleva a 2 (0.1) y abajo a 10 (0.1). Fíjate en algo curioso: pedir ir contra el muro es una forma de quedarse quieto casi seguro, lejos de la trampa.",
+    alResolver: function () { est.chk4 = true; if (est.paso === 3) entrar(3); pasos.completar(3); }
+  });
+
+  chk5 = B.numerico(cuerpo("chk5"), {
+    pregunta: "El robot está en la casilla 2, justo a la izquierda del queso, y pide <b>derecha</b> con suelo mojado. ¿Cuánto vale la recompensa esperada $R(2, \\text{derecha})$?",
+    respuesta: 7.8,
+    tolerancia: 0.001,
+    pistas: ["Primero los destinos: derecha va al queso. Los costados de derecha son arriba y abajo.",
+      "Arriba choca con el borde y se queda en 2 (−1). Abajo va a la 6 (−1). Derecha llega al queso (+10).",
+      "$0.8 \\cdot 10 + 0.1 \\cdot (-1) + 0.1 \\cdot (-1)$."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 8) < 0.001) return "Contaste solo el queso. Los dos costados también pagan algo.";
+      if (Math.abs(v - 7.9) < 0.001) return "Chocar con el borde también cuesta −1: el robot gastó el paso.";
+      if (Math.abs(v - 10) < 0.001) return "Eso sería con suelo seco. Con suelo mojado, 2 de cada 10 veces no llega.";
+      return null;
+    },
+    explicacion: "$0.8 \\cdot 10 + 0.1 \\cdot (-1) + 0.1 \\cdot (-1) = 8 - 0.2 = 7.8$. Ahora toca esa combinación en el escenario y mira la tabla. Y después lee el recuadro de abajo.",
+    alResolver: function () { est.chk5 = true; if (est.paso === 4) entrar(4); cerrarPaso5(); }
+  });
+
+  B.opcionMultiple(cuerpo("chk5b"), {
+    pregunta: "Alguien quiere que el robot se mueva más y cambia el −1 por paso por un <b>+2</b> por paso. El queso sigue dando +10. ¿Qué hace un robot que maximiza su suma de recompensas (con descuento 0.9)?",
+    opciones: [
+      "Evita el queso: se queda dando vueltas para siempre",
+      "Va al queso más rápido que antes",
+      "Hace lo mismo que con −1",
+      "Se tira a la trampa para terminar"
+    ],
+    correcta: 0,
+    pistas: [null, "Cada paso ahora suma. ¿Qué gana si llega rápido? ¿Qué pierde?",
+      "La recompensa por paso cambió de signo. ¿Puede no cambiar nada?",
+      "La trampa da −10 y termina el episodio. ¿Para qué querría perder todo lo que suma dando vueltas?"],
+    explicacion: "Llegar al queso termina el episodio y corta la fuente de +2. Dar vueltas para siempre vale $2 + 0.9 \\cdot 2 + 0.9^2 \\cdot 2 + \\dots = 2/(1 - 0.9) = 20$, más que 10. El robot hace lo que pediste, no lo que querías. <b>Ahora prueba los tres diseños</b> con los botones y mira las flechas.",
+    alResolver: function () { est.chk5b = true; activarDisenio(); cerrarPaso5(); }
+  });
+  function cerrarPaso5() { if (est.chk5 && est.chk5b) pasos.completar(4); }
+
+  B.opcionMultiple(cuerpo("chk6"), {
+    pregunta: "Con la política fija (las flechas no cambian más), el robot junto con el mundo es...",
+    opciones: [
+      "Una cadena de Markov: desde cada casilla salen flechas con probabilidades fijas",
+      "Un MDP más grande, con más acciones",
+      "Un sistema determinista: el robot siempre sigue su flecha",
+      "Nada con nombre propio: depende de la suerte de cada episodio"
+    ],
+    correcta: 0,
+    pistas: [null, "Al fijar la política no aparecen acciones nuevas: desaparece la elección.",
+      "Sigue la flecha al pedir, pero el suelo lo puede desviar. Mira la bitácora de un episodio.",
+      "Cada episodio cambia, pero las probabilidades de cada salto no. Eso tiene nombre."],
+    explicacion: "Fijar la política quita la decisión: en cada casilla queda una sola acción y por lo tanto un solo juego de flechas. Es una <b>cadena de Markov</b>, la de la página anterior de la ruta, con recompensas encima (un MRP). Esta idea se usa en la vida real del programa para calcular la probabilidad exacta de llegar al queso.",
+    alResolver: function () { pasos.completar(5); }
+  });
+
+  B.opcionMultiple(cuerpo("chk7"), {
+    pregunta: "Ahora el robot tiene una batería que se gasta con cada paso, y cuando se acaba se detiene. Si el estado sigue siendo solo la casilla, ¿se cumple la propiedad de Markov?",
+    opciones: [
+      "No: en la misma casilla, lo que puede pasar depende de la batería que queda, y eso depende de la historia. Hay que meter la batería en el estado",
+      "Sí: la casilla sigue siendo la misma, así que las flechas también",
+      "Sí: la propiedad de Markov habla de las acciones, no de los estados",
+      "No, y por eso ya no se puede escribir como MDP"
+    ],
+    correcta: 0,
+    pistas: [null, "Imagina dos robots en la casilla 2: uno con batería llena y otro con un paso de batería. ¿Tienen el mismo futuro?",
+      "La propiedad dice que el futuro depende solo del estado y la acción actuales. Si el estado no dice todo, falla.",
+      "Sí se puede: basta con agrandar el estado. El estado pasa a ser (casilla, batería)."],
+    explicacion: "Con solo la casilla, la historia importa (cuántos pasos dio), así que <b>no</b> es de Markov. La solución es agrandar el estado a (casilla, batería). La propiedad de Markov no es algo que el mundo cumple o no: es algo que tú garantizas al elegir qué es el estado.",
+    alResolver: function () { pasos.completar(6); }
+  });
+
+  pasos = B.pasos($("recorrido"), {
+    concepto: C,
+    alEntrar: entrar,
+    alTerminar: function () { location.hash = "retos"; }
+  });
+  est.chk1 = pasos.hecho(0);
+  est.chk2 = pasos.hecho(1);
+  est.chk4 = pasos.hecho(3);
+  if (pasos.hecho(4)) { est.chk5 = true; est.chk5b = true; activarDisenio(); }
+  if (est.chk1) $("txt1").hidden = false;
+  entrar(0);
+
+  /* ---------------- hipotesis inicial ---------------- */
+  (function () {
+    var ta = $("hipotesis"), t = null;
+    ta.value = B.nota("mdp", "hipotesis");
+    function cita() {
+      var v = ta.value.trim(), el = $("citaHipo");
+      el.hidden = !v;
+      if (v) { el.textContent = ""; el.appendChild(document.createTextNode("Al principio escribiste: «" + v + "». Compáralo con la tupla: ¿qué pieza tenías? ¿Cuál te faltaba? Casi nadie piensa al principio en el resbalón (P) ni en el descuento (γ).")); }
+    }
+    cita();
+    ta.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { B.nota("mdp", "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; cita(); }, 500);
+    });
+  })();
+
+  /* ---------------- marcadores de estado de retos ---------------- */
+  function pintarEstados() {
+    [].forEach.call(document.querySelectorAll("[data-reto]"), function (el) {
+      var ok = C.retoOk(el.getAttribute("data-reto"));
+      el.textContent = ok ? "resuelto" : "pendiente";
+      el.classList.toggle("ok", ok);
+    });
+  }
+  C.alCambiar(pintarEstados);
+
+  /* ---------------- reto: ojo clinico ---------------- */
+  (function () {
+    var cont = $("ojo");
+    var VALORES = [0, 0.1, 0.2, 0.8, 0.9];
+    var porValor = {};
+    NOTERM.forEach(function (s) { ACC.forEach(function (a) { var v = pQuedarse(s, a); (porValor[v] = porValor[v] || []).push([s, a]); }); });
+    cont.innerHTML = '<div class="ronda"></div><svg role="img" aria-label="Cuadrícula de la ronda"></svg>' +
+      '<div class="ojo-opts">' + VALORES.map(function (v) { return '<button type="button" class="opt" data-v="' + v + '">' + p1(v) + '</button>'; }).join("") + '</div>' +
+      '<div class="fb" aria-live="polite"></div><div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    var m = crearMundo(cont.querySelector("svg"), {});
+    var rondas, ronda, aciertos, respondida;
+    function nueva() {
+      var vals = B.mezclar(VALORES.slice());
+      rondas = vals.map(function (v) { var l = porValor[v]; return l[Math.floor(Math.random() * l.length)]; });
+      ronda = 0; aciertos = 0;
+      mostrar();
+    }
+    function mostrar() {
+      respondida = false;
+      var r = rondas[ronda];
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 5 · aciertos " + aciertos + " · casilla " + r[0] + ", pide " + NOMBRE[r[1]];
+      m.set({ robot: r[0], accion: r[1], intencion: true, flechas: false });
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (b) { b.disabled = false; b.className = "opt"; });
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+    }
+    cont.querySelector(".ojo-opts").addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || respondida) return;
+      respondida = true;
+      var r = rondas[ronda], v = pQuedarse(r[0], r[1]), ok = Math.abs(+b.getAttribute("data-v") - v) < 1e-9;
+      if (ok) aciertos++;
+      b.classList.add(ok ? "ok" : "mal");
+      if (!ok) cont.querySelector('[data-v="' + v + '"]').classList.add("ok");
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (x) { x.disabled = true; });
+      m.set({ flechas: true });
+      var choques = ramas(r[0], r[1], true).filter(function (x) { return x[0] === r[0]; }).map(function (x) { return NOMBRE[x[2]] + " (" + p1(x[1]) + ")"; });
+      cont.querySelector(".fb").innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No.</span> ') +
+        (choques.length ? "Chocan: " + choques.join(" y ") + ". Total " + p1(v) + "." : "Ninguna de las tres direcciones choca: siempre se mueve.");
+      var sig = cont.querySelector(".sig");
+      sig.hidden = false;
+      if (ronda === 4) {
+        var aprobo = aciertos >= 4;
+        C.reto("ojo", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertos + " de 5" + (aprobo ? ". Aprobado." : ". Necesitas 4 para aprobar.");
+        sig.textContent = "Otra tanda";
+      } else sig.textContent = "Siguiente ronda";
+    });
+    cont.querySelector(".sig").addEventListener("click", function () { if (ronda === 4) nueva(); else { ronda++; mostrar(); } });
+    nueva();
+  })();
+
+  /* ---------------- reto: construir ---------------- */
+  (function () {
+    var pol = copiaPol(SEGURA);
+    var OBJ = [
+      { t: "Desde el inicio llega <b>siempre</b> al queso: probabilidad de trampa 0 y de no terminar 0. Pista: hay casillas donde conviene pedir algo imposible.", ok: function (a) { return a.trampa < 1e-9 && a.queso > 0.9999; } },
+      { t: "Una política tan mala que, desde el inicio, la trampa sea más probable que el queso.", ok: function (a) { return a.trampa > a.queso + 1e-9; } },
+      { t: "Una política con la que, desde el inicio, el robot casi nunca termina: queso más trampa por debajo de 0.01.", ok: function (a) { return a.queso + a.trampa < 0.01; } }
+    ];
+    var logrados = [false, false, false], avisado = false, ul = $("objetivos");
+    OBJ.forEach(function (o) { var li = document.createElement("li"); li.innerHTML = '<span class="m"></span><span>' + o.t + '</span>'; ul.appendChild(li); });
+    var m = crearMundo($("mundoConstr"), {
+      estado: { politica: pol, tocable: true, robot: INICIO },
+      alTocar: function (s) {
+        if (terminal(s) || s === MURO) return;
+        pol[s] = ACC[(ACC.indexOf(pol[s]) + 1) % 4];
+        actualizar();
+      }
+    });
+    function actualizar() {
+      m.set({ politica: pol });
+      var a = absorcion(pol, INICIO);
+      $("constrBarras").innerHTML = barra("queso", a.queso, 1, "pos", f(a.queso, 4)) + barra("trampa", a.trampa, 1, "neg", f(a.trampa, 4)) + barra("no termina", a.sigue, 1, "", f(a.sigue, 4));
+      OBJ.forEach(function (o, i) { if (!logrados[i] && o.ok(a)) logrados[i] = true; ul.children[i].classList.toggle("hecho", logrados[i]); });
+      if (!avisado && logrados.every(Boolean)) { avisado = true; C.reto("construir", true); }
+    }
+    $("constrReset").addEventListener("click", function () { pol = copiaPol(SEGURA); actualizar(); });
+    actualizar();
+  })();
+
+  /* ---------------- reto: a mano ---------------- */
+  (function () {
+    var PARES = [];
+    [2, 6, 11].forEach(function (s) { ACC.forEach(function (a) { PARES.push([s, a]); }); });
+    var D, m = crearMundo($("mundoMano"), {});
+    function generar() {
+      var nuevo;
+      do { nuevo = PARES[Math.floor(Math.random() * PARES.length)]; } while (D && nuevo[0] === D[0] && nuevo[1] === D[1]);
+      D = nuevo;
+      m.set({ robot: D[0], accion: D[1], intencion: true, recompensas: true });
+    }
+    function detalle() {
+      return ramas(D[0], D[1], true).map(function (r) { return NOMBRE[r[2]] + " → " + (r[0] === D[0] ? "choca, se queda en " + r[0] : r[0]) + " con " + p1(r[1]) + ", recompensa " + senal(recompensa(r[0])); }).join("; ");
+    }
+    function cuenta() {
+      return ramas(D[0], D[1], true).map(function (r) { var v = recompensa(r[0]); return p1(r[1]) + " \\cdot " + (v < 0 ? "(" + v + ")" : v); }).join(" + ");
+    }
+    generar();
+    B.numerico($("mano"), {
+      pregunta: function () { return "Casilla <b>" + D[0] + "</b>, pide <b>" + NOMBRE[D[1]] + "</b>. ¿Cuánto vale $R(" + D[0] + ", \\text{" + NOMBRE[D[1]] + "})$?"; },
+      respuesta: function () { return rEsperada(D[0], D[1]); },
+      tolerancia: 0.001,
+      pistas: [
+        function () { return "Los costados de " + NOMBRE[D[1]] + " son " + NOMBRE[LADOS[D[1]][0]] + " y " + NOMBRE[LADOS[D[1]][1]] + ". Mira adónde lleva cada uno en la figura."; },
+        function () { return "Destinos: " + detalle() + "."; },
+        function () { return "$" + cuenta() + "$"; }
+      ],
+      diagnostico: function (v) {
+        var sinChoque = 0;
+        ramas(D[0], D[1], true).forEach(function (r) { sinChoque += r[1] * (r[0] === D[0] ? 0 : recompensa(r[0])); });
+        if (Math.abs(v - redondo(sinChoque)) < 0.001 && Math.abs(sinChoque - rEsperada(D[0], D[1])) > 0.001) return "Chocar también cuesta −1: el robot gastó el paso.";
+        if (Math.abs(v - recompensa(mover(D[0], D[1]))) < 0.001) return "Esa es la recompensa si no resbala. Con suelo mojado hay que promediar los tres destinos.";
+        return null;
+      },
+      explicacion: function () { return "$" + cuenta() + " = " + f(rEsperada(D[0], D[1])) + "$."; },
+      reintentable: true,
+      textoReintentar: "Otro par",
+      antesDeReintentar: generar,
+      alResolver: function (ok) { C.reto("mano", ok); }
+    });
+  })();
+
+  /* ---------------- reto: cazar el error ---------------- */
+  B.cazarError($("error"), {
+    variantes: [
+      {
+        intro: "Recompensa esperada de pedir derecha en la casilla 2:",
+        lineas: ["\\text{derecha}:\\; 2 \\to 3 \\text{ (queso) con } 0.8", "\\text{costado arriba}:\\; \\text{choca con el borde, se queda en } 2 \\text{ con } 0.1",
+          "\\text{costado abajo}:\\; 2 \\to 6 \\text{ con } 0.1", "R(2, \\text{der}) = 0.8 \\cdot 10 + 0.1 \\cdot 0 + 0.1 \\cdot (-1)", "R(2, \\text{der}) = 7.9"],
+        erronea: 3,
+        explicacion: "Chocar no es gratis: el robot gastó el paso y recibe −1. La cuenta correcta es $0.8 \\cdot 10 + 0.1 \\cdot (-1) + 0.1 \\cdot (-1) = 7.8$. La última línea hace bien la cuenta, pero con un dato malo."
+      },
+      {
+        intro: "Transiciones de pedir arriba en la casilla 11 (abajo a la derecha):",
+        lineas: ["\\text{arriba}:\\; 11 \\to 7 \\text{ (trampa) con } 0.8", "\\text{costado izquierda}:\\; 11 \\to 10 \\text{ con } 0.1",
+          "\\text{costado derecha}:\\; \\text{choca con el borde}", "P(7 \\mid 11, \\text{arriba}) = 0.8", "P(10 \\mid 11, \\text{arriba}) = 0.1", "P(11 \\mid 11, \\text{arriba}) = 0"],
+        erronea: 5,
+        explicacion: "El costado derecho choca con el borde y lo deja en 11, así que $P(11 \\mid 11, \\text{arriba}) = 0.1$. Con un 0 la fila sumaría 0.9: algo tiene que pasar el 10 % restante."
+      },
+      {
+        intro: "Transiciones de pedir arriba en la casilla 4 (a la izquierda del muro):",
+        lineas: ["\\text{arriba}:\\; 4 \\to 0 \\text{ con } 0.8", "\\text{costado izquierda}:\\; \\text{choca con el borde, se queda en } 4",
+          "\\text{costado derecha}:\\; 4 \\to 5 \\text{ con } 0.1", "P(0 \\mid 4, \\text{arriba}) = 0.8"],
+        erronea: 2,
+        explicacion: "La 5 es el muro: no es un estado y el robot no puede estar ahí. El costado derecho choca y lo deja en 4, así que $P(4 \\mid 4, \\text{arriba}) = 0.1 + 0.1 = 0.2$."
+      }
+    ],
+    alResolver: function (ok) { C.reto("error", ok); }
+  });
+
+  /* ---------------- retos: propiedades ---------------- */
+  function prop(id, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple($(id), cfg);
+  }
+  prop("prop1", {
+    pregunta: "¿Qué suma tiene que dar exactamente 1?",
+    opciones: [
+      "$\\sum_{s'} P(s' \\mid s, a)$, para cada par $(s, a)$",
+      "$\\sum_{a} P(s' \\mid s, a)$, para cada par $(s, s')$",
+      "$\\sum_{s} P(s' \\mid s, a)$, para cada par $(s', a)$",
+      "La suma de todas las entradas de las 36 filas"
+    ],
+    correcta: 0,
+    pistas: [null, "Sumar sobre las acciones es mezclar cuatro tablas distintas. ¿Por qué darían 1 entre las cuatro?",
+      "Eso es sumar una columna. Recuerda las cadenas de Markov: las columnas no tienen por qué sumar 1.",
+      "Si cada fila suma 1, las 36 filas juntas suman 36."],
+    explicacion: "Fijado dónde estás y qué pides, algo tiene que pasar: la fila de destinos suma 1. Hay una fila así por cada uno de los 36 pares."
+  });
+  prop("prop2", {
+    pregunta: "La propiedad de Markov dice que...",
+    opciones: [
+      "Para predecir el siguiente estado basta con el estado y la acción actuales; la historia no agrega nada",
+      "El robot no puede volver a un estado por el que ya pasó",
+      "Todas las transiciones tienen la misma probabilidad",
+      "El futuro no depende del presente"
+    ],
+    correcta: 0,
+    pistas: [null, "Los episodios del paso 6 vuelven a la misma casilla muchas veces, y el mundo sigue siendo de Markov.",
+      "En la casilla 6 hay probabilidades de 0.8 y de 0.1. Eso no la rompe.",
+      "Al revés: el futuro depende del presente, pero solo del presente."],
+    explicacion: "Memoria cero: el presente resume todo lo que importa del pasado. Por eso las dos historias del paso 7 dejan las mismas flechas en la casilla 2."
+  });
+  prop("prop3", {
+    pregunta: "El robot entra en el queso. ¿Qué pasa después?",
+    opciones: [
+      "El episodio termina: no hay más acciones ni recompensas, y el valor de un estado terminal es 0",
+      "Sigue recibiendo +10 en cada paso mientras se quede ahí",
+      "Vuelve solo al inicio y la suma sigue",
+      "Recibe −1 por cada paso que se queda en el queso"
+    ],
+    correcta: 0,
+    pistas: [null, "Si el queso pagara +10 en cada paso, el robot se quedaría ahí sumando para siempre. ¿Es así este mundo?",
+      "Empezar de nuevo es otro episodio, con su propia suma.",
+      "En un estado terminal ya no hay pasos."],
+    explicacion: "El queso y la trampa son <b>terminales</b>: el +10 se cobra al entrar y ahí se acaba el episodio. Lo que viene después es otro episodio, que empieza de nuevo en la casilla 8."
+  });
+  prop("prop4", {
+    pregunta: "Con el suelo seco (sin resbalones), las entradas de $P(s' \\mid s, a)$...",
+    opciones: [
+      "Valen 0 o 1: cada par (s, a) tiene un único destino",
+      "Valen 0.25 cada una, una por acción",
+      "Siguen siendo 0.8 y 0.1, pero ahora sin choques",
+      "Desaparecen: un mundo determinista no necesita P"
+    ],
+    correcta: 0,
+    pistas: [null, "0.25 sería un robot que elige al azar. Aquí lo que cambia es el suelo, no la decisión.",
+      "Sin resbalones no hay costados. Prueba el botón Suelo seco del paso 4.",
+      "P sigue existiendo: es la tabla, solo que con un 1 por fila."],
+    explicacion: "Determinista significa que cada fila tiene un 1 (choque incluido) y el resto ceros. Es lo que Raschka llama dinámica determinista."
+  });
+  prop("prop5", {
+    pregunta: "En un MDP, ¿quién decide qué?",
+    opciones: [
+      "El agente elige la acción; el entorno elige el siguiente estado (con P) y la recompensa (con R)",
+      "El agente elige la acción y también el siguiente estado",
+      "El entorno elige la acción y el agente la recompensa",
+      "El agente elige la recompensa que quiere recibir"
+    ],
+    correcta: 0,
+    pistas: [null, "Si el robot eligiera el siguiente estado, nunca caería en la trampa del paso 1.",
+      "Al revés. Mira el ciclo agente-entorno del paso 2.",
+      "La recompensa la da el mundo. Si la eligiera el agente, se pondría +1000."],
+    explicacion: "El agente controla solo su acción. El resto (adónde cae y cuánto le pagan) lo decide el entorno. Por eso aprender a decidir es difícil: el agente tiene que tener en cuenta lo que no controla."
+  });
+
+  /* ---------------- formula de memoria ---------------- */
+  B.ordenar($("formula"), {
+    piezas: ["P(s' \\mid s, a)", "=", "\\Pr(", "S_{t+1} = s'", "\\mid", "S_t = s,", "A_t = a", ")"],
+    distractores: ["S_{t-1} = s'", "A_{t+1} = a", "\\pi(a \\mid s)"],
+    soluciones: [[0, 1, 2, 3, 4, 5, 6, 7]],
+    explicacion: "La probabilidad de que el próximo estado sea $s'$, sabiendo el estado de ahora y la acción que se eligió ahora. Nada del pasado: eso es la propiedad de Markov.",
+    alResolver: function (ok) { C.reto("formula", ok); }
+  });
+
+  /* ---------------- vida real ---------------- */
+  (function () {
+    var CODIGO = {
+      py: [
+        ["import", "import numpy as np"],
+        [null, ""],
+        [null, "# el mundo del robot: 3 filas x 4 columnas, casilla s = 4 * fila + columna"],
+        ["mundo", "FILAS, COLS = 3, 4"],
+        ["mundo", "MURO, QUESO, TRAMPA, INICIO = 5, 3, 7, 8"],
+        ["mov", "MOV = {\"arriba\": (-1, 0), \"abajo\": (1, 0), \"izq\": (0, -1), \"der\": (0, 1)}"],
+        ["lados", "LADOS = {\"arriba\": (\"izq\", \"der\"), \"abajo\": (\"der\", \"izq\"),"],
+        ["lados", "         \"izq\": (\"abajo\", \"arriba\"), \"der\": (\"arriba\", \"abajo\")}"],
+        [null, ""],
+        ["defmover", "def mover(s, a):                      # P: adónde lleva la acción a desde s"],
+        ["m-fc", "    fila, col = divmod(s, COLS)"],
+        ["m-f2", "    f2, c2 = fila + MOV[a][0], col + MOV[a][1]"],
+        ["m-if", "    if f2 < 0 or f2 >= FILAS or c2 < 0 or c2 >= COLS or COLS * f2 + c2 == MURO:"],
+        ["m-choca", "        return s                      # choca con el borde o el muro"],
+        ["m-ok", "    return COLS * f2 + c2"],
+        [null, ""],
+        ["defrec", "def recompensa(s2):                   # R: depende de la casilla a la que llegas"],
+        ["r-queso", "    if s2 == QUESO: return 10"],
+        ["r-trampa", "    if s2 == TRAMPA: return -10"],
+        ["r-paso", "    return -1"],
+        [null, ""],
+        ["defres", "def resbalar(a, u):                   # 0.8 la acción elegida, 0.1 cada lado"],
+        ["rb1", "    if u < 0.8: return a"],
+        ["rb2", "    if u < 0.9: return LADOS[a][0]"],
+        ["rb3", "    return LADOS[a][1]"],
+        [null, ""],
+        ["pol", "politica = {0: \"der\", 1: \"der\", 2: \"der\", 4: \"arriba\", 6: \"arriba\","],
+        ["pol", "            8: \"arriba\", 9: \"izq\", 10: \"izq\", 11: \"izq\"}"],
+        [null, ""],
+        [null, "# 1. un episodio con azar escrito a mano"],
+        ["u", "u = [0.35, 0.93, 0.12, 0.84, 0.50, 0.27, 0.61]"],
+        ["ini", "s, total, t = INICIO, 0, 0"],
+        ["while", "while s != QUESO and s != TRAMPA:"],
+        ["a", "    a = politica[s]"],
+        ["real", "    real = resbalar(a, u[t])"],
+        ["s2", "    s2 = mover(s, real)"],
+        ["r", "    r = recompensa(s2)"],
+        ["total", "    total += r"],
+        ["print", "    print(t, s, a, real, s2, r)"],
+        ["avanza", "    s, t = s2, t + 1"],
+        ["fin1", "print(\"suma de recompensas:\", total)"],
+        [null, ""],
+        [null, "# 2. muchos episodios con semilla"],
+        ["seed", "rng = np.random.default_rng(0)"],
+        ["q0", "quesos = 0"],
+        ["muchos", "for ep in range(10000):"],
+        ["muchos", "    s = INICIO"],
+        ["muchos", "    while s != QUESO and s != TRAMPA:"],
+        ["muchos", "        s = mover(s, resbalar(politica[s], rng.random()))"],
+        ["muchos", "    quesos += s == QUESO"],
+        ["fin2", "print(\"llega al queso:\", quesos / 10000)"],
+        [null, ""],
+        [null, "# 3. exacto: con la política fija, el MDP es una cadena de Markov"],
+        ["nt", "NT = list(politica)                   # los 9 estados no terminales"],
+        ["qb", "Q, b = np.zeros((9, 9)), np.zeros(9)"],
+        ["armar", "for i, s in enumerate(NT):"],
+        ["armar", "    a = politica[s]"],
+        ["armar", "    for real, p in zip([a, LADOS[a][0], LADOS[a][1]], [0.8, 0.1, 0.1]):"],
+        ["armar", "        s2 = mover(s, real)"],
+        ["armar", "        if s2 == QUESO: b[i] += p"],
+        ["armar", "        elif s2 != TRAMPA: Q[i, NT.index(s2)] += p"],
+        ["solve", "h = np.linalg.solve(np.eye(9) - Q, b)"],
+        ["fin3", "print(\"exacto:\", round(h[NT.index(INICIO)], 4))"]
+      ],
+      r: [
+        [null, "# el mundo del robot: 3 filas x 4 columnas, casilla s = 4 * fila + columna"],
+        ["mundo", "FILAS <- 3; COLS <- 4"],
+        ["mundo", "MURO <- 5; QUESO <- 3; TRAMPA <- 7; INICIO <- 8"],
+        ["mov", "MOV <- list(arriba = c(-1, 0), abajo = c(1, 0), izq = c(0, -1), der = c(0, 1))"],
+        ["lados", "LADOS <- list(arriba = c(\"izq\", \"der\"), abajo = c(\"der\", \"izq\"),"],
+        ["lados", "              izq = c(\"abajo\", \"arriba\"), der = c(\"arriba\", \"abajo\"))"],
+        [null, ""],
+        ["defmover", "mover <- function(s, a) {             # P: adónde lleva la acción a desde s"],
+        ["m-fc", "  fila <- s %/% COLS; col <- s %% COLS"],
+        ["m-f2", "  f2 <- fila + MOV[[a]][1]; c2 <- col + MOV[[a]][2]"],
+        ["m-if", "  if (f2 < 0 || f2 >= FILAS || c2 < 0 || c2 >= COLS || COLS * f2 + c2 == MURO)"],
+        ["m-choca", "    return(s)                         # choca con el borde o el muro"],
+        ["m-ok", "  COLS * f2 + c2"],
+        [null, "}"],
+        ["defrec", "recompensa <- function(s2) {          # R: depende de la casilla a la que llegas"],
+        ["r-queso", "  if (s2 == QUESO) return(10)"],
+        ["r-trampa", "  if (s2 == TRAMPA) return(-10)"],
+        ["r-paso", "  -1"],
+        [null, "}"],
+        ["defres", "resbalar <- function(a, u) {          # 0.8 la acción elegida, 0.1 cada lado"],
+        ["rb1", "  if (u < 0.8) return(a)"],
+        ["rb2", "  if (u < 0.9) return(LADOS[[a]][1])"],
+        ["rb3", "  LADOS[[a]][2]"],
+        [null, "}"],
+        ["pol", "politica <- c(\"0\" = \"der\", \"1\" = \"der\", \"2\" = \"der\", \"4\" = \"arriba\", \"6\" = \"arriba\","],
+        ["pol", "              \"8\" = \"arriba\", \"9\" = \"izq\", \"10\" = \"izq\", \"11\" = \"izq\")"],
+        [null, ""],
+        [null, "# 1. un episodio con azar escrito a mano"],
+        ["u", "u <- c(0.35, 0.93, 0.12, 0.84, 0.50, 0.27, 0.61)"],
+        ["ini", "s <- INICIO; total <- 0; t <- 1"],
+        ["while", "while (s != QUESO && s != TRAMPA) {"],
+        ["a", "  a <- politica[[as.character(s)]]"],
+        ["real", "  real <- resbalar(a, u[t])"],
+        ["s2", "  s2 <- mover(s, real)"],
+        ["r", "  r <- recompensa(s2)"],
+        ["total", "  total <- total + r"],
+        ["print", "  cat(t, s, a, real, s2, r, \"\\n\")"],
+        ["avanza", "  s <- s2; t <- t + 1"],
+        [null, "}"],
+        ["fin1", "cat(\"suma de recompensas:\", total, \"\\n\")"],
+        [null, ""],
+        [null, "# 2. muchos episodios con semilla"],
+        ["seed", "set.seed(0)"],
+        ["q0", "quesos <- 0"],
+        ["muchos", "for (ep in 1:10000) {"],
+        ["muchos", "  s <- INICIO"],
+        ["muchos", "  while (s != QUESO && s != TRAMPA)"],
+        ["muchos", "    s <- mover(s, resbalar(politica[[as.character(s)]], runif(1)))"],
+        ["muchos", "  quesos <- quesos + (s == QUESO)"],
+        [null, "}"],
+        ["fin2", "cat(\"llega al queso:\", quesos / 10000, \"\\n\")"],
+        [null, ""],
+        [null, "# 3. exacto: con la política fija, el MDP es una cadena de Markov"],
+        ["nt", "NT <- as.numeric(names(politica))     # los 9 estados no terminales"],
+        ["qb", "Q <- matrix(0, 9, 9); b <- numeric(9)"],
+        ["armar", "for (i in 1:9) {"],
+        ["armar", "  s <- NT[i]; a <- politica[[i]]"],
+        ["armar", "  for (k in 1:3) {"],
+        ["armar", "    s2 <- mover(s, c(a, LADOS[[a]])[k]); p <- c(0.8, 0.1, 0.1)[k]"],
+        ["armar", "    if (s2 == QUESO) b[i] <- b[i] + p"],
+        ["armar", "    else if (s2 != TRAMPA) Q[i, match(s2, NT)] <- Q[i, match(s2, NT)] + p"],
+        [null, "  }"],
+        [null, "}"],
+        ["solve", "h <- solve(diag(9) - Q, b)"],
+        ["fin3", "cat(\"exacto:\", round(h[match(INICIO, NT)], 4), \"\\n\")"]
+      ]
+    };
+    var SALIDA = {
+      py: ["0 8 arriba arriba 4 -1", "1 4 arriba der 4 -1", "2 4 arriba arriba 0 -1", "3 0 der arriba 0 -1", "4 0 der der 1 -1", "5 1 der der 2 -1", "6 2 der der 3 10",
+        "suma de recompensas: 4", "llega al queso: 0.9856", "exacto: 0.9863"],
+      r: ["1 8 arriba arriba 4 -1 ", "2 4 arriba der 4 -1 ", "3 4 arriba arriba 0 -1 ", "4 0 der arriba 0 -1 ", "5 0 der der 1 -1 ", "6 1 der der 2 -1 ", "7 2 der der 3 10 ",
+        "suma de recompensas: 4 ", "llega al queso: 0.9872 ", "exacto: 0.9863 "]
+    };
+    var U = [0.35, 0.93, 0.12, 0.84, 0.50, 0.27, 0.61];
+    var H = {};
+    NOTERM.forEach(function (s) { H[s] = absorcion(SEGURA, s).queso; });
+
+    var EV = [];
+    (function () {
+      var fase = 1, s = null, t = null, total = null, cam = [], sal = 0, a = null, real = null, s2 = null, r = null;
+      function foto(id, extra) {
+        EV.push(Object.assign({ id: id, fase: fase, s: s, t: t, total: total, cam: cam.slice(), sal: sal, a: a, real: real, s2: s2, r: r, u: t != null && t < U.length ? U[t] : null }, extra || {}));
+      }
+      ["import", "mundo", "mov", "lados", "defmover", "defrec", "defres", "pol"].forEach(function (id) { foto(id); });
+      fase = 2;
+      foto("u");
+      s = INICIO; total = 0; t = 0; cam = [s];
+      foto("ini");
+      while (!terminal(s)) {
+        a = null; real = null; s2 = null; r = null;
+        foto("while", { cond: true });
+        a = SEGURA[s];
+        foto("a");
+        var u = U[t];
+        real = resbalar(a, u);
+        foto(u < 0.8 ? "rb1" : u < 0.9 ? "rb2" : "rb3", { enRes: true });
+        foto("real");
+        s2 = mover(s, real);
+        foto(s2 === s ? "m-choca" : "m-ok", { enMov: true });
+        foto("s2");
+        r = recompensa(s2);
+        foto(s2 === QUESO ? "r-queso" : "r-paso", { enRec: true });
+        foto("r");
+        total += r;
+        foto("total");
+        sal++;
+        foto("print");
+        s = s2; t = t + 1; cam.push(s);
+        foto("avanza");
+      }
+      a = null; real = null; s2 = null; r = null;
+      foto("while", { cond: false });
+      sal++;
+      foto("fin1");
+      fase = 3;
+      foto("seed"); foto("q0"); foto("muchos");
+      sal++;
+      foto("fin2");
+      fase = 4;
+      foto("nt"); foto("qb"); foto("armar"); foto("solve");
+      sal++;
+      foto("fin3", { fin: true });
+    })();
+
+    var vrMundo = crearMundo($("vrMundo"), {});
+    function narrar(e, ctx) {
+      var py = ctx.lang() === "py", ix = ctx.ix;
+      switch (e.id) {
+        case "import": return py ? "Carga NumPy: hace falta para la semilla y para resolver el sistema del final." : "R no necesita importar nada para esto.";
+        case "mundo": return "El tamaño de la cuadrícula y los números de las casillas especiales: muro 5, queso 3, trampa 7, inicio 8.";
+        case "mov": return "Cada acción como un cambio de (fila, columna): arriba resta una fila, derecha suma una columna.";
+        case "lados": return "Los dos costados de cada acción, adonde puede resbalar. Los de arriba son izquierda y derecha.";
+        case "defmover": return "<b>mover</b> es P sin el azar: dada la acción que de verdad ocurre, dice a qué casilla se llega. Si se sale del tablero o pisa el muro, devuelve la misma casilla.";
+        case "defrec": return "<b>recompensa</b> es R: depende solo de la casilla de llegada.";
+        case "defres": return "<b>resbalar</b> es el azar del suelo: un número u entre 0 y 1 decide si sale la acción elegida (u &lt; 0.8) o uno de los costados.";
+        case "pol": return "La política del camino seguro: una acción por cada uno de los 9 estados no terminales.";
+        case "u": return "Siete números al azar escritos a mano, para poder seguir el episodio con el dedo.";
+        case "ini": return "El robot empieza en la casilla <b>8</b>, con la suma en 0 y el reloj t en <b>" + ix(0) + "</b>.";
+        case "while": return e.cond ? "La casilla " + e.s + " no es terminal: sigue el episodio." : "La casilla " + e.s + " es el queso: el bucle termina.";
+        case "a": return "La política dice que en <b>" + e.s + "</b> se pide <b>" + e.a + "</b>.";
+        case "rb1": return "u = " + f(e.u) + " es menor que 0.8: sale la acción elegida, <b>" + e.real + "</b>.";
+        case "rb2": return "u = " + f(e.u) + " está entre 0.8 y 0.9: resbala al primer costado, <b>" + e.real + "</b>.";
+        case "rb3": return "u = " + f(e.u) + " es 0.9 o más: resbala al segundo costado, <b>" + e.real + "</b>.";
+        case "real": return "Pidió " + e.a + " y ocurre <b>" + e.real + "</b>." + (e.a !== e.real ? " Resbaló." : "");
+        case "m-choca": return "Ir " + e.real + " desde " + e.s + " choca con " + (e.s === 4 ? "el muro" : "el borde") + ": se queda en <b>" + e.s + "</b>.";
+        case "m-ok": return "Ir " + e.real + " desde " + e.s + " lleva a la casilla <b>" + e.s2 + "</b>.";
+        case "s2": return "El siguiente estado es <b>" + e.s2 + "</b>.";
+        case "r-queso": return "Llegó al queso: <b>+10</b>.";
+        case "r-paso": return "No es ni queso ni trampa: <b>−1</b>, el costo del paso" + (e.s2 === e.s ? ", aunque no se haya movido." : ".");
+        case "r": return "Recompensa de este paso: <b>" + e.r + "</b>.";
+        case "total": return "La suma va en <b>" + e.total + "</b>.";
+        case "print": return "Imprime t, s, la acción pedida, la que ocurrió, s' y r.";
+        case "avanza": return "El robot pasa a <b>" + e.s + "</b> y el reloj a <b>" + ix(e.t) + "</b>.";
+        case "fin1": return "Seis pasos de −1 y un +10: la suma es <b>4</b>. En la página de retorno vas a ver por qué conviene descontar las recompensas lejanas.";
+        case "seed": return py ? "Un generador de números al azar con semilla 0: cada vez que corras el programa sale lo mismo." : "Fija la semilla en 0: cada vez que corras el programa sale lo mismo.";
+        case "q0": return "Contador de episodios que terminan en el queso.";
+        case "muchos": return "10 000 episodios completos con la misma política. Cada uno termina en el queso o en la trampa.";
+        case "fin2": return "Fracción de episodios que llegan al queso: <b>" + (py ? "0.9856" : "0.9872") + "</b>. Python y R dan algo distinto porque sus generadores al azar son distintos.";
+        case "nt": return "Los 9 estados no terminales, en el orden de la política.";
+        case "qb": return "Q: transiciones entre no terminales. b: probabilidad de ir directo al queso.";
+        case "armar": return "Para cada estado, sus tres ramas (0.8, 0.1, 0.1): si cae en el queso suma a b; si cae en un no terminal suma a Q; la trampa no suma nada.";
+        case "solve": return "Resuelve (I − Q) h = b: h(s) es la probabilidad exacta de llegar al queso desde s. El mapa muestra h en cada casilla.";
+        case "fin3": return "Desde el inicio: <b>0.9863</b>. La simulación daba " + (py ? "0.9856" : "0.9872") + ": a una distancia de unas milésimas, lo esperable con 10 000 episodios.";
+      }
+      return "";
+    }
+    function visual(e, anterior, ctx) {
+      var lang = ctx.lang(), sal = SALIDA[lang];
+      if (!e) {
+        vrMundo.set({ robot: INICIO, accion: null, camino: [], etiquetas: null, intencion: false, flechas: false });
+        $("vrCuenta").innerHTML = "";
+        $("vrSalida").textContent = "";
+        return;
+      }
+      if (e.fase === 4 && (e.id === "solve" || e.id === "fin3")) {
+        var et = {};
+        NOTERM.forEach(function (s) { et[s] = "h = " + f(H[s], 2); });
+        vrMundo.set({ robot: null, accion: null, camino: [], etiquetas: et, intencion: false, flechas: false, politica: SEGURA });
+      } else if (e.fase >= 3) {
+        vrMundo.set({ robot: null, accion: null, camino: [], etiquetas: null, intencion: false, flechas: false, politica: SEGURA });
+      } else {
+        vrMundo.set({ robot: e.s != null ? e.s : INICIO, accion: e.real || e.a, intencion: !!e.a && e.id !== "avanza", flechas: false, camino: e.cam, etiquetas: null, politica: e.fase === 1 && e.id === "pol" ? SEGURA : null });
+      }
+      var c = "";
+      if (e.u != null && e.a && e.id !== "avanza") c = "u[" + ctx.ix(e.t) + "] = " + f(e.u) + " · pide <b>" + e.a + "</b>" + (e.real ? " · ocurre <b>" + e.real + "</b>" : "") + (e.s2 != null ? " · llega a <b>" + e.s2 + "</b>" : "") + (e.r != null ? " · r = <b>" + e.r + "</b>" : "");
+      else if (e.fase === 3) c = "10 000 episodios con semilla 0";
+      else if (e.fase === 4) c = "(I − Q) h = b, con 9 incógnitas";
+      $("vrCuenta").innerHTML = c;
+      var pre = $("vrSalida");
+      pre.textContent = "";
+      sal.slice(0, e.sal).forEach(function (l, k) {
+        var sp = document.createElement("span");
+        if (k === e.sal - 1 && (e.id === "print" || e.id.indexOf("fin") === 0)) sp.className = "nueva";
+        sp.textContent = l + "\n";
+        pre.appendChild(sp);
+      });
+    }
+    B.vidaReal($("vidareal"), {
+      codigo: CODIGO,
+      eventos: EV,
+      narrar: narrar,
+      vars: function (e, ctx) {
+        var v = [];
+        if (e && e.s != null && e.fase === 2) v.push('<span>s = <b>' + e.s + '</b></span>');
+        if (e && e.t != null && e.fase === 2) v.push('<span>t = <b>' + ctx.ix(e.t) + '</b></span>');
+        if (e && e.a && e.fase === 2) v.push('<span class="vj">a = <b>' + e.a + '</b></span>');
+        if (e && e.real && e.fase === 2) v.push('<span class="vk">real = <b>' + e.real + '</b></span>');
+        if (e && e.r != null && e.fase === 2) v.push('<span>r = <b>' + e.r + '</b></span>');
+        if (e && e.total != null) v.push('<span>total = <b>' + e.total + '</b></span>');
+        return v;
+      },
+      visual: visual,
+      demora: function (e) { return !e ? 600 : e.fase === 1 ? 900 : e.id === "while" ? 450 : e.fase >= 3 ? 1400 : 750; }
+    });
+
+    B.numerico(cuerpo("vrPred"), {
+      pregunta: "El programa usa la política del camino seguro (8 y 4 piden arriba; 0, 1 y 2 piden derecha) y estos números al azar, uno por paso: <code>0.35, 0.93, 0.12, 0.84, 0.50, 0.27, 0.61</code>. La regla: menos de 0.8 sale la acción pedida, de 0.8 a 0.9 el primer costado, 0.9 o más el segundo. ¿En cuántos pasos del episodio el robot <b>se queda en la misma casilla</b>?",
+      respuesta: 2,
+      tolerancia: 0,
+      pistas: [
+        "Los costados de arriba son (izquierda, derecha). Los de derecha son (arriba, abajo).",
+        "Paso 2: el robot está en 4, pide arriba y u = 0.93. Paso 4: está en 0, pide derecha y u = 0.84. ¿Qué pasa en cada uno?"
+      ],
+      diagnostico: function (v) {
+        if (v === 0) return "Que resbale no significa que se mueva a otro lado: puede resbalar contra el muro o el borde.";
+        if (v === 1) return "Hay dos resbalones, y los dos terminan en choque. Revisa los dos.";
+        if (v === 7) return "Esos son los pasos del episodio. ¿En cuántos no se movió?";
+        return null;
+      },
+      explicacion: "Dos. Con u = 0.93 en la casilla 4 resbala a la derecha, que es el <b>muro</b>. Con u = 0.84 en la casilla 0 resbala hacia arriba, que es el <b>borde</b>. En los dos se queda y paga −1. Ahora reproduce y mira las líneas 2 y 4 de la salida.",
+      alResolver: function (ok) { C.reto("codigo1", ok); }
+    });
+    prop("codigo2", {
+      pregunta: "Con la misma semilla 0 y los mismos 10 000 episodios, Python imprime <code>llega al queso: 0.9856</code> y R <code>llega al queso: 0.9872</code>. ¿Por qué no coinciden?",
+      opciones: [
+        "Usan generadores distintos: con la misma semilla producen otros números al azar. Los dos estiman bien el 0.9863 exacto",
+        "R tiene un error en el bucle de los episodios",
+        "Con 1 000 000 de episodios darían exactamente el mismo número",
+        "La semilla 0 no es válida en NumPy"
+      ],
+      correcta: 0,
+      pistas: [null, "Los dos programas hacen el mismo episodio a mano y llegan a la misma suma. El problema no está en el bucle.",
+        "Con más episodios los dos se acercan a 0.9863, pero cada uno con su propio azar: no tienen por qué coincidir en todos los decimales.",
+        "La semilla 0 es válida en los dos. Lo que cambia es el algoritmo que fabrica los números."],
+      explicacion: "<code>np.random.default_rng</code> usa el generador PCG64 y R usa Mersenne-Twister. La semilla fija el punto de partida de <b>cada</b> generador, no los números. Por eso se compara contra la cuenta exacta, 0.9863, y no entre lenguajes."
+    });
+    prop("codigo3", {
+      pregunta: "Cambias la política a <code>8: abajo</code> y <code>9: izq</code>, y corres solo la parte exacta. Desde 8 y 9 el robot ya nunca sale. ¿Qué pasa?",
+      opciones: [
+        "Python imprime exacto: 0.0 sin quejarse; R se detiene con el error system is computationally singular",
+        "Los dos imprimen exacto: 0.0",
+        "Los dos se detienen con un error",
+        "Python da error y R imprime 0"
+      ],
+      correcta: 0,
+      pistas: [null, "La matriz I − Q tiene un bloque sin salida: es singular. ¿Los dos lenguajes revisan eso igual?",
+        "R revisa el número de condición antes de resolver. NumPy no avisa.",
+        "Es al revés. NumPy resuelve casi siempre aunque la matriz sea casi singular."],
+      explicacion: "Lo corrimos. Desde 8 y 9 el robot rebota entre los dos para siempre, así que $I - Q$ es singular. Por el redondeo, NumPy no lo detecta: resuelve igual, devuelve 7.9e−18 para el inicio y al redondear imprime 0.0, que por casualidad es la respuesta correcta. R mide el número de condición recíproco (2.4e−18) y se detiene. Moraleja: antes de confiar en <code>solve</code>, comprueba que la política termina."
+    });
+  })();
+
+  /* ---------------- tarjetas ---------------- */
+  B.tarjetas($("tarjetas"), [
+    ["¿Cuáles son las cinco piezas de un MDP?", "$(\\mathcal{S}, \\mathcal{A}, P, R, \\gamma)$: estados, acciones, transiciones, recompensas y descuento."],
+    ["¿Qué tiene un MDP que no tiene una cadena de Markov?", "Acciones (con una matriz de transición por acción) y recompensas. La cadena solo salta."],
+    ["¿Qué dice la propiedad de Markov?", "El siguiente estado depende solo del estado y la acción actuales, no de la historia."],
+    ["¿Qué suma 1 en la tabla de transiciones?", "Cada fila $P(\\cdot \\mid s, a)$: los destinos posibles de un mismo par (estado, acción)."],
+    ["¿Qué pasa si el robot pide ir contra el muro?", "Choca, se queda en la misma casilla y paga −1."],
+    ["¿Qué es una política?", "La regla de decisión: una acción por estado, $\\pi(s)$, o una probabilidad por acción, $\\pi(a \\mid s)$."],
+    ["MDP más una política fija, ¿qué da?", "Una cadena de Markov (con recompensas: un MRP)."],
+    ["¿La recompensa es el objetivo?", "No. El agente maximiza la suma de recompensas. Con +2 por paso, el robot evita el queso para seguir sumando."]
+  ]);
+
+  /* ---------------- conexiones ---------------- */
+  B.conexiones("mdp");
+})();
+</script>
+</body>
+</html>
