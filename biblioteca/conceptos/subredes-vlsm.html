@@ -1,0 +1,1550 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Subredes y VLSM</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+/* colores de las areas: dos extra con modo claro y oscuro */
+:root { --d5: #b7791f; --d6: #b83b7a; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --d5: #e0a84a; --d6: #e879b0; } }
+:root[data-theme="dark"] { --d5: #e0a84a; --d6: #e879b0; }
+
+/* ---------- tablero de 256 direcciones ---------- */
+.tab-svg { width: 100%; height: auto; display: block; user-select: none; -webkit-user-select: none; touch-action: manipulation; }
+.tab-svg .celda { fill: var(--surface-2); stroke: var(--line-soft); stroke-width: 1; }
+.tab-svg .fila-lab, .tab-svg .col-lab { font: 9.5px var(--f-mono); fill: var(--ink-3); }
+.tab-svg .bloq { fill-opacity: .24; stroke-width: 1.3; stroke-opacity: .95; }
+.tab-svg .uso { fill-opacity: .5; stroke: none; }
+.tab-svg .etq { font: 500 10.5px var(--f-mono); fill: var(--ink); paint-order: stroke; stroke: var(--surface); stroke-width: 2.5px; pointer-events: none; }
+.tab-svg .rb { font: 600 9.5px var(--f-mono); fill: var(--ink); pointer-events: none; }
+.tab-svg .oc { fill: var(--ink-3); fill-opacity: .32; stroke: var(--ink-3); stroke-opacity: .55; }
+.tab-svg .hueco { fill: var(--neg); fill-opacity: .12; stroke: var(--neg); stroke-dasharray: 3 3; stroke-width: 1.3; }
+.tab-svg .ghost-ok { fill: var(--ok); fill-opacity: .2; stroke: var(--ok); stroke-width: 2; }
+.tab-svg .ghost-mal { fill: var(--bad); fill-opacity: .16; stroke: var(--bad); stroke-width: 2; stroke-dasharray: 4 3; }
+.tab-svg .punto { fill: none; stroke: var(--accent); stroke-width: 3; }
+.tab-svg .resalta { fill: none; stroke: var(--ink); stroke-width: 2.2; }
+
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.esc-head .hint { font-size: 12.5px; color: var(--ink-2); }
+.esc-head button { margin-left: auto; font-size: 12px; padding: 5px 10px; }
+.extra { margin-top: 10px; }
+.lectura { font-size: 14px; color: var(--ink-2); min-height: 2.6em; margin: 8px 0 0; }
+.lectura b { color: var(--ink); font-weight: 500; font-family: var(--f-mono); }
+.msg { font-size: 13.5px; color: var(--ink-2); min-height: 2.6em; margin: 8px 0 0; }
+.msg.bad { color: var(--bad); }
+.msg.ok { color: var(--ok); }
+.alin { font-family: var(--f-mono); font-size: 12.5px; color: var(--ink-2); min-height: 2.8em; margin-top: 6px; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.alin .hb { padding: 0 2px; border-radius: 3px; background: var(--ok-soft); color: var(--ok); }
+.alin .hb.mal { background: var(--bad-soft); color: var(--bad); }
+
+.demandas { display: flex; flex-wrap: wrap; gap: 6px; }
+.dem { font-size: 12.5px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); border-left: 4px solid var(--c); color: var(--ink-2); }
+.dem b { color: var(--ink); font-weight: 600; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.chip-dep { font-size: 12.5px; padding: 6px 10px; border-left: 5px solid var(--c); text-align: left; background: var(--surface); }
+.chip-dep.sel { box-shadow: 0 0 0 2px var(--ink); }
+.chip-dep.puesto { background: var(--surface-2); color: var(--ink-2); }
+.chip-dep[disabled] { opacity: .45; cursor: default; }
+.btn-row.compacta { gap: 6px; margin: 6px 0; }
+.btn-row.compacta button { font-size: 12.5px; padding: 6px 10px; }
+
+/* ---------- tablas ---------- */
+.tabla-wrap { overflow-x: auto; margin-top: 10px; }
+.tabla { width: 100%; border-collapse: collapse; font-family: var(--f-mono); font-size: 12px; font-variant-numeric: tabular-nums; }
+.tabla th { font-weight: 500; color: var(--ink-3); font-size: 11px; text-align: right; padding: 4px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.tabla td { text-align: right; padding: 4px 8px; border-bottom: 1px solid var(--line-soft); color: var(--ink-2); white-space: nowrap; }
+.tabla td.pl, .tabla th:first-child { text-align: left; color: var(--ink); }
+.tabla tr[data-id] { cursor: pointer; }
+.tabla tr.sel td { background: var(--accent-soft); color: var(--ink); }
+.tabla tr.si td { background: var(--ok-soft); color: var(--ink); }
+.tabla .pun { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; }
+.tabla td.mal { color: var(--bad); }
+.tabla td.bien { color: var(--ok); }
+.bin { font-family: var(--f-mono); font-size: 13px; letter-spacing: .02em; font-variant-numeric: tabular-nums; }
+.bin .u { color: var(--ink); }
+.bin .c { color: var(--ink-3); }
+
+.rango { width: 100%; max-width: 360px; accent-color: var(--accent); }
+.grande { font-family: var(--f-mono); font-size: 14px; color: var(--ink-2); margin: 6px 0 12px; font-variant-numeric: tabular-nums; }
+.grande b { font-size: 18px; color: var(--ink); font-weight: 500; }
+
+/* ---------- retos propios ---------- */
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.ojo-opts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
+.ojo-opts .opt { text-align: center; }
+.objetivos { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.objetivos li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.objetivos .m { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.objetivos li.hecho { color: var(--ink); }
+.objetivos li.hecho .m { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 3px var(--surface); }
+.datos-mano { border-collapse: collapse; font-family: var(--f-mono); font-size: 14px; margin: 4px 0 12px; }
+.datos-mano th, .datos-mano td { padding: 4px 14px; border: 1px solid var(--line); text-align: center; }
+.datos-mano th { color: var(--ink-3); font-weight: 500; font-size: 12px; }
+
+/* ---------- vida real ---------- */
+.vr-salida { margin: 10px 0 0; padding: 10px 12px; background: var(--surface-2); border-radius: 8px; font-family: var(--f-mono); font-size: 12.5px; line-height: 1.6; min-height: 3em; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); }
+.vr-salida .t { color: var(--ink-3); font-size: 11px; display: block; letter-spacing: .06em; text-transform: uppercase; }
+.pie-codigo { font-family: var(--f-mono); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ Subredes y VLSM</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Infraestructura · Redes de computadores · UD4 y UD5</p>
+    <h1>Subredes y VLSM: repartir un bloque de direcciones sin desperdiciar</h1>
+    <p class="lede">
+      Una empresa recibe 256 direcciones IP y tiene áreas muy distintas: una con 50 equipos, otra con 20 y un enlace de solo 2.
+      Lo vas a resolver con las manos: <b>cada área recibe un trozo del bloque, del tamaño justo, y los trozos tienen reglas de tamaño, de posición y de orden</b>.
+      Eso es VLSM: máscaras de subred de largo variable.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> Tienes 256 direcciones seguidas, de la .0 a la .255. Ventas necesita 50, Soporte 20 y un enlace entre dos routers necesita 2. Si tuvieras que cortar el bloque en tres trozos, uno por área, ¿de qué tamaño serían y en qué orden los pondrías? Escríbelo como te salga, aunque esté mal.</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: a Ventas le daría..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>Repartir un /24 con VLSM</h2>
+      <p>Siete pasos. Cada uno termina con un chequeo: hasta que no lo resuelves, el siguiente queda cerrado. Equivocarte aquí no resta nada, es parte del método.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="El reparto">
+          <span class="etapa">Paso 1</span>
+          <h3>256 direcciones y tres áreas distintas</h3>
+          <p>Tu empresa recibe un bloque de 256 direcciones, el <b>192.168.10.0/24</b>. Es el mismo bloque que usa la empresa TechNova en el material del máster
+            <cite class="cita" data-fuente="red5" data-pag="4" data-pimp="1" data-seccion="Introducción: caso de referencia, la red de TechNova" data-que="El cuadro que presenta el caso guía de la unidad: tres departamentos, VLAN y el bloque 192.168.10.0/24 dividido en subredes distintas." data-cuando="Antes de empezar este paso"></cite>.
+            En el tablero, cada cuadrito es una dirección, de <b>.0</b> a <b>.255</b>, y cada fila trae 16.</p>
+          <p>Hay tres áreas que necesitan su propia subred, un trozo seguido del bloque que será solo suyo: <b>Ventas</b> (50 equipos), <b>Soporte</b> (20 equipos) y un <b>Enlace</b> entre dos routers (2 equipos).</p>
+          <p>Una regla del juego: un trozo solo puede medir 1, 2, 4, 8, 16, 32, 64, 128 o 256 direcciones, siempre una potencia de dos. La razón está en la página de Máscara de subred y CIDR; por ahora acéptala.</p>
+          <p>Antes de repartir con cuidado, prueba el reparto más simple: a todas las áreas, el mismo tamaño.</p>
+          <div class="check" id="chk1">
+            <p class="check-tit">Predice antes de ver nada</p>
+            <div class="cuerpo"></div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Qué cuesta un bloque">
+          <span class="etapa">Paso 2</span>
+          <h3>Un bloque no es solo para equipos</h3>
+          <p>En cada subred hay dos direcciones que no se asignan a ningún equipo. La <b>primera</b> es el nombre de la subred (la dirección de red, marcada <b>R</b> en el tablero) y la <b>última</b> es el aviso para todos los equipos de la subred (la dirección de broadcast, marcada <b>B</b>)
+            <cite class="cita" data-fuente="red4" data-pag="12" data-pimp="10" data-seccion="10. Máscara de subred y notación CIDR" data-que="La definición de máscara (unos para la red, ceros para el host), la Tabla 21 con los hosts útiles de /24 a /30 y la frase que dice que se restan la dirección de red y la de broadcast." data-cuando="Después de probar los tres tamaños"></cite>.</p>
+          <p>Por eso, en un bloque de cierto tamaño caben <b>dos equipos menos</b> que direcciones. Cambia el tamaño del bloque de Ventas y mira cuántos equipos caben.</p>
+          <div class="fbloque"><div class="vivo" id="vivo2"></div></div>
+          <p>El material lo resuelve igual en una diapositiva de repaso, con un bloque de 16 direcciones
+            <cite class="cita" data-fuente="red5diapo" data-pag="21" data-seccion="Pregunta de repaso: subred /28" data-que="La única cuenta escrita en las diapositivas de UD5: 32 − 28 = 4 bits de host, 16 direcciones, menos la de red y la de broadcast, 14 utilizables." data-cuando="Al terminar este paso"></cite>.</p>
+          <div class="check" id="chk2"><p class="check-tit">Antes de seguir</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Del número al prefijo">
+          <span class="etapa">Paso 3</span>
+          <h3>De equipos a tamaño y a prefijo</h3>
+          <p>Para cada área buscas el bloque más chico que sirva. Una dirección tiene 32 bits; si dejas <span data-tex="k"></span> bits para los equipos, el bloque mide <span data-tex="2^{k}"></span> direcciones y quedan <span data-tex="2^{k}-2"></span> para equipos. Los otros <span data-tex="32-k"></span> bits dicen cuál es la subred: es el prefijo.</p>
+          <div class="fbloque">
+            <div data-tex="2^{k}-2 \;\ge\; h \qquad\qquad p = 32-k \qquad\qquad \text{salto} = 256-\text{octeto de la máscara} = 2^{k}" data-display></div>
+            <div class="vivo" id="vivo3"></div>
+          </div>
+          <p>Como cada área tiene su propio <span data-tex="k"></span>, cada subred termina con su <b>propia máscara</b>. Eso es VLSM (Variable Length Subnet Mask): máscaras de largo distinto dentro de la misma red, para ajustar cada subred a los equipos reales en lugar de usar una sola máscara para todas
+            <cite class="cita" data-fuente="red4" data-pag="13" data-pimp="11" data-seccion="11. Metodología de cálculo de subredes y 12. Introducción a VLSM" data-que="Los pasos 2 a 5 del método (bits de host, nueva máscara, el salto de 256 menos el octeto de la máscara y enumerar red, primer host, último host y broadcast) y la definición de VLSM." data-cuando="Al terminar este paso"></cite>.</p>
+          <p>Toca una fila de la tabla para ver su máscara escrita en binario. Lo de los unos y ceros ya lo viste en la página de Binario y otras bases; el material hace la misma conversión con la máscara 255.255.255.192
+            <cite class="cita" data-fuente="red4" data-pag="11" data-pimp="9" data-seccion="Conversión decimal-binario (Tablas 18 y 19)" data-que="Los valores posicionales 128, 64, 32, 16, 8, 4, 2, 1 y el ejemplo 11000000 = 128 + 64 = 192, que es el último octeto del /26." data-cuando="Después de tocar la fila de Ventas"></cite>.</p>
+          <p>Una advertencia sobre ese mismo material: en su tabla de máscaras (Tabla 21) la columna de la máscara decimal de /25 a /30 sale como <code>2,55255E+11</code>, porque una hoja de cálculo convirtió 255.255.255.x en un número. Las máscaras correctas son /25 = 255.255.255.128, /26 = .192, /27 = .224, /28 = .240, /29 = .248 y /30 = .252; las diapositivas repiten el error
+            <cite class="cita" data-fuente="red4diapo" data-pag="16" data-seccion="Máscara de subred y CIDR" data-que="La misma tabla de /24 a /30 con la máscara rota; sirve para comparar con los valores correctos de arriba." data-cuando="Si quieres ver el error con tus ojos"></cite>.</p>
+          <details class="profundizar">
+            <summary>¿Servidores necesita 2 equipos o 6? El material dice las dos cosas</summary>
+            <div>
+              <p>La tabla resuelta de la unidad pide "2 (crecimiento)" para Servidores y le asigna un /29
+                <cite class="cita" data-fuente="red5" data-pag="9" data-pimp="6" data-seccion="3.2. Direccionamiento IPv4, máscaras y VLSM (Tabla 3)" data-que="El ejemplo resuelto sobre 192.168.10.0/24: cuatro subredes, sus rangos y broadcast, y la regla de asignar primero los bloques más grandes. Servidores aparece con 2 hosts y un /29." data-cuando="Al terminar este paso"></cite>.
+                El enunciado del ejercicio, en cambio, dice "hasta 6 hosts, incluyendo margen de crecimiento"
+                <cite class="cita" data-fuente="red5ej" data-pag="2" data-pimp="1" data-seccion="Enunciado: datos de partida" data-que="Los datos de partida del ejercicio: Comercial 50, IT 20, laboratorio 10 y servidores hasta 6; la solución también usa un /29." data-cuando="Al terminar este paso"></cite>.
+                Con solo 2 equipos el bloque más justo sería un /30; con 6, un /29. Usa el botón de la tabla para verlo. El resultado final, <b>192.168.10.112/29</b>, no cambia porque ambos documentos usan el /29: el margen de crecimiento es la diferencia.</p>
+              <p>Hay otra incoherencia menor: el material habla de "un bloque de direcciones privadas" asignado por el proveedor de Internet. En la vida real un proveedor no entrega rangos privados; esos se usan dentro de la red de la empresa. Es un detalle del ejemplo, no de la técnica.</p>
+            </div>
+          </details>
+          <div class="check" id="chk3"><p class="check-tit">Calcula con los datos en vivo</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Alinear">
+          <span class="etapa">Paso 4</span>
+          <h3>Cada bloque empieza en un múltiplo de su tamaño</h3>
+          <p>Ahora hay que poner los bloques en el tablero, y hay una regla: un bloque de 32 direcciones solo puede empezar en .0, .32, .64, .96, .128... y uno de 64 solo en .0, .64, .128 o .192. Es el "salto" del método de cinco pasos del material
+            <cite class="cita" data-fuente="red4diapo" data-pag="17" data-seccion="Metodología de cálculo de subredes" data-que="Los cinco pasos del método en viñetas, con el salto entre redes como cuarto paso." data-cuando="Después de resolver la predicción"></cite>.</p>
+          <p>La razón está en los bits. En la dirección de red, los bits que se reservan para los equipos tienen que valer 0. Un /27 reserva 5 bits, así que su inicio debe acabar en cinco ceros, y los números que acaban en cinco ceros son justo los múltiplos de 32.</p>
+          <div class="fbloque">
+            <div data-tex="\text{inicio} = m\cdot 2^{k} \qquad (m = 0,\,1,\,2,\dots)" data-display></div>
+            <div class="vivo" id="vivo4"></div>
+          </div>
+          <p>Y dos bloques nunca pueden compartir una dirección. Primero predice, después el tablero se activa para que lo pruebes tú.</p>
+          <div class="check" id="chk4"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="El orden">
+          <span class="etapa">Paso 5</span>
+          <h3>Primero los grandes</h3>
+          <p>Imagina que de la red solo está libre la primera mitad, de .0 a .127; la otra mitad es de otra sede. Los pedidos llegan en cierto orden y tú pegas cada bloque justo después del anterior, saltando hasta el siguiente múltiplo de su tamaño.</p>
+          <div class="fbloque">
+            <div data-tex="\text{inicio} = \Big\lceil \dfrac{\text{siguiente}}{2^{k}} \Big\rceil \cdot 2^{k} \qquad \text{siguiente} \leftarrow \text{inicio} + 2^{k}" data-display></div>
+            <div class="vivo" id="vivo5"></div>
+          </div>
+          <p>Cuando un bloque grande llega detrás de uno pequeño, hay que saltar hasta su siguiente múltiplo y esos saltos dejan <b>huecos</b>. La regla que da el material es asignar primero los bloques más grandes, para no fragmentar el espacio
+            <cite class="cita" data-fuente="red5diapo" data-pag="18" data-seccion="Direccionamiento IPv4 y VLSM: ejemplo TechNova" data-que="La tabla de cuatro subredes con su rango y broadcast, y la regla VLSM de asignar primero los bloques más grandes." data-cuando="Después de probar los órdenes"></cite>.</p>
+          <details class="profundizar">
+            <summary>¿Y si los pongo de menor a mayor?</summary>
+            <div>
+              <p>Prueba el botón "Menores primero". Con estos tamaños también cabe todo, aunque justo: queda un hueco de 4 direcciones y no sobra nada. En cambio el orden de llegada original no cabe, y no es casualidad: de mayor a menor, <b>nunca</b> quedan huecos, porque cada bloque empieza donde terminó otro de tamaño mayor o igual, y ese final ya es múltiplo del tamaño del nuevo.</p>
+              <p>De menor a mayor puede funcionar, pero depende de los números; de mayor a menor siempre. Por eso el material da la regla así, sin condiciones.</p>
+            </div>
+          </details>
+          <div class="cita" id="citaHipo" hidden></div>
+          <div class="check" id="chk5"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="El reparto completo">
+          <span class="etapa">Paso 6</span>
+          <h3>El reparto completo, y Marketing</h3>
+          <p>Con los bloques de mayor a menor en el /24 completo, la tabla del escenario da, para cada área, su dirección de red, su rango de equipos y su broadcast. Los cuatro primeros son los de la tabla resuelta del material; el quinto, el enlace, lo agregamos nosotros con un /30. Cada subred suele ser además una VLAN distinta: aquí Ventas sería la VLAN 10 y Soporte la 20 (en el material el laboratorio es la 30 y los servidores la 99).</p>
+          <p>Quedan libres de la .124 a la .255, 132 direcciones. Llega un área nueva: <b>Marketing</b>, con 25 equipos. Para 25 equipos hace falta un bloque de 32 (un /27: <span data-tex="2^5-2=30\ge 25"></span>). La solución del ejercicio pone a Marketing en <b>192.168.10.128/27</b>
+            <cite class="cita" data-fuente="red5ej" data-pag="4" data-pimp="3" data-seccion="Soluciones 2 y 3: subnetting VLSM, direcciones libres y Marketing" data-que="La tabla de las cuatro subredes, la verificación 64 + 32 + 16 + 8 = 120 direcciones usadas, y la subred de Marketing 192.168.10.128/27 con sus rangos." data-cuando="Después de resolver la predicción"></cite>.</p>
+          <div class="check" id="chk6"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+          <p>Un detalle del texto de esa solución: dice que Marketing necesita "al menos 27 direcciones utilizables (25 hosts + margen)". El 27 no sale de ninguna regla; con 25 equipos basta que el bloque tenga 25 utilizables, y un /27 ya trae 30. El resultado es correcto, solo la justificación es floja.</p>
+
+          <div class="destacado" id="destacado">
+            <p class="dest-tit">Una confusión muy común</p>
+            <h4>Si el /24 tenía 254 equipos útiles, ¿por qué las subredes no suman lo mismo?</h4>
+            <p>Un /24 completo da 254 direcciones para equipos. Pero cada subred pierde su propia dirección de red y su propio broadcast, así que <b>partir en subredes siempre cuesta direcciones</b>. En el reparto de la tabla, Ventas, Soporte, Laboratorio, Servidores y Enlace tienen cada una 2 direcciones perdidas.</p>
+            <div class="check" id="chk6b"><p class="check-tit">Calcula antes de seguir</p><div class="cuerpo"></div></div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="A qué subred pertenece">
+          <span class="etapa">Paso 7</span>
+          <h3>Dada una IP, ¿en qué subred está?</h3>
+          <p>Un equipo es el 192.168.10.<b>37</b>. ¿De qué área es? Un router lo decide con una operación de bits: toma la dirección, aplica la máscara de cada subred con un <b>AND</b> bit a bit y mira si el resultado es la dirección de red de esa subred. El AND deja pasar los bits donde la máscara tiene 1 y apaga los demás.</p>
+          <div class="fbloque">
+            <div data-tex="\text{IP} \;\&\; \text{máscara} = \text{dirección de red}" data-display></div>
+            <div class="vivo" id="vivo7"></div>
+          </div>
+          <p>El .37 con la máscara de Ventas (.192) da 0, y 0 es la dirección de red de Ventas: pertenece a Ventas. Con la máscara de Soporte (.224) da 32, que no es la red de Soporte (.64): no pertenece. Esto no viene resuelto en el material de la unidad, que explica la máscara pero no hace ningún AND; lo vas a necesitar en la página de Routing.</p>
+          <details class="profundizar">
+            <summary>¿Por qué el AND con el /26 da el inicio del bloque?</summary>
+            <div>
+              <p>La máscara de un /26 es 11000000 en el último octeto: los dos primeros bits son de red y los seis restantes de equipo. El AND borra los seis bits de equipo y deja los dos de red, que son justo el inicio del bloque: 00 es .0, 01 es .64, 10 es .128, 11 es .192. Es el mismo cálculo del paso 4 visto desde el otro lado: en lugar de comprobar que el inicio acaba en ceros, <b>pones</b> esos ceros.</p>
+            </div>
+          </details>
+          <div class="check" id="chk7"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+        </div>
+        <svg id="plano" role="img" aria-label="Tablero de 256 direcciones de la red 192.168.10.0/24, en 16 filas de 16"></svg>
+        <div class="extra" id="extra"></div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>El reparto de los pasos 3 al 6, escrito como lo haría un programa: ordena las áreas de mayor a menor, calcula los bits de host de cada una, alinea su inicio y avanza. Elige Python o R, dale a reproducir y mira cómo el tablero se va llenando. El programa no usa red: trabaja con números escritos a mano.</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir</p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="true">Python</button>
+            <button type="button" data-lang="r" aria-pressed="false">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">1 · ordenar</span><span data-f="2">2 · un bloque por área</span><span data-f="3">3 · el resultado</span><span data-f="4">4 · comprobar</span>
+        </div>
+        <svg id="vrPlano" role="img" aria-label="Tablero de 256 direcciones que se llena mientras corre el programa"></svg>
+        <h3 class="mini-tit vr-tit" style="margin-top:10px">Lo que va calculando el programa</h3>
+        <div class="tabla-wrap"><table class="tabla vr-tabla" id="vrTabla"></table></div>
+        <div class="vr-cuenta" id="vrCuenta"></div>
+        <div class="vr-salida" id="vrSalida"></div>
+      </div>
+    </div>
+
+    <p class="vr-nota">En Python la librería <code>ipaddress</code> comprueba el trabajo: <code>ip_network("192.168.10.0/24").subnets(new_prefix=26)</code> parte el bloque en cuatro /26 iguales, y <code>address_exclude</code> dice qué sobra al quitar un trozo. VLSM, partir con tamaños distintos, lo tienes que decidir tú, como en el bucle. R no trae <code>ipaddress</code>: la comprobación final se hace con aritmética y con <code>bitwAnd</code>, y por eso el programa de R tiene tres líneas más en esa parte. El resultado coincide con la solución de la unidad, incluidos los cuatro primeros bloques de su tabla.</p>
+
+    <details class="profundizar">
+      <summary>¿Cómo se parte solo un trozo en Python?</summary>
+      <div>
+        <p><code>list(ipaddress.ip_network("192.168.10.0/24").address_exclude(ipaddress.ip_network("192.168.10.0/26")))</code> devuelve <code>['192.168.10.128/25', '192.168.10.64/26']</code>: lo que queda del /24 al quitar el primer /26, ya como bloques alineados. Es la forma de repartir "a lo grande" con la librería: te quedas con el primer trozo que te sirva y sigues con el resto.</p>
+      </div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Una dirección que no es múltiplo</h3><span class="estado" data-reto="codigo2"></span></div>
+        <div id="codigo2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>El caso del /31</h3><span class="estado" data-reto="codigo3"></span></div>
+        <div id="codigo3"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: la biblioteca te avisa en el índice cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>¿Es un reparto válido?</h3><span class="estado" data-reto="ojo"></span></div>
+        <p class="desc">Cinco repartos del tablero. Mira y decide sin calcular: ¿es válido, hay un bloque mal alineado o dos se pisan? Apruebas con 4 de 5.</p>
+        <div id="ojo"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Construir</span><h3>Reparte tú el /24</h3><span class="estado" data-reto="construir"></span></div>
+        <p class="desc">Elige un área y toca el tablero donde quieres que empiece. Se marcan solos los objetivos.</p>
+        <svg id="planoConstr" role="img" aria-label="Tablero para repartir las cinco áreas"></svg>
+        <div class="chips" id="constrChips"></div>
+        <p class="msg" id="constrMsg" aria-live="polite"></p>
+        <ul class="objetivos" id="objetivos"></ul>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>El broadcast de una subred</h3><span class="estado" data-reto="mano"></span></div>
+        <p class="desc">Toma papel y haz la cuenta antes de pedir pistas.</p>
+        <div id="manoDatos"></div>
+        <div id="mano"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Alguien se equivocó</h3><span class="estado" data-reto="error"></span></div>
+        <p class="desc">Una de las líneas tiene un error. Tócala.</p>
+        <div id="error"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Equipos que caben</h3><span class="estado" data-reto="prop1"></span></div>
+        <div id="prop1"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Dónde puede empezar un /26</h3><span class="estado" data-reto="prop2"></span></div>
+        <div id="prop2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>La máscara de un /27</h3><span class="estado" data-reto="prop3"></span></div>
+        <div id="prop3"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>A qué subred pertenece</h3><span class="estado" data-reto="prop4"></span></div>
+        <div id="prop4"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Cuatro subredes iguales</h3><span class="estado" data-reto="prop5"></span></div>
+        <div id="prop5"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Recordar a la fuerza es lo que fija. Arma la regla de los bits de host y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Fórmula de memoria</span><h3>Arma la regla del tamaño del bloque</h3><span class="estado" data-reto="formula"></span></div>
+        <p class="desc">Un bloque de <span data-tex="2^{k}"></span> direcciones alberga a <span data-tex="h"></span> equipos si cumple una desigualdad. Hay piezas de más. No mires arriba.</p>
+        <div id="formula"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el material</h2>
+      <p class="lecturas-intro">Ya construiste la idea con las manos. Ahora ve a la versión escrita de la materia y comprueba que la reconoces. Cada entrada dice qué vas a encontrar y en qué momento conviene leerla. Si abres la biblioteca con doble clic, el enlace abre el PDF en esa página. Tres cosas que explicamos aquí no vienen en el material: el AND bit a bit para saber a qué subred pertenece una IP, la razón por la que asignar de mayor a menor evita los huecos (el material da solo la regla) y el enlace de 2 equipos.</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> Las áreas y sus equipos (Ventas 50, Soporte 20, Laboratorio 10, Servidores 6, Enlace 2 y Marketing 25) siguen el caso TechNova del material, salvo el enlace de 2 equipos, que es un añadido para la página. Las direcciones 192.168.x.x son privadas y se usan dentro de una red; el material no explica qué son ni la traducción de direcciones (NAT) que las lleva a Internet. Tu progreso se guarda solo en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+/* Ejemplo comun de la ruta "Redes de computadores" (para que los numeros se reconozcan entre paginas):
+   la red 192.168.10.0/24 (caso TechNova de UD5) repartida con VLSM de mayor a menor:
+   Ventas 50 equipos -> 192.168.10.0/26 (VLAN 10), Soporte 20 -> .64/27 (VLAN 20), Laboratorio 10 -> .96/28,
+   Servidores 6 -> .112/29, Enlace de 2 routers -> .120/30; libre desde .124. Marketing (25) -> .128/27.
+   El equipo 192.168.10.37 es de Ventas; el nombre de ejemplo es www.ejemplo.org. */
+(function () {
+  "use strict";
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var RETOS = ["ojo", "construir", "mano", "error", "formula", "prop1", "prop2", "prop3", "prop4", "prop5", "codigo1", "codigo2", "codigo3"];
+  var C = B.concepto({ id: "subredes-vlsm", retos: RETOS, pasos: 7 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  /* ---------------- utilidades ---------------- */
+  var NS = "http://www.w3.org/2000/svg";
+  function nodo(tag, at, padre) {
+    var e = document.createElementNS(NS, tag);
+    for (var k in at) e.setAttribute(k, at[k]);
+    if (padre) padre.appendChild(e);
+    return e;
+  }
+  function texto(padre, at, t) { var e = nodo("text", at, padre); e.textContent = t; return e; }
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+  function bin8(n) { var s = n.toString(2); while (s.length < 8) s = "0" + s; return s; }
+  function bin4(n) { var s = bin8(n); return s.slice(0, 4) + " " + s.slice(4); }
+  function log2(t) { return Math.round(Math.log(t) / Math.LN2); }
+
+  /* ---------------- las areas ---------------- */
+  var DEPS = [
+    { id: "ventas", n: "Ventas", h: 50, c: "var(--j)" },
+    { id: "soporte", n: "Soporte", h: 20, c: "var(--k)" },
+    { id: "lab", n: "Laboratorio", h: 10, c: "var(--accent)" },
+    { id: "serv", n: "Servidores", h: 6, c: "var(--d5)" },
+    { id: "enlace", n: "Enlace", h: 2, c: "var(--pos)" },
+    { id: "mkt", n: "Marketing", h: 25, c: "var(--d6)" }
+  ];
+  function dep(id) { for (var i = 0; i < DEPS.length; i++) if (DEPS[i].id === id) return DEPS[i]; return null; }
+  function kDe(h) { var k = 0; while (Math.pow(2, k) - 2 < h) k++; return k; }
+  function tam(d) { return Math.pow(2, kDe(d.h)); }
+  function pref(d) { return 32 - kDe(d.h); }
+  function mascaraOct(t) { return 256 - t; }
+  var CINCO = ["ventas", "soporte", "lab", "serv", "enlace"];
+
+  /* reparto secuencial: cada bloque justo despues del anterior, saltando al siguiente multiplo de su tamano */
+  function secuencia(ids, limite) {
+    var p = 0, res = [], huecos = [];
+    ids.forEach(function (id) {
+      var t = tam(dep(id)), s = Math.ceil(p / t) * t;
+      if (s + t > limite) { res.push({ id: id, fallo: true, size: t }); return; }
+      if (s > p) huecos.push({ ini: p, fin: s - 1 });
+      res.push({ id: id, start: s, size: t, antes: p });
+      p = s + t;
+    });
+    return { res: res, huecos: huecos, fin: p };
+  }
+  var SOL = secuencia(CINCO, 256);
+  function solDe(id) { for (var i = 0; i < SOL.res.length; i++) if (SOL.res[i].id === id) return SOL.res[i]; return null; }
+
+  /* ---------------- el tablero de 256 direcciones ---------------- */
+  function crearTablero(svg) {
+    var CEL = 24, ML = 38, MT = 20, W = ML + 16 * CEL + 4, H = MT + 16 * CEL + 4;
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    svg.classList.add("tab-svg");
+    var gBase = nodo("g", {}, svg), gCap = nodo("g", {}, svg);
+    var st = { bloques: [], ocupado: [], huecos: [], ghost: null, marcas: false, punto: null, resalta: null };
+    var T = { on: {} };
+    var a, r, c;
+    for (a = 0; a < 256; a++) {
+      r = Math.floor(a / 16); c = a % 16;
+      nodo("rect", { x: ML + c * CEL, y: MT + r * CEL, width: CEL, height: CEL, "class": "celda" }, gBase);
+    }
+    for (r = 0; r < 16; r++) texto(gBase, { x: ML - 5, y: MT + r * CEL + 15, "class": "fila-lab", "text-anchor": "end" }, "." + (r * 16));
+    [0, 4, 8, 12, 15].forEach(function (cc) { texto(gBase, { x: ML + cc * CEL + CEL / 2, y: MT - 6, "class": "col-lab", "text-anchor": "middle" }, "+" + cc); });
+
+    function segs(ini, t) {
+      var fin = Math.min(255, ini + t - 1), out = [];
+      for (var rr = Math.floor(ini / 16); rr <= Math.floor(fin / 16); rr++) {
+        out.push({ r: rr, c0: Math.max(ini, rr * 16) - rr * 16, c1: Math.min(fin, rr * 16 + 15) - rr * 16 });
+      }
+      return out;
+    }
+    function rectSeg(g, s, cls) {
+      return nodo("rect", { x: ML + s.c0 * CEL, y: MT + s.r * CEL, width: (s.c1 - s.c0 + 1) * CEL, height: CEL, "class": cls }, g);
+    }
+    function etiqueta(ss, variantes) {
+      var mejor = ss[0];
+      ss.forEach(function (s) { if (s.c1 - s.c0 > mejor.c1 - mejor.c0) mejor = s; });
+      var ancho = (mejor.c1 - mejor.c0 + 1) * CEL;
+      for (var i = 0; i < variantes.length; i++) {
+        if (variantes[i] && variantes[i].length * 6.6 + 8 <= ancho) {
+          texto(gCap, { x: ML + mejor.c0 * CEL + 4, y: MT + mejor.r * CEL + 15, "class": "etq" }, variantes[i]);
+          return;
+        }
+      }
+    }
+    function celdaTxt(a2, t, cls) {
+      var rr = Math.floor(a2 / 16), cc = a2 % 16;
+      texto(gCap, { x: ML + cc * CEL + CEL / 2, y: MT + rr * CEL + 15.5, "class": cls, "text-anchor": "middle" }, t);
+    }
+    function render() {
+      gCap.innerHTML = "";
+      st.ocupado.forEach(function (o) {
+        var ss = segs(o.ini, o.fin - o.ini + 1);
+        ss.forEach(function (s) { rectSeg(gCap, s, "oc"); });
+        etiqueta(ss, [o.texto || ""]);
+      });
+      st.bloques.forEach(function (b) {
+        var ss = segs(b.start, b.size);
+        ss.forEach(function (s) { var e = rectSeg(gCap, s, "bloq"); e.style.fill = b.color; e.style.stroke = b.color; });
+        if (b.uso) segs(b.start, Math.min(b.uso, b.size)).forEach(function (s) { var e = rectSeg(gCap, s, "uso"); e.style.fill = b.color; });
+        if (st.marcas) { celdaTxt(b.start, "R", "rb"); celdaTxt(Math.min(255, b.start + b.size - 1), "B", "rb"); }
+        var largo = (b.nom || "") + (b.pref != null ? " /" + b.pref : "");
+        etiqueta(ss, [largo, b.nom || "", b.nom ? b.nom.charAt(0) : ""]);
+      });
+      st.huecos.forEach(function (h) {
+        var ss = segs(h.ini, h.fin - h.ini + 1);
+        ss.forEach(function (s) { rectSeg(gCap, s, "hueco"); });
+        etiqueta(ss, ["hueco " + (h.fin - h.ini + 1), "hueco", ""]);
+      });
+      if (st.resalta) segs(st.resalta.start, st.resalta.size).forEach(function (s) { rectSeg(gCap, s, "resalta"); });
+      if (st.ghost) {
+        var g = st.ghost, ssg = segs(g.start, g.size);
+        ssg.forEach(function (s) { rectSeg(gCap, s, g.ok ? "ghost-ok" : "ghost-mal"); });
+        if (g.texto) etiqueta(ssg, [g.texto, ""]);
+      }
+      if (st.punto !== null) {
+        var rr = Math.floor(st.punto / 16), cc = st.punto % 16;
+        nodo("rect", { x: ML + cc * CEL + 1, y: MT + rr * CEL + 1, width: CEL - 2, height: CEL - 2, "class": "punto" }, gCap);
+      }
+    }
+    function cellDe(e) {
+      var rc = svg.getBoundingClientRect();
+      var x = (e.clientX - rc.left) / rc.width * W, y = (e.clientY - rc.top) / rc.height * H;
+      var cc = Math.floor((x - ML) / CEL), rr = Math.floor((y - MT) / CEL);
+      if (cc < 0 || cc > 15 || rr < 0 || rr > 15) return -1;
+      return rr * 16 + cc;
+    }
+    svg.addEventListener("pointermove", function (e) { if (T.on.hover) T.on.hover(cellDe(e)); });
+    svg.addEventListener("pointerleave", function () { if (T.on.hover) T.on.hover(-1); });
+    svg.addEventListener("click", function (e) { var q = cellDe(e); if (q >= 0 && T.on.clic) T.on.clic(q); });
+    T.set = function (c2) {
+      for (var k in c2) st[k] = c2[k];
+      render();
+    };
+    T.limpiar = function () {
+      st.bloques = []; st.ocupado = []; st.huecos = []; st.ghost = null; st.marcas = false; st.punto = null; st.resalta = null;
+      T.on = {};
+      render();
+    };
+    render();
+    return T;
+  }
+
+  /* explicacion en bits del inicio de un bloque */
+  function alinHTML(a, t) {
+    var k = log2(t), bits = bin8(a), red = bits.slice(0, 8 - k), host = bits.slice(8 - k);
+    var ok = /^0*$/.test(host);
+    return "Inicio .<b>" + a + "</b> = " + red + '<span class="hb' + (ok ? "" : " mal") + '">' + host + "</span><br>" +
+      "Un bloque de " + t + " reserva " + k + " bits y en la dirección de red todos valen 0: " + (ok ? "aquí sí." : "aquí no.");
+  }
+
+  /* ---------------- colocador: elegir un area y tocar el tablero ---------------- */
+  function colocador(T, cfg) {
+    var puestos = {}, sel = null, ui = { chips: null, msg: null, alin: null };
+    function bloques() {
+      return Object.keys(puestos).map(function (id) {
+        var d = dep(id);
+        return { start: puestos[id], size: tam(d), color: d.c, nom: d.n, pref: pref(d) };
+      });
+    }
+    function evaluar(id, a) {
+      var d = dep(id), t = tam(d), validos = [], n, s;
+      for (s = 0, n = 0; s < cfg.limite && n < 4; s += t, n++) validos.push("." + s);
+      if (a % t !== 0) return { ok: false, msg: d.n + " mide " + t + " direcciones y no puede empezar en ." + a + ": " + a + " no es múltiplo de " + t + ". Inicios válidos: " + validos.join(", ") + "..." };
+      if (a + t > cfg.limite) return { ok: false, msg: d.n + " se saldría de la red: de ." + a + " a ." + (a + t - 1) + "." };
+      for (var o in puestos) {
+        if (o === id) continue;
+        var d2 = dep(o), t2 = tam(d2), s2 = puestos[o];
+        if (a < s2 + t2 && s2 < a + t) return { ok: false, msg: d.n + " pisaría a " + d2.n + " (de ." + s2 + " a ." + (s2 + t2 - 1) + ")." };
+      }
+      return { ok: true };
+    }
+    function pintarChips() {
+      if (!ui.chips) return;
+      ui.chips.innerHTML = cfg.ids.map(function (id) {
+        var d = dep(id), t = tam(d), en = puestos[id];
+        return '<button type="button" class="chip-dep' + (sel === id ? " sel" : "") + (en != null ? " puesto" : "") + '" data-id="' + id + '" style="--c:' + d.c + '">' +
+          d.n + " · " + d.h + " eq. · /" + pref(d) + " (" + t + ")" + (en != null ? " · en ." + en : "") + "</button>";
+      }).join("");
+    }
+    function mensaje(t, cls) { if (ui.msg) { ui.msg.textContent = t; ui.msg.className = "msg" + (cls ? " " + cls : ""); } }
+    function pintar() {
+      T.set({ bloques: bloques(), ghost: null });
+      pintarChips();
+      if (cfg.alCambiar) cfg.alCambiar(puestos);
+    }
+    function elegir(id) {
+      if (!cfg.activo()) { mensaje("Responde primero la predicción para activar el tablero."); return; }
+      if (puestos[id] != null) { delete puestos[id]; }
+      sel = id;
+      mensaje("Toca el tablero donde quieres que empiece " + dep(id).n + ".");
+      pintar();
+    }
+    var api = {
+      puestos: function () { return puestos; },
+      vaciar: function () { puestos = {}; sel = null; mensaje(""); pintar(); },
+      activar: function (chipsEl, msgEl, alinEl) {
+        ui.chips = chipsEl; ui.msg = msgEl; ui.alin = alinEl;
+        chipsEl.onclick = function (e) { var b = e.target.closest(".chip-dep"); if (b) elegir(b.getAttribute("data-id")); };
+        T.on = {
+          hover: function (a) {
+            if (!cfg.activo() || sel === null || a < 0) { T.set({ ghost: null }); if (ui.alin) ui.alin.innerHTML = ""; return; }
+            var ev = evaluar(sel, a), d = dep(sel), t = tam(d);
+            T.set({ ghost: { start: a, size: t, ok: ev.ok, texto: d.n } });
+            if (ui.alin) ui.alin.innerHTML = alinHTML(a, t);
+          },
+          clic: function (a) {
+            if (!cfg.activo()) { mensaje("Responde primero la predicción para activar el tablero."); return; }
+            if (sel === null) { mensaje("Elige primero un área, arriba del tablero."); return; }
+            var ev = evaluar(sel, a);
+            if (!ev.ok) { mensaje(ev.msg, "bad"); return; }
+            puestos[sel] = a;
+            mensaje(dep(sel).n + " queda en ." + a + " a ." + (a + tam(dep(sel)) - 1) + ".", "ok");
+            sel = null;
+            pintar();
+          }
+        };
+        pintar();
+      }
+    };
+    return api;
+  }
+
+  /* ---------------- estado del recorrido ---------------- */
+  var est = { paso: 0, g1: false, g4: false, g5: false, g6: false, g6b: false, g7: false, tam2: 32, sel3: "ventas", serv: 6, lista5: [], mkt: false, oct: 37 };
+  var pasos;
+  var T = crearTablero($("plano"));
+  var col4 = colocador(T, {
+    ids: CINCO, limite: 256,
+    activo: function () { return est.g4; }
+  });
+  var HINTS = [
+    "Cada cuadrito es una dirección",
+    "Cambia el tamaño del bloque de Ventas",
+    "Toca una fila de la tabla",
+    "Elige un área y toca el tablero",
+    "Prueba los órdenes de llegada",
+    "Marketing necesita su propio bloque",
+    "Mueve el equipo por el tablero"
+  ];
+
+  function extra(h) { $("extra").innerHTML = h; }
+
+  function entrar(i) {
+    est.paso = i;
+    $("escHint").textContent = HINTS[i];
+    T.limpiar();
+    var fn = [m0, m1, m2, m3, m4, m5, m6][i];
+    fn();
+  }
+
+  /* paso 1: el reparto parejo */
+  function m0() {
+    var h = '<div class="demandas">' + ["ventas", "soporte", "enlace"].map(function (id) {
+      var d = dep(id); return '<span class="dem" style="--c:' + d.c + '"><b>' + d.n + "</b> " + d.h + " equipos</span>";
+    }).join("") + "</div>";
+    if (est.g1) {
+      T.set({ bloques: [
+        { start: 0, size: 64, color: dep("ventas").c, nom: "Ventas", pref: 26, uso: 50 },
+        { start: 64, size: 64, color: dep("soporte").c, nom: "Soporte", pref: 26, uso: 20 },
+        { start: 128, size: 64, color: dep("enlace").c, nom: "Enlace", pref: 26, uso: 2 }
+      ] });
+      h += '<p class="lectura">Cada área recibió un bloque de 64. Usan de verdad <b>50 + 20 + 2 = 72</b> direcciones de las <b>192</b> que ocupan: se pierden <b>120</b>, y a la red le quedan solo 64 libres. El color intenso es lo que se usa; el claro, lo que se desperdicia.</p>';
+    } else {
+      h += '<p class="lectura">Responde la predicción para ver un primer reparto en el tablero.</p>';
+    }
+    extra(h);
+  }
+
+  /* paso 2: dos direcciones reservadas */
+  function m1() {
+    var t = est.tam2, util = t - 2, d = dep("ventas");
+    T.set({ marcas: true, bloques: [{ start: 0, size: t, color: d.c, nom: "Ventas", pref: 32 - log2(t), uso: Math.min(52, t) }] });
+    var h = '<div class="btn-row compacta" id="tams2">' + [32, 64, 128].map(function (x) {
+      return '<button type="button" data-t="' + x + '" class="' + (x === t ? "on" : "") + '">Bloque de ' + x + "</button>";
+    }).join("") + "</div>";
+    h += '<p class="lectura">' + (util < 50
+      ? "Bloque de <b>" + t + "</b>: la primera dirección (.0) es la red y la última (." + (t - 1) + ") el broadcast. Quedan <b>" + util + "</b> para equipos y Ventas necesita 50: <b>faltan " + (50 - util) + "</b>."
+      : "Bloque de <b>" + t + "</b>: la primera (.0) es la red y la última (." + (t - 1) + ") el broadcast. Quedan <b>" + util + "</b> para equipos: caben los 50 y <b>sobran " + (util - 50) + "</b>.") + "</p>";
+    extra(h);
+    $("vivo2").innerHTML = t + " − 2 = " + util + " equipos" + (util >= 50 ? " (alcanza para 50)" : " (no alcanza para 50)");
+  }
+  $("extra").addEventListener("click", function (e) {
+    var b = e.target.closest("#tams2 button");
+    if (b && est.paso === 1) { est.tam2 = +b.getAttribute("data-t"); m1(); }
+  });
+
+  /* paso 3: tabla de bits de host */
+  function filas3() { return [["ventas", 50], ["soporte", 20], ["lab", 10], ["serv", est.serv], ["enlace", 2]]; }
+  function m2() {
+    var h = '<div class="btn-row compacta" id="servBtns"><button type="button" data-s="6" class="' + (est.serv === 6 ? "on" : "") + '">Servidores: 6 equipos</button><button type="button" data-s="2" class="' + (est.serv === 2 ? "on" : "") + '">Servidores: 2 equipos</button></div>';
+    h += '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Área</th><th>Equipos</th><th>k</th><th>Tamaño</th><th>Prefijo</th><th>Útiles</th></tr></thead><tbody>';
+    var det = null;
+    filas3().forEach(function (r) {
+      var d = dep(r[0]), k = kDe(r[1]), t = Math.pow(2, k);
+      if (est.sel3 === d.id) det = { d: d, h: r[1], k: k, t: t };
+      h += '<tr data-id="' + d.id + '" tabindex="0" class="' + (est.sel3 === d.id ? "sel" : "") + '"><td class="pl"><i class="pun" style="background:' + d.c + '"></i>' + d.n + "</td><td>" + r[1] + "</td><td>" + k + "</td><td>" + t + "</td><td>/" + (32 - k) + "</td><td>" + (t - 2) + "</td></tr>";
+    });
+    h += "</tbody></table></div>";
+    if (det) {
+      var oct = mascaraOct(det.t), pre = 32 - det.k;
+      var m = bin8(oct);
+      T.set({ bloques: [{ start: 0, size: det.t, color: det.d.c, nom: det.d.n, pref: pre, uso: det.h + 2 }] });
+      h += '<p class="lectura"><b>' + det.d.n + "</b>: 2<sup>" + det.k + "</sup> − 2 = " + (det.t - 2) + " ≥ " + det.h + ", así que k = " + det.k + " y el prefijo es /" + pre + ". Máscara <b>255.255.255." + oct + '</b> = <span class="bin"><span class="u">11111111.11111111.11111111.</span>' + m.slice(0, 8 - det.k) + '<span class="c">' + m.slice(8 - det.k) + "</span></span>. Salto: 256 − " + oct + " = " + det.t + ".</p>";
+      $("vivo3").innerHTML = det.d.n + ": 2<sup>" + det.k + "</sup> − 2 = " + (det.t - 2) + " ≥ " + det.h + " → k = " + det.k + " → /" + pre;
+    }
+    extra(h);
+  }
+  $("extra").addEventListener("click", function (e) {
+    if (est.paso !== 2) return;
+    var b = e.target.closest("#servBtns button");
+    if (b) { est.serv = +b.getAttribute("data-s"); m2(); return; }
+    var tr = e.target.closest("tr[data-id]");
+    if (tr) { est.sel3 = tr.getAttribute("data-id"); m2(); }
+  });
+  $("extra").addEventListener("keydown", function (e) {
+    if (est.paso !== 2 || e.key !== "Enter") return;
+    var tr = e.target.closest ? e.target.closest("tr[data-id]") : null;
+    if (tr) { est.sel3 = tr.getAttribute("data-id"); m2(); }
+  });
+
+  /* paso 4: alinear y no pisarse */
+  function m3() {
+    var h = '<div class="chips" id="chips4"></div><p class="msg" id="msg4" aria-live="polite">' + (est.g4 ? "Elige un área y toca el tablero." : "Responde la predicción para activar el tablero.") + '</p><div class="alin" id="alin4"></div><div class="btn-row compacta"><button type="button" id="vaciar4">Vaciar el tablero</button></div>';
+    extra(h);
+    $("vivo4").innerHTML = est.g4 ? "Pasa el cursor por el tablero con un área elegida para ver los bits de su inicio." : "";
+    col4.activar($("chips4"), $("msg4"), $("alin4"));
+  }
+  $("extra").addEventListener("click", function (e) { if (e.target.id === "vaciar4") col4.vaciar(); });
+
+  /* paso 5: el orden de llegada */
+  var ORDEN_LLEGADA = ["enlace", "lab", "ventas", "serv", "soporte"];
+  function m4() {
+    T.set({ ocupado: [{ ini: 128, fin: 255, texto: "otra sede" }] });
+    pintar5();
+  }
+  function pintar5() {
+    var s = secuencia(est.lista5, 128), bl = [], perdidas = 0;
+    s.res.forEach(function (r) { if (!r.fallo) { var d = dep(r.id); bl.push({ start: r.start, size: r.size, color: d.c, nom: d.n, pref: pref(d) }); } });
+    s.huecos.forEach(function (hh) { perdidas += hh.fin - hh.ini + 1; });
+    T.set({ bloques: bl, huecos: s.huecos, ocupado: [{ ini: 128, fin: 255, texto: "otra sede" }] });
+    var puede = est.g5, h = '<div class="chips">';
+    CINCO.forEach(function (id) {
+      var d = dep(id), usado = est.lista5.indexOf(id) >= 0;
+      h += '<button type="button" class="chip-dep' + (usado ? " puesto" : "") + '" data-id="' + id + '" style="--c:' + d.c + '"' + (!puede || usado ? " disabled" : "") + ">" + d.n + " · /" + pref(d) + " (" + tam(d) + ")</button>";
+    });
+    h += '</div><div class="btn-row compacta" id="ord5"><button type="button" data-o="may"' + (puede ? "" : " disabled") + '>Mayores primero</button><button type="button" data-o="men"' + (puede ? "" : " disabled") + '>Menores primero</button><button type="button" data-o="lle"' + (puede ? "" : " disabled") + '>Orden de llegada</button><button type="button" data-o="vac"' + (puede ? "" : " disabled") + ">Vaciar</button></div>";
+    var txt;
+    if (!puede) txt = "Responde la predicción para activar los botones.";
+    else if (!est.lista5.length) txt = "Toca las áreas en el orden en que llegan sus pedidos, o usa un orden ya armado.";
+    else {
+      var fallos = s.res.filter(function (r) { return r.fallo; }).map(function (r) { return dep(r.id).n; });
+      txt = "Huecos perdidos: <b>" + perdidas + "</b> direcciones. " + (fallos.length ? 'No cabe: <b>' + fallos.join(", ") + "</b>." : (est.lista5.length === 5 ? "Cupieron las cinco." : ""));
+    }
+    h += '<p class="lectura">' + txt + "</p>";
+    extra(h);
+    var ult = null;
+    s.res.forEach(function (r) { if (!r.fallo) ult = r; });
+    $("vivo5").innerHTML = ult ? dep(ult.id).n + ": ⌈" + ult.antes + " / " + ult.size + "⌉ × " + ult.size + " = " + ult.start + " → siguiente = " + (ult.start + ult.size) : (puede ? "Todavía no hay bloques." : "");
+  }
+  $("extra").addEventListener("click", function (e) {
+    if (est.paso !== 4 || !est.g5) return;
+    var c = e.target.closest(".chip-dep");
+    if (c && !c.disabled) { est.lista5.push(c.getAttribute("data-id")); pintar5(); return; }
+    var o = e.target.closest("#ord5 button");
+    if (!o || o.disabled) return;
+    var tipo = o.getAttribute("data-o");
+    if (tipo === "may") est.lista5 = CINCO.slice();
+    else if (tipo === "men") est.lista5 = CINCO.slice().reverse();
+    else if (tipo === "lle") est.lista5 = ORDEN_LLEGADA.slice();
+    else est.lista5 = [];
+    pintar5();
+  });
+
+  /* paso 6: el reparto completo y Marketing */
+  function m5() {
+    var bl = SOL.res.map(function (r) { var d = dep(r.id); return { start: r.start, size: r.size, color: d.c, nom: d.n, pref: pref(d) }; });
+    var huecos = [];
+    if (est.mkt) { var dm = dep("mkt"); bl.push({ start: 128, size: 32, color: dm.c, nom: dm.n, pref: pref(dm) }); huecos = [{ ini: 124, fin: 127 }]; }
+    T.set({ bloques: bl, huecos: huecos });
+    var h = '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Área</th><th>Subred</th><th>Equipos</th><th>Primero</th><th>Último</th><th>Broadcast</th></tr></thead><tbody>';
+    SOL.res.forEach(function (r) {
+      var d = dep(r.id);
+      h += '<tr><td class="pl"><i class="pun" style="background:' + d.c + '"></i>' + d.n + "</td><td>." + r.start + "/" + pref(d) + "</td><td>" + d.h + "</td><td>." + (r.start + 1) + "</td><td>." + (r.start + r.size - 2) + "</td><td>." + (r.start + r.size - 1) + "</td></tr>";
+    });
+    if (est.mkt) h += '<tr class="si"><td class="pl"><i class="pun" style="background:var(--d6)"></i>Marketing</td><td>.128/27</td><td>25</td><td>.129</td><td>.158</td><td>.159</td></tr>';
+    h += "</tbody></table></div>";
+    h += '<div class="btn-row compacta"><button type="button" id="btnMkt"' + (est.g6 ? "" : " disabled") + ">" + (est.mkt ? "Quitar Marketing" : "Poner Marketing (25 equipos)") + "</button></div>";
+    h += '<p class="lectura">' + (est.mkt
+      ? "Marketing queda en <b>.128/27</b>. Entre el enlace (termina en .123) y Marketing quedan <b>4 direcciones libres</b> (.124 a .127) que ningún /27 puede aprovechar. En el material no está el enlace y el hueco es de .120 a .127, 8 direcciones."
+      : (est.g6 ? "Pulsa el botón para poner a Marketing." : "Responde la predicción para activar el botón.")) + "</p>";
+    extra(h);
+  }
+  $("extra").addEventListener("click", function (e) {
+    if (e.target.id === "btnMkt" && est.paso === 5 && est.g6) { est.mkt = !est.mkt; m5(); }
+  });
+
+  /* paso 7: a que subred pertenece */
+  function m6() {
+    var h = '<p class="grande" id="g7"></p>';
+    if (est.g7) h += '<input type="range" class="rango" id="octR" min="0" max="255" value="' + est.oct + '" aria-label="Último octeto del equipo">';
+    else h += '<p class="msg">Responde la predicción para mover el equipo por el tablero.</p>';
+    h += '<div id="t7"></div>';
+    extra(h);
+    var r = $("octR");
+    if (r) r.addEventListener("input", function () { est.oct = +r.value; act7(); });
+    act7();
+  }
+  function act7() {
+    var o = est.oct, par = null;
+    SOL.res.forEach(function (r) { if ((o & mascaraOct(r.size)) === r.start && o < r.start + r.size) par = r; });
+    var bl = SOL.res.map(function (r) { var d = dep(r.id); return { start: r.start, size: r.size, color: d.c, nom: d.n, pref: pref(d) }; });
+    T.set({ bloques: bl, punto: o, resalta: par ? { start: par.start, size: par.size } : null });
+    $("g7").innerHTML = '192.168.10.<b>' + o + '</b> = <span class="bin">11000000.10101000.00001010.' + bin4(o) + "</span>";
+    var h = '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Subred</th><th>Máscara</th><th>IP AND máscara</th><th>Red</th></tr></thead><tbody>';
+    SOL.res.forEach(function (r) {
+      var d = dep(r.id), m = mascaraOct(r.size), and = o & m, ok = par && par.id === r.id;
+      h += '<tr class="' + (ok ? "si" : "") + '"><td class="pl"><i class="pun" style="background:' + d.c + '"></i>' + d.n + " /" + pref(d) + "</td><td>" + m + "</td><td>" + and + "</td><td>" + r.start + "</td></tr>";
+    });
+    h += "</tbody></table></div>";
+    h += '<p class="lectura">' + (par
+      ? "El resultado coincide con la red de <b>" + dep(par.id).n + "</b> (." + par.start + "): el equipo es de esa subred."
+      : "Ninguna fila coincide: la dirección .<b>" + o + "</b> está en la parte libre.") + "</p>";
+    $("t7").innerHTML = h;
+    $("vivo7").innerHTML = "." + o + " &amp; " + (par ? mascaraOct(par.size) : 192) + " = " + (o & (par ? mascaraOct(par.size) : 192)) + (par ? " → red de " + dep(par.id).n : " → ninguna red coincide");
+  }
+
+  /* ---------------- chequeos de cada paso ---------------- */
+  B.numerico(cuerpo("chk1"), {
+    pregunta: "Los bloques solo miden 1, 2, 4, 8, 16, 32, 64, 128 o 256 direcciones. Si las tres áreas reciben bloques del mismo tamaño y el de Ventas tiene que alojar a sus 50 equipos, ¿cuántos bloques de ese tamaño caben en las 256 direcciones?",
+    respuesta: 4,
+    tolerancia: 0,
+    pistas: [
+      "Primero busca el bloque permitido más chico que aloja 50 equipos.",
+      "Un bloque de 32 no alcanza para 50. El siguiente tamaño permitido es 64. ¿Cuántas veces cabe 64 en 256?"
+    ],
+    diagnostico: function (v) {
+      if (v === 8) return "Con bloques de 32 sí saldrían 8, pero un bloque de 32 no alcanza para los 50 equipos de Ventas.";
+      if (v === 2) return "Con bloques de 128 saldrían 2, pero hay uno más chico que ya sirve: 64.";
+      if (v === 5) return "256 entre 50 da cerca de 5, pero 50 no es un tamaño permitido: el bloque tiene que ser una potencia de dos.";
+      return null;
+    },
+    explicacion: "Ventas necesita un bloque de 64 (el de 32 se queda corto) y en 256 direcciones caben <b>4</b> bloques de 64. Mira el tablero: así quedaría el reparto parejo. Soporte usaría 20 de 64 y el enlace 2 de 64. Hace falta algo mejor: darle a cada área su tamaño.",
+    alResolver: function () { est.g1 = true; if (est.paso === 0) m0(); pasos.completar(0); }
+  });
+
+  B.opcionMultiple(cuerpo("chk2"), {
+    pregunta: "El enlace entre los dos routers tiene que alojar 2 equipos. Teniendo en cuenta las dos direcciones reservadas, ¿cuál es el bloque más pequeño que sirve?",
+    opciones: ["2 direcciones", "4 direcciones", "8 direcciones", "1 dirección"],
+    correcta: 1,
+    pistas: ["Un bloque de 2 direcciones, ¿cuántas le quedan a los equipos después de quitar la red y el broadcast?", null,
+      "Sirve, pero hay uno más pequeño que también sirve.", "Una sola dirección no puede ser a la vez la red, el broadcast y dos equipos."],
+    explicacion: "Con 4 direcciones quedan 4 − 2 = 2 para equipos: justo los dos routers. Con 2 direcciones no quedaría ninguna. Esto da un prefijo /30, la subred típica de un enlace entre routers (en la práctica existe también el /31 para enlaces punto a punto; lo verás en la trampa real del código). Este enlace de 2 equipos es un añadido de la página, no viene en el material.",
+    alResolver: function () { pasos.completar(1); }
+  });
+
+  B.numerico(cuerpo("chk3"), {
+    pregunta: "Marketing, un área nueva, tiene 25 equipos. Con la regla $2^{k}-2 \\ge h$, ¿qué prefijo $p=32-k$ le toca? Escribe solo el número del prefijo.",
+    respuesta: 27,
+    tolerancia: 0,
+    pistas: [
+      "Prueba k = 4: $2^4-2 = 14$, ¿alcanza para 25?",
+      "Con k = 5 salen $2^5-2 = 30$, que sí alcanza. El prefijo es 32 menos ese k."
+    ],
+    diagnostico: function (v) {
+      if (v === 5) return "5 son los bits de host, k. El prefijo es lo que queda: 32 − 5.";
+      if (v === 28) return "Un /28 tiene 4 bits de host y solo 14 direcciones útiles: no caben 25 equipos.";
+      if (v === 26) return "Un /26 sirve pero sobra el doble (62 útiles); hay un bloque más justo.";
+      return null;
+    },
+    explicacion: "25 + 2 = 27 direcciones como mínimo. $2^4 = 16$ se queda corto y $2^5 = 32$ alcanza: k = 5, prefijo $32-5 = 27$, que deja 30 equipos útiles y la máscara 255.255.255.224.",
+    alResolver: function () { pasos.completar(2); }
+  });
+
+  B.opcionMultiple(cuerpo("chk4"), {
+    pregunta: "Quieres poner a Soporte, un bloque de 32 direcciones, empezando en .48. ¿Qué pasa?",
+    opciones: [
+      "Se puede, mientras esas direcciones estén libres",
+      "No se puede: 48 no es múltiplo de 32, solo valen .0, .32, .64, .96...",
+      "No se puede: un bloque de 32 solo puede empezar en .0",
+      "Se puede, pero entonces el bloque mide solo 16"
+    ],
+    correcta: 1,
+    pistas: ["Piensa en los bits: un bloque de 32 reserva 5 bits de host, y todos tienen que valer 0 en el inicio. ¿48 acaba en cinco ceros?", null,
+      "Hay más inicios válidos que el .0. Fíjate en los múltiplos de 32.", "El tamaño del bloque lo fija el prefijo, no la posición."],
+    explicacion: "48 en binario es 00110000: los últimos 5 bits no son todos 0 (hay un 1 en el 16). Un /27 solo puede empezar donde esos 5 bits valen 0: .0, .32, .64, .96, .128, .160, .192, .224. <b>Ahora pruébalo:</b> el tablero ya está activo. Elige un área, mueve el cursor y mira cómo cambian los bits.",
+    alResolver: function () { est.g4 = true; if (est.paso === 3) m3(); pasos.completar(3); }
+  });
+
+  B.numerico(cuerpo("chk5"), {
+    pregunta: "Enlace llega primero y se queda en .0 a .3. Luego llega Ventas, un bloque de 64. Con la regla de saltar al siguiente múltiplo, ¿en qué dirección empieza Ventas?",
+    respuesta: 64,
+    tolerancia: 0,
+    pistas: [
+      "Después del enlace, la primera dirección libre es la .4. ¿Es múltiplo de 64?",
+      "El siguiente múltiplo de 64 que sea mayor o igual a 4 es el 64. Entre .4 y .63 queda un hueco."
+    ],
+    diagnostico: function (v) {
+      if (v === 4) return "La .4 es la primera libre, pero 4 no es múltiplo de 64: un bloque de 64 no puede empezar ahí.";
+      if (v === 128) return "Ese sería el siguiente /26 después del .64, pero el .64 ya vale.";
+      return null;
+    },
+    explicacion: "⌈4 / 64⌉ × 64 = 64: Ventas empieza en .64 y entre .4 y .63 quedan <b>60 direcciones de hueco</b>. Si Ventas hubiera llegado primero, habría empezado en .0 sin dejar nada. <b>Ahora pruébalo:</b> los botones del escenario ya funcionan.",
+    alResolver: function () { est.g5 = true; if (est.paso === 4) pintar5(); pasos.completar(4); }
+  });
+
+  B.numerico(cuerpo("chk6"), {
+    pregunta: "Los cinco bloques ya están puestos y la primera dirección libre es la .124. Marketing necesita un /27, de 32 direcciones. ¿En qué dirección empieza su bloque?",
+    respuesta: 128,
+    tolerancia: 0,
+    pistas: [
+      "¿Es .124 múltiplo de 32? Prueba con 96, 128, 160.",
+      "El siguiente múltiplo de 32 mayor o igual a 124 es el 128."
+    ],
+    diagnostico: function (v) {
+      if (v === 124) return "La .124 es la primera libre, pero un /27 no puede empezar ahí: 124 no es múltiplo de 32.";
+      if (v === 120) return "La .120 era la primera libre antes de poner el enlace, y de todos modos 120 tampoco es múltiplo de 32.";
+      if (v === 160) return "Sirve, pero hay un múltiplo de 32 más cerca.";
+      return null;
+    },
+    explicacion: "⌈124 / 32⌉ × 32 = 128. Marketing va en .128/27 y se pierden las direcciones .124 a .127, un hueco de 4. <b>Ahora pulsa el botón</b> del escenario para verlo en el tablero.",
+    alResolver: function () { est.g6 = true; if (est.paso === 5) m5(); cerrarPaso6(); }
+  });
+
+  B.numerico(cuerpo("chk6b"), {
+    pregunta: "Suma los equipos útiles de las cinco subredes (Ventas /26, Soporte /27, Laboratorio /28, Servidores /29 y Enlace /30). ¿Cuánto da?",
+    respuesta: 114,
+    tolerancia: 0,
+    pistas: [
+      "Útiles de cada una: tamaño menos 2. Ventas tiene 62.",
+      "62 + 30 + 14 + 6 + 2."
+    ],
+    diagnostico: function (v) {
+      if (v === 124) return "124 son las direcciones que ocupan los cinco bloques, contando las reservadas. Los equipos útiles son 124 − 5 × 2.";
+      if (v === 88) return "88 es la suma de los equipos que se pidieron (50 + 20 + 10 + 6 + 2). Aquí piden los útiles que ofrecen los bloques, que son más.";
+      if (v === 254) return "254 son los útiles de un /24 sin dividir. Al dividir se pierden direcciones.";
+      return null;
+    },
+    explicacion: "62 + 30 + 14 + 6 + 2 = <b>114</b> equipos útiles. Los cinco bloques ocupan 124 direcciones y cada uno pierde 2: 124 − 10 = 114. Más las 132 que siguen libres sin repartir, no se puede volver a juntar el /24 entero sin deshacer el reparto. Dividir tiene un precio, y VLSM lo mantiene bajo porque cada bloque es del tamaño justo.",
+    alResolver: function () { est.g6b = true; cerrarPaso6(); }
+  });
+  function cerrarPaso6() { if (est.g6 && est.g6b) pasos.completar(5); }
+
+  B.numerico(cuerpo("chk7"), {
+    pregunta: "Un equipo tiene la IP 192.168.10.100. Con las subredes de la tabla, ¿cuál es el último octeto de la dirección de red a la que pertenece?",
+    respuesta: 96,
+    tolerancia: 0,
+    pistas: [
+      "Hay que ver en cuál de los bloques cae el 100. Los bloques acaban en .63, .95, .111, .119 y .123.",
+      "El 100 está después de .95 y antes de .111: es el bloque del Laboratorio, que empieza en la .96."
+    ],
+    diagnostico: function (v) {
+      if (v === 64) return "El .64 es la red de Soporte, que acaba en .95. El 100 ya pasó ese bloque.";
+      if (v === 100) return "Esa es la IP del equipo. La dirección de red es la primera de su bloque.";
+      if (v === 111) return "El .111 es el broadcast del bloque. La dirección de red es la primera.";
+      return null;
+    },
+    explicacion: "100 en binario es 01100100. Con la máscara del /28 (11110000) el AND da 01100000 = 96. Es la red del Laboratorio (.96/28, de .96 a .111). <b>Ahora mueve el equipo</b> por el tablero y mira qué fila de la tabla se enciende.",
+    alResolver: function () { est.g7 = true; if (est.paso === 6) m6(); pasos.completar(6); }
+  });
+
+  pasos = B.pasos($("recorrido"), { concepto: C, alEntrar: entrar, alTerminar: function () { location.hash = "retos"; } });
+  est.g1 = pasos.hecho(0);
+  est.g4 = pasos.hecho(3);
+  est.g5 = pasos.hecho(4);
+  est.g6 = pasos.hecho(5);
+  est.g6b = est.g6;
+  est.g7 = pasos.hecho(6);
+  entrar(0);
+
+  /* ---------------- hipotesis inicial ---------------- */
+  (function () {
+    var ta = $("hipotesis"), t = null;
+    ta.value = B.nota("subredes-vlsm", "hipotesis");
+    function cita() {
+      var v = ta.value.trim(), el = $("citaHipo");
+      if (!el) return;
+      el.hidden = !v;
+      if (v) { el.textContent = ""; el.appendChild(document.createTextNode("Al principio escribiste: «" + v + "». ¿Se parece a lo que construimos? ¿Qué te faltaba?")); }
+    }
+    cita();
+    ta.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { B.nota("subredes-vlsm", "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; cita(); }, 500);
+    });
+  })();
+
+  /* ---------------- marcadores de estado de retos ---------------- */
+  function pintarEstados() {
+    [].forEach.call(document.querySelectorAll("[data-reto]"), function (el) {
+      var ok = C.retoOk(el.getAttribute("data-reto"));
+      el.textContent = ok ? "resuelto" : "pendiente";
+      el.classList.toggle("ok", ok);
+    });
+  }
+  C.alCambiar(pintarEstados);
+
+  /* ---------------- reto: ojo clinico ---------------- */
+  function clasificar(bl) {
+    var i, j;
+    for (i = 0; i < bl.length; i++) for (j = i + 1; j < bl.length; j++) {
+      if (bl[i].start < bl[j].start + bl[j].size && bl[j].start < bl[i].start + bl[i].size) return "pisa";
+    }
+    for (i = 0; i < bl.length; i++) if (bl[i].start % bl[i].size) return "desalineado";
+    return "valido";
+  }
+  function genBloques(tipo) {
+    var tams = [8, 16, 32, 64], intento;
+    for (intento = 0; intento < 600; intento++) {
+      var n = 3 + (Math.random() < 0.5 ? 1 : 0), bl = [], usado = [], i, a, s;
+      for (i = 0; i < n; i++) {
+        var t = tams[Math.floor(Math.random() * 4)], cand = [];
+        for (s = 0; s < 256; s += t) {
+          var libre = true;
+          for (a = s; a < s + t; a++) if (usado[a]) { libre = false; break; }
+          if (libre) cand.push(s);
+        }
+        if (!cand.length) break;
+        var s0 = cand[Math.floor(Math.random() * cand.length)];
+        for (a = s0; a < s0 + t; a++) usado[a] = true;
+        bl.push({ start: s0, size: t });
+      }
+      if (bl.length < n) continue;
+      var k = Math.floor(Math.random() * n);
+      if (tipo === "desalineado") {
+        bl[k].start += bl[k].size / 2;
+        if (bl[k].start + bl[k].size > 256) continue;
+      } else if (tipo === "pisa") {
+        var otro = bl[(k + 1) % n];
+        bl[k].start = Math.floor(otro.start / bl[k].size) * bl[k].size;
+      }
+      if (clasificar(bl) === tipo) return bl;
+    }
+    return [{ start: 0, size: 64 }, { start: 64, size: 32 }, { start: 96, size: 16 }];
+  }
+  (function () {
+    var cont = $("ojo");
+    cont.innerHTML = '<div class="ronda"></div><svg role="img" aria-label="Un reparto de bloques en el tablero"></svg>' +
+      '<div class="ojo-opts"><button type="button" class="opt" data-a="valido">Es válido</button><button type="button" class="opt" data-a="desalineado">Uno desalineado</button><button type="button" class="opt" data-a="pisa">Dos se pisan</button></div>' +
+      '<div class="fb" aria-live="polite"></div><div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    var tb = crearTablero(cont.querySelector("svg"));
+    var COLS = ["var(--j)", "var(--k)", "var(--accent)", "var(--d5)"], LET = ["A", "B", "C", "D"];
+    var tipos, ronda, aciertos, respondida, actual;
+    function nueva() {
+      var extra2 = ["valido", "desalineado", "pisa"][Math.floor(Math.random() * 3)];
+      tipos = B.mezclar(["valido", "desalineado", "pisa", "valido", extra2]);
+      ronda = 0; aciertos = 0;
+      mostrar();
+    }
+    function mostrar() {
+      respondida = false;
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 5 · aciertos " + aciertos;
+      actual = genBloques(tipos[ronda]);
+      tb.limpiar();
+      tb.set({ bloques: actual.map(function (b, i) { return { start: b.start, size: b.size, color: COLS[i], nom: LET[i], pref: 32 - log2(b.size) }; }) });
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (b) { b.disabled = false; b.className = "opt"; });
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+    }
+    cont.querySelector(".ojo-opts").addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || respondida) return;
+      respondida = true;
+      var tipo = tipos[ronda], ok = b.getAttribute("data-a") === tipo;
+      if (ok) aciertos++;
+      b.classList.add(ok ? "ok" : "mal");
+      if (!ok) cont.querySelector('[data-a="' + tipo + '"]').classList.add("ok");
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (x) { x.disabled = true; });
+      var porque = "";
+      if (tipo === "valido") porque = "Cada bloque empieza en un múltiplo de su tamaño y ninguno comparte direcciones con otro.";
+      else if (tipo === "desalineado") {
+        for (var i = 0; i < actual.length; i++) if (actual[i].start % actual[i].size) { porque = "El bloque " + LET[i] + " mide " + actual[i].size + " y empieza en ." + actual[i].start + ", que no es múltiplo de " + actual[i].size + "."; break; }
+      } else {
+        outer: for (var p = 0; p < actual.length; p++) for (var q = p + 1; q < actual.length; q++) {
+          if (actual[p].start < actual[q].start + actual[q].size && actual[q].start < actual[p].start + actual[p].size) { porque = "Los bloques " + LET[p] + " y " + LET[q] + " comparten direcciones."; break outer; }
+        }
+      }
+      cont.querySelector(".fb").innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No.</span> ') + porque;
+      var sig = cont.querySelector(".sig");
+      sig.hidden = false;
+      if (ronda === 4) {
+        var aprobo = aciertos >= 4;
+        C.reto("ojo", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertos + " de 5" + (aprobo ? ". Aprobado." : ". Necesitas 4 para aprobar.");
+        sig.textContent = "Otra tanda";
+      } else {
+        sig.textContent = "Siguiente ronda";
+      }
+    });
+    cont.querySelector(".sig").addEventListener("click", function () {
+      if (ronda === 4) nueva(); else { ronda++; mostrar(); }
+    });
+    nueva();
+  })();
+
+  /* ---------------- reto: construir ---------------- */
+  (function () {
+    var OBJ = [
+      { t: "Coloca las cinco áreas en el tablero, sin pisarse y bien alineadas.", ok: function (p) { return CINCO.every(function (id) { return p[id] != null; }); } },
+      { t: "Que no quede ningún hueco: los bloques ocupan seguidos desde la .0.", ok: function (p) {
+          if (!CINCO.every(function (id) { return p[id] != null; })) return false;
+          var l = CINCO.map(function (id) { return [p[id], tam(dep(id))]; }).sort(function (a, b) { return a[0] - b[0]; }), fin = 0;
+          for (var i = 0; i < l.length; i++) { if (l[i][0] !== fin) return false; fin = l[i][0] + l[i][1]; }
+          return true;
+        } },
+      { t: "Que todo quepa en la primera mitad, de la .0 a la .127.", ok: function (p) {
+          return CINCO.every(function (id) { return p[id] != null && p[id] + tam(dep(id)) <= 128; });
+        } }
+    ];
+    var logrados = [false, false, false], avisado = false, ul = $("objetivos");
+    OBJ.forEach(function (o) { var li = document.createElement("li"); li.innerHTML = '<span class="m"></span><span>' + o.t + "</span>"; ul.appendChild(li); });
+    var tc = crearTablero($("planoConstr"));
+    var cc = colocador(tc, {
+      ids: CINCO, limite: 256,
+      activo: function () { return true; },
+      alCambiar: function (p) {
+        OBJ.forEach(function (o, i) { if (!logrados[i] && o.ok(p)) logrados[i] = true; ul.children[i].classList.toggle("hecho", logrados[i]); });
+        if (!avisado && logrados.every(Boolean)) { avisado = true; C.reto("construir", true); }
+      }
+    });
+    cc.activar($("constrChips"), $("constrMsg"), null);
+  })();
+
+  /* ---------------- reto: a mano ---------------- */
+  (function () {
+    var D;
+    function generar() {
+      var tams = [8, 16, 32, 64], t = tams[Math.floor(Math.random() * 4)], y = 1 + Math.floor(Math.random() * 254);
+      var red = Math.floor(y / t) * t;
+      D = { t: t, y: y, p: 32 - log2(t), red: red, bc: red + t - 1 };
+      $("manoDatos").innerHTML = '<table class="datos-mano"><tr><th>Equipo</th><th>Prefijo</th></tr><tr><td>192.168.10.' + y + "</td><td>/" + D.p + "</td></tr></table>";
+    }
+    var cfg = {
+      pregunta: "¿Cuál es el último octeto de la dirección de broadcast de la subred donde está ese equipo?",
+      respuesta: function () { return D.bc; },
+      tolerancia: 0,
+      pistas: [
+        function () { return "Bits de host: $32-" + D.p + " = " + log2(D.t) + "$. El bloque mide $2^{" + log2(D.t) + "} = " + D.t + "$ direcciones."; },
+        function () { return "La red es el múltiplo de " + D.t + " más grande que no pasa de " + D.y + ": es " + D.red + "."; },
+        function () { return "El broadcast es la última dirección del bloque: " + D.red + " + " + D.t + " − 1."; }
+      ],
+      diagnostico: function (v) {
+        if (v === D.red) return "Esa es la dirección de red, la primera del bloque. El broadcast es la última.";
+        if (v === D.red + D.t) return "Eso ya es la primera dirección del bloque siguiente. El broadcast es una antes.";
+        if (v === D.y) return "Esa es la IP del equipo, no el broadcast.";
+        return null;
+      },
+      explicacion: function () { return "Bloque de " + D.t + ", red en ." + D.red + ", broadcast en " + D.red + " + " + D.t + " − 1 = ." + D.bc + "."; },
+      reintentable: true,
+      textoReintentar: "Otro ejercicio",
+      antesDeReintentar: generar,
+      alResolver: function (ok) { C.reto("mano", ok); }
+    };
+    generar();
+    B.numerico($("mano"), cfg);
+  })();
+
+  /* ---------------- reto: cazar el error ---------------- */
+  B.cazarError($("error"), {
+    variantes: [
+      {
+        intro: "Marketing tiene 25 equipos. Alguien calculó su bloque así:",
+        lineas: ["25 + 2 = 27 \\text{ direcciones como mínimo}", "2^{4} = 16 < 27 \\quad\\text{y}\\quad 2^{5} = 32 \\ge 27", "\\text{bits de host: } k = 5", "\\text{prefijo: } 32 - 5 = 27",
+          "\\text{equipos útiles: } 2^{5} = 32", "\\text{máscara: } 256 - 32 = 224 \\Rightarrow 255.255.255.224"],
+        erronea: 4,
+        explicacion: "Faltó restar las dos direcciones reservadas: los equipos útiles son $2^{5} - 2 = 30$, no 32. Las otras líneas están bien."
+      },
+      {
+        intro: "Ya están Ventas (.0 a .63), Soporte (.64 a .95) y Laboratorio (.96 a .111). Alguien ubica Servidores, con 6 equipos:",
+        lineas: ["6 + 2 = 8 \\text{ direcciones}", "2^{3} = 8 \\ge 8 \\Rightarrow k = 3", "\\text{prefijo: } 32 - 3 = 29",
+          "\\text{Laboratorio acabó en } .111 \\Rightarrow \\text{Servidores empieza en } .111", "\\text{rango: } .111 \\text{ a } .118"],
+        erronea: 3,
+        explicacion: "La .111 es la última dirección de Laboratorio (su broadcast): ya está ocupada. El siguiente libre es la .112, y además es múltiplo de 8, así que Servidores empieza en .112."
+      },
+      {
+        intro: "Ya está Ventas (.0 a .63). Alguien ubica Soporte, con 20 equipos:",
+        lineas: ["20 + 2 = 22 \\text{ direcciones como mínimo}", "2^{5} = 32 \\ge 22 \\Rightarrow k = 5", "\\text{prefijo: } /5",
+          "\\text{inicio: } .64 \\text{ (múltiplo de 32)}", "\\text{rango: } .64 \\text{ a } .95"],
+        erronea: 2,
+        explicacion: "Confundió k, los bits de host, con el prefijo. El prefijo es lo que queda de 32 bits: $32 - 5 = 27$, es decir /27."
+      }
+    ],
+    alResolver: function (ok) { C.reto("error", ok); }
+  });
+
+  /* ---------------- retos: propiedades ---------------- */
+  function prop(id, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple($(id), cfg);
+  }
+  prop("prop1", {
+    pregunta: "Una subred /29 tiene 8 direcciones. ¿Cuántos equipos puede alojar?",
+    opciones: ["6", "8", "7", "4"],
+    correcta: 0,
+    pistas: [null, "Las 8 direcciones incluyen la de red y la de broadcast, que no son para equipos.", "Solo se resta una. ¿Cuántas direcciones reservadas hay?", "Eso sería un /30."],
+    explicacion: "8 − 2 = 6: la primera dirección es la red y la última el broadcast."
+  });
+  prop("prop2", {
+    pregunta: "Dentro de 192.168.10.0/24, ¿en cuál de estas direcciones puede empezar un bloque /26 (64 direcciones)?",
+    opciones: [".128", ".96", ".48", ".200"],
+    correcta: 0,
+    pistas: [null, "96 es múltiplo de 32 pero no de 64. Un /26 solo empieza en múltiplos de 64.", "48 es múltiplo de 16. Un /26 necesita múltiplos de 64.", "200 no es múltiplo de 64: 192 y 256 sí."],
+    explicacion: "Un /26 mide 64 y solo puede empezar en .0, .64, .128 o .192. Entre las opciones, solo .128."
+  });
+  prop("prop3", {
+    pregunta: "¿Cuál es la máscara de un /27?",
+    opciones: ["255.255.255.224", "255.255.255.192", "255.255.255.240", "255.255.254.0"],
+    correcta: 0,
+    pistas: [null, "Ese es el último octeto del /26: 256 − 64 = 192.", "Ese es el del /28: 256 − 16 = 240.", "Ese es el de un /23, mucho más grande."],
+    explicacion: "Un /27 deja 5 bits para equipos: el bloque mide 32 y el último octeto de la máscara es 256 − 32 = 224. Es justo la columna que la Tabla 21 del material muestra rota."
+  });
+  prop("prop4", {
+    pregunta: "Con el reparto de la página (Ventas .0/26 y Soporte .64/27), ¿a qué subred pertenece el equipo 192.168.10.70?",
+    opciones: ["Soporte", "Ventas", "A ninguna", "A las dos"],
+    correcta: 0,
+    pistas: [null, "Ventas llega hasta la .63.", "Soporte va de .64 a .95: ¿está el 70?", "Dos subredes nunca comparten direcciones."],
+    explicacion: "70 está entre .64 y .95. Con el AND: 70 &amp; 224 = 64, que es la red de Soporte."
+  });
+  prop("prop5", {
+    pregunta: "Quieres partir 192.168.10.0/24 en 4 subredes del mismo tamaño. ¿Qué prefijo tiene cada una?",
+    opciones: ["/26", "/25", "/27", "/28"],
+    correcta: 0,
+    pistas: [null, "Un /25 da solo 2 subredes (128 cada una).", "Un /27 da 8 subredes de 32.", "Un /28 da 16 subredes de 16."],
+    explicacion: "4 subredes iguales piden 2 bits más para identificarlas: 24 + 2 = 26. Cada una mide 64 direcciones. Es lo que hace <code>subnets(new_prefix=26)</code> de la librería."
+  });
+
+  /* ---------------- formula de memoria ---------------- */
+  B.ordenar($("formula"), {
+    piezas: ["2^{k}", "-", "2", "\\ge", "h"],
+    distractores: ["+", "\\le", "1", "k^{2}"],
+    soluciones: [[0, 1, 2, 3, 4]],
+    explicacion: "Un bloque de $2^{k}$ direcciones pierde 2 (la de red y la de broadcast) y lo que queda tiene que alcanzar para los $h$ equipos.",
+    alResolver: function (ok) { C.reto("formula", ok); }
+  });
+
+  /* ---------------- vida real: el algoritmo en codigo ---------------- */
+  (function () {
+    var CODIGO = {
+      py: [
+        ["import", "import math"],
+        ["import", "import ipaddress"],
+        [null, ""],
+        [null, "# nombres y equipos de cada área (en el orden en que llegaron los pedidos)"],
+        ["datos", "nombres = [\"Enlace\", \"Laboratorio\", \"Ventas\", \"Servidores\", \"Soporte\"]"],
+        ["datos", "hosts = [2, 10, 50, 6, 20]"],
+        ["orden", "orden = sorted(range(5), key=lambda i: -hosts[i])   # 1. mayores primero"],
+        ["siguiente", "siguiente = 0"],
+        ["vectores", "inicio = [0] * 5"],
+        ["vectores", "prefijo = [0] * 5"],
+        ["forbloque", "for i in orden:                                     # 2. un bloque por área"],
+        ["k0", "    k = 0"],
+        ["while", "    while 2 ** k - 2 < hosts[i]:                    #    bits de host"],
+        ["kinc", "        k += 1"],
+        ["tam", "    tam = 2 ** k"],
+        ["alinear", "    inicio[i] = math.ceil(siguiente / tam) * tam    #    alinear al múltiplo"],
+        ["pref", "    prefijo[i] = 32 - k"],
+        ["avanzar", "    siguiente = inicio[i] + tam"],
+        ["forimp", "for i in orden:                                     # 3. el resultado"],
+        ["imprimir", "    print(nombres[i] + \" 192.168.10.\" + str(inicio[i]) + \"/\" + str(prefijo[i]))"],
+        ["libres", "print(\"libres desde 192.168.10.\" + str(siguiente))"],
+        ["verificar", "red = ipaddress.ip_network(\"192.168.10.0/24\")       # 4. comprobar con la librería"],
+        ["verificar", "redes = [ipaddress.ip_network(\"192.168.10.%d/%d\" % (inicio[i], prefijo[i])) for i in orden]"],
+        ["verificar", "print(all(r.subnet_of(red) for r in redes), not any(a.overlaps(b) for a in redes for b in redes if a is not b))"]
+      ],
+      r: [
+        [null, "# nombres y equipos de cada área (en el orden en que llegaron los pedidos)"],
+        ["datos", "nombres <- c(\"Enlace\", \"Laboratorio\", \"Ventas\", \"Servidores\", \"Soporte\")"],
+        ["datos", "hosts <- c(2, 10, 50, 6, 20)"],
+        ["orden", "orden <- order(-hosts)                              # 1. mayores primero"],
+        ["siguiente", "siguiente <- 0"],
+        ["vectores", "inicio <- numeric(5)"],
+        ["vectores", "prefijo <- numeric(5)"],
+        ["forbloque", "for (i in orden) {                                  # 2. un bloque por área"],
+        ["k0", "  k <- 0"],
+        ["while", "  while (2 ^ k - 2 < hosts[i]) {                    #    bits de host"],
+        ["kinc", "    k <- k + 1"],
+        [null, "  }"],
+        ["tam", "  tam <- 2 ^ k"],
+        ["alinear", "  inicio[i] <- ceiling(siguiente / tam) * tam       #    alinear al múltiplo"],
+        ["pref", "  prefijo[i] <- 32 - k"],
+        ["avanzar", "  siguiente <- inicio[i] + tam"],
+        [null, "}"],
+        ["forimp", "for (i in orden) {                                  # 3. el resultado"],
+        ["imprimir", "  cat(nombres[i], \" 192.168.10.\", inicio[i], \"/\", prefijo[i], \"\\n\", sep = \"\")"],
+        [null, "}"],
+        ["libres", "cat(\"libres desde 192.168.10.\", siguiente, \"\\n\", sep = \"\")"],
+        ["verificar", "fin <- inicio + 2 ^ (32 - prefijo)                  # 4. comprobar con bits (R no trae ipaddress)"],
+        ["verificar", "alineadas <- all(bitwAnd(inicio, 256 - 2 ^ (32 - prefijo)) == inicio)"],
+        ["verificar", "sin_pisarse <- all(inicio[orden][-1] >= fin[orden][-5])"],
+        ["verificar", "cat(paste(alineadas, sin_pisarse), \"\\n\", sep = \"\")"]
+      ]
+    };
+    var NOMB = ["Enlace", "Laboratorio", "Ventas", "Servidores", "Soporte"], HOS = [2, 10, 50, 6, 20];
+    var CLAVE = ["enlace", "lab", "ventas", "serv", "soporte"];
+
+    var EV = [];
+    (function () {
+      var ord = null, sig = 0, ini = [0, 0, 0, 0, 0], pre = [0, 0, 0, 0, 0], asig = [false, false, false, false, false], salida = [], veces = 0, fase = 0;
+      function foto(id, ex) {
+        EV.push(Object.assign({ id: id, fase: fase, ord: ord, sig: sig, ini: ini.slice(), pre: pre.slice(), asig: asig.slice(), salida: salida.slice(), veces: veces,
+          i: null, k: null, tam: null, cond: null, inicio: null, antes: null }, ex || {}));
+      }
+      foto("import");
+      foto("datos");
+      fase = 1; ord = [2, 4, 1, 3, 0]; foto("orden");
+      fase = 2; foto("siguiente");
+      foto("vectores");
+      ord.forEach(function (i) {
+        foto("forbloque", { i: i });
+        var k = 0;
+        foto("k0", { i: i, k: 0 });
+        for (;;) {
+          var c = Math.pow(2, k) - 2 < HOS[i];
+          foto("while", { i: i, k: k, cond: c });
+          if (!c) break;
+          k++; veces++;
+          foto("kinc", { i: i, k: k });
+        }
+        var t = Math.pow(2, k);
+        foto("tam", { i: i, k: k, tam: t });
+        var s = Math.ceil(sig / t) * t;
+        ini[i] = s; asig[i] = true;
+        foto("alinear", { i: i, k: k, tam: t, inicio: s, antes: sig });
+        pre[i] = 32 - k;
+        foto("pref", { i: i, k: k, tam: t, inicio: s });
+        var antes = sig;
+        sig = s + t;
+        foto("avanzar", { i: i, k: k, tam: t, inicio: s, antes: antes });
+      });
+      fase = 3;
+      ord.forEach(function (i) {
+        foto("forimp", { i: i });
+        salida.push(NOMB[i] + " 192.168.10." + ini[i] + "/" + pre[i]);
+        foto("imprimir", { i: i });
+      });
+      salida.push("libres desde 192.168.10." + sig);
+      foto("libres");
+      fase = 4;
+      foto("verificar", { fin: true });
+    })();
+
+    function narrar(e, ctx) {
+      var py = ctx.lang() === "py", ix = ctx.ix;
+      switch (e.id) {
+        case "import": return py ? "Carga <b>math</b> (para redondear hacia arriba) e <b>ipaddress</b> (para comprobar al final)." : "R trae todo lo que hace falta: no hay nada que importar.";
+        case "datos": return "Los pedidos, tal como llegaron: enlace (2), laboratorio (10), ventas (50), servidores (6) y soporte (20).";
+        case "orden": return "Ordena los <b>números de posición</b> de mayor a menor número de equipos: <b>" + e.ord.map(function (v) { return ix(v); }).join(", ") + "</b>. Primero Ventas, después Soporte, Laboratorio, Servidores y Enlace.";
+        case "siguiente": return "<b>siguiente</b> es la primera dirección libre. Al empezar vale 0.";
+        case "vectores": return "Dos listas de cinco ceros, donde se irá guardando el inicio y el prefijo de cada área.";
+        case "forbloque": return "Toma el área número <b>" + ix(e.i) + "</b>: " + NOMB[e.i] + ", con " + HOS[e.i] + " equipos.";
+        case "k0": return "Empieza probando con 0 bits de host.";
+        case "while": return "¿2<sup>" + e.k + "</sup> − 2 = " + (Math.pow(2, e.k) - 2) + " es menor que " + HOS[e.i] + "? " + (e.cond ? "Sí: no alcanzan, hay que subir k." : "No: ya alcanzan. El bucle termina con <b>k = " + e.k + "</b>.");
+        case "kinc": return "Un bit más para los equipos: <b>k = " + e.k + "</b>.";
+        case "tam": return "El bloque mide 2<sup>" + e.k + "</sup> = <b>" + e.tam + "</b> direcciones.";
+        case "alinear": return "Alinea: el siguiente múltiplo de " + e.tam + " a partir de " + e.antes + " es <b>" + e.inicio + "</b>" + (e.inicio === e.antes ? " (ya estaba alineado)." : ". Se saltó un hueco de " + (e.inicio - e.antes) + " direcciones.");
+        case "pref": return "El prefijo es 32 − " + e.k + " = <b>" + (32 - e.k) + "</b>.";
+        case "avanzar": return "La primera dirección libre pasa a ser " + e.inicio + " + " + e.tam + " = <b>" + (e.inicio + e.tam) + "</b>.";
+        case "forimp": return "Recorre las áreas en el mismo orden para escribir el resultado: el área <b>" + ix(e.i) + "</b>.";
+        case "imprimir": return "Escribe <b>" + e.salida[e.salida.length - 1] + "</b>.";
+        case "libres": return "Lo que queda libre empieza en la <b>.124</b>: son 132 direcciones sin repartir.";
+        case "verificar": return py
+          ? "Comprueba con <b>ipaddress</b> que cada subred cabe en el /24 (<b>subnet_of</b>) y que ninguna se pisa con otra (<b>overlaps</b>). Si un inicio no estuviera alineado, <b>ip_network</b> daría un error. Resultado: <b>True True</b>."
+          : "R no trae <b>ipaddress</b>, así que lo comprueba con bits: cada inicio queda igual al aplicarle su máscara con <b>bitwAnd</b> (está alineado), y cada bloque empieza después de que acabe el anterior. Resultado: <b>TRUE TRUE</b>.";
+      }
+      return "";
+    }
+
+    var Tv = crearTablero($("vrPlano"));
+    function visual(e, anterior, ctx) {
+      var ix = ctx.ix, bl = [], fantasma = null;
+      if (e) {
+        for (var j = 0; j < 5; j++) if (e.asig[j]) {
+          var d = dep(CLAVE[j]);
+          bl.push({ start: e.ini[j], size: Math.pow(2, kDe(HOS[j])), color: d.c, nom: NOMB[j], pref: e.pre[j] ? e.pre[j] : null });
+        }
+        if (e.id === "tam") fantasma = { start: e.sig, size: e.tam, ok: e.sig % e.tam === 0, texto: NOMB[e.i] };
+      }
+      Tv.set({ bloques: bl, ghost: fantasma });
+      var h = "<thead><tr><th>área</th><th>equipos</th><th>k</th><th>tamaño</th><th>inicio</th><th>prefijo</th></tr></thead><tbody>";
+      for (var q = 0; q < 5; q++) {
+        var kq = kDe(HOS[q]), listo = e && e.asig[q], enCurso = e && e.i === q && e.fase === 2 && !listo;
+        var kc = listo ? kq : (enCurso && e.k !== null ? e.k : ""), tc = listo ? Math.pow(2, kq) : (enCurso && e.tam !== null ? e.tam : "");
+        h += "<tr" + (e && e.i === q && e.fase >= 2 && e.fase <= 3 ? ' class="on"' : "") + '><td class="pl">' + NOMB[q] + "</td><td>" + HOS[q] + "</td><td>" + kc + "</td><td>" + tc + "</td><td>" + (listo ? "." + e.ini[q] : "") + "</td><td>" + (listo && e.pre[q] ? "/" + e.pre[q] : "") + "</td></tr>";
+      }
+      $("vrTabla").innerHTML = h + "</tbody>";
+      $("vrCuenta").innerHTML = e && e.id === "alinear"
+        ? "⌈" + e.antes + " / " + e.tam + "⌉ × " + e.tam + " = <b>" + e.inicio + "</b>"
+        : e && e.id === "while" ? "2<sup>" + e.k + "</sup> − 2 = <b>" + (Math.pow(2, e.k) - 2) + "</b> " + (e.cond ? "&lt;" : "≥") + " " + HOS[e.i]
+        : e && e.fin ? "Cinco bloques, 124 direcciones usadas, 132 libres." : "";
+      var lineas = e ? e.salida.slice() : [];
+      if (e && e.id === "verificar") lineas.push(ctx.lang() === "py" ? "True True" : "TRUE TRUE");
+      $("vrSalida").innerHTML = '<span class="t">salida del programa</span>' + (lineas.length ? lineas.map(function (l) { return ctx.esc(l); }).join("<br>") : "");
+    }
+    B.vidaReal($("vidareal"), {
+      codigo: CODIGO,
+      eventos: EV,
+      narrar: narrar,
+      vars: function (e, ctx) {
+        var v = [], ix = ctx.ix;
+        if (e && e.i !== null) v.push('<span class="vj">i = <b>' + ix(e.i) + "</b></span>");
+        if (e && e.k !== null) v.push('<span class="vk">k = <b>' + e.k + "</b></span>");
+        if (e && e.tam !== null) v.push("<span>tam = <b>" + e.tam + "</b></span>");
+        if (e && e.fase >= 2) v.push("<span>siguiente = <b>" + e.sig + "</b></span>");
+        v.push("<span>k subió <b>" + (e ? e.veces : 0) + "</b> veces</span>");
+        return v;
+      },
+      visual: visual,
+      demora: function (e) { return !e ? 600 : e.id === "while" || e.id === "kinc" ? 330 : e.id === "forimp" || e.id === "imprimir" ? 500 : e.id === "alinear" ? 1100 : 800; }
+    });
+
+    B.numerico(cuerpo("vrPred"), {
+      pregunta: "¿Cuántas veces se va a ejecutar la línea <code>k += 1</code> (en R, <code>k &lt;- k + 1</code>) hasta que el programa termine? Piensa en el k final de cada área: Ventas 6, Soporte 5, Laboratorio 4, Servidores 3 y Enlace 2.",
+      respuesta: 20,
+      tolerancia: 0,
+      pistas: [
+        "Para cada área, k parte de 0 y sube de uno en uno hasta su valor final. Ventas sube 6 veces.",
+        "Suma lo que sube cada área: 6 + 5 + 4 + 3 + 2."
+      ],
+      diagnostico: function (v) {
+        if (v === 25) return "Esa es la cantidad de veces que se evalúa el <b>while</b>: una más que los aumentos de cada área, porque la última vez dice que no.";
+        if (v === 5) return "Esas son las áreas. Cada una sube su k varias veces.";
+        if (v === 15) return "Ese número sale de sumar 5 + 4 + 3 + 2 + 1. Ventas llega a k = 6, no a 5.";
+        return null;
+      },
+      explicacion: "6 + 5 + 4 + 3 + 2 = <b>20</b>. El <b>while</b> se evalúa 25 veces (una más por área, la que dice que ya alcanza). Dale a reproducir y mira el contador.",
+      alResolver: function (ok) { C.reto("codigo1", ok); }
+    });
+    prop("codigo2", {
+      pregunta: "En Python escribes <code>ipaddress.ip_network(\"192.168.10.48/27\")</code>. ¿Qué obtienes?",
+      opciones: [
+        "Un error: tiene bits de host encendidos, porque .48 no es múltiplo de 32",
+        "La red 192.168.10.32/27, sin avisar",
+        "La red 192.168.10.48/27 sin problema",
+        "Una lista con dos subredes"
+      ],
+      correcta: 0,
+      pistas: [null, "Eso solo pasa si pides <code>strict=False</code>. Por defecto, la librería no corrige tu dirección.", "El bloque /27 solo puede empezar en múltiplos de 32.", "<code>ip_network</code> devuelve una sola red, no una lista."],
+      explicacion: "Por defecto <code>ip_network</code> es estricta y lanza <code>ValueError: ... has host bits set</code>: es el mismo control de alineación del paso 4. Con <code>strict=False</code> devuelve 192.168.10.32/27 sin quejarse: cómodo, pero un inicio mal calculado queda corregido en silencio. En R no hay un control equivalente: tienes que comprobarlo tú, como hace el programa con <code>bitwAnd</code>."
+    });
+    prop("codigo3", {
+      pregunta: "Para <code>192.168.10.8/31</code> la cuenta 2<sup>k</sup> − 2 da 0 equipos, pero <code>list(red.hosts())</code> devuelve dos direcciones. ¿Por qué?",
+      opciones: [
+        "En un enlace punto a punto, un /31 usa sus dos direcciones como equipos, sin dirección de red ni broadcast",
+        "Python tiene un error en el /31",
+        "hosts() incluye la dirección de red",
+        "En un /31 el broadcast se llama distinto"
+      ],
+      correcta: 0,
+      pistas: [null, "La librería sigue un estándar de redes (RFC 3021) que permite este caso.", "En /30 sí devuelve solo las dos de en medio; en /31 devuelve las dos.", "Un /31 no tiene broadcast: las dos direcciones son para equipos."],
+      explicacion: "La regla \"restar dos\" es la del material, y vale desde el /30 hasta el /24 de los ejemplos. El /31 es una excepción pensada para enlaces entre dos routers: aprovecha las dos direcciones. Con un /32 hosts() devuelve una sola. Por eso el enlace de esta página, con un /30, es la opción clásica y la del material; el /31 ahorra dos direcciones por enlace."
+    });
+  })();
+
+  /* ---------------- tarjetas ---------------- */
+  B.tarjetas($("tarjetas"), [
+    ["¿Cuántos equipos caben en un bloque de $2^{k}$ direcciones?", "$2^{k}-2$. Se pierden la dirección de red (la primera) y la de broadcast (la última)."],
+    ["¿Cómo pasas del número de equipos al prefijo?", "Buscas el menor $k$ con $2^{k}-2 \\ge h$ y el prefijo es $/(32-k)$."],
+    ["¿Qué significa la V de VLSM?", "Variable: cada subred puede tener una máscara de largo distinto, ajustada a sus equipos reales."],
+    ["¿Por qué un bloque empieza en un múltiplo de su tamaño?", "Porque en la dirección de red todos los bits de host valen 0. Un /27 reserva 5 bits y su inicio acaba en cinco ceros."],
+    ["¿En qué orden se reparten los bloques?", "De mayor a menor: así nunca quedan huecos de alineación (regla del material)."],
+    ["¿Cómo calculas el broadcast de una subred?", "Dirección de red + tamaño − 1: la última dirección del bloque."],
+    ["¿Cómo sabes a qué subred pertenece una IP?", "Es la subred donde IP AND máscara da la dirección de red."],
+    ["¿Por qué Marketing no se pone justo después del enlace?", "Un /27 solo empieza en múltiplos de 32: salta de la .124 a la .128 y se pierden 4 direcciones (en el material, con el hueco de la .120 a la .127)."]
+  ]);
+
+  /* ---------------- conexiones ---------------- */
+  B.conexiones("subredes-vlsm");
+})();
+</script>
+</body>
+</html>

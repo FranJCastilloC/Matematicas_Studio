@@ -1,0 +1,1523 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Complemento a dos y la ALU</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+/* ---------- escenario: rueda, interruptores, sumador y lamparas ---------- */
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.esc-head .hint { font-size: 12.5px; color: var(--ink-2); }
+
+.fila-bits { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) 10px repeat(4, minmax(0, 1fr)); gap: 4px; }
+.fila-bits.pesos { margin-bottom: 4px; }
+.peso { font: 500 10.5px var(--f-mono); color: var(--ink-3); text-align: center; }
+.peso.neg { color: var(--neg); }
+.bit { aspect-ratio: 1; min-height: 34px; padding: 0; border-radius: 7px; font: 500 17px var(--f-mono); background: var(--surface); color: var(--ink-3); }
+.bit.on { background: color-mix(in oklab, var(--pos) 22%, var(--surface)); border-color: var(--pos); color: var(--ink); }
+.bit.on.neg { background: color-mix(in oklab, var(--neg) 22%, var(--surface)); border-color: var(--neg); }
+.bit:disabled { cursor: default; opacity: .85; }
+.byte-lect { margin-top: 12px; font-family: var(--f-mono); font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.byte-lect b { color: var(--ink); font-weight: 500; font-size: 15px; }
+.byte-lect .oculto, .alu-res .oculto { color: var(--accent); font-weight: 600; }
+#byteBtns { margin-top: 10px; }
+#byteBtns button { font-size: 12.5px; padding: 6px 11px; }
+
+.alu-ctrl { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 10px; }
+.alu-ctrl label { display: flex; align-items: center; gap: 6px; font: 500 13px var(--f-mono); color: var(--ink-2); }
+.alu-ctrl input { width: 74px; font: 500 14px var(--f-mono); padding: 5px 7px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); }
+.adder { display: grid; grid-template-columns: 64px repeat(8, minmax(0, 1fr)); gap: 3px; }
+.adder .et { font: 11px var(--f-mono); color: var(--ink-3); display: grid; align-items: center; min-height: 28px; }
+.adder .ac { display: grid; place-items: center; min-height: 28px; border-radius: 5px; background: var(--surface-2); font: 500 14px var(--f-mono); color: var(--ink); cursor: default; }
+.adder .ac.col { background: transparent; color: var(--ink-3); font-size: 11px; min-height: 18px; }
+.adder .ac.u1 { background: color-mix(in oklab, var(--pos) 20%, var(--surface-2)); }
+.adder .ac.neg1 { background: color-mix(in oklab, var(--neg) 20%, var(--surface-2)); }
+.adder .ac.car { background: transparent; box-shadow: inset 0 0 0 1px var(--line); color: var(--ink-2); }
+.adder .ac.car.u1 { box-shadow: inset 0 0 0 1.5px var(--accent); color: var(--accent); background: var(--accent-soft); }
+.adder .ac.vacio { color: var(--ink-3); }
+.adder .ac.oc { color: var(--accent); font-weight: 600; background: var(--accent-soft); }
+.adder .ac.s { font-size: 15px; }
+.adder .ac.cur { outline: 2px solid var(--ink); outline-offset: -1px; }
+.adder .ac.sel { outline: 2px solid var(--accent); outline-offset: -1px; }
+.adder .ac.nuevo { animation: llega .5s ease-out; }
+.alu-res { margin-top: 12px; font-family: var(--f-mono); font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.alu-res b { color: var(--ink); font-weight: 500; }
+.lamps { display: flex; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
+.lamps[hidden] { display: none; }
+.lamp { display: grid; justify-items: center; gap: 3px; font: 11px var(--f-mono); color: var(--ink-3); }
+.lamp i { width: 42px; height: 42px; border-radius: 50%; border: 2px solid var(--line); display: grid; place-items: center; font: 600 15px var(--f-mono); font-style: normal; color: var(--ink-3); background: var(--surface); transition: background .2s, border-color .2s; }
+.lamp.on i { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+.lamp.on.v i { background: var(--neg); border-color: var(--neg); }
+.lamp.oc i { color: var(--accent); border-style: dashed; border-color: var(--accent); }
+
+.rueda-svg { width: 100%; max-width: 330px; height: auto; display: block; margin: 0 auto; }
+.rueda-svg .anillo { fill: var(--surface); stroke: var(--line); stroke-width: 1.5; }
+.rueda-svg .marca { stroke: var(--ink-3); stroke-width: 1; }
+.rueda-svg .marca.g { stroke: var(--ink-2); stroke-width: 1.6; }
+.rueda-svg .num { font: 500 10.5px var(--f-mono); fill: var(--ink-2); }
+.rueda-svg .num.n { fill: var(--neg); }
+.rueda-svg .front { stroke: var(--neg); stroke-width: 3; stroke-linecap: round; }
+.rueda-svg .front-lab { font: 500 10px var(--f-mono); fill: var(--neg); }
+.rueda-svg .mano { stroke: var(--accent); stroke-width: 3; stroke-linecap: round; }
+.rueda-svg .punta { fill: var(--accent); }
+.rueda-svg .centro { fill: var(--ink); }
+.rueda-svg .giro { transition: transform .75s cubic-bezier(.4, 0, .2, 1); }
+.rueda-svg .valor { font: 500 22px var(--f-mono); fill: var(--ink); text-anchor: middle; }
+.rueda-svg .valor-sub { font: 11px var(--f-mono); fill: var(--ink-3); text-anchor: middle; }
+.rueda-lectura { min-height: 3.6em; margin-top: 6px; font: 13px var(--f-mono); color: var(--ink-2); overflow-wrap: anywhere; }
+.rueda-lectura b { color: var(--ink); font-weight: 500; }
+.rueda-btns { margin-top: 10px; }
+.rueda-btns button { font-size: 12.5px; padding: 6px 11px; }
+.rueda-nota { font-size: 12.5px; color: var(--ink-3); margin-top: 8px; }
+
+/* ---------- tabla del doble cero ---------- */
+.tabla-cero { border-collapse: collapse; font-size: 13.5px; margin: 10px 0; }
+.tabla-cero th, .tabla-cero td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; }
+.tabla-cero th { font-weight: 500; color: var(--ink-3); font-size: 12px; }
+.tabla-cero td.m { font-family: var(--f-mono); white-space: nowrap; }
+
+/* ---------- vida real ---------- */
+.salida { margin: 10px 0 0; padding: 10px 12px; background: var(--surface-2); border-radius: 8px; font: 12.5px/1.55 var(--f-mono); color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; min-height: 3em; }
+.vr-visual .adder { margin-top: 6px; }
+.vr-visual .lamps { margin-top: 12px; }
+
+/* ---------- retos ---------- */
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.ojo-cuenta { font: 500 22px var(--f-mono); margin: 10px 0; color: var(--ink); overflow-wrap: anywhere; }
+.ojo-opts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
+.ojo-opts .opt { text-align: center; font-size: 13px; }
+@media (max-width: 520px) { .ojo-opts { grid-template-columns: minmax(0, 1fr); } }
+.objetivos { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.objetivos li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.objetivos .m { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.objetivos li.hecho { color: var(--ink); }
+.objetivos li.hecho .m { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 3px var(--surface); }
+.grande { font-family: var(--f-mono); font-size: 14px; color: var(--ink-2); margin: 8px 0 12px; font-variant-numeric: tabular-nums; }
+.grande b { font-size: 18px; color: var(--ink); font-weight: 500; }
+@media (prefers-reduced-motion: reduce) { .rueda-svg .giro { transition: none; } .adder .ac.nuevo { animation: none; } }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ Complemento a dos y la ALU</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Infraestructura · Arquitectura de computadores · UD1 y UD2</p>
+    <h1>Complemento a dos y la ALU: restar sin saber restar</h1>
+    <p class="lede">
+      Un circuito que solo sabe sumar puede restar si le entregas los números con un truco: <b>invertir los bits y sumar 1</b>.
+      Lo vas a ver con las manos: una manecilla que da la vuelta, ocho interruptores con un peso negativo y un sumador que arrastra un acarreo de columna en columna,
+      con cuatro lámparas que avisan qué pasó con el resultado.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> Imagina un circuito que solo tiene sumador de 8 bits: nadie le puso restador. ¿Cómo harías para que calcule 7 − 5 usando únicamente sumas? Escríbelo como te salga, aunque esté mal.</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: le sumaría..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>Restar con un circuito que solo suma</h2>
+      <p>Siete pasos. Cada uno termina con un chequeo: hasta que no lo resuelves, el siguiente queda cerrado. Equivocarte aquí no resta nada, es parte del método. Si te falta práctica con el binario, pasa antes por <a href="bases-numericas.html">Binario y otras bases</a>.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="La vuelta">
+          <span class="etapa">Paso 1</span>
+          <h3>Un contador que da la vuelta</h3>
+          <p>Piensa en un contador de 8 bits como un reloj de <b>256 posiciones</b>, del 0 al 255. Cada paso avanza una posición. Después del 255 no hay un 256: el contador <b>vuelve al 0</b>, porque el noveno bit no cabe y se pierde.</p>
+          <p>La manecilla está en el 7. Más adelante vas a poder avanzar y retroceder, pero primero una predicción: la parte difícil de la resta es que un circuito no sabe ir hacia atrás, solo hacia adelante.</p>
+          <div class="check" id="chk1">
+            <p class="check-tit">Predice antes de tocar</p>
+            <div class="cuerpo"></div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Un peso negativo">
+          <span class="etapa">Paso 2</span>
+          <h3>El primer bit pesa −128</h3>
+          <p>Con los números con signo hay un cambio mínimo: el interruptor de la izquierda deja de valer 128 y pasa a valer <b>−128</b>. Los otros siete se quedan igual. Si ese interruptor está encendido, el número es negativo.</p>
+          <div class="fbloque">
+            <div data-tex="\text{valor} = -128\,b_7 + 64\,b_6 + 32\,b_5 + 16\,b_4 + 8\,b_3 + 4\,b_2 + 2\,b_1 + b_0" data-display></div>
+            <div class="vivo" id="vivo2"></div>
+          </div>
+          <p>La teoría de la unidad lo dice sin pesos: el bit más significativo es el signo, 0 para positivo o cero y 1 para negativo <cite class="cita" data-fuente="arq1" data-pag="22" data-pimp="19" data-seccion="5.2 Complemento a dos" data-que="El bit más significativo indica el signo: 0 positivo o cero, 1 negativo. No da ejemplo numérico, ni el rango de enteros de n bits, ni el peso −128: eso es lo que construyes aquí." data-cuando="Después del chequeo de este paso"></cite>. Aquí usamos 8 bits para ver todo a la vez; los registros reales tienen entre 32 y 64 bits <cite class="cita" data-fuente="arq2" data-pag="7" data-pimp="4" data-seccion="2 Registros: tamaño y tipos" data-que="Los registros tienen habitualmente entre 32 y 64 bits y se acceden en un ciclo. La idea es idéntica con más interruptores." data-cuando="Cuando quieras pasar de 8 a 32 o 64 bits"></cite>.</p>
+          <p>Toca los interruptores. El valor con signo queda oculto hasta que lo calcules tú.</p>
+          <div class="check" id="chk2"><p class="check-tit">Calcula con los datos en vivo</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Invertir y sumar 1">
+          <span class="etapa">Paso 3</span>
+          <h3>Cambiar de signo: invertir y sumar 1</h3>
+          <p>Para pasar de 5 a −5 hay una receta de dos movimientos: <b>invertir</b> todos los bits y después <b>sumar 1</b>. El byte arranca en 5. Pulsa los botones en orden.</p>
+          <div class="fbloque">
+            <div data-tex="-x = \overline{x} + 1 \qquad\qquad x + \overline{x} = 1111\,1111 = -1" data-display></div>
+            <div class="vivo" id="vivo3"></div>
+          </div>
+          <p>La regla aparece en la teoría como "invertir los bits y sumar 1", y las diapositivas traen el único ejemplo numérico de la unidad: +5 = 0000 0101, invertido 1111 1010, más 1 da −5 = 1111 1011 <cite class="cita" data-fuente="arq1diapo" data-pag="37" data-seccion="Complemento a 2" data-que="La definición (misma ALU para sumar y restar), la regla de invertir y sumar 1, el bit de signo y el ejemplo +5 = 0000 0101 → 1111 1010 → −5 = 1111 1011. Es el único ejemplo numérico de negativos de la unidad." data-cuando="Después de pulsar Invertir y Sumar 1"></cite>
+          <cite class="cita" data-fuente="arq1" data-pag="21" data-pimp="18" data-seccion="5.2 Complemento a dos" data-que="Por qué casi todos los computadores lo usan (la ALU suma y resta con el mismo circuito) y la regla simplificada: invertir los bits de la representación positiva y sumar 1." data-cuando="Al terminar este paso"></cite>.
+          Las diapositivas dicen "invirtiendo todos <i>sus</i> bits", que suena a invertir los del propio negativo. Lo preciso: se invierten los bits del <b>positivo</b>. Y el resultado depende de cuántos bits fijes: −5 en 4 bits es 1011, en 8 bits es 1111 1011.</p>
+          <details class="profundizar">
+            <summary>¿Por qué funciona?</summary>
+            <div>
+              <p>Un número y sus bits invertidos suman ocho unos: donde uno tiene 1 el otro tiene 0. Ocho unos, 1111 1111, es el −1 de este sistema (sumarle 1 hace que todo el byte dé la vuelta a 0).</p>
+              <p>Entonces <span data-tex="x + \overline{x} = -1"></span>, y despejando <span data-tex="\overline{x} = -x - 1"></span>. Sumar 1 deja <span data-tex="-x"></span>. Por eso al invertir el 5 sale −6 y no −5: el +1 es el que corrige.</p>
+            </div>
+          </details>
+          <div class="check" id="chk3"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="El sumador">
+          <span class="etapa">Paso 4</span>
+          <h3>Sumar columna por columna</h3>
+          <p>La ALU es la parte de la CPU que hace las cuentas; en el ejemplo integrador de la unidad, es la que suma a y b <cite class="cita" data-fuente="arq1" data-pag="14" data-pimp="11" data-seccion="3.5 Ejemplo integrador" data-que="El recorrido completo de resultado = a + b: el contador de programa localiza la instrucción, se decodifica, se piden a y b, la ALU suma y el resultado va a memoria o a un registro." data-cuando="Si quieres ver dónde encaja la ALU en una instrucción"></cite>. Por dentro, suma como en el colegio: columna por columna, de derecha a izquierda, <b>arrastrando un acarreo</b> cuando 1 + 1 no cabe en un dígito.</p>
+          <p>Cada columna recibe tres bits (el de A, el de B y el acarreo que llega de la derecha) y entrega dos: el bit de la suma y el acarreo que pasa a la izquierda.</p>
+          <div class="fbloque">
+            <div data-tex="S_k = A_k \oplus B_k \oplus c_k \qquad\qquad c_{k+1} = (A_k \land B_k) \lor (A_k \land c_k) \lor (B_k \land c_k)" data-display></div>
+            <div class="vivo" id="vivo4"></div>
+          </div>
+          <p>El símbolo <span data-tex="\oplus"></span> es la O exclusiva (XOR): da 1 si hay un número impar de unos. El acarreo es 1 si al menos dos de los tres bits son 1. Esas dos puertas, XOR y AND, las explica la página de <a href="algebra-booleana.html">Álgebra booleana y puertas lógicas</a>; el material de la unidad solo dice que "todo se reduce a la suma binaria" <cite class="cita" data-fuente="arq2" data-pag="10" data-pimp="7" data-seccion="3 ALU y 3.3 Sumador" data-que="Las operaciones de la ALU (aritméticas, lógicas, desplazamientos), sus dos operandos y su señal de control, la salida con flags y el sumador: todo se reduce a la suma binaria y la resta reutiliza el sumador." data-cuando="Después del chequeo de este paso"></cite>. Las columnas, el acarreo y las fórmulas de arriba son el detalle que no trae.</p>
+          <p>En la pantalla, el sumador tiene ocho columnas. Los acarreos están tapados con signos de interrogación. Toca una columna cuando se destapen para ver su cuenta.</p>
+          <div class="check" id="chk4"><p class="check-tit">Calcula con los datos en vivo</p><div class="cuerpo"></div></div>
+          <details class="profundizar">
+            <summary>¿Y el acarreo que sale de la última columna?</summary>
+            <div>
+              <p>Sale del circuito y se pierde: el resultado solo tiene 8 bits. Es exactamente el "noveno bit que no cabe" de la manecilla del paso 1. La ALU no lo tira a la basura: lo guarda en una lámpara, la del acarreo, que verás en el paso 6.</p>
+            </div>
+          </details>
+        </section>
+
+        <section class="paso card" data-titulo="Restar es sumar">
+          <span class="etapa">Paso 5</span>
+          <h3>Restar es sumar con trampa</h3>
+          <p>Ahora junta los pasos 3 y 4. Para calcular A − B, el circuito hace dos cosas antes de sumar: <b>invierte los bits de B</b> y <b>pone un 1 como acarreo de entrada</b> en la columna 0. Ese 1 es el "+1" de la receta, sin ningún sumador extra.</p>
+          <div class="fbloque">
+            <div data-tex="A - B = A + \overline{B} + 1" data-display></div>
+            <div class="vivo" id="vivo5"></div>
+          </div>
+          <p>Es la idea de la unidad: la resta se hace con complemento a dos y reutiliza el sumador <cite class="cita" data-fuente="arq2diapo" data-pag="12" data-seccion="ALU: sumador, complemento a dos y FPU" data-que="El sumador, la resta por complemento a dos y la FPU. Ojo: la frase sobre el doble 0 está rota ('es par solucionar el problema del doble 0') y no explica nada." data-cuando="Después de cambiar a restar y ver la fila de B"></cite>. Pulsa <b>A − B</b> en el escenario (A = 9, B = 4) y mira cómo pasa B por un inversor.</p>
+          <div class="check" id="chk5"><p class="check-tit">Calcula antes de ver la fila</p><div class="cuerpo"></div></div>
+          <div class="cita" id="citaHipo" hidden></div>
+
+          <div class="destacado" id="destacado">
+            <p class="dest-tit">Lo que el material menciona y no explica</p>
+            <h4>¿Cuál es "el problema del doble 0"?</h4>
+            <p>La teoría dice que el complemento a dos "permite solucionar el problema del doble 0" <cite class="cita" data-fuente="arq2" data-pag="10" data-pimp="7" data-seccion="3.3 Sumador" data-que="La resta por complemento a dos 'que permite solucionar el problema del doble 0'. Nunca se presentan los otros métodos (signo y magnitud, complemento a uno) que sí tienen un +0 y un −0." data-cuando="Después de resolver la predicción"></cite>, pero ninguna página enseña los métodos que sí lo tienen. Aquí están los tres, negando el cero.</p>
+            <div class="check" id="chk5b"><p class="check-tit">Predice antes de ver la tabla</p><div class="cuerpo"></div></div>
+            <div id="tablaCero" hidden>
+              <table class="tabla-cero">
+                <thead><tr><th>Método de negar</th><th>Qué hace con 0000 0000</th><th>Resultado</th></tr></thead>
+                <tbody>
+                  <tr><td>Signo y magnitud</td><td>cambia el primer bit</td><td class="m">1000 0000 (un "−0")</td></tr>
+                  <tr><td>Complemento a uno</td><td>solo invierte los bits</td><td class="m">1111 1111 (otro "−0")</td></tr>
+                  <tr><td>Complemento a dos</td><td>invierte (1111 1111) y suma 1: 1 0000 0000</td><td class="m">0000 0000: el noveno bit se pierde y queda un solo cero</td></tr>
+                </tbody>
+              </table>
+              <p>Con dos ceros haría falta un circuito extra para decidir que +0 y −0 son iguales. En complemento a dos el patrón 1000 0000 no se desperdicia en un −0: pasa a ser el −128, y por eso el rango con signo de un byte es de −128 a 127.</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Las lámparas">
+          <span class="etapa">Paso 6</span>
+          <h3>Las cuatro lámparas de la ALU</h3>
+          <p>Además del resultado, la ALU enciende <b>cuatro lámparas</b> (flags) que dicen cómo salió la cuenta: <b>C</b> (acarreo), <b>Z</b> (cero), <b>N</b> (negativo, o signo) y <b>V</b> (desbordamiento). La unidad las nombra y dice que se guardan en el registro de estado, para que las instrucciones de salto decidan <cite class="cita" data-fuente="arq2" data-pag="8" data-pimp="5" data-seccion="2.1.2 Registros de control y estado" data-que="El registro de estado con los indicadores de acarreo, cero, signo y desbordamiento, usados para los saltos condicionales. Solo los nombra." data-cuando="Al empezar este paso"></cite>
+          <cite class="cita" data-fuente="arq2" data-pag="10" data-pimp="7" data-seccion="3 ALU: operaciones, entradas y salidas" data-que="Tras cada operación la ALU actualiza los indicadores de acarreo, desbordamiento, resultado nulo o resultado negativo. No define cuándo se enciende cada uno." data-cuando="Después del chequeo de este paso"></cite>
+          <cite class="cita" data-fuente="arq2" data-pag="5" data-pimp="2" data-seccion="1.1 Ciclo de instrucción: Write-back" data-que="La última fase del ciclo guarda el resultado y actualiza los flags." data-cuando="Cuando quieras ubicar los flags en el ciclo"></cite>. <b>Cuándo se encienden</b> no está en el material: lo define este paso.</p>
+          <div class="fbloque">
+            <div data-tex="C = c_8 \quad Z = [\text{todos los bits de } S \text{ valen } 0] \quad N = S_7 \quad V = c_7 \oplus c_8" data-display></div>
+            <div class="vivo" id="vivo6"></div>
+          </div>
+          <p><b>C</b> es el acarreo que sale de la columna 7. <b>Z</b> se enciende si el resultado es cero. <b>N</b> copia el primer bit del resultado. <b>V</b> se enciende cuando el acarreo que <i>entra</i> a la columna 7 es distinto del que <i>sale</i>: es la señal de que el resultado con signo se salió del rango de −128 a 127.</p>
+          <p>El sumador del escenario está fijo en 127 + 1 y tapado. Una predicción, y se destapa.</p>
+          <div class="check" id="chk6"><p class="check-tit">Predice antes de destapar</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Desbordamiento">
+          <span class="etapa">Paso 7</span>
+          <h3>Desbordamiento: cuando el resultado no cabe</h3>
+          <p>Con signo, un byte guarda de −128 a 127. Si la cuenta verdadera se sale, el byte da la vuelta y el resultado queda <b>con el signo equivocado</b>. La regla sirve de memoria:</p>
+          <ul>
+            <li>positivo + positivo = negativo: desbordamiento por arriba, V encendida;</li>
+            <li>negativo + negativo = positivo: desbordamiento por abajo, V encendida;</li>
+            <li>un positivo y un negativo: <b>nunca</b> desbordan, porque el resultado queda entre los dos sumandos.</li>
+          </ul>
+          <div class="fbloque">
+            <div data-tex="V = 1 \iff \text{la suma verdadera sale de } [-128,\,127]" data-display></div>
+            <div class="vivo" id="vivo7"></div>
+          </div>
+          <p>La unidad solo nombra el indicador de desbordamiento; no lo define ni da un ejemplo. La regla de arriba, y el 127 + 1 = −128, son aparte del material. Lo que sí vale mencionar para la IA: los modelos cuantizados a 8 bits guardan sus pesos justo en este rango, de −128 a 127.</p>
+          <p>La manecilla ahora lleva los números con signo: la frontera roja separa el 127 del −128. Está en 100 y los botones están cerrados hasta que respondas.</p>
+          <div class="check" id="chk7"><p class="check-tit">Calcula antes de girar</p><div class="cuerpo"></div></div>
+          <details class="profundizar">
+            <summary>La trampa del −128: no tiene opuesto</summary>
+            <div>
+              <p>Pulsa <b>Poner −128</b> y después <b>Negar</b>. El byte no cambia: −128 negado es −128, y V se enciende. El +128 no cabe en 8 bits con signo, así que el rango no es simétrico: hay un negativo más que positivos.</p>
+              <p>Por eso <span data-tex="|x|"></span> puede salir negativo en lenguajes con enteros de ancho fijo, y por eso el cero es el único número que se niega a sí mismo sin problema.</p>
+            </div>
+          </details>
+          <details class="profundizar">
+            <summary>C y V no son lo mismo</summary>
+            <div>
+              <p>C mira el byte como número sin signo (0 a 255): se enciende cuando la suma pasa de 255. V lo mira con signo: se enciende cuando pasa de 127 o baja de −128. El mismo byte puede encender una, otra, las dos o ninguna. Prueba 255 + 1 en la fila de pruebas del paso anterior y compáralo con −1 + 1: son los mismos bits.</p>
+              <p>La CPU no sabe si tus números llevan signo: eso lo decide el programa, mirando C o V según corresponda. En la resta, además, hay dos convenciones para el significado de C; el material no entra en eso.</p>
+            </div>
+          </details>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+        </div>
+        <div id="vRueda"></div>
+        <div id="vByte" hidden>
+          <div id="byteCont"></div>
+          <div class="byte-lect" id="byteLect"></div>
+          <div class="btn-row" id="byteBtns"></div>
+        </div>
+        <div id="vSum" hidden></div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>Un programa que construye el sumador de 8 columnas y lo usa dos veces: primero 7 − 5 (suma con B invertido y acarreo de entrada 1) y después 127 + 1. Elige Python o R, dale a reproducir y mira cómo cada columna calcula su bit y su acarreo.</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir</p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="true">Python</button>
+            <button type="button" data-lang="r" aria-pressed="false">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">1 · 7 − 5</span><span data-f="2">2 · 127 + 1</span><span data-f="3">3 · la librería</span>
+        </div>
+        <h3 class="mini-tit vr-tit" id="vrTit">El sumador de 8 columnas</h3>
+        <div class="adder" id="vrGrid"></div>
+        <div class="vr-cuenta" id="vrCuenta"></div>
+        <div class="lamps" id="vrLamps"></div>
+        <h3 class="mini-tit vr-tit" style="margin-top:14px">Lo que imprimió</h3>
+        <pre class="salida" id="vrSalida"></pre>
+      </div>
+    </div>
+
+    <p class="vr-nota">En la práctica nadie escribe este sumador: la CPU lo trae en silicio y los lenguajes lo exponen como el entero de ancho fijo. NumPy lo llama <code>np.int8</code>, y la última línea del programa lo usa para comprobar el resultado. R no tiene enteros de 8 bits, así que hace la cuenta y la reduce con módulo 256 (<code>%%</code>), restando 256 si pasa de 127. Esa es la salida real de cada lenguaje; la salida de los casos 1 y 2 es idéntica en los dos.</p>
+
+    <details class="profundizar">
+      <summary>La versión de una línea con el módulo 256</summary>
+      <div>
+        <p>La vuelta del paso 1 se escribe con un resto: el resultado de 8 bits es <code>(a + b) % 256</code> en Python y <code>(a + b) %% 256</code> en R, y se lee con signo restando 256 si pasa de 127. Con enteros negativos, el resto de Python y el de R dan un resultado entre 0 y 255: <code>-5 % 256</code> vale 251 en los dos, que es exactamente el byte 1111 1011.</p>
+        <p>El código usa bucles y XOR para que se vea el circuito. Esta forma de una línea es la que usarías en un programa.</p>
+      </div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Los enteros de Python no se desbordan</h3><span class="estado" data-reto="codigo2"></span></div>
+        <div id="codigo2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>El entero más grande de R</h3><span class="estado" data-reto="codigo3"></span></div>
+        <div id="codigo3"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: la biblioteca te avisa en el índice cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>¿Cabe o desborda?</h3><span class="estado" data-reto="ojo"></span></div>
+        <p class="desc">Dos números con signo de 8 bits y una suma. Decide sin calcular el byte: solo si el resultado verdadero cabe. Apruebas con 4 de 5.</p>
+        <div id="ojo"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Construir</span><h3>Arma el byte</h3><span class="estado" data-reto="construir"></span></div>
+        <p class="desc">Enciende interruptores hasta cumplir cada objetivo. Se marcan solos.</p>
+        <div id="constrByte"></div>
+        <div class="grande" id="constrVivo"></div>
+        <ul class="objetivos" id="objetivos"></ul>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>Niégalo con lápiz</h3><span class="estado" data-reto="mano"></span></div>
+        <p class="desc">Toma papel y haz las dos operaciones antes de pedir pistas.</p>
+        <div id="mano"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Alguien se equivocó</h3><span class="estado" data-reto="error"></span></div>
+        <p class="desc">Una de las líneas tiene un error. Tócala.</p>
+        <div id="error"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Negar el −128</h3><span class="estado" data-reto="prop1"></span></div>
+        <div id="prop1"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Signos distintos</h3><span class="estado" data-reto="prop2"></span></div>
+        <div id="prop2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Qué le hace la ALU a B</h3><span class="estado" data-reto="prop3"></span></div>
+        <div id="prop3"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>255 + 1 contra −1 + 1</h3><span class="estado" data-reto="prop4"></span></div>
+        <div id="prop4"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Recordar a la fuerza es lo que fija. Arma la regla de la resta de memoria y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Fórmula de memoria</span><h3>Arma la resta como la hace la ALU</h3><span class="estado" data-reto="formula"></span></div>
+        <p class="desc">Hay piezas de más que no pertenecen. No mires arriba.</p>
+        <div id="formula"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el material</h2>
+      <p class="lecturas-intro">Ya construiste la idea con las manos. Ahora ve al material de la unidad y comprueba que la reconoces. Cada entrada dice qué vas a encontrar y en qué momento conviene leerla. Ten presente lo que el material no trae: el peso −128, el sumador columna por columna, el significado de cada lámpara y el desbordamiento. El "doble 0" se menciona sin explicarse. Si abres la biblioteca con doble clic, el enlace abre el PDF en esa página.</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> Los números de los ejemplos (7, 5, 9, 4, 127, 100 y 50) son inventados, elegidos para que las cuentas den limpias.
+    Los bytes son de 8 bits para verlos completos; los registros reales usan 32 o 64. Tu progreso se guarda solo en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+(function () {
+  "use strict";
+  /* Ejemplo comun de la ruta Arquitectura (para las demas paginas de la ruta):
+     - los bytes 0110 1101 (109) y 0000 1101 (13);
+     - el byte 0000 0101 (5) y su negativo 1111 1011 (-5);
+     - la suma 7 - 5 = 7 + (5 invertido) + 1 = 2, y la suma 127 + 1 = -128 con V encendida. */
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var RETOS = ["ojo", "construir", "mano", "error", "formula", "prop1", "prop2", "prop3", "prop4", "codigo1", "codigo2", "codigo3"];
+  var C = B.concepto({ id: "complemento-dos-alu", retos: RETOS, pasos: 7 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  /* ---------------- utilidades de bits ---------------- */
+  function bitsDe(v) { v = ((Math.round(v) % 256) + 256) % 256; var a = [], k; for (k = 7; k >= 0; k--) a.push((v >> k) & 1); return a; }
+  function sinSigno(b) { var v = 0, i; for (i = 0; i < 8; i++) v += b[i] * (1 << (7 - i)); return v; }
+  function conSigno(b) { return sinSigno(b) - (b[0] ? 256 : 0); }
+  function z(v) { return v < 0 ? "−" + (-v) : String(v); }
+  function zt(v) { return v < 0 ? "-" + (-v) : String(v); }
+  function nib(b) { return b.slice(0, 4).join("") + " " + b.slice(4).join(""); }
+  function inv(b) { return b.map(function (x) { return 1 - x; }); }
+  function copia(a) { return a.slice(); }
+  function rnd(n) { return Math.floor(Math.random() * n); }
+
+  // la ALU: a y b con signo, op "sumar" o "restar". c[k] es el acarreo que entra en la columna k (c[8] es el que sale).
+  function alu(a, b, op) {
+    var A = bitsDe(a), Bo = bitsDe(b), cin = op === "restar" ? 1 : 0;
+    var Be = op === "restar" ? inv(Bo) : Bo;
+    var S = [0, 0, 0, 0, 0, 0, 0, 0], c = [cin, 0, 0, 0, 0, 0, 0, 0, 0], k, p, x, y;
+    for (k = 0; k < 8; k++) {
+      p = 7 - k; x = A[p]; y = Be[p];
+      S[p] = x ^ y ^ c[k];
+      c[k + 1] = (x & y) | (x & c[k]) | (y & c[k]);
+    }
+    var exacto = op === "restar" ? a - b : a + b;
+    var suma = S.reduce(function (s, v) { return s + v; }, 0);
+    return { A: A, B: Bo, Be: Be, cin: cin, S: S, c: c, val: conSigno(S), uns: sinSigno(S), exacto: exacto,
+             cabe: exacto >= -128 && exacto <= 127, N: S[0], Z: suma === 0 ? 1 : 0, C: c[8], V: c[7] ^ c[8] };
+  }
+
+  /* ---------------- lamparas ---------------- */
+  var LAMPS = [["C", "acarreo", "c"], ["Z", "cero", "z"], ["N", "signo", "n"], ["V", "desbordam.", "v"]];
+  function pintarLamps(el, f, oculto) {
+    el.innerHTML = LAMPS.map(function (l) {
+      var v = f ? f[l[0]] : null;
+      var cls = "lamp " + l[2] + (oculto ? " oc" : (v === 1 ? " on" : ""));
+      return '<div class="' + cls + '"><i>' + (oculto ? "?" : l[0]) + '</i><span>' + l[1] + '</span></div>';
+    }).join("");
+  }
+
+  /* ---------------- componente: ocho interruptores ---------------- */
+  function crearByte(cont, o) {
+    var st = { bits: o.bits.slice(), neg: true, activo: true };
+    var PES = [128, 64, 32, 16, 8, 4, 2, 1];
+    function celdas(fn) { var h = "", k; for (k = 0; k < 8; k++) { if (k === 4) h += '<span class="sp"></span>'; h += fn(k); } return h; }
+    function render(foco) {
+      var h = '<div class="fila-bits pesos">' + celdas(function (k) {
+        var n = st.neg && k === 0;
+        return '<span class="peso' + (n ? " neg" : "") + '">' + (n ? "−128" : PES[k]) + '</span>';
+      }) + '</div>';
+      h += '<div class="fila-bits" role="group" aria-label="Ocho interruptores">' + celdas(function (k) {
+        var on = st.bits[k] === 1, n = st.neg && k === 0;
+        return '<button type="button" class="bit' + (on ? " on" : "") + (n ? " neg" : "") + '" data-k="' + k + '" aria-pressed="' + (on ? "true" : "false") +
+          '" aria-label="Bit de peso ' + (n ? "menos 128" : PES[k]) + '"' + (st.activo ? "" : " disabled") + '>' + st.bits[k] + '</button>';
+      }) + '</div>';
+      cont.innerHTML = h;
+      if (foco != null) { var b = cont.querySelector('[data-k="' + foco + '"]'); if (b && b.focus) b.focus(); }
+    }
+    cont.addEventListener("click", function (e) {
+      var b = e.target.closest ? e.target.closest(".bit") : null;
+      if (!b || !st.activo) return;
+      var k = +b.getAttribute("data-k");
+      st.bits[k] = 1 - st.bits[k];
+      render(k);
+      if (o.alCambiar) o.alCambiar(st.bits.slice());
+    });
+    render();
+    return {
+      get: function () { return st.bits.slice(); },
+      set: function (bits) { st.bits = bits.slice(); render(); if (o.alCambiar) o.alCambiar(st.bits.slice()); },
+      activo: function (v) { st.activo = v; render(); }
+    };
+  }
+
+  /* ---------------- componente: sumador de 8 columnas con lamparas ---------------- */
+  function crearSumador(cont, o) {
+    var st = { a: 7, b: 5, op: "sumar", conOp: false, oc: { b2: false, carry: false, s: false }, lamp: "no", bloq: false, col: 0 };
+    cont.innerHTML =
+      '<div class="alu-ctrl">' +
+        '<label>A <input type="number" class="in-a" min="-128" max="127" step="1" inputmode="numeric" aria-label="Operando A"></label>' +
+        '<label>B <input type="number" class="in-b" min="-128" max="127" step="1" inputmode="numeric" aria-label="Operando B"></label>' +
+        '<div class="seg op" role="group" aria-label="Operación"><button type="button" data-op="sumar">A + B</button><button type="button" data-op="restar">A − B</button></div>' +
+      '</div><div class="adder"></div><div class="alu-res"></div><div class="lamps"></div>';
+    var inA = cont.querySelector(".in-a"), inB = cont.querySelector(".in-b"), seg = cont.querySelector(".op");
+    var grid = cont.querySelector(".adder"), res = cont.querySelector(".alu-res"), lamps = cont.querySelector(".lamps");
+    function clamp(v) { v = Math.round(+v); if (isNaN(v)) v = 0; return Math.max(-128, Math.min(127, v)); }
+    function info() {
+      var r = alu(st.a, st.b, st.op), k = st.col, p = 7 - k;
+      return { r: r, k: k, a: r.A[p], b: r.Be[p], c: r.c[k], s: r.S[p], cout: r.c[k + 1] };
+    }
+    function render() {
+      var r = alu(st.a, st.b, st.op), p, h = "";
+      inA.value = st.a; inB.value = st.b;
+      inA.disabled = inB.disabled = st.bloq;
+      seg.hidden = !st.conOp;
+      [].forEach.call(seg.children, function (b) { b.setAttribute("aria-pressed", b.getAttribute("data-op") === st.op ? "true" : "false"); b.disabled = st.bloq; });
+      function fila(etq, cls, fn) {
+        h += '<span class="et">' + etq + '</span>';
+        for (p = 0; p < 8; p++) {
+          var k = 7 - p, v = fn(p, k);
+          h += '<span class="ac ' + cls + (v.c ? " " + v.c : "") + (st.col === k ? " sel" : "") + '" data-k="' + k + '">' + v.t + '</span>';
+        }
+      }
+      fila("columna", "col", function (p, k) { return { t: k }; });
+      fila("A", "", function (p) { return { t: r.A[p], c: r.A[p] ? (p === 0 ? "neg1" : "u1") : "" }; });
+      fila("B", "", function (p) { return { t: r.B[p], c: r.B[p] ? (p === 0 ? "neg1" : "u1") : "" }; });
+      if (st.conOp) fila("B que entra", "", function (p) {
+        if (!st.oc.b2) return { t: "?", c: "oc" };
+        return { t: r.Be[p], c: r.Be[p] ? (p === 0 ? "neg1" : "u1") : "" };
+      });
+      fila("acarreo", "car", function (p, k) {
+        if (!st.oc.carry) return { t: "?", c: "oc" };
+        return { t: r.c[k], c: r.c[k] ? "u1" : "" };
+      });
+      fila("S", "s", function (p) {
+        if (!st.oc.s) return { t: "?", c: "oc" };
+        return { t: r.S[p], c: r.S[p] ? (p === 0 ? "neg1" : "u1") : "" };
+      });
+      grid.innerHTML = h;
+      var oper = st.op === "restar" ? "−" : "+";
+      if (!st.oc.s) res.innerHTML = z(st.a) + " " + oper + " " + z(st.b) + " = <span class=\"oculto\">?</span>";
+      else res.innerHTML = z(st.a) + " " + oper + " " + z(st.b) + " = <b>" + z(r.exacto) + "</b>" +
+        (r.cabe ? ". El byte <b>" + nib(r.S) + "</b> vale <b>" + z(r.val) + "</b>."
+                : ". No cabe en −128 a 127: el byte <b>" + nib(r.S) + "</b> vale <b>" + z(r.val) + "</b>.");
+      lamps.hidden = st.lamp === "no";
+      if (st.lamp !== "no") pintarLamps(lamps, r, st.lamp === "oculto");
+      if (o.alCambiar) o.alCambiar(info());
+    }
+    inA.addEventListener("change", function () { st.a = clamp(inA.value); render(); });
+    inB.addEventListener("change", function () { st.b = clamp(inB.value); render(); });
+    seg.addEventListener("click", function (e) { var b = e.target.closest("button"); if (!b || st.bloq) return; st.op = b.getAttribute("data-op"); render(); });
+    grid.addEventListener("click", function (e) {
+      var c = e.target.closest(".ac");
+      if (!c) return;
+      st.col = +c.getAttribute("data-k");
+      render();
+    });
+    render();
+    return {
+      set: function (c) { Object.keys(c).forEach(function (k) { if (k === "oc") st.oc = Object.assign({}, st.oc, c.oc); else st[k] = c[k]; }); render(); },
+      info: info,
+      alu: function () { return alu(st.a, st.b, st.op); },
+      valores: function () { return { a: st.a, b: st.b, op: st.op }; }
+    };
+  }
+
+  /* ---------------- componente: la rueda de 256 posiciones ---------------- */
+  var NS = "http://www.w3.org/2000/svg";
+  function crearRueda(cont, o) {
+    var st = { total: 7, signo: false, lamps: false, bloq: true, botones: [], flags: null, leyenda: "", ini: 7 };
+    cont.innerHTML = '<svg class="rueda-svg" viewBox="0 0 320 320" role="img" aria-label="Rueda de 256 posiciones con una manecilla"></svg>' +
+      '<div class="rueda-lectura" aria-live="polite"></div><div class="lamps" hidden></div><div class="btn-row rueda-btns"></div><p class="rueda-nota"></p>';
+    var svg = cont.querySelector("svg"), lect = cont.querySelector(".rueda-lectura"), lamps = cont.querySelector(".lamps");
+    var btns = cont.querySelector(".rueda-btns"), nota = cont.querySelector(".rueda-nota");
+    function nodo(tag, at, padre, t) { var e = document.createElementNS(NS, tag), k; for (k in at) e.setAttribute(k, at[k]); if (t != null) e.textContent = t; (padre || svg).appendChild(e); return e; }
+    var CX = 160, CY = 160, R = 108;
+    function pt(v, r) { var a = v / 256 * 2 * Math.PI; return [CX + r * Math.sin(a), CY - r * Math.cos(a)]; }
+    var giro, valorT, subT, fronteras, etiquetas = [];
+    function dibujarFondo() {
+      svg.innerHTML = "";
+      nodo("circle", { cx: CX, cy: CY, r: R, "class": "anillo" });
+      var v, a, b;
+      for (v = 0; v < 256; v += 8) {
+        var g = v % 32 === 0;
+        a = pt(v, R - (g ? 12 : 6)); b = pt(v, R);
+        nodo("line", { x1: a[0], y1: a[1], x2: b[0], y2: b[1], "class": "marca" + (g ? " g" : "") });
+      }
+      etiquetas = [];
+      for (v = 0; v < 256; v += 32) {
+        var p = pt(v, R + 17);
+        etiquetas.push(nodo("text", { x: p[0], y: p[1] + 4, "text-anchor": "middle", "class": "num" }, null, String(v)));
+      }
+      fronteras = nodo("g", {});
+      valorT = nodo("text", { x: CX, y: CY - 2, "class": "valor" }, null, "7");
+      subT = nodo("text", { x: CX, y: CY + 16, "class": "valor-sub" }, null, "");
+      giro = nodo("g", { "class": "giro" });
+      nodo("line", { x1: CX, y1: CY, x2: CX, y2: CY - (R - 8), "class": "mano" }, giro);
+      nodo("circle", { cx: CX, cy: CY - (R - 8), r: 5, "class": "punta" }, giro);
+      nodo("circle", { cx: CX, cy: CY, r: 4, "class": "centro" });
+    }
+    function etiquetasYFrontera() {
+      etiquetas.forEach(function (t, i) {
+        var v = i * 32, s = st.signo && v >= 128 ? v - 256 : v;
+        t.textContent = z(s);
+        t.setAttribute("class", "num" + (s < 0 ? " n" : ""));
+      });
+      fronteras.innerHTML = "";
+      var pos = st.signo ? 128 : 0, a = pt(pos, R - 14), b = pt(pos, R + 3), l = pt(pos, R - 24);
+      nodo("line", { x1: a[0], y1: a[1], x2: b[0], y2: b[1], "class": "front" }, fronteras);
+      nodo("text", { x: l[0], y: l[1] + (st.signo ? -2 : 12), "text-anchor": "middle", "class": "front-lab" }, fronteras, st.signo ? "127 | −128" : "255 | 0");
+    }
+    function valor() { return ((st.total % 256) + 256) % 256; }
+    function render() {
+      var v = valor(), deg = st.total / 256 * 360;
+      giro.setAttribute("style", "transform: rotate(" + deg + "deg); transform-origin: " + CX + "px " + CY + "px");
+      valorT.textContent = st.signo ? z(v > 127 ? v - 256 : v) : String(v);
+      subT.textContent = st.signo ? "byte " + nib(bitsDe(v)) : "";
+      etiquetasYFrontera();
+      lect.innerHTML = st.leyenda || (st.bloq ? "Los botones se abren cuando resuelvas el chequeo." : "Elige una operación.");
+      lamps.hidden = !st.lamps;
+      if (st.lamps) pintarLamps(lamps, st.flags, false);
+      btns.innerHTML = "";
+      st.botones.forEach(function (bt, i) {
+        var b = document.createElement("button");
+        b.type = "button";
+        b.textContent = bt.t;
+        b.disabled = st.bloq;
+        b.addEventListener("click", function () { accion(bt); });
+        btns.appendChild(b);
+      });
+      nota.textContent = st.nota || "";
+    }
+    function accion(bt) {
+      if (st.bloq) return;
+      var v0 = valor(), s0 = v0 > 127 ? v0 - 256 : v0, texto, destino;
+      if (bt.reset != null) { st.total = bt.reset; st.leyenda = ""; st.flags = null; render(); return; }
+      if (bt.poner != null) {
+        destino = ((bt.poner % 256) + 256) % 256;
+        st.total += ((destino - v0) % 256 + 256) % 256;
+        st.leyenda = "Pusiste la manecilla en <b>" + z(bt.poner) + "</b>."; st.flags = null; render(); return;
+      }
+      if (st.signo) {
+        var r = bt.neg ? alu(0, s0, "restar") : alu(s0, bt.d, "sumar");
+        st.total += ((r.uns - v0) % 256 + 256) % 256;
+        var cuenta = bt.neg ? "0 − (" + z(s0) + ")" : z(s0) + (bt.d < 0 ? " − " + (-bt.d) : " + " + bt.d);
+        texto = cuenta + " = <b>" + z(r.exacto) + "</b>. " + (r.cabe
+          ? "Cabe en −128 a 127: el byte <b>" + nib(r.S) + "</b> vale " + z(r.val) + "."
+          : "No cabe en −128 a 127. El byte <b>" + nib(r.S) + "</b> vale <b>" + z(r.val) + "</b>: la manecilla cruzó la frontera roja.");
+        st.flags = r;
+      } else {
+        var suma = v0 + bt.d;
+        st.total += bt.d;
+        texto = v0 + (bt.d < 0 ? " − " + (-bt.d) : " + " + bt.d) + " = " + suma;
+        if (suma > 255) texto += ", da la vuelta: " + suma + " − 256 = <b>" + (suma - 256) + "</b>";
+        else if (suma < 0) texto += ", da la vuelta hacia atrás: " + suma + " + 256 = <b>" + (suma + 256) + "</b>";
+        else texto = texto.replace(" = " + suma, " = <b>" + suma + "</b>");
+        st.flags = null;
+      }
+      st.leyenda = texto;
+      render();
+    }
+    dibujarFondo();
+    render();
+    return {
+      set: function (c) {
+        Object.keys(c).forEach(function (k) {
+          if (k === "ini") { st.total = c.ini; st.leyenda = ""; st.flags = null; } else st[k] = c[k];
+        });
+        render();
+      },
+      valor: function () { var v = valor(); return st.signo && v > 127 ? v - 256 : v; }
+    };
+  }
+
+  /* ---------------- escenario ---------------- */
+  var est = { paso: 0, hecho: [false, false, false, false, false, false, false], c5: false, c5b: false };
+  var pasos;
+  var byte2, rueda, suma;
+
+  byte2 = crearByte($("byteCont"), { bits: bitsDe(230), alCambiar: refrescarByte });
+  rueda = crearRueda($("vRueda"), {});
+  suma = crearSumador($("vSum"), { alCambiar: refrescarSuma });
+
+  var HINTS = [
+    "Predice primero; luego gira la manecilla",
+    "Toca los interruptores",
+    "Pulsa Invertir y después Sumar 1",
+    "Cambia A y B; toca una columna",
+    "Cambia entre A + B y A − B",
+    "Cuando se destape, prueba otros números",
+    "Gira la manecilla con signo"
+  ];
+
+  function refrescarByte(bits) {
+    var i = est.paso, b = bits || byte2.get();
+    if (i === 1) {
+      var terms = [-128, 64, 32, 16, 8, 4, 2, 1].map(function (p, k) { return z(p) + "·" + b[k]; });
+      $("vivo2").textContent = terms.join(" + ").replace(/\+ −/g, "− ") + " = " + (est.hecho[1] ? z(conSigno(b)) : "?");
+      $("byteLect").innerHTML = "Byte: <b>" + nib(b) + "</b><br>Sin signo: <b>" + sinSigno(b) + "</b> · Con signo: " +
+        (est.hecho[1] ? "<b>" + z(conSigno(b)) + "</b>" : '<span class="oculto">?</span>');
+    } else if (i === 2) {
+      $("byteLect").innerHTML = "Byte: <b>" + nib(b) + "</b><br>Sin signo: <b>" + sinSigno(b) + "</b> · Con signo: " +
+        (est.hecho[2] ? "<b>" + z(conSigno(b)) + "</b>" : '<span class="oculto">?</span>') + (est.log3 ? "<br>" + est.log3 : "");
+      $("vivo3").textContent = "x = 5 → invertir → " + (est.hecho[2] ? z(-6) : "?") + " → sumar 1 → " + (est.sumo && est.hecho[2] ? z(conSigno(b)) : "?");
+    }
+  }
+  function botonesByte() {
+    var cont = $("byteBtns");
+    cont.innerHTML = "";
+    if (est.paso !== 2) return;
+    [["Invertir", function () { est.invirtio = true; est.sumo = false; byte2.set(inv(byte2.get())); est.log3 = "Invertiste los ocho bits."; refrescarByte(); }],
+     ["Sumar 1", function () {
+        var b = byte2.get(); est.sumo = true; byte2.set(bitsDe(sinSigno(b) + 1));
+        est.log3 = "Sumaste 1 al byte (si todo era 1, da la vuelta a 0)."; refrescarByte(); }],
+     ["Volver al 5", function () { est.invirtio = false; est.sumo = false; est.log3 = ""; byte2.set(bitsDe(5)); refrescarByte(); }]
+    ].forEach(function (d) {
+      var b = document.createElement("button");
+      b.type = "button"; b.textContent = d[0];
+      b.addEventListener("click", d[1]);
+      cont.appendChild(b);
+    });
+  }
+
+  function refrescarSuma(inf) {
+    var i = est.paso;
+    if (i === 3) {
+      $("vivo4").innerHTML = est.hecho[3]
+        ? "Columna " + inf.k + ": A = " + inf.a + ", B = " + inf.b + ", acarreo que entra = " + inf.c + " → S = " + inf.s + ", acarreo que sale = " + inf.cout
+        : "Los acarreos están tapados hasta que resuelvas el chequeo.";
+    } else if (i === 4) {
+      var r = inf.r, v = suma.valores();
+      if (est.hecho[4]) {
+        var be = sinSigno(r.Be), a = sinSigno(r.A);
+        $("vivo5").textContent = v.op === "restar"
+          ? z(v.a) + " − " + z(v.b) + " = " + a + " + " + be + " + 1 = " + (a + be + 1) + (a + be + 1 > 255 ? " → " + (a + be + 1) + " − 256 = " + ((a + be + 1) % 256) : "") + " (el byte vale " + z(r.val) + ")"
+          : z(v.a) + " + " + z(v.b) + " con acarreo de entrada 0 (suma normal)";
+      } else $("vivo5").textContent = "La cuenta aparece cuando resuelvas el chequeo.";
+    } else if (i === 5) {
+      $("vivo6").textContent = est.hecho[5]
+        ? "c7 = " + inf.r.c[7] + ", c8 = " + inf.r.c[8] + " → V = " + inf.r.V + " · N = " + inf.r.N + " · Z = " + inf.r.Z + " · C = " + inf.r.C
+        : "Los valores aparecen cuando destapes el sumador.";
+    }
+  }
+  function refrescarRueda() {
+    var v = rueda.valor();
+    $("vivo7").textContent = est.hecho[6] ? "La manecilla marca " + z(v) + " (byte " + nib(bitsDe(v)) + ")" : "La manecilla marca 100 y los botones esperan tu respuesta.";
+  }
+
+  function entrar(i) {
+    est.paso = i;
+    $("escHint").textContent = HINTS[i];
+    $("vRueda").hidden = !(i === 0 || i === 6);
+    $("vByte").hidden = !(i === 1 || i === 2);
+    $("vSum").hidden = !(i >= 3 && i <= 5);
+    if (i === 0) {
+      rueda.set({ signo: false, lamps: false, bloq: !est.hecho[0], ini: 7,
+        botones: [{ t: "Sumar 251", d: 251 }, { t: "Restar 5", d: -5 }, { t: "Sumar 1", d: 1 }, { t: "Volver al 7", reset: 7 }],
+        nota: "Cada botón mueve la manecilla; el valor se lee en el centro." });
+    } else if (i === 1) {
+      if (!est.hecho[1]) byte2.set(bitsDe(230)); else refrescarByte();
+      botonesByte();
+      refrescarByte();
+    } else if (i === 2) {
+      if (!est.hecho[2]) { est.invirtio = false; est.sumo = false; est.log3 = ""; byte2.set(bitsDe(5)); }
+      botonesByte();
+      refrescarByte();
+    } else if (i === 3) {
+      suma.set({ a: 7, b: 5, op: "sumar", conOp: false, lamp: "no", bloq: false, col: 0, oc: { b2: true, carry: est.hecho[3], s: true } });
+    } else if (i === 4) {
+      suma.set({ a: 9, b: 4, op: "restar", conOp: true, lamp: "no", bloq: false, col: 0, oc: { b2: est.hecho[4], carry: true, s: true } });
+    } else if (i === 5) {
+      if (!est.hecho[5]) suma.set({ a: 127, b: 1, op: "sumar", conOp: false, lamp: "oculto", bloq: true, col: 7, oc: { b2: true, carry: false, s: false } });
+      else suma.set({ conOp: true, lamp: "ver", bloq: false, oc: { b2: true, carry: true, s: true } });
+    } else if (i === 6) {
+      rueda.set({ signo: true, lamps: true, bloq: !est.hecho[6], ini: 100,
+        botones: [{ t: "+ 20", d: 20 }, { t: "+ 27", d: 27 }, { t: "+ 28", d: 28 }, { t: "+ 50", d: 50 }, { t: "− 50", d: -50 },
+                  { t: "Negar", neg: true }, { t: "Poner −128", poner: -128 }, { t: "Volver al 100", reset: 100 }],
+        nota: "La manecilla gira en pasos de 8 bits con signo. Mira las lámparas después de cada botón." });
+      refrescarRueda();
+    }
+  }
+
+  /* ---------------- chequeos de cada paso ---------------- */
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+
+  B.numerico(cuerpo("chk1"), {
+    pregunta: "La manecilla está en 7. Si la haces avanzar <b>251</b> posiciones, da la vuelta después del 255. ¿En qué número queda?",
+    respuesta: 2,
+    tolerancia: 0,
+    pistas: ["7 + 251 = 258, pero el contador no pasa del 255.", "Cada vez que pasa del 255 vuelve a empezar en 0. ¿Cuántas posiciones tiene en total la vuelta?"],
+    diagnostico: function (v) {
+      if (v === 258) return "258 sería la suma sin vuelta, pero el contador solo llega al 255. Cada vuelta completa son 256 posiciones.";
+      if (v === 3) return "Casi: después del 255 viene el 0, no el 1. De 258 hay que restar 256, no 255.";
+      return null;
+    },
+    explicacion: "7 + 251 = 258, y 258 − 256 = <b>2</b>. Ahora abre los botones y comprueba algo curioso: <b>restar 5</b> también deja la manecilla en 2. Avanzar 251 y retroceder 5 llegan al mismo lugar, porque 251 = 256 − 5. Esa es toda la idea: restar es sumar el complemento a una vuelta.",
+    alResolver: function () { est.hecho[0] = true; rueda.set({ bloq: false, nota: "Prueba Restar 5 y Sumar 251 desde el 7: llegan al mismo lugar." }); pasos.completar(0); }
+  });
+
+  B.numerico(cuerpo("chk2"), {
+    pregunta: "Con los interruptores como están ahora, ¿cuánto vale el byte <b>con signo</b>?",
+    respuesta: function () { return conSigno(byte2.get()); },
+    tolerancia: 0,
+    pistas: ["Suma solo los pesos de los interruptores encendidos. El primero pesa −128.",
+      function () { var b = byte2.get(); return "Los pesos encendidos son: " + [-128, 64, 32, 16, 8, 4, 2, 1].filter(function (p, k) { return b[k]; }).map(function (p) { return "$" + zt(p) + "$"; }).join(", ") + "."; }],
+    diagnostico: function (v) {
+      var b = byte2.get();
+      if (v === sinSigno(b) && b[0]) return "Esa es la lectura sin signo: ahí el primer interruptor vale +128. Con signo vale −128.";
+      return null;
+    },
+    explicacion: function () {
+      var b = byte2.get();
+      return [-128, 64, 32, 16, 8, 4, 2, 1].map(function (p, k) { return b[k] ? "(" + z(p) + ")" : null; }).filter(Boolean).join(" + ") + " = <b>" + z(conSigno(b)) + "</b>. Ahora el valor queda a la vista: cambia interruptores y comprueba cómo el primero decide el signo.";
+    },
+    alResolver: function () { est.hecho[1] = true; refrescarByte(); pasos.completar(1); }
+  });
+
+  B.numerico(cuerpo("chk3"), {
+    pregunta: "El byte arranca en 5 (0000 0101). Al pulsar <b>Invertir</b> queda 1111 1010. ¿Cuánto vale ese byte <b>con signo</b>?",
+    respuesta: -6,
+    tolerancia: 0,
+    pistas: ["Suma los pesos de los interruptores encendidos: −128, 64, 32, 16, 8 y 2.", "−128 + 64 + 32 + 16 + 8 + 2: lo que pesan los encendidos."],
+    diagnostico: function (v) {
+      if (v === 250) return "250 es la lectura sin signo del mismo byte. Con signo el primer interruptor pesa −128: 250 − 256.";
+      if (v === -5) return "Falta un paso: −5 es el resultado final, después de sumar 1. Aquí pregunto solo por el byte recién invertido.";
+      if (v === -4) return "Revisa la cuenta: −128 + 64 + 32 + 16 + 8 + 2 da −6.";
+      return null;
+    },
+    explicacion: "−128 + 64 + 32 + 16 + 8 + 2 = <b>−6</b>. Invertir el 5 da −6, no −5: invertir siempre da −x − 1. El <b>+1</b> es el que corrige. Pulsa Sumar 1 y mira el −5.",
+    alResolver: function () { est.hecho[2] = true; refrescarByte(); pasos.completar(2); }
+  });
+
+  B.numerico(cuerpo("chk4"), {
+    pregunta: "Con los números que tienes en pantalla, ¿cuántas de las 8 columnas <b>entregan un acarreo de 1</b> a la columna siguiente? (Cuéntalo tú: están tapados.)",
+    respuesta: function () { var r = suma.alu(), n = 0, k; for (k = 1; k <= 8; k++) n += r.c[k]; return n; },
+    tolerancia: 0,
+    pistas: ["Columna por columna, de derecha a izquierda: hay acarreo de salida cuando suman dos o más unos entre A, B y el acarreo que llega.",
+      function () { var r = suma.alu(); return "Con A = " + r.A.join("") + " y B = " + r.B.join("") + ", la columna 0 suma 1 + 1 = 10: sale un acarreo."; }],
+    explicacion: function () {
+      var r = suma.alu();
+      return "Acarreos que entran en cada columna, de la 0 a la 7: " + r.c.slice(0, 8).join(", ") + ". Los que salen son los de la columna siguiente, y la última columna entrega el <b>" + r.c[8] + "</b>. Ahora puedes ver los acarreos en la fila de arriba del resultado y tocar una columna para ver su cuenta.";
+    },
+    alResolver: function () { est.hecho[3] = true; suma.set({ oc: { carry: true } }); pasos.completar(3); }
+  });
+
+  B.numerico(cuerpo("chk5"), {
+    pregunta: "El circuito calcula 9 − 4 y para ello invierte B = 4 (0000 0100). Como número <b>sin signo</b>, ¿cuánto vale el B invertido que entra al sumador?",
+    respuesta: 251,
+    tolerancia: 0,
+    pistas: ["Invierte uno por uno los bits de 0000 0100.", "Queda 1111 1011. Súmale los pesos 128, 64, 32, 16, 8, 2 y 1."],
+    diagnostico: function (v) {
+      if (v === -5) return "−5 es la lectura con signo del mismo byte (1111 1011). Aquí pregunto sin signo: todos los pesos positivos.";
+      if (v === 252) return "252 sería 256 − 4. Eso ya incluye el +1; pero ese +1 entra después, como acarreo de entrada.";
+      return null;
+    },
+    explicacion: "1111 1011 = 251. Y 9 + 251 + 1 = 261: el 256 de más es el noveno bit, que se pierde, y quedan <b>5</b>. Mira: invertir 4 da 255 − 4 = 251, que es lo mismo que el 251 del paso 1. Restar 4 es avanzar 252 (= 251 + 1) en la rueda.",
+    alResolver: function () { est.hecho[4] = true; est.c5 = true; suma.set({ oc: { b2: true } }); cerrar5(); }
+  });
+
+  B.opcionMultiple(cuerpo("chk5b"), {
+    pregunta: "En complemento a dos, ¿cuántos bytes distintos de 8 bits valen cero?",
+    opciones: ["Uno solo: 0000 0000", "Dos: 0000 0000 y 1000 0000", "Dos: 0000 0000 y 1111 1111", "Depende del circuito"],
+    correcta: 0,
+    pistas: [null, "1000 0000 no es un cero en complemento a dos: su primer bit pesa −128 y nada lo compensa.", "1111 1111 vale −1 en complemento a dos: sumarle 1 da 0.", "El valor de cada byte lo fija la regla de lectura, no el circuito."],
+    explicacion: "Solo 0000 0000. Mira la tabla: signo y magnitud y complemento a uno sí tienen un +0 y un −0; el complemento a dos no. Esa es la ventaja que el material nombra como \"el problema del doble 0\" sin explicarla.",
+    alResolver: function () { $("tablaCero").hidden = false; est.c5b = true; cerrar5(); }
+  });
+  function cerrar5() { if (est.c5 && est.c5b) pasos.completar(4); }
+
+  B.opcionMultiple(cuerpo("chk6"), {
+    pregunta: "El sumador está en 127 + 1. El resultado verdadero es 128. ¿Qué lámparas se encienden?",
+    opciones: [
+      "Solo Z, porque el resultado es cero",
+      "N y V: el byte queda con el primer bit en 1 y la suma se salió del rango con signo",
+      "Solo C, porque se perdió el noveno bit",
+      "Ninguna: 128 cabe en un byte"
+    ],
+    correcta: 1,
+    pistas: ["El resultado, 1000 0000, tiene un bit encendido: no es cero.", null,
+      "El noveno bit se pierde cuando la suma pasa de 255 como número sin signo. 127 + 1 = 128 no pasa.",
+      "128 cabe sin signo (0 a 255), pero con signo el máximo de un byte es 127."],
+    explicacion: "127 + 1 da el byte 1000 0000: el primer bit en 1 enciende <b>N</b>. Dos positivos dieron un resultado con el signo equivocado, así que enciende <b>V</b>. C queda apagada (no salió acarreo de la columna 7) y Z también (hay un bit encendido). Mira el sumador destapado: el byte vale −128.",
+    alResolver: function () {
+      est.hecho[5] = true;
+      suma.set({ conOp: true, lamp: "ver", bloq: false, oc: { b2: true, carry: true, s: true } });
+      refrescarSuma(suma.info());
+      pasos.completar(5);
+    }
+  });
+
+  B.numerico(cuerpo("chk7"), {
+    pregunta: "La manecilla está en 100, con signo. Si le sumas 50, ¿en qué número queda? (Responde con el signo que corresponde.)",
+    respuesta: -106,
+    tolerancia: 0,
+    pistas: ["100 + 50 = 150, pero con signo el máximo es 127.", "150 − 256 = ?"],
+    diagnostico: function (v) {
+      if (v === 150) return "150 sería el resultado verdadero, pero no cabe: con signo el máximo de un byte es 127.";
+      if (v === 106) return "El valor absoluto está bien, pero el signo es negativo: el primer bit quedó encendido.";
+      return null;
+    },
+    explicacion: "100 + 50 = 150, y 150 − 256 = <b>−106</b>: el byte 1001 0110. Dos positivos dieron un negativo, así que V se enciende. Abre los botones y compruébalo; después prueba el −128.",
+    alResolver: function () { est.hecho[6] = true; rueda.set({ bloq: false }); refrescarRueda(); pasos.completar(6); }
+  });
+
+  pasos = B.pasos($("recorrido"), {
+    concepto: C,
+    alEntrar: entrar,
+    alTerminar: function () { location.hash = "retos"; }
+  });
+  [0, 1, 2, 3, 4, 5, 6].forEach(function (i) { est.hecho[i] = pasos.hecho(i); });
+  est.c5 = est.c5b = est.hecho[4];
+  if (est.hecho[4]) $("tablaCero").hidden = false;
+  entrar(0);
+
+  /* ---------------- hipotesis inicial ---------------- */
+  (function () {
+    var ta = $("hipotesis"), t = null;
+    ta.value = B.nota("complemento-dos-alu", "hipotesis");
+    function cita() {
+      var v = ta.value.trim(), el = $("citaHipo");
+      el.hidden = !v;
+      if (v) { el.textContent = ""; el.appendChild(document.createTextNode("Al principio escribiste: «" + v + "». ¿Se parece a invertir B y poner un 1 de acarreo? ¿Qué te faltaba?")); }
+    }
+    cita();
+    ta.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { B.nota("complemento-dos-alu", "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; cita(); }, 500);
+    });
+  })();
+
+  /* ---------------- marcadores de estado de retos ---------------- */
+  function pintarEstados() {
+    [].forEach.call(document.querySelectorAll("[data-reto]"), function (el) {
+      var ok = C.retoOk(el.getAttribute("data-reto"));
+      el.textContent = ok ? "resuelto" : "pendiente";
+      el.classList.toggle("ok", ok);
+    });
+  }
+  C.alCambiar(pintarEstados);
+
+  /* ---------------- reto: ojo clinico ---------------- */
+  function parOjo(tipo) {
+    for (;;) {
+      var a, b;
+      if (tipo === "arriba") { a = 40 + rnd(88); b = 40 + rnd(88); }
+      else if (tipo === "abajo") { a = -128 + rnd(88); b = -128 + rnd(88); }
+      else { a = rnd(256) - 128; b = rnd(256) - 128; }
+      var s = a + b, real = s > 127 ? "arriba" : s < -128 ? "abajo" : "cabe";
+      if (real === tipo && (tipo !== "cabe" || (Math.abs(a) > 20 && Math.abs(b) > 20))) return [a, b];
+    }
+  }
+  (function () {
+    var cont = $("ojo");
+    cont.innerHTML = '<div class="ronda"></div><div class="ojo-cuenta"></div>' +
+      '<div class="ojo-opts"><button type="button" class="opt" data-a="cabe">Cabe: V apagada</button><button type="button" class="opt" data-a="arriba">Se pasa por arriba</button><button type="button" class="opt" data-a="abajo">Se pasa por abajo</button></div>' +
+      '<div class="fb" aria-live="polite"></div><div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    var tipos, ronda, aciertos, respondida, par;
+    function nueva() {
+      var extra = ["cabe", "arriba", "abajo"][rnd(3)];
+      tipos = B.mezclar(["cabe", "arriba", "abajo", "cabe", extra]);
+      ronda = 0; aciertos = 0;
+      mostrar();
+    }
+    function mostrar() {
+      respondida = false;
+      par = parOjo(tipos[ronda]);
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 5 · aciertos " + aciertos;
+      cont.querySelector(".ojo-cuenta").textContent = z(par[0]) + " + " + z(par[1]) + " = ?";
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (b) { b.disabled = false; b.className = "opt"; });
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+    }
+    cont.querySelector(".ojo-opts").addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || respondida) return;
+      respondida = true;
+      var tipo = tipos[ronda], ok = b.getAttribute("data-a") === tipo, r = alu(par[0], par[1], "sumar");
+      if (ok) aciertos++;
+      b.classList.add(ok ? "ok" : "mal");
+      if (!ok) cont.querySelector('[data-a="' + tipo + '"]').classList.add("ok");
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (x) { x.disabled = true; });
+      var porque = tipo === "cabe"
+        ? "El resultado verdadero, " + z(r.exacto) + ", está entre −128 y 127. Los signos distintos nunca desbordan, y los iguales solo si los números son grandes."
+        : tipo === "arriba" ? "Dos positivos grandes: el resultado verdadero, " + z(r.exacto) + ", pasa de 127 y el byte queda negativo."
+        : "Dos negativos grandes: el resultado verdadero, " + z(r.exacto) + ", baja de −128 y el byte queda positivo.";
+      cont.querySelector(".fb").innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No.</span> ') + porque +
+        " El byte es " + nib(r.S) + " = " + z(r.val) + ", V = " + r.V + ".";
+      var sig = cont.querySelector(".sig");
+      sig.hidden = false;
+      if (ronda === 4) {
+        var aprobo = aciertos >= 4;
+        C.reto("ojo", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertos + " de 5" + (aprobo ? ". Aprobado." : ". Necesitas 4 para aprobar.");
+        sig.textContent = "Otra tanda";
+      } else sig.textContent = "Siguiente ronda";
+    });
+    cont.querySelector(".sig").addEventListener("click", function () { if (ronda === 4) nueva(); else { ronda++; mostrar(); } });
+    nueva();
+  })();
+
+  /* ---------------- reto: construir ---------------- */
+  (function () {
+    var OBJ = [
+      { t: "Arma el −5 (la respuesta del ejemplo de la unidad).", ok: function (v) { return v === -5; } },
+      { t: "Arma el número más negativo que cabe en un byte.", ok: function (v) { return v === -128; } },
+      { t: "Arma el −37. Pista: parte del +37, inviértelo y suma 1.", ok: function (v) { return v === -37; } }
+    ];
+    var logrados = [false, false, false], avisado = false, ul = $("objetivos");
+    OBJ.forEach(function (o) { var li = document.createElement("li"); li.innerHTML = '<span class="m"></span><span>' + o.t + '</span>'; ul.appendChild(li); });
+    function mirar(bits) {
+      var v = conSigno(bits);
+      $("constrVivo").innerHTML = "Byte <b>" + nib(bits) + "</b> · con signo <b>" + z(v) + "</b> · sin signo " + sinSigno(bits);
+      OBJ.forEach(function (o, i) { if (!logrados[i] && o.ok(v)) logrados[i] = true; ul.children[i].classList.toggle("hecho", logrados[i]); });
+      if (!avisado && logrados.every(Boolean)) { avisado = true; C.reto("construir", true); }
+    }
+    var cb = crearByte($("constrByte"), { bits: bitsDe(0), alCambiar: mirar });
+    mirar(cb.get());
+  })();
+
+  /* ---------------- reto: a mano ---------------- */
+  (function () {
+    var x;
+    function generar() { x = 3 + rnd(97); }
+    generar();
+    B.numerico($("mano"), {
+      pregunta: function () { return "Escribe <b>−" + x + "</b> en complemento a dos con 8 bits (invierte los bits de " + x + " y suma 1). ¿Cuánto vale ese byte leído <b>sin signo</b>?"; },
+      respuesta: function () { return 256 - x; },
+      tolerancia: 0,
+      pistas: [
+        function () { return "Pasa " + x + " a binario con 8 bits: <code>" + nib(bitsDe(x)) + "</code>."; },
+        function () { return "Invertido queda <code>" + nib(inv(bitsDe(x))) + "</code>, que vale " + (255 - x) + " (todo unos menos " + x + ")."; },
+        function () { return "Sumar 1 da <code>" + nib(bitsDe(256 - x)) + "</code>, que vale " + (256 - x) + "."; }
+      ],
+      diagnostico: function (v) {
+        if (v === 255 - x) return "Ese es el byte solo invertido. Falta sumar 1.";
+        if (v === -x) return "Esa es la lectura con signo. Te pido el valor del byte sin signo.";
+        if (v === x) return "Ese es el byte positivo original. Hay que invertir y sumar 1.";
+        return null;
+      },
+      explicacion: function () { return "Invertir da 255 − " + x + " = " + (255 - x) + " y sumar 1 da 256 − " + x + " = <b>" + (256 - x) + "</b>, es decir " + nib(bitsDe(256 - x)) + ". Siempre es 256 menos el número: es la vuelta del paso 1."; },
+      reintentable: true,
+      textoReintentar: "Otro ejercicio",
+      antesDeReintentar: generar,
+      alResolver: function (ok) { C.reto("mano", ok); }
+    });
+  })();
+
+  /* ---------------- reto: cazar el error ---------------- */
+  B.cazarError($("error"), {
+    variantes: [
+      {
+        intro: "Alguien calculó el −5 en 8 bits y lo leyó:",
+        lineas: ["5 = 0000\\,0101", "\\text{invertir}: 1111\\,1010", "\\text{sumar } 1: 1111\\,1011", "\\text{sin signo}: 128+64+32+16+8+2+1 = 251",
+          "\\text{con signo}: 251 - 128 = 123", "\\text{entonces el byte vale } 123"],
+        erronea: 4,
+        explicacion: "El primer bit pesa −128, no 128: el valor con signo es $251 - 256 = -5$. Restar 128 deja un número positivo y la cuenta no cierra con lo que se quería construir."
+      },
+      {
+        intro: "Alguien calculó 9 − 4 con el sumador de 8 bits:",
+        lineas: ["A = 9 = 0000\\,1001", "B = 4 = 0000\\,0100,\\quad \\overline{B} = 1111\\,1011 = 251", "A + \\overline{B} = 9 + 251 = 260",
+          "260 - 256 = 4 \\quad (\\text{se pierde el noveno bit})", "\\text{resultado}: 9 - 4 = 4"],
+        erronea: 2,
+        explicacion: "Faltó el acarreo de entrada 1, el +1 de la receta. La suma correcta es $9 + 251 + 1 = 261$, y $261 - 256 = 5$."
+      },
+      {
+        intro: "Alguien sumó 100 + 50 con signo en 8 bits:",
+        lineas: ["100 = 0110\\,0100", "50 = 0011\\,0010", "\\text{suma}: 1001\\,0110", "\\text{el primer bit es 1: el byte es negativo}",
+          "\\text{valor}: 150 - 128 = 22", "V = 1 \\text{ (dos positivos dieron un negativo)}"],
+        erronea: 4,
+        explicacion: "El primer bit pesa −128: el valor es $150 - 256 = -106$. Con 22 la suma parecería correcta, y el desbordamiento pasaría inadvertido."
+      }
+    ],
+    alResolver: function (ok) { C.reto("error", ok); }
+  });
+
+  /* ---------------- retos: propiedades ---------------- */
+  function prop(id, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple($(id), cfg);
+  }
+  prop("prop1", {
+    pregunta: "Niegas el byte 1000 0000 (que vale −128) con invertir y sumar 1. ¿Qué obtienes?",
+    opciones: ["1000 0000 otra vez: sigue valiendo −128", "0111 1111, que vale 127", "1 0000 0000, que vale 128", "0000 0000"],
+    correcta: 0,
+    pistas: [null, "Eso es solo invertir. Falta sumar 1.", "El +128 no cabe en 8 bits con signo, así que no hay un byte que lo represente.", "Invertir 1000 0000 no da todo ceros."],
+    explicacion: "Invertir da 0111 1111 y sumar 1 da 1000 0000: el mismo byte. El −128 no tiene opuesto porque el +128 no cabe. Es el único byte (además del cero) que se niega a sí mismo."
+  });
+  prop("prop2", {
+    pregunta: "Sumas un número positivo y uno negativo de 8 bits con signo. ¿Puede haber desbordamiento?",
+    opciones: ["Nunca: el resultado queda entre los dos sumandos", "Sí, si el positivo es mayor que 127", "Sí, siempre que haya acarreo de salida", "Solo si el negativo es −128"],
+    correcta: 0,
+    pistas: [null, "Ningún byte con signo puede ser mayor que 127.", "Un acarreo de salida puede aparecer sin que haya desbordamiento: −1 + 1 lo produce y da 0.", "Con −128 y un positivo el resultado sigue estando entre los dos."],
+    explicacion: "Si un sumando es positivo y el otro negativo, el resultado está entre ellos, así que sigue dentro de −128 a 127. El desbordamiento exige dos sumandos del mismo signo."
+  });
+  prop("prop3", {
+    pregunta: "La ALU recibe la orden de restar A − B con el mismo sumador. ¿Qué le hace al circuito?",
+    opciones: ["Invierte los bits de B y pone el acarreo de entrada de la columna 0 en 1", "Invierte los bits de A y suma 1 al resultado", "Resta columna por columna con un circuito aparte", "Cambia el primer bit de B y deja el resto"],
+    correcta: 0,
+    pistas: [null, "El que se niega es B, el que se resta. A entra igual.", "La unidad dice que la resta reutiliza el sumador: no hay un restador aparte.", "Eso es signo y magnitud, otro método, con doble cero. No es lo que usa la ALU."],
+    explicacion: "A − B = A + (B invertido) + 1. Dos cambios en la entrada del sumador, ninguno dentro: los bits de B pasan por un inversor y el acarreo de entrada vale 1."
+  });
+  prop("prop4", {
+    pregunta: "Un registro de 8 bits tiene 1111 1111 y le sumas 1. El resultado es 0000 0000. ¿Qué lámparas se encienden?",
+    opciones: [
+      "C y Z: salió un acarreo y el resultado es cero. V queda apagada",
+      "Solo Z",
+      "Z y V, porque pasó de 127",
+      "Ninguna, porque 0 es un valor normal"
+    ],
+    correcta: 0,
+    pistas: [null, "El noveno bit sí se pierde: sin signo, 255 + 1 da 256 y se salió.", "Con signo, 1111 1111 es −1. Y −1 + 1 = 0 no se sale de −128 a 127.", "Un resultado igual a cero enciende Z, y aquí además hubo acarreo."],
+    explicacion: "Sin signo, 255 + 1 = 256 no cabe: sale un acarreo (<b>C</b>) y el resultado es cero (<b>Z</b>). Con signo, el mismo byte dice −1 + 1 = 0, que cabe de sobra: <b>V</b> apagada. Los mismos bits, dos lecturas: por eso hay dos lámparas distintas."
+  });
+
+  /* ---------------- formula de memoria ---------------- */
+  (function () {
+    var base = [0, 1, 2, 3, 4, 5, 6, 7, 8], sols = [], i, j;
+    [false, true].forEach(function (cambiaA) { [false, true].forEach(function (cambiaMas) {
+      var s = base.slice(), t;
+      if (cambiaA) { t = s[0]; s[0] = s[4]; s[4] = t; }
+      if (cambiaMas) { t = s[5]; s[5] = s[7]; s[7] = t; }
+      sols.push(s);
+    }); });
+    B.ordenar($("formula"), {
+      piezas: ["A", "-", "B", "=", "A", "+", "\\overline{B}", "+", "1"],
+      distractores: ["\\overline{A}", "2^8", "-1"],
+      soluciones: sols,
+      explicacion: "A − B = A + (B invertido) + 1: invertir los bits de B y poner un 1 de acarreo de entrada.",
+      alResolver: function (ok) { C.reto("formula", ok); }
+    });
+  })();
+
+  /* ---------------- vida real: el algoritmo en codigo ---------------- */
+  (function () {
+    var CODIGO = {
+      py: [
+        ["import", "import numpy as np"],
+        [null, ""],
+        ["defsumar", "def sumar(A, B, cin):                       # sumador de 8 columnas"],
+        ["s0", "    S = [0] * 8"],
+        ["acinit", "    acarreo = cin"],
+        ["fori", "    for i in range(7, -1, -1):              # de la columna 0 (derecha) a la 7"],
+        ["entra", "        entra = acarreo                     # acarreo que entra en esta columna"],
+        ["suma", "        S[i] = A[i] ^ B[i] ^ entra          # bit de suma"],
+        ["acarreo", "        acarreo = (A[i] & B[i]) | (A[i] & entra) | (B[i] & entra)"],
+        ["ret", "    return S, entra, acarreo                # entra: el que llegó a la columna 7"],
+        [null, ""],
+        ["defsigno", "def con_signo(S):                           # leer los 8 bits con signo"],
+        ["vint", "    v = int(\"\".join(str(b) for b in S), 2)"],
+        ["vret", "    return v - 256 if S[0] == 1 else v"],
+        [null, ""],
+        [null, "# caso 1: 7 - 5 = 7 + (5 invertido) + 1"],
+        ["datosA", "A = [0, 0, 0, 0, 0, 1, 1, 1]                # 7"],
+        ["datosB", "B = [0, 0, 0, 0, 0, 1, 0, 1]                # 5"],
+        ["inv", "Binv = [1 - b for b in B]                   # invertir los bits de 5"],
+        ["llamar", "S, entra, sale = sumar(A, Binv, 1)"],
+        ["r", "r1 = con_signo(S)"],
+        ["fN", "N = S[0]                                    # signo: el primer bit"],
+        ["fZ", "Z = int(sum(S) == 0)                        # cero: ningún bit encendido"],
+        ["fC", "C = sale                                    # acarreo que sale de la columna 7"],
+        ["fV", "V = entra ^ sale                            # desbordamiento"],
+        ["imprimir", "print(\"\".join(map(str, S)), r1, \"NZCV =\", N, Z, C, V)"],
+        [null, ""],
+        [null, "# caso 2: 127 + 1"],
+        ["datosA", "A = [0, 1, 1, 1, 1, 1, 1, 1]                # 127"],
+        ["datosB", "B = [0, 0, 0, 0, 0, 0, 0, 1]                # 1"],
+        ["llamar", "S, entra, sale = sumar(A, B, 0)"],
+        ["r", "r2 = con_signo(S)"],
+        ["fN", "N = S[0]"],
+        ["fZ", "Z = int(sum(S) == 0)"],
+        ["fC", "C = sale"],
+        ["fV", "V = entra ^ sale"],
+        ["imprimir", "print(\"\".join(map(str, S)), r2, \"NZCV =\", N, Z, C, V)"],
+        [null, ""],
+        [null, "# la librería: enteros de 8 bits con signo"],
+        ["esperado", "esperado = np.array([7, 127], dtype=np.int8) + np.array([-5, 1], dtype=np.int8)"],
+        ["verificar", "print(esperado, [r1, r2] == list(esperado))"]
+      ],
+      r: [
+        ["defsumar", "sumar <- function(A, B, cin) {              # sumador de 8 columnas"],
+        ["s0", "  S <- integer(8)"],
+        ["acinit", "  acarreo <- cin"],
+        ["fori", "  for (i in 8:1) {                          # de la columna 0 (derecha) a la 7"],
+        ["entra", "    entra <- acarreo                        # acarreo que entra en esta columna"],
+        ["suma", "    S[i] <- bitwXor(bitwXor(A[i], B[i]), entra)   # bit de suma"],
+        ["acarreo", "    acarreo <- bitwOr(bitwOr(bitwAnd(A[i], B[i]), bitwAnd(A[i], entra)), bitwAnd(B[i], entra))"],
+        [null, "  }"],
+        ["ret", "  list(S = S, entra = entra, sale = acarreo)      # entra: el que llegó a la columna 7"],
+        [null, "}"],
+        [null, ""],
+        ["defsigno", "con_signo <- function(S) {                  # leer los 8 bits con signo"],
+        ["vint", "  v <- strtoi(paste(S, collapse = \"\"), base = 2)"],
+        ["vret", "  if (S[1] == 1) v - 256 else v"],
+        [null, "}"],
+        [null, ""],
+        [null, "# caso 1: 7 - 5 = 7 + (5 invertido) + 1"],
+        ["datosA", "A <- c(0, 0, 0, 0, 0, 1, 1, 1)              # 7"],
+        ["datosB", "B <- c(0, 0, 0, 0, 0, 1, 0, 1)              # 5"],
+        ["inv", "Binv <- 1 - B                               # invertir los bits de 5"],
+        ["llamar", "res <- sumar(A, Binv, 1)"],
+        ["llamar", "S <- res$S; entra <- res$entra; sale <- res$sale"],
+        ["r", "r1 <- con_signo(S)"],
+        ["fN", "N <- S[1]                                   # signo: el primer bit"],
+        ["fZ", "Z <- as.integer(sum(S) == 0)                # cero: ningún bit encendido"],
+        ["fC", "C <- sale                                   # acarreo que sale de la columna 7"],
+        ["fV", "V <- bitwXor(entra, sale)                   # desbordamiento"],
+        ["imprimir", "writeLines(paste(paste(S, collapse = \"\"), r1, \"NZCV =\", N, Z, C, V))"],
+        [null, ""],
+        [null, "# caso 2: 127 + 1"],
+        ["datosA", "A <- c(0, 1, 1, 1, 1, 1, 1, 1)              # 127"],
+        ["datosB", "B <- c(0, 0, 0, 0, 0, 0, 0, 1)              # 1"],
+        ["llamar", "res <- sumar(A, B, 0)"],
+        ["llamar", "S <- res$S; entra <- res$entra; sale <- res$sale"],
+        ["r", "r2 <- con_signo(S)"],
+        ["fN", "N <- S[1]"],
+        ["fZ", "Z <- as.integer(sum(S) == 0)"],
+        ["fC", "C <- sale"],
+        ["fV", "V <- bitwXor(entra, sale)"],
+        ["imprimir", "writeLines(paste(paste(S, collapse = \"\"), r2, \"NZCV =\", N, Z, C, V))"],
+        [null, ""],
+        [null, "# la cuenta con módulo 256: lo que hace un registro de 8 bits"],
+        ["esperado", "x <- c(7 + (-5), 127 + 1) %% 256"],
+        ["esperado", "esperado <- ifelse(x > 127, x - 256, x)"],
+        ["verificar", "print(esperado)"],
+        ["verificar", "print(all.equal(c(r1, r2), esperado))"]
+      ]
+    };
+
+    /* eventos: una foto del estado despues de ejecutar cada linea */
+    var EV = [];
+    var cur = { caso: 0, fase: 0, A: null, B: null, Bent: null, cin: null, S: [0, 0, 0, 0, 0, 0, 0, 0], hechos: [false, false, false, false, false, false, false, false],
+      cs: [null, null, null, null, null, null, null, null, null], pos: null, k: null, flags: { N: null, Z: null, C: null, V: null }, imp: 0, entra: null, sale: null, r: null };
+    function foto(id, extra) {
+      EV.push(Object.assign({ id: id, caso: cur.caso, fase: cur.fase, A: cur.A && cur.A.slice(), B: cur.B && cur.B.slice(), Bent: cur.Bent && cur.Bent.slice(), cin: cur.cin,
+        S: cur.S.slice(), hechos: cur.hechos.slice(), cs: cur.cs.slice(), pos: cur.pos, k: cur.k, flags: Object.assign({}, cur.flags), imp: cur.imp,
+        entra: cur.entra, sale: cur.sale, r: cur.r }, extra || {}));
+    }
+    function caso(n, a, b, invertir, cin) {
+      cur.caso = n; cur.fase = n;
+      cur.A = null; cur.B = null; cur.Bent = null; cur.cin = null; cur.pos = null; cur.k = null; cur.entra = null; cur.sale = null; cur.r = null;
+      cur.S = [0, 0, 0, 0, 0, 0, 0, 0]; cur.hechos = cur.hechos.map(function () { return false; }); cur.cs = cur.cs.map(function () { return null; });
+      cur.flags = { N: null, Z: null, C: null, V: null };
+      cur.A = bitsDe(a); foto("datosA");
+      cur.B = bitsDe(b); if (!invertir) cur.Bent = cur.B.slice(); foto("datosB");
+      if (invertir) { cur.Bent = inv(cur.B); foto("inv"); }
+      cur.cin = cin; foto("llamar");
+      foto("s0");
+      cur.cs[0] = cin; foto("acinit");
+      var k, p, ent, x, y, s;
+      for (k = 0; k < 8; k++) {
+        p = 7 - k; cur.pos = p; cur.k = k;
+        foto("fori");
+        ent = cur.cs[k]; cur.entra = ent; foto("entra");
+        x = cur.A[p]; y = cur.Bent[p];
+        s = x ^ y ^ ent; cur.S[p] = s; cur.hechos[p] = true; foto("suma", { x: x, y: y, s: s, ent: ent });
+        cur.cs[k + 1] = (x & y) | (x & ent) | (y & ent); foto("acarreo", { x: x, y: y, ent: ent, sale1: cur.cs[k + 1], nuevo: k + 1 });
+      }
+      cur.pos = null; cur.k = null; cur.entra = cur.cs[7]; cur.sale = cur.cs[8];
+      foto("ret");
+      cur.r = conSigno(cur.S); foto("r");
+      foto("vint", { uns: sinSigno(cur.S) }); foto("vret", { uns: sinSigno(cur.S) });
+      cur.flags.N = cur.S[0]; foto("fN");
+      cur.flags.Z = cur.S.reduce(function (t, v) { return t + v; }, 0) === 0 ? 1 : 0; foto("fZ");
+      cur.flags.C = cur.sale; foto("fC");
+      cur.flags.V = cur.entra ^ cur.sale; foto("fV");
+      cur.imp = n; foto("imprimir");
+    }
+    foto("import");
+    foto("defsumar");
+    foto("defsigno");
+    caso(1, 7, 5, true, 1);
+    caso(2, 127, 1, false, 0);
+    cur.fase = 3; cur.caso = 3; foto("esperado");
+    foto("verificar", { fin: true });
+
+    var SALIDA = ["00000010 2 NZCV = 0 0 1 0", "10000000 -128 NZCV = 1 0 0 1"];
+    var SAL_PY = ["[   2 -128] True"], SAL_R = ["[1]    2 -128", "[1] TRUE"];
+
+    function bs(b) { return b ? nib(b) : "·"; }
+    function narrar(e, ctx) {
+      var py = ctx.lang() === "py", ix = ctx.ix;
+      var cs = e.caso === 1 ? "7 − 5" : "127 + 1";
+      switch (e.id) {
+        case "import": return py ? "Carga NumPy. Solo se usa en la última línea, para comparar con los enteros de 8 bits de la librería." : "R no necesita importar nada: la comparación del final usa el módulo %% y ifelse, que ya vienen.";
+        case "defsumar": return "Define el sumador de 8 columnas. Todavía no suma: solo guarda la receta. Recibe A, B y el acarreo de entrada <b>cin</b>.";
+        case "defsigno": return "Define cómo leer 8 bits con signo: como número sin signo y, si el primer bit es 1, restando 256.";
+        case "datosA": return "A = <b>" + bs(e.A) + "</b> = " + (e.caso === 1 ? 7 : 127) + ". Los bits van ordenados del primero (el signo) al último.";
+        case "datosB": return "B = <b>" + bs(e.B) + "</b> = " + (e.caso === 1 ? 5 : 1) + ".";
+        case "inv": return "Invierte cada bit de B: <b>" + bs(e.Bent) + "</b> = 250 sin signo. Es el B de la resta; el +1 lo pondrá el acarreo de entrada.";
+        case "llamar": return e.caso === 1
+          ? "Llama al sumador con A, B invertido y <b>acarreo de entrada 1</b>: ese 1 es el +1 de la receta. Calcula 7 − 5."
+          : "Llama al sumador con A, B y acarreo de entrada 0: es una suma normal, 127 + 1.";
+        case "s0": return "Prepara los ocho bits del resultado, todos en 0.";
+        case "acinit": return "El acarreo que entra en la columna 0 es <b>" + e.cin + "</b>.";
+        case "fori": return "Columna <b>" + e.k + "</b> (posición " + ix(e.pos) + " de la lista): se va de la columna 0, a la derecha, hasta la 7.";
+        case "entra": return "El acarreo que entra en esta columna es <b>" + e.entra + "</b>.";
+        case "suma": return "Bit de suma = " + e.x + " XOR " + e.y + " XOR " + e.ent + " = <b>" + e.s + "</b>. Queda escrito en S[" + ix(e.pos) + "].";
+        case "acarreo": return "Acarreo que sale = mayoría de (" + e.x + ", " + e.y + ", " + e.ent + ") = <b>" + e.sale1 + "</b>." +
+          (e.k === 7 ? " Es el acarreo que sale del byte: ya no tiene columna donde entrar." : " Entra en la columna " + (e.k + 1) + ".");
+        case "ret": return "Devuelve el resultado <b>" + bs(e.S) + "</b>, el acarreo que <b>entró</b> en la columna 7 (<b>" + e.entra + "</b>) y el que <b>salió</b> (<b>" + e.sale + "</b>).";
+        case "r": return "Llama a con_signo para leer el byte " + bs(e.S) + ".";
+        case "vint": return "Lo lee sin signo: " + e.S.join("") + " = <b>" + e.uns + "</b>.";
+        case "vret": return e.S[0] === 1
+          ? "El primer bit es 1, así que resta 256: " + e.uns + " − 256 = <b>" + z(e.r) + "</b>."
+          : "El primer bit es 0, así que el valor es <b>" + e.r + "</b> sin tocar.";
+        case "fN": return "N = primer bit del resultado = <b>" + e.flags.N + "</b>. " + (e.flags.N ? "Negativo." : "No es negativo.");
+        case "fZ": return "Z = <b>" + e.flags.Z + "</b>: " + (e.flags.Z ? "todos los bits valen 0." : "hay al menos un bit encendido.");
+        case "fC": return "C = acarreo que salió = <b>" + e.flags.C + "</b>." + (e.caso === 1 ? " En una resta, 1 aquí quiere decir que no hizo falta pedir prestado (es la convención de ARM; x86 usa la contraria, y el material no entra)." : "");
+        case "fV": return "V = entró (" + e.entra + ") XOR salió (" + e.sale + ") = <b>" + e.flags.V + "</b>. " + (e.flags.V ? "Desbordamiento: dos positivos dieron un negativo." : "Sin desbordamiento: el resultado cabe.");
+        case "imprimir": return "Imprime el byte, su valor con signo y las cuatro lámparas en el orden N, Z, C, V. " + cs + " = <b>" + z(e.r) + "</b>.";
+        case "esperado": return py
+          ? "NumPy suma los arreglos de enteros de 8 bits con signo [7, 127] y [−5, 1]. Ahí 127 + 1 da la vuelta en silencio: −128."
+          : "R no tiene enteros de 8 bits: hace la cuenta con módulo 256 (%%) y pasa a signo restando 256 si el resultado pasa de 127.";
+        case "verificar": return py
+          ? "Imprime lo que calculó NumPy y compara con los dos resultados del sumador: da <b>True</b>."
+          : "Imprime lo calculado y compara con los dos resultados del sumador con <b>all.equal</b>: da <b>TRUE</b>.";
+      }
+      return "";
+    }
+    function celda(t, cls) { return '<span class="ac ' + (cls || "") + '">' + t + '</span>'; }
+    function fila(etq, fn) {
+      var h = '<span class="et">' + etq + '</span>', p;
+      for (p = 0; p < 8; p++) h += fn(p);
+      return h;
+    }
+    function visual(e, anterior, ctx) {
+      var ix = ctx.ix;
+      var A = e && e.A, Bb = e && e.B, Be = e && e.Bent;
+      function bitCls(v, p) { return v ? (p === 0 ? "neg1" : "u1") : ""; }
+      var h = fila("columna", function (p) { return celda(7 - p, "col" + (e && e.pos === p ? " cur" : "")); });
+      h += fila("A", function (p) { return celda(A ? A[p] : "·", (A ? bitCls(A[p], p) : "vacio") + (e && e.pos === p ? " cur" : "")); });
+      h += fila("B", function (p) { return celda(Bb ? Bb[p] : "·", (Bb ? bitCls(Bb[p], p) : "vacio") + (e && e.pos === p ? " cur" : "")); });
+      h += fila("B que entra", function (p) { return celda(Be ? Be[p] : "·", (Be ? bitCls(Be[p], p) : "vacio") + (e && e.pos === p ? " cur" : "")); });
+      h += fila("acarreo", function (p) {
+        var k = 7 - p, v = e ? e.cs[k] : null;
+        return celda(v === null || v === undefined ? "·" : v, "car" + (v ? " u1" : "") + (e && e.id === "acarreo" && e.nuevo === k ? " nuevo" : "") + (v === null || v === undefined ? " vacio" : "") + (e && e.k === k ? " cur" : ""));
+      });
+      h += fila("S", function (p) {
+        var hecho = e && e.hechos[p], v = e ? e.S[p] : 0;
+        return celda(hecho ? v : "·", "s" + (hecho ? bitCls(v, p) : " vacio") + (e && e.pos === p ? " cur" : "") + (e && e.id === "suma" && e.pos === p ? " nuevo" : ""));
+      });
+      $("vrGrid").innerHTML = h;
+      var cuenta = "";
+      if (e && e.id === "suma") cuenta = e.x + " ⊕ " + e.y + " ⊕ " + e.ent + " = <b>" + e.s + "</b>";
+      else if (e && e.id === "acarreo") cuenta = "acarreo = mayoría(" + e.x + ", " + e.y + ", " + e.ent + ") = <b>" + e.sale1 + "</b>";
+      else if (e && (e.id === "ret" || e.id === "r")) cuenta = "entró en la columna 7: <b>" + e.entra + "</b> · salió: <b>" + e.sale + "</b>";
+      else if (e && e.id === "imprimir") cuenta = z(e.r) + " en " + nib(e.S);
+      $("vrCuenta").innerHTML = cuenta;
+      pintarLamps($("vrLamps"), e ? e.flags : null, false);
+      [].forEach.call($("vrLamps").children, function (l, i) { if (!e || e.flags[LAMPS[i][0]] === null) l.classList.remove("on"); });
+      var lineas = e ? SALIDA.slice(0, e.imp) : [];
+      if (e && e.id === "verificar") lineas = lineas.concat(ctx.lang() === "py" ? SAL_PY : SAL_R);
+      $("vrSalida").textContent = lineas.length ? lineas.join("\n") : "(todavía no imprimió nada)";
+      var t = e && e.caso === 1 ? "7 − 5: A + (B invertido) + 1" : e && e.caso === 2 ? "127 + 1: A + B" : "El sumador de 8 columnas";
+      $("vrTit").textContent = t;
+      void ix;
+    }
+    B.vidaReal($("vidareal"), {
+      codigo: CODIGO,
+      eventos: EV,
+      narrar: narrar,
+      vars: function (e, ctx) {
+        var v = [], ix = ctx.ix;
+        if (e && e.k !== null && e.pos !== null) v.push('<span class="vj">i = <b>' + ix(e.pos) + '</b></span>');
+        if (e && e.entra !== null) v.push('<span>entra = <b>' + e.entra + '</b></span>');
+        if (e && e.cs[e.k !== null ? e.k + 1 : 8] !== null && e.k !== null) v.push('<span>acarreo = <b>' + e.cs[e.k + 1] + '</b></span>');
+        if (e && e.r !== null) v.push('<span>valor = <b>' + z(e.r) + '</b></span>');
+        if (e && e.flags.V !== null) v.push('<span class="vk">V = <b>' + e.flags.V + '</b></span>');
+        return v;
+      },
+      visual: visual,
+      demora: function (e) { return !e ? 600 : e.id === "fori" ? 240 : e.id === "entra" ? 220 : e.id === "suma" ? 500 : e.id === "acarreo" ? 600 : e.id === "imprimir" ? 1300 : e.id === "ret" ? 1000 : 800; }
+    });
+
+    var TOTAL_ACARREO = EV.filter(function (e) { return e.id === "acarreo"; }).length;
+    B.numerico(cuerpo("vrPred"), {
+      pregunta: "¿Cuántas veces se va a ejecutar la línea del acarreo, <code>acarreo = (A[i] &amp; B[i]) | (A[i] &amp; entra) | (B[i] &amp; entra)</code>, hasta terminar el programa?",
+      respuesta: TOTAL_ACARREO,
+      tolerancia: 0,
+      pistas: [
+        "El sumador tiene 8 columnas: dentro del bucle, esa línea corre una vez por columna.",
+        "El programa llama al sumador dos veces: 7 − 5 y 127 + 1."
+      ],
+      diagnostico: function (v) {
+        if (v === 8) return "Esas son las de una sola llamada al sumador. Mira cuántas veces se llama.";
+        if (v === 32) return "Ese sería el total de las cuatro líneas del bucle en una llamada. Aquí cuenta solo la del acarreo.";
+        if (v === 2) return "Esas son las llamadas al sumador; la línea del acarreo está dentro del bucle y corre una vez por columna.";
+        return null;
+      },
+      explicacion: "8 columnas por 2 llamadas: <b>" + TOTAL_ACARREO + "</b>. Es el mismo sumador reutilizado: la resta no necesita una versión nueva, solo cambian los datos que le entran. Ahora dale a reproducir y fíjate en el acarreo viajando de derecha a izquierda.",
+      alResolver: function (ok) { C.reto("codigo1", ok); }
+    });
+    prop("codigo2", {
+      pregunta: "En Python escribes <code>127 + 1</code> con números normales, no con NumPy. ¿Qué da?",
+      opciones: [
+        "128, porque los enteros normales de Python no tienen ancho fijo",
+        "−128, porque son enteros de 8 bits",
+        "Un error de desbordamiento",
+        "0, porque da la vuelta"
+      ],
+      correcta: 0,
+      pistas: [null, "El −128 aparece solo si le pides a NumPy un entero de 8 bits con signo (<code>np.int8</code>).", "Python no lanza error: sus enteros crecen cuanto haga falta.", "Dar la vuelta a 0 es el contador sin signo del paso 1, y ahí el tope es 256."],
+      explicacion: "Los enteros normales de Python crecen sin límite: <code>127 + 1</code> da 128. El −128 aparece solo con tipos de ancho fijo, como <code>np.int8</code> en arreglos (en un entero suelto de NumPy, además, sale un aviso de desbordamiento). Para imitar un byte con enteros normales hay que escribir tú el módulo 256, como en la versión de una línea."
+    });
+    prop("codigo3", {
+      pregunta: "En R sumas <code>.Machine$integer.max + 1L</code>: el entero más grande que R guarda (de 32 bits) más uno. ¿Qué da?",
+      opciones: [
+        "NA, con un aviso de desbordamiento de enteros",
+        "−2147483648, porque da la vuelta como un byte",
+        "2147483648",
+        "0"
+      ],
+      correcta: 0,
+      pistas: [null, "En R, el patrón 1000... (el más negativo) está reservado para otra cosa.", "Ese número no cabe en 32 bits con signo; el 1L pide un entero, no un decimal.", "No da cero: no hay vuelta en la suma de enteros de R."],
+      explicacion: "R no deja que el entero dé la vuelta: el resultado es <b>NA</b> y avisa \"NAs produced by integer overflow\". El patrón del entero más negativo se usa en R para representar NA, y por eso el rango de los enteros de R pierde ese valor. Con decimales (<code>127 + 1</code>, sin la L) no pasa nada: da 128."
+    });
+  })();
+
+  /* ---------------- tarjetas ---------------- */
+  B.tarjetas($("tarjetas"), [
+    ["¿Cómo se cambia de signo un número en complemento a dos?", "Invirtiendo todos sus bits y sumando 1. Sirve en los dos sentidos: −x y x."],
+    ["¿Cuánto pesa el primer bit de un byte con signo y qué rango tiene?", "Pesa −128. El rango es de −128 a 127: hay un negativo más que positivos."],
+    ["¿Cómo resta A − B una ALU que solo suma?", "Invierte los bits de B y pone el acarreo de entrada en 1: A + (B invertido) + 1."],
+    ["¿Qué hace cada columna del sumador?", "Recibe A, B y el acarreo que llega. Entrega el bit de suma (XOR de los tres) y el acarreo que sale (1 si hay al menos dos unos)."],
+    ["¿Qué dicen las lámparas C, Z, N y V?", "C: salió acarreo de la columna 7. Z: el resultado es cero. N: el primer bit del resultado es 1. V: el resultado con signo no cabe."],
+    ["¿Cuándo hay desbordamiento con signo?", "Cuando dos números del mismo signo dan un resultado del signo contrario. Un positivo con un negativo nunca desbordan. V = acarreo que entra en la columna 7 XOR acarreo que sale."],
+    ["¿Por qué el −128 no tiene opuesto?", "Porque el +128 no cabe en 8 bits con signo. Negarlo (invertir y sumar 1) devuelve el mismo byte."],
+    ["¿Qué diferencia hay entre C y V?", "C mira el resultado como número sin signo; V como número con signo. Los mismos bits pueden encender una, la otra, las dos o ninguna."]
+  ]);
+
+  /* ---------------- conexiones ---------------- */
+  B.conexiones("complemento-dos-alu");
+})();
+</script>
+</body>
+</html>

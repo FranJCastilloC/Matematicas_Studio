@@ -1,0 +1,1806 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Firewall: reglas, estado y DMZ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+:root { --amb: #a8661a; --amb-soft: #f7ecd9; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --amb: #e0a64a; --amb-soft: #33281a; } }
+:root[data-theme="dark"] { --amb: #e0a64a; --amb-soft: #33281a; }
+
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.esc-head .hint { font-size: 12.5px; color: var(--ink-2); }
+.blq { margin-bottom: 12px; }
+.blq h3.mini-tit { margin: 0 0 6px; }
+
+/* zonas */
+.zonas { display: grid; grid-template-columns: minmax(0, 1fr) 70px minmax(0, 1fr); grid-template-areas: "ext fw dmz" "ext fw int"; gap: 6px; margin-bottom: 12px; }
+.z { border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; background: var(--surface); font-size: 12px; line-height: 1.35; min-width: 0; }
+.z b { display: block; font-weight: 500; font-size: 12.5px; }
+.z small { display: block; color: var(--ink-3); font: 10.5px var(--f-mono); margin-bottom: 3px; }
+.z span { display: block; font: 10.5px var(--f-mono); color: var(--ink-2); overflow-wrap: anywhere; }
+.z.ext { grid-area: ext; }
+.z.dmz { grid-area: dmz; }
+.z.int { grid-area: int; }
+.z.fw { grid-area: fw; text-align: center; display: grid; align-content: center; justify-items: center; gap: 4px; background: var(--surface-2); }
+.z.fw i { font: 500 10.5px var(--f-mono); font-style: normal; color: var(--ink-3); }
+.z.ori { box-shadow: 0 0 0 2px var(--k); }
+.z.des { box-shadow: 0 0 0 2px var(--j); }
+.z.fw.si { background: var(--ok-soft); border-color: var(--ok); }
+.z.fw.si i { color: var(--ok); }
+.z.fw.no { background: var(--bad-soft); border-color: var(--bad); }
+.z.fw.no i { color: var(--bad); }
+.zlev { display: inline-block; font: 500 9.5px var(--f-mono); border-radius: 999px; padding: 0 6px; margin-left: 4px; background: var(--surface-2); color: var(--ink-2); border: 1px solid var(--line); }
+
+/* reglas */
+.rg { display: grid; grid-template-columns: 22px 74px minmax(0, 1fr) auto; gap: 6px; align-items: center; border: 1px solid var(--line); border-radius: 7px; padding: 6px 8px; margin-bottom: 4px; background: var(--surface); font-size: 12.5px; }
+.rg .n { font: 500 12px var(--f-mono); color: var(--ink-3); }
+.rg .ac { font: 500 10.5px var(--f-mono); text-align: center; border-radius: 5px; padding: 3px 0; border: 1.5px solid var(--ink-3); color: var(--ink-2); }
+.rg .ac.perm { border-color: var(--ok); color: var(--ok); }
+.rg .ac.den { border-color: var(--bad); color: var(--bad); }
+.rg .de { min-width: 0; overflow-wrap: anywhere; line-height: 1.35; }
+.rg .de b { font-weight: 500; }
+.rg .de small { display: block; color: var(--ink-3); font: 10.5px var(--f-mono); }
+.rg .de em { display: block; font: 10.5px var(--f-mono); font-style: normal; color: var(--ink-2); }
+.rg .mv { display: flex; gap: 3px; }
+.rg .mv button { padding: 2px 7px; font-size: 12px; }
+.rg.no { opacity: .55; }
+.rg.hit { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1.5px var(--accent); }
+.rg.omit { opacity: .35; }
+.rg.mira { border-color: var(--ink); }
+.rg .hc { font: 10.5px var(--f-mono); color: var(--ink-3); }
+
+/* paquete */
+.pq-sel { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.pq-sel select { flex: 1; min-width: 0; font-size: 13px; padding: 6px 8px; border-radius: 7px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+.pq-det { margin-top: 8px; font: 12px/1.5 var(--f-mono); color: var(--ink-2); padding: 8px 10px; border: 1px dashed var(--line); border-radius: 8px; overflow-wrap: anywhere; }
+.pq-det b { color: var(--ink); font-weight: 500; }
+.veredicto { margin-top: 8px; font-size: 13.5px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); min-height: 3.2em; overflow-wrap: anywhere; }
+.veredicto.si { border-color: var(--ok); background: var(--ok-soft); }
+.veredicto.no { border-color: var(--bad); background: var(--bad-soft); }
+.veredicto b { font-weight: 600; }
+
+/* tablas pequenas */
+.tp { width: 100%; border-collapse: collapse; font-family: var(--f-mono); font-size: 11.5px; font-variant-numeric: tabular-nums; display: table !important; }
+.tp th { text-align: left; color: var(--ink-3); font-weight: 500; padding: 3px 6px; border-bottom: 1px solid var(--line); }
+.tp td { padding: 3px 6px; border-bottom: 1px solid var(--line-soft); color: var(--ink); overflow-wrap: anywhere; }
+.tp td.dif { background: var(--amb-soft); color: var(--amb); font-weight: 500; }
+.tp td.igu { background: var(--ok-soft); }
+.tp tr.cab td:first-child { color: var(--ink-3); }
+.vacio { color: var(--ink-3); font-size: 12.5px; padding: 6px 0; }
+
+/* match */
+.m-sel { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+.m-sel label { font: 11px var(--f-mono); color: var(--ink-3); display: block; }
+.m-sel select { width: 100%; font-size: 13px; padding: 6px 8px; border-radius: 7px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+.m-res { font: 13px/1.5 var(--f-mono); margin-top: 8px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); overflow-wrap: anywhere; }
+.m-res.si { border-color: var(--ok); background: var(--ok-soft); }
+.m-res.no { border-color: var(--bad); background: var(--bad-soft); }
+
+/* ataques */
+.celdas { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 4px; margin: 8px 0; }
+.celdas span { height: 26px; border-radius: 5px; border: 1.5px dashed var(--line); }
+.celdas span.leg { background: color-mix(in oklab, var(--j) 30%, var(--surface)); border: 1.5px solid var(--j); }
+.celdas span.fal { background: color-mix(in oklab, var(--amb) 30%, var(--surface)); border: 1.5px solid var(--amb); }
+.scan { display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); gap: 5px; margin-top: 8px; }
+.scan div { font: 11.5px var(--f-mono); padding: 5px 6px; border-radius: 6px; border: 1px solid var(--line); text-align: center; }
+.scan div.ab { border-color: var(--bad); background: var(--bad-soft); }
+.scan div.fi { color: var(--ink-3); }
+
+/* bloques de los pasos */
+.vivo2 { font-family: var(--f-mono); font-size: 13px; color: var(--ink-2); margin-top: 6px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.vivo2 b { color: var(--ink); font-weight: 500; }
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.afirm { font-size: 15px; margin: 10px 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); overflow-wrap: anywhere; }
+.afirm code { font-size: 13px; }
+.objetivos { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.objetivos li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.objetivos .m { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.objetivos li.hecho { color: var(--ink); }
+.objetivos li.hecho .m { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 3px var(--surface); }
+.dos-op { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.linea > span:last-child { min-width: 0; overflow-x: auto; }
+.tipos td, .tipos th { vertical-align: top; }
+
+/* vida real */
+.vr-sal { margin: 0; padding: 8px 10px; background: var(--surface-2); border-radius: 8px; font: 12px/1.55 var(--f-mono); white-space: pre-wrap; overflow-wrap: anywhere; min-height: 3em; color: var(--ink); }
+.vr-pq { display: grid; gap: 3px; margin-bottom: 4px; }
+.vr-pq div { font: 11px var(--f-mono); padding: 4px 7px; border-radius: 6px; border: 1px solid var(--line); overflow-wrap: anywhere; color: var(--ink-2); display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 6px; }
+.vr-pq div.ahora { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); }
+.vr-pq div.pasa { border-left: 4px solid var(--ok); }
+.vr-pq div.cae { border-left: 4px solid var(--bad); }
+.vr-pq div small { display: block; color: var(--ink-3); font-size: 10.5px; }
+@media (max-width: 480px) {
+  .rg { grid-template-columns: 22px 66px minmax(0, 1fr); }
+  .rg .mv { grid-column: 3; }
+  .dos-op { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ Firewall: reglas, estado y DMZ</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Infraestructura y programación · Redes de computadores · UD6</p>
+    <h1>Firewall: una lista de reglas que se lee de arriba abajo</h1>
+    <p class="lede">
+      Un firewall es un portero con una lista. Por cada paquete que llega mira de dónde viene, adónde va, con qué protocolo y a qué puerto, <b>baja por la lista hasta que una regla coincide</b> y hace lo que ella dice. Con eso se arma todo lo demás: el orden de las reglas, la tabla que recuerda las conexiones y la DMZ. Lo vas a probar paquete por paquete, y vas a descubrir una regla que la tabla del material olvidó.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> Tu empresa tiene una red interna, un servidor web que debe verse desde Internet y una conexión al exterior. Sin saber nada de firewalls: ¿qué le dirías a un portero para que deje entrar a los visitantes de la web pero no a un desconocido que quiere llegar a los equipos de las oficinas? Escríbelo como te salga, aunque esté mal.</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: dejaría pasar solo a quien pide la página web y..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>Construir un firewall regla por regla</h2>
+      <p>Ocho pasos. Cada uno termina con un chequeo: hasta que no lo resuelves, el siguiente queda cerrado y el botón de enviar paquetes del escenario también. Equivocarte aquí no resta nada, es parte del método.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="Un portero con lista">
+          <span class="etapa">Paso 1</span>
+          <h3>Un portero que lee una lista</h3>
+          <p>Un <b>firewall</b> (cortafuegos) se pone entre zonas de distinta confianza y decide qué tráfico pasa y cuál no. Para decidir mira cuatro cosas de cada paquete: la <b>IP de origen</b>, la <b>IP de destino</b>, el <b>protocolo</b> y el <b>puerto</b> de destino. No es un antivirus: no mira si un archivo es malicioso, solo controla el tráfico <cite class="cita" data-fuente="red6" data-pag="8" data-pimp="5" data-seccion="6. Cortafuegos" data-que="La definición de firewall: controla el tráfico por IP, puerto, protocolo o estado, es un punto de control entre zonas de distinta confianza y no es un antivirus." data-cuando="Antes de enviar tu primer paquete"></cite>
+          <cite class="cita" data-fuente="red6diapo" data-pag="16" data-seccion="Cortafuegos y tipos" data-que="La misma definición y la tabla con los cuatro tipos de cortafuegos en una sola diapositiva." data-cuando="Si quieres un repaso corto"></cite>.</p>
+          <p>En el escenario hay una empresa con tres zonas: <b>Internet</b>, una zona intermedia para el servidor web (la <b>DMZ</b>) y la <b>red interna</b>. Debajo está la lista de reglas, cada una con su acción, su origen, su destino y su puerto. Un paquete sin regla que lo permita no pasa.</p>
+          <p>Lee la lista despacio. Todavía no hay nada que calcular: se trata de leer.</p>
+          <div class="check" id="chk1"><p class="check-tit">Predice antes de seguir</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="La primera que coincide">
+          <span class="etapa">Paso 2</span>
+          <h3>Gana la primera regla que coincide</h3>
+          <p>El firewall recorre la lista <b>de arriba abajo</b> y se detiene en la primera regla que coincide con el paquete. Hace lo que esa regla dice y <b>no mira las de abajo</b>. Esto se llama <i>first match</i> (primera coincidencia) y significa que el <b>orden</b> importa tanto como el contenido <cite class="cita" data-fuente="red6" data-pag="9" data-pimp="6" data-seccion="9. Reglas de filtrado (Tabla 4)" data-que="La evaluación secuencial con primera coincidencia y la tabla de cuatro reglas del ejemplo: red interna a Internet por TCP/443 y TCP/80, Internet al servidor web de la DMZ por TCP/443, red interna al servidor por TCP/22 y denegar todo lo demás. La tabla sigue en la página siguiente." data-cuando="Antes de reordenar las reglas"></cite>
+          <cite class="cita" data-fuente="red6diapo" data-pag="18" data-seccion="Reglas de filtrado" data-que="La tabla de las cuatro reglas con la nota de first match en una sola diapositiva." data-cuando="Si quieres un repaso corto"></cite>.</p>
+          <p>La última regla del ejemplo es «denegar lo demás». Coincide con <b>todo</b>, por eso tiene que estar al final: si la subes, ninguna regla de abajo llegaría a verse.</p>
+          <p>Una nota sobre los datos: el material escribe la red interna como 192.168.1.0/24. Aquí usamos <b>192.168.10.0/24</b>, la red de las demás páginas de la ruta, para que reconozcas el equipo 192.168.10.37.</p>
+          <div class="check" id="chk2"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Qué es coincidir">
+          <span class="etapa">Paso 3</span>
+          <h3>«Coincide» quiere decir cuatro comparaciones</h3>
+          <p>Una regla coincide con un paquete solo si pasan <b>las cuatro</b> comparaciones: el origen está en la red de origen de la regla, el destino está en la de destino, el protocolo es el pedido y el puerto está entre los permitidos. Si una falla, esa regla no coincide y se pasa a la siguiente.</p>
+          <p>«Estar en la red» se calcula con la máscara, la misma cuenta de la página de <b>Máscara de subred y CIDR</b>: se aplica un AND entre la IP y la máscara y se compara con la dirección de la red <cite class="cita" data-fuente="red4" data-pag="12" data-pimp="10" data-seccion="Máscara de subred y notación CIDR" data-que="La máscara de 32 bits (unos para la red, ceros para el host), la notación CIDR como cantidad de unos y la cuenta de hosts útiles. La Tabla 21 de la misma página trae rota la columna de máscaras de /25 a /30 (aparece 2,55255E+11)." data-cuando="Después de mover los selectores del escenario"></cite>:</p>
+          <div class="fbloque">
+            <div data-tex="\text{coincide} \iff (\text{IP} \,\&\, M) = \text{red}" data-display></div>
+            <div class="vivo2" id="vivoMatch"></div>
+          </div>
+          <p>Aquí <span data-tex="\&"></span> es el AND bit a bit, octeto por octeto, y <span data-tex="M"></span> la máscara de la regla. Cambia la IP y la red en el escenario y mira qué octetos se comparan.</p>
+          <p>Dos casos límite que se usan mucho en firewalls: <b>/32</b> es una red de una sola dirección (un equipo exacto) y <b>0.0.0.0/0</b> no tiene bits de red, así que coincide con <b>cualquier</b> dirección. Ese «cualquiera» de la tabla es 0.0.0.0/0.</p>
+          <details class="profundizar">
+            <summary>¿Por qué no se descuentan la dirección de red y el broadcast?</summary>
+            <div>
+              <p>En la página de subredes, una red /24 tiene $2^8 = 256$ direcciones pero solo $254$ equipos útiles, porque la primera (red) y la última (broadcast) no se asignan a equipos. El firewall no pregunta si la dirección es asignable: solo compara bits. Una regla sobre 192.168.10.0/24 coincide con <b>las 256 direcciones</b>, incluidas la .0 y la .255.</p>
+            </div>
+          </details>
+          <div class="check" id="chk3"><p class="check-tit">Calcula con lápiz</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="La vuelta">
+          <span class="etapa">Paso 4</span>
+          <h3>La respuesta también es un paquete</h3>
+          <p>Una conexión no es un solo paquete: tu equipo pide y el servidor <b>responde</b>, y las dos cosas cruzan el firewall. Un <b>filtro de paquetes</b> simple mira cada paquete aislado, sin recordar nada de los anteriores. Una <b>inspección de estado</b> (<i>stateful</i>) guarda en una <b>tabla de estados</b> cada conexión que dejó pasar, y permite solo las respuestas que cuadran con ella <cite class="cita" data-fuente="red6" data-pag="9" data-pimp="6" data-seccion="7. Tipos de cortafuegos (Tabla 3)" data-que="Los cuatro tipos: filtrado de paquetes (capas 3 y 4, cada paquete aislado), inspección de estado (tabla de estados, solo respuestas coherentes), proxy o nivel de aplicación (capa 7) y firewall de nueva generación (capas 3 a 7, con prevención de intrusiones)." data-cuando="Después de activar la tabla de estados"></cite>.</p>
+          <p>Cada conexión se identifica por sus dos extremos, IP y puerto, más el protocolo: lo que el material llama un <b>socket</b> en cada lado <cite class="cita" data-fuente="red5" data-pag="10" data-pimp="7" data-seccion="4.1 Puertos y multiplexación" data-que="Los puertos de 0 a 65535, los bien conocidos (80, 443, 53, 22) y la definición de socket como IP más puerto en origen y destino." data-cuando="Antes de leer la tabla de estados del escenario"></cite>. La respuesta es la misma conexión con los extremos <b>intercambiados</b>: el servidor (puerto 443) le habla al equipo (puerto 49152).</p>
+          <p>El material no muestra esta tabla ni dice qué pasa con el tráfico de vuelta; lo explica solo en una frase de la tabla de tipos. Aquí lo vas a ver funcionar.</p>
+          <div class="check" id="chk4"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="La DMZ">
+          <span class="etapa">Paso 5</span>
+          <h3>Tres zonas, tres niveles de confianza</h3>
+          <p>El servidor web tiene que recibir visitas de cualquiera, así que está expuesto. Si lo pones dentro de la red interna y alguien lo compromete, ya está dentro. La solución es una <b>DMZ</b>: una zona intermedia, con su propia interfaz del firewall, donde viven los servidores públicos <cite class="cita" data-fuente="red6" data-pag="9" data-pimp="6" data-seccion="8. Arquitecturas de despliegue" data-que="Las cuatro arquitecturas: perimetral, DMZ (con uno o dos firewalls), interno o de segmentación (contra el movimiento lateral) y personal o de host." data-cuando="Al empezar este paso"></cite>.</p>
+          <p>El firewall del ejemplo tiene <b>tres interfaces</b>: externa (no confiable), DMZ (confianza media) e interna (confianza alta). La regla de oro: el tráfico que va de <b>menor a mayor confianza</b> se restringe al máximo <cite class="cita" data-fuente="red6" data-pag="10" data-pimp="7" data-seccion="10. Topología con DMZ (Tabla 5)" data-que="La tabla de las tres interfaces del firewall con su nivel de confianza, y la idea de restringir al máximo el tráfico de menor a mayor confianza." data-cuando="Mientras envías paquetes entre zonas"></cite>
+          <cite class="cita" data-fuente="red6diapo" data-pag="19" data-seccion="Topología con DMZ" data-que="La tabla de tres interfaces en una sola diapositiva." data-cuando="Si quieres un repaso corto"></cite>.</p>
+          <p>En el escenario, el servidor <b>www.ejemplo.org</b> (172.16.0.10) está ahora en la DMZ. El equipo 192.168.10.70, que en otras páginas era el servidor, aquí es un equipo más de la red interna.</p>
+          <div class="check" id="chk5"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="La regla que falta">
+          <span class="etapa">Paso 6</span>
+          <h3>La tabla del material olvidó el DNS</h3>
+          <p>Antes de abrir <b>www.ejemplo.org</b>, tu equipo tiene que convertir el nombre en una IP. Eso lo hace el DNS, que usa el puerto <b>53</b> y casi siempre el protocolo <b>UDP</b>, no TCP <cite class="cita" data-fuente="red5" data-pag="12" data-pimp="9" data-seccion="5.1 y 5.2 DNS: por qué y jerarquía" data-que="Por qué existe el DNS (traducir nombres a IP) y su jerarquía de raíz, TLD y servidores autoritativos." data-cuando="Al terminar este paso"></cite>.</p>
+          <p>La tabla de reglas del material permite desde la red interna <b>solo TCP/443 y TCP/80</b>. Ahí falta algo: la consulta DNS (UDP/53) no coincide con ninguna regla de permitir, cae en «denegar lo demás» y se bloquea. <b>La navegación por nombre fallaría</b> aunque los puertos web estén abiertos. Es una errata de la unidad, y de las buenas: es un error de configuración real. Tampoco indica el tráfico de respuesta, que en un firewall con estado lo resuelve la tabla sin decirlo.</p>
+          <p>En el escenario, envía la consulta DNS, agrega la regla que falta y vuelve a enviarla.</p>
+          <div class="check" id="chk6"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+
+          <div class="destacado" id="destacado">
+            <p class="dest-tit">Una confusión muy común</p>
+            <h4>Nadie escribió «bloquear el DNS». ¿Quién lo bloqueó?</h4>
+            <p>Mira la lista: no hay ninguna regla que mencione el puerto 53. Y sin embargo la consulta se descarta. Pasa porque la última regla, «denegar lo demás», funciona como <b>denegación por defecto</b>: lo que no está permitido de forma explícita queda prohibido. Es la forma segura de escribir un firewall (permitir solo lo necesario), pero tiene un precio: <b>cada servicio nuevo necesita su regla</b>.</p>
+            <div class="check" id="chk6b"><p class="check-tit">Predice antes de seguir</p><div class="cuerpo"></div></div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Ataques">
+          <span class="etapa">Paso 7</span>
+          <h3>El firewall frente a un escaneo y a una inundación</h3>
+          <p>Dos ataques que se ven desde el firewall. En un <b>escaneo de puertos</b>, el atacante prueba muchos puertos de un servidor para ver cuáles responden: cada puerto que pasa el firewall le da una pista de qué servicio hay detrás. Aparece en los patrones de incidentes del material como el primer paso contra un servicio expuesto <cite class="cita" data-fuente="red6" data-pag="8" data-pimp="5" data-seccion="5. Patrones de incidentes reales (Tabla 2)" data-que="Las cadenas de ataque más comunes (correo, Wi-Fi pública, servicio expuesto con escaneo de puertos y fuerza bruta contra VPN), cada una con la capa que la habría contenido." data-cuando="Al terminar este paso"></cite>.</p>
+          <p>En un <b>SYN flood</b> el atacante inicia miles de conexiones TCP que nunca termina: manda el primer paquete (SYN) y no completa el apretón de manos, de modo que cada intento deja una entrada a medias en la tabla de conexiones. Cuando la tabla se llena, no hay lugar para las conexiones de los clientes de verdad <cite class="cita" data-fuente="red6" data-pag="6" data-pimp="3" data-seccion="3.2 DoS y DDoS" data-que="Los ataques de denegación de servicio, la botnet y el SYN flood: SYN sin completar el handshake agota la tabla de conexiones." data-cuando="Después de llenar la tabla en el escenario"></cite>.</p>
+          <p>El tamaño real de la tabla y los tiempos de espera que limpian las entradas a medias no vienen en el material. Aquí la tabla es chiquita (8 entradas) para que se vea llenarse.</p>
+          <div class="check" id="chk7"><p class="check-tit">Calcula con lápiz</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Lo que no ve">
+          <span class="etapa">Paso 8</span>
+          <h3>Lo que un firewall no puede ver</h3>
+          <p>Un filtro de paquetes decide con IP, protocolo y puerto. Si esos datos cumplen una regla, el paquete pasa, <b>venga lo que venga dentro</b>. Por eso un ataque escondido en una conexión HTTPS permitida cruza sin problema: el firewall ve «TCP/443 hacia el servidor web» y nada más. Tampoco frena a un empleado que ya está dentro de la red, ni cifra el tráfico <cite class="cita" data-fuente="red6" data-pag="11" data-pimp="8" data-seccion="11. Limitaciones de los firewalls" data-que="Las limitaciones: no frenan amenazas internas, el filtrado de paquetes no ve el contenido (un ataque dentro de HTTPS pasa) y no cifran el tráfico." data-cuando="Al terminar este paso"></cite>.</p>
+          <p>Para ver más hay otros tipos: la inspección de estado recuerda conexiones, el proxy lee la aplicación (capa 7) y el de nueva generación combina todo y añade prevención de intrusiones. En el escenario hay una tabla de los cuatro, resumida con otras palabras.</p>
+          <div class="check" id="chk8"><p class="check-tit">Antes de terminar</p><div class="cuerpo"></div></div>
+          <div class="cita" id="citaHipo" hidden></div>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+        </div>
+
+        <div id="bZonas" class="blq">
+          <div class="zonas" id="zonas">
+            <div class="z ext" data-z="ext"><b>Internet</b><small>no confiable</small><span>203.0.113.50 visitante</span><span>198.51.100.7 atacante</span><span>198.51.100.53 DNS</span><span>203.0.113.80 sitio web</span></div>
+            <div class="z fw" id="zFw"><b>Firewall</b><i id="zFwTxt">3 interfaces</i></div>
+            <div class="z dmz" data-z="dmz"><b>DMZ</b><small>confianza media</small><span>172.16.0.10</span><span>www.ejemplo.org</span></div>
+            <div class="z int" data-z="int"><b>Red interna</b><small>confianza alta</small><span>192.168.10.0/24</span><span>equipos .37 y .70</span></div>
+          </div>
+        </div>
+
+        <div id="bReglas" class="blq">
+          <h3 class="mini-tit">Reglas, de arriba abajo</h3>
+          <div id="listaReglas"></div>
+          <div class="btn-row" id="extras" style="margin-top:6px">
+            <button type="button" id="bExtraBlq">Agregar: denegar al equipo .37 hacia TCP 443</button>
+            <button type="button" id="bExtraDns">Agregar la regla de DNS</button>
+            <button type="button" class="ghost" id="bResetReglas">Restablecer la lista</button>
+          </div>
+        </div>
+
+        <div id="bEstado" class="blq">
+          <div class="seg" id="segEstado" role="group" aria-label="Tipo de firewall">
+            <button type="button" data-e="0" aria-pressed="true">Sin estado</button>
+            <button type="button" data-e="1" aria-pressed="false">Con estado</button>
+          </div>
+          <div id="tablaEstado" style="margin-top:8px"></div>
+        </div>
+
+        <div id="bMatch" class="blq">
+          <div class="m-sel">
+            <div><label for="mIp">IP de origen del paquete</label><select id="mIp"></select></div>
+            <div><label for="mRed">Red de origen de la regla</label><select id="mRed"></select></div>
+          </div>
+          <div class="tabla-wrap"><table class="tp" id="mTabla"></table></div>
+          <div class="m-res" id="mRes"></div>
+        </div>
+
+        <div id="bAtaque" class="blq">
+          <h3 class="mini-tit">Escaneo de puertos</h3>
+          <div class="btn-row"><button type="button" id="bScan">El atacante 198.51.100.7 escanea 172.16.0.10</button></div>
+          <div class="scan" id="scan"></div>
+          <h3 class="mini-tit" style="margin-top:14px">Tabla de conexiones del firewall (8 entradas)</h3>
+          <div class="celdas" id="celdas"></div>
+          <div class="btn-row">
+            <button type="button" id="bSyn">Enviar 2 SYN falsos</button>
+            <button type="button" id="bLegit">Un cliente legítimo intenta conectar</button>
+            <button type="button" class="ghost" id="bSynRe">Vaciar</button>
+          </div>
+          <div class="veredicto" id="synMsg">Resuelve el chequeo para activar los botones.</div>
+        </div>
+
+        <div id="bPaq" class="blq">
+          <h3 class="mini-tit">Paquete</h3>
+          <div class="pq-sel">
+            <select id="selPaq" aria-label="Paquete de prueba"></select>
+            <button type="button" class="primary" id="bEnviar">Enviar al firewall</button>
+          </div>
+          <div class="pq-det" id="pqDet"></div>
+          <div class="veredicto" id="veredicto">Elige un paquete y envíalo.</div>
+        </div>
+
+        <div id="bTipos" class="blq">
+          <h3 class="mini-tit">Los cuatro tipos, resumidos</h3>
+          <div class="tabla-wrap"><table class="tp tipos" id="tTipos"></table></div>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>Un motor de reglas de verdad: recorre la lista con primera coincidencia, comprueba cada red con la máscara y recuerda las conexiones en una tabla de estados. Cinco paquetes de prueba, y al final el arreglo del DNS. Elige Python o R, dale a reproducir y mira qué regla decide cada paquete.</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir</p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="true">Python</button>
+            <button type="button" data-lang="r" aria-pressed="false">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">1 · reglas y funciones</span><span data-f="2">2 · cinco paquetes</span><span data-f="3">3 · el arreglo del DNS</span>
+        </div>
+        <h3 class="mini-tit vr-tit">Los paquetes de prueba</h3>
+        <div class="vr-pq" id="vrPaq"></div>
+        <h3 class="mini-tit vr-tit">La lista de reglas</h3>
+        <div id="vrRegs"></div>
+        <h3 class="mini-tit vr-tit">La tabla de estados</h3>
+        <div id="vrEst"></div>
+        <h3 class="mini-tit vr-tit">Lo que imprimió el programa</h3>
+        <pre class="vr-sal" id="vrSalida"></pre>
+      </div>
+    </div>
+
+    <p class="vr-nota">Una aclaración honesta: Python trae <code>ipaddress</code> para saber si una IP está en una red, y el motor la usa; R no trae nada equivalente, así que <code>en_red</code> está escrita a mano con <code>bitwAnd</code>, octeto por octeto, y se comprobó contra la de Python con 88 pares de prueba (ninguno distinto). Un firewall real, como <code>iptables</code> o <code>nftables</code>, no se parece a este programa por dentro, pero la idea de la lista y de la tabla de conexiones es la misma. No se abre ninguna conexión de red: todo son datos escritos a mano.</p>
+
+    <details class="profundizar">
+      <summary>La versión con una lista de tuplas más corta (Python)</summary>
+      <div>
+        <p>Si no te importa la tabla de estados, el motor entero cabe en una expresión: <code>next((a for a, o, d, pr, pt in reglas if en_red(src, o) and en_red(dst, d) and pr in ("*", proto) and (not pt or dport in pt)), "DENEGAR")</code>. Devuelve la acción de la primera regla que coincide, y <code>"DENEGAR"</code> si ninguna lo hace. Es la misma idea de primera coincidencia, sin la tabla.</p>
+      </div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>La red de un equipo</h3><span class="estado" data-reto="codigo2"></span></div>
+        <div id="codigo2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>La regla al final de la lista</h3><span class="estado" data-reto="codigo3"></span></div>
+        <div id="codigo3"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: la biblioteca te avisa en el índice cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>¿Pasa o se bloquea?</h3><span class="estado" data-reto="ojo"></span></div>
+        <p class="desc">Cinco paquetes contra la lista original de cuatro reglas, en un firewall sin estado. Decide sin enviarlos. Apruebas con 4 de 5.</p>
+        <div class="tabla-wrap"><div id="ojoLista"></div></div>
+        <div id="ojo"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Construir</span><h3>Arma la lista que te piden</h3><span class="estado" data-reto="construir"></span></div>
+        <p class="desc">Agrega y reordena reglas hasta cumplir los tres objetivos a la vez. Se marcan solos.</p>
+        <div id="listaC"></div>
+        <div class="btn-row" style="margin-top:6px">
+          <button type="button" id="cBlq">Agregar: denegar al equipo .37 hacia TCP 443</button>
+          <button type="button" id="cDns">Agregar la regla de DNS</button>
+          <button type="button" class="ghost" id="cReset">Restablecer la lista</button>
+        </div>
+        <ul class="objetivos" id="objetivos"></ul>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>Cuántas direcciones cubre una regla</h3><span class="estado" data-reto="mano"></span></div>
+        <p class="desc">Una red de origen con un prefijo al azar. Haz la cuenta antes de pedir pistas.</p>
+        <div id="mano"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Alguien se equivocó</h3><span class="estado" data-reto="error"></span></div>
+        <p class="desc">Una de las líneas tiene un error. Tócala.</p>
+        <div id="error"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Dónde va «denegar todo»</h3><span class="estado" data-reto="prop1"></span></div>
+        <div id="prop1"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Sin estado, para que funcione la web</h3><span class="estado" data-reto="prop2"></span></div>
+        <div id="prop2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>La regla de 0.0.0.0/0</h3><span class="estado" data-reto="prop3"></span></div>
+        <div id="prop3"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Recordar a la fuerza es lo que fija. Arma la condición de «coincide» pieza por pieza y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Fórmula de memoria</span><h3>Cuándo una IP está dentro de la red de una regla</h3><span class="estado" data-reto="formula"></span></div>
+        <p class="desc">Hay piezas de más que no pertenecen. No mires arriba.</p>
+        <div id="formula"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el material</h2>
+      <p class="lecturas-intro">Ya armaste la idea con las manos. Ahora ve a la versión del material de la unidad y comprueba que la reconoces. Cada entrada dice qué vas a encontrar y en qué momento conviene leerla. Si abres la biblioteca con doble clic, el enlace abre el PDF en esa página. Un aviso: la unidad no trae reglas de <code>iptables</code>, ni una tabla de estados con números, ni cuántas conexiones aguanta un firewall; eso sale de la práctica y no del material.</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> Las direcciones, los puertos y los paquetes son inventados. La red interna 192.168.10.0/24 es la del ejemplo común de la ruta (el material usa 192.168.1.0/24); 203.0.113.0/24 y 198.51.100.0/24 son rangos reservados para documentación y 172.16.0.0/24 es un rango privado: el servidor www.ejemplo.org vive aquí en la DMZ (en otras páginas estaba en 192.168.10.70). El tamaño de la tabla de 8 entradas es ficticio.
+    Tu progreso se guarda solo en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+/*
+  EJEMPLO COMUN DE LA RUTA "REDES DE COMPUTADORES" (reutilizado de la pagina "Capas y encapsulacion")
+
+  Bloque de la empresa: 192.168.10.0/24, partido en subredes del tamano justo (de mayor a menor).
+    Ventas   50 equipos   192.168.10.0/26    VLAN 10   hosts .1 a .62,  broadcast .63   puerta de enlace 192.168.10.1
+    Soporte  20 equipos   192.168.10.64/27   VLAN 20   hosts .65 a .94, broadcast .95   puerta de enlace 192.168.10.65
+    Enlace    2 equipos   192.168.10.96/30   hosts .97 y .98,           broadcast .99   entre el router y el proveedor
+  Equipo de ejemplo:  192.168.10.37 (Ventas, VLAN 10), puerto de origen 49152.
+  Esta pagina: la red interna es 192.168.10.0/24; el servidor www.ejemplo.org pasa a una DMZ (172.16.0.10) y el .70 es un equipo de Soporte.
+*/
+(function () {
+  "use strict";
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+
+  var RETOS = ["ojo", "construir", "mano", "error", "formula", "prop1", "prop2", "prop3", "codigo1", "codigo2", "codigo3"];
+  var C = B.concepto({ id: "firewall-reglas", retos: RETOS, pasos: 8 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  /* ---------------- motor de reglas ---------------- */
+  function ipn(ip) { var o = ip.split(".").map(Number); return ((o[0] * 256 + o[1]) * 256 + o[2]) * 256 + o[3]; }
+  function enRed(ip, cidr) { var p = cidr.split("/"), m = Math.pow(2, 32 - +p[1]); return Math.floor(ipn(ip) / m) === Math.floor(ipn(p[0]) / m); }
+  function zonaDe(ip) { return enRed(ip, "192.168.10.0/24") ? "int" : enRed(ip, "172.16.0.0/24") ? "dmz" : "ext"; }
+  var ZNOM = { ext: "Internet", dmz: "la DMZ", int: "la red interna" };
+  function netTxt(c) { return c === "0.0.0.0/0" ? "cualquiera" : /\/32$/.test(c) ? c.replace("/32", "") : c; }
+  function ptTxt(r) {
+    var pr = r.pr === "*" ? "cualquier protocolo" : r.pr.toUpperCase();
+    return r.pt.length ? pr + " " + r.pt.join(", ") : pr;
+  }
+
+  var RB = {
+    web: { id: "web", acc: "PERMITIR", o: "192.168.10.0/24", d: "0.0.0.0/0", pr: "tcp", pt: [443, 80], n: "Navegar" },
+    pub: { id: "pub", acc: "PERMITIR", o: "0.0.0.0/0", d: "172.16.0.10/32", pr: "tcp", pt: [443], n: "Web pública" },
+    adm: { id: "adm", acc: "PERMITIR", o: "192.168.10.0/24", d: "172.16.0.10/32", pr: "tcp", pt: [22], n: "Administrar por SSH" },
+    den: { id: "den", acc: "DENEGAR", o: "0.0.0.0/0", d: "0.0.0.0/0", pr: "*", pt: [], n: "Denegar lo demás" },
+    dns: { id: "dns", acc: "PERMITIR", o: "192.168.10.0/24", d: "0.0.0.0/0", pr: "udp", pt: [53], n: "Consultas DNS" },
+    blq: { id: "blq", acc: "DENEGAR", o: "192.168.10.37/32", d: "0.0.0.0/0", pr: "tcp", pt: [443], n: "Bloquear al equipo .37" }
+  };
+  var BASE = ["web", "pub", "adm", "den"];
+
+  function P(id, nom, src, sport, dst, dport, pr, resp, cont) {
+    return { id: id, nom: nom, src: src, sport: sport, dst: dst, dport: dport, pr: pr, resp: !!resp, cont: cont || "" };
+  }
+  var PK = {
+    p1: P("p1", "El equipo .37 abre una página web", "192.168.10.37", 49152, "203.0.113.80", 443, "tcp"),
+    p2: P("p2", "La web le responde al .37", "203.0.113.80", 443, "192.168.10.37", 49152, "tcp", true),
+    p3: P("p3", "Un visitante pide www.ejemplo.org", "203.0.113.50", 50000, "172.16.0.10", 443, "tcp"),
+    p4: P("p4", "www.ejemplo.org responde al visitante", "172.16.0.10", 443, "203.0.113.50", 50000, "tcp", true),
+    p5: P("p5", "Un visitante intenta entrar por SSH al servidor", "203.0.113.50", 50001, "172.16.0.10", 22, "tcp"),
+    p6: P("p6", "El equipo .37 administra el servidor por SSH", "192.168.10.37", 53001, "172.16.0.10", 22, "tcp"),
+    p7: P("p7", "Un atacante prueba el escritorio remoto del .37", "198.51.100.7", 40000, "192.168.10.37", 3389, "tcp"),
+    p8: P("p8", "El servidor de la DMZ llama a un equipo interno", "172.16.0.10", 40100, "192.168.10.37", 445, "tcp"),
+    p9: P("p9", "El equipo .37 consulta el DNS", "192.168.10.37", 53000, "198.51.100.53", 53, "udp"),
+    p10: P("p10", "El equipo .70 abre una página web", "192.168.10.70", 49300, "203.0.113.80", 443, "tcp"),
+    p11: P("p11", "El DNS le responde al .37", "198.51.100.53", 53, "192.168.10.37", 53000, "udp", true),
+    p12: P("p12", "Un empleado sube un archivo a un sitio externo por HTTPS", "192.168.10.70", 49400, "203.0.113.99", 443, "tcp", false, "un archivo con los datos de los clientes de la empresa"),
+    p13: P("p13", "Una petición web con un ataque escondido", "203.0.113.50", 50100, "172.16.0.10", 443, "tcp", false, "una petición con código malicioso escondido dentro de la conexión cifrada")
+  };
+  function clave(a, sa, b, sb, pr) { return [a, sa, b, sb, pr].join("|"); }
+  function mirar(r, p) {
+    if (!enRed(p.src, r.o)) return "el origen " + p.src + " no está en " + netTxt(r.o);
+    if (!enRed(p.dst, r.d)) return "el destino " + p.dst + " no está en " + netTxt(r.d);
+    if (r.pr !== "*" && r.pr !== p.pr) return "el protocolo es " + p.pr.toUpperCase() + " y la regla pide " + r.pr.toUpperCase();
+    if (r.pt.length && r.pt.indexOf(p.dport) < 0) return "el puerto " + p.dport + " no está entre " + r.pt.join(", ");
+    return null;
+  }
+  // lista: ids de reglas; tabla: claves de conexiones abiertas (solo si conEstado)
+  function decidir(p, lista, conEstado, tabla) {
+    var res = { marks: [], i: -1, acc: "DENEGAR", por: "sin regla" };
+    if (conEstado && tabla.indexOf(clave(p.dst, p.dport, p.src, p.sport, p.pr)) >= 0) { res.acc = "PERMITIR"; res.por = "estado"; return res; }
+    for (var i = 0; i < lista.length; i++) {
+      var r = RB[lista[i]], why = mirar(r, p);
+      res.marks.push(why);
+      if (!why) { res.i = i; res.acc = r.acc; res.por = "regla"; return res; }
+    }
+    return res;
+  }
+
+  /* ---------------- lista de reglas (componente) ---------------- */
+  function montarLista(cont, S, alCambiar) {
+    function pintar() {
+      var h = "";
+      S.ids.forEach(function (id, i) {
+        var r = RB[id], cls = "rg", why = "";
+        if (S.res) {
+          if (S.res.por === "estado") cls += " omit";
+          else if (i === S.res.i) cls += " hit";
+          else if (i < S.res.marks.length) { cls += " no"; why = "no coincide: " + S.res.marks[i]; }
+          else cls += " omit";
+        }
+        var hc = S.hits && S.hits[id] ? '<span class="hc"> × ' + S.hits[id] + '</span>' : "";
+        h += '<div class="' + cls + '"><span class="n">' + (i + 1) + '</span>' +
+          '<span class="ac ' + (r.acc === "PERMITIR" ? "perm" : "den") + '">' + r.acc + '</span>' +
+          '<span class="de"><b>' + netTxt(r.o) + '</b> → <b>' + netTxt(r.d) + '</b><small>' + ptTxt(r) + ' · ' + r.n + hc + '</small>' +
+          (why ? '<em>' + esc(why) + '</em>' : "") + '</span>' +
+          (S.mover ? '<span class="mv"><button type="button" data-m="-1" data-i="' + i + '" aria-label="Subir la regla ' + (i + 1) + '"' + (i === 0 ? " disabled" : "") + '>↑</button><button type="button" data-m="1" data-i="' + i + '" aria-label="Bajar la regla ' + (i + 1) + '"' + (i === S.ids.length - 1 ? " disabled" : "") + '>↓</button></span>' : "<span></span>") +
+          '</div>';
+      });
+      cont.innerHTML = h;
+    }
+    cont.addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-m]");
+      if (!b || !S.mover) return;
+      var i = +b.getAttribute("data-i"), j = i + (+b.getAttribute("data-m"));
+      if (j < 0 || j >= S.ids.length) return;
+      var t = S.ids[i]; S.ids[i] = S.ids[j]; S.ids[j] = t;
+      S.res = null;
+      if (alCambiar) alCambiar();
+      pintar();
+    });
+    return { pintar: pintar };
+  }
+  function alternar(S, id) {
+    var k = S.ids.indexOf(id);
+    if (k >= 0) S.ids.splice(k, 1); else S.ids.splice(S.ids.indexOf("den"), 0, id);
+    S.res = null;
+  }
+
+  /* ---------------- estado del escenario ---------------- */
+  var est = { paso: 0, l: [], conEstado: false, tabla: [], pk: "p1", syn: { leg: 2, fal: 0 }, ultimo: null };
+  var S1 = { ids: BASE.slice(), mover: false, res: null, hits: {} };
+  var pasos;
+  var listaUI = montarLista($("listaReglas"), S1, function () { pintarVeredicto(null); });
+
+  var PAQS = [
+    ["p1", "p3", "p5", "p7"],
+    ["p1", "p10", "p3", "p5"],
+    [],
+    ["p1", "p2", "p3", "p4"],
+    ["p3", "p4", "p6", "p8", "p7"],
+    ["p9", "p11", "p1"],
+    [],
+    ["p12", "p13", "p3"]
+  ];
+  var MODOS = [
+    { hint: "Envía paquetes y mira qué regla decide", b: ["bZonas", "bReglas", "bPaq"], mover: false, extras: [] },
+    { hint: "Reordena las reglas y vuelve a enviar", b: ["bZonas", "bReglas", "bPaq"], mover: true, extras: ["bExtraBlq", "bResetReglas"] },
+    { hint: "Cambia la IP y la red de la regla", b: ["bReglas", "bMatch"], mover: false, extras: [] },
+    { hint: "Activa la tabla de estados", b: ["bZonas", "bReglas", "bEstado", "bPaq"], mover: false, extras: [] },
+    { hint: "Envía paquetes entre las tres zonas", b: ["bZonas", "bReglas", "bEstado", "bPaq"], mover: false, extras: [] },
+    { hint: "Agrega la regla que falta", b: ["bZonas", "bReglas", "bEstado", "bPaq"], mover: true, extras: ["bExtraDns", "bResetReglas"] },
+    { hint: "Escanea puertos e inunda la tabla", b: ["bReglas", "bAtaque"], mover: false, extras: [] },
+    { hint: "Mira lo que el filtro no puede ver", b: ["bZonas", "bReglas", "bPaq", "bTipos"], mover: false, extras: [] }
+  ];
+  var TODOS = ["bZonas", "bReglas", "bEstado", "bMatch", "bAtaque", "bPaq", "bTipos"];
+  var EXTRAS = ["bExtraBlq", "bExtraDns", "bResetReglas"];
+
+  function libre() { return !!est.l[est.paso]; }
+  function pintarEstado() {
+    var cont = $("tablaEstado");
+    [].forEach.call($("segEstado").children, function (b) { b.setAttribute("aria-pressed", (+b.getAttribute("data-e") === (est.conEstado ? 1 : 0)) ? "true" : "false"); });
+    if (!est.conEstado) { cont.innerHTML = '<p class="vacio">Sin estado: cada paquete se juzga solo, sin recordar nada.</p>'; return; }
+    if (!est.tabla.length) { cont.innerHTML = '<p class="vacio">Tabla de estados vacía. Cada conexión permitida que empiece desde dentro se anotará aquí.</p>'; return; }
+    cont.innerHTML = '<div class="tabla-wrap"><table class="tp"><tr><th>Conexión abierta</th><th>Proto.</th></tr>' +
+      est.tabla.map(function (k) { var a = k.split("|"); return "<tr><td>" + a[0] + ":" + a[1] + " ⇄ " + a[2] + ":" + a[3] + "</td><td>" + a[4].toUpperCase() + "</td></tr>"; }).join("") +
+      '</table></div><div class="btn-row" style="margin-top:6px"><button type="button" class="ghost" id="bVaciar">Vaciar la tabla</button></div>';
+  }
+  $("tablaEstado").addEventListener("click", function (e) { if (e.target.id === "bVaciar") { est.tabla = []; pintarEstado(); } });
+  $("segEstado").addEventListener("click", function (e) {
+    var b = e.target.closest("button");
+    if (!b) return;
+    est.conEstado = b.getAttribute("data-e") === "1";
+    est.tabla = [];
+    pintarEstado();
+  });
+
+  function llenarPaq() {
+    var ids = PAQS[est.paso];
+    var sel = $("selPaq");
+    sel.innerHTML = ids.map(function (id) { return '<option value="' + id + '">' + esc(PK[id].nom) + '</option>'; }).join("");
+    if (ids.indexOf(est.pk) < 0) est.pk = ids[0];
+    sel.value = est.pk;
+    pintarDetalle();
+  }
+  function pintarDetalle() {
+    var p = PK[est.pk];
+    if (!p) return;
+    var h = "<b>Origen</b> " + p.src + ":" + p.sport + " (" + ZNOM[zonaDe(p.src)] + ")<br><b>Destino</b> " + p.dst + ":" + p.dport + " (" + ZNOM[zonaDe(p.dst)] + ")<br><b>Protocolo</b> " + p.pr.toUpperCase() +
+      " · " + (p.resp ? "respuesta a una conexión" : "conexión nueva");
+    if (p.cont && est.paso === 7 && est.l[7]) h += "<br><b>Dentro del paquete (el filtro no lo ve)</b> " + p.cont;
+    $("pqDet").innerHTML = h;
+  }
+  $("selPaq").addEventListener("change", function () { est.pk = this.value; S1.res = null; pintarDetalle(); listaUI.pintar(); pintarVeredicto(null); });
+
+  function pintarZonas(p, res) {
+    [].forEach.call($("zonas").querySelectorAll(".z[data-z]"), function (z) {
+      var k = z.getAttribute("data-z");
+      z.classList.toggle("ori", !!p && zonaDe(p.src) === k);
+      z.classList.toggle("des", !!p && zonaDe(p.dst) === k);
+    });
+    var fw = $("zFw");
+    fw.classList.toggle("si", !!res && res.acc === "PERMITIR");
+    fw.classList.toggle("no", !!res && res.acc === "DENEGAR");
+    $("zFwTxt").textContent = res ? (res.acc === "PERMITIR" ? "pasa" : "bloquea") : "3 interfaces";
+  }
+  function nombreRegla(i) { var r = RB[S1.ids[i]]; return "la regla " + (i + 1) + " (" + r.n + ")"; }
+  function pintarVeredicto(res) {
+    var v = $("veredicto"), p = PK[est.pk];
+    if (!res) { v.className = "veredicto"; v.textContent = libre() ? "Elige un paquete y envíalo." : "Resuelve el chequeo para activar el botón de enviar."; pintarZonas(null, null); return; }
+    var ok = res.acc === "PERMITIR";
+    v.className = "veredicto " + (ok ? "si" : "no");
+    var porque = res.por === "estado" ? "por la tabla de estados: es la respuesta de una conexión que alguien de dentro abrió"
+      : res.por === "regla" ? "por " + nombreRegla(res.i) + ", la primera que coincide"
+      : "porque ninguna regla coincide";
+    v.innerHTML = "<b>" + (ok ? "PERMITIDO" : "DENEGADO") + "</b> " + porque + ".";
+    pintarZonas(p, res);
+  }
+  $("bEnviar").addEventListener("click", function () {
+    if (!libre()) return;
+    var p = PK[est.pk];
+    var res = decidir(p, S1.ids, est.conEstado, est.tabla);
+    if (res.por === "regla") S1.hits[S1.ids[res.i]] = (S1.hits[S1.ids[res.i]] || 0) + 1;
+    if (est.conEstado && res.acc === "PERMITIR" && res.por === "regla" && !p.resp) {
+      var k = clave(p.src, p.sport, p.dst, p.dport, p.pr);
+      if (est.tabla.indexOf(k) < 0) est.tabla.push(k);
+    }
+    S1.res = res;
+    est.ultimo = res;
+    listaUI.pintar();
+    pintarVeredicto(res);
+    pintarEstado();
+  });
+  function repintarBotones() {
+    $("bEnviar").disabled = !libre();
+    $("bExtraBlq").textContent = S1.ids.indexOf("blq") >= 0 ? "Quitar la regla del equipo .37" : "Agregar: denegar al equipo .37 hacia TCP 443";
+    $("bExtraDns").textContent = S1.ids.indexOf("dns") >= 0 ? "Quitar la regla de DNS" : "Agregar la regla de DNS";
+    $("bExtraBlq").disabled = !libre();
+    $("bExtraDns").disabled = !libre();
+    S1.mover = MODOS[est.paso].mover && libre();
+  }
+  $("bExtraBlq").addEventListener("click", function () { alternar(S1, "blq"); listaUI.pintar(); repintarBotones(); pintarVeredicto(null); });
+  $("bExtraDns").addEventListener("click", function () { alternar(S1, "dns"); listaUI.pintar(); repintarBotones(); pintarVeredicto(null); });
+  $("bResetReglas").addEventListener("click", function () { S1.ids = BASE.slice(); S1.res = null; S1.hits = {}; listaUI.pintar(); repintarBotones(); pintarVeredicto(null); });
+
+  /* ---------------- paso 3: coincide ---------------- */
+  var M_IPS = ["192.168.10.37", "192.168.10.70", "192.168.11.37", "203.0.113.50"];
+  var M_REDES = ["192.168.10.0/24", "192.168.10.0/26", "192.168.10.64/27", "172.16.0.10/32", "0.0.0.0/0"];
+  $("mIp").innerHTML = M_IPS.map(function (x) { return '<option>' + x + '</option>'; }).join("");
+  $("mRed").innerHTML = M_REDES.map(function (x) { return '<option>' + x + '</option>'; }).join("");
+  function maskOct(n, k) { var bits = Math.max(0, Math.min(8, n - 8 * k)); return (255 << (8 - bits)) & 255; }
+  function pintarMatch() {
+    var ip = $("mIp").value, red = $("mRed").value, n = +red.split("/")[1];
+    var a = ip.split(".").map(Number), r = red.split("/")[0].split(".").map(Number), m = [0, 1, 2, 3].map(function (k) { return maskOct(n, k); });
+    var y = a.map(function (x, k) { return x & m[k]; }), z = r.map(function (x, k) { return x & m[k]; });
+    var igual = y.every(function (v, k) { return v === z[k]; });
+    var fila = function (tit, arr, cmp) { return "<tr><td>" + tit + "</td>" + arr.map(function (v, k) { return "<td" + (cmp ? ' class="' + (cmp[k] === v ? "igu" : "dif") + '"' : "") + ">" + v + "</td>"; }).join("") + "</tr>"; };
+    $("mTabla").innerHTML = "<tr><th></th><th>1.º</th><th>2.º</th><th>3.º</th><th>4.º</th></tr>" + fila("IP", a) + fila("Máscara /" + n, m) + fila("IP AND máscara", y, z) + fila("Red de la regla", z, y);
+    var cuantas = Math.pow(2, 32 - n);
+    $("mRes").className = "m-res " + (igual ? "si" : "no");
+    $("mRes").innerHTML = (igual ? "<b>Coincide</b>: los cuatro octetos son iguales." : "<b>No coincide</b>: algún octeto es distinto.") +
+      (est.chk3 ? "<br>Esta red cubre " + String(cuantas).replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " direcciones (2^" + (32 - n) + ")." : "");
+    $("vivoMatch").innerHTML = "(<b>" + ip + "</b> &amp; <b>" + m.join(".") + "</b>) = <b>" + y.join(".") + "</b> &nbsp;·&nbsp; red = <b>" + z.join(".") + "</b> &nbsp;→&nbsp; <b>" + (igual ? "pertenece" : "no pertenece") + "</b>";
+  }
+  $("mIp").addEventListener("change", pintarMatch);
+  $("mRed").addEventListener("change", pintarMatch);
+
+  /* ---------------- paso 7: ataques ---------------- */
+  var SCAN = [21, 22, 23, 25, 80, 443, 3389, 8080];
+  $("bScan").addEventListener("click", function () {
+    if (!est.l[6]) return;
+    var ab = 0;
+    $("scan").innerHTML = SCAN.map(function (pt) {
+      var p = P("s", "", "198.51.100.7", 41000 + pt % 1000, "172.16.0.10", pt, "tcp");
+      var r = decidir(p, S1.ids, est.conEstado, est.tabla);
+      if (r.acc === "PERMITIR") ab++;
+      return '<div class="' + (r.acc === "PERMITIR" ? "ab" : "fi") + '">' + pt + "<br>" + (r.acc === "PERMITIR" ? "responde" : "sin respuesta") + "</div>";
+    }).join("") + '<p class="vivo2" style="grid-column:1/-1;margin:4px 0 0">Puertos que el atacante ve abiertos: <b>' + ab + "</b> de " + SCAN.length + ".</p>";
+  });
+  var CAP = 8;
+  function pintarCeldas() {
+    var h = "";
+    for (var i = 0; i < CAP; i++) h += "<span" + (i < est.syn.leg ? ' class="leg"' : i < est.syn.leg + est.syn.fal ? ' class="fal"' : "") + "></span>";
+    $("celdas").innerHTML = h;
+    var ok = !!est.l[6];
+    $("bSyn").disabled = !ok; $("bLegit").disabled = !ok; $("bSynRe").disabled = !ok;
+  }
+  function msgSyn(t, ok) { $("synMsg").className = "veredicto " + (ok ? "si" : "no"); $("synMsg").innerHTML = t; }
+  $("bSyn").addEventListener("click", function () {
+    var libres = CAP - est.syn.leg - est.syn.fal;
+    var n = Math.min(2, libres);
+    est.syn.fal += n;
+    pintarCeldas();
+    msgSyn(est.syn.leg + est.syn.fal >= CAP ? "<b>Tabla llena.</b> Hay " + est.syn.fal + " entradas a medias de atacantes y " + est.syn.leg + " conexiones de verdad." : "Entradas a medias: <b>" + est.syn.fal + "</b>. Quedan " + (CAP - est.syn.leg - est.syn.fal) + " lugares.", est.syn.leg + est.syn.fal < CAP);
+  });
+  $("bLegit").addEventListener("click", function () {
+    if (est.syn.leg + est.syn.fal >= CAP) { msgSyn("<b>Rechazada.</b> La tabla está llena: el firewall no tiene dónde anotar la conexión del cliente legítimo. El servicio está caído para él.", false); return; }
+    est.syn.leg++;
+    pintarCeldas();
+    msgSyn("<b>Aceptada.</b> Todavía había lugar. Conexiones de verdad: " + est.syn.leg + ".", true);
+  });
+  $("bSynRe").addEventListener("click", function () { est.syn = { leg: 2, fal: 0 }; pintarCeldas(); msgSyn("Tabla vaciada: 2 conexiones de verdad.", true); });
+
+  /* ---------------- paso 8: tipos ---------------- */
+  $("tTipos").innerHTML = "<tr><th>Tipo</th><th>Capas</th><th>Qué mira</th><th>Cuándo no alcanza</th></tr>" + [
+    ["Filtrado de paquetes", "3 y 4", "IP, protocolo y puerto de cada paquete, solo", "No recuerda conexiones ni ve el contenido"],
+    ["Inspección de estado", "3 y 4", "Lo mismo, más una tabla de conexiones abiertas", "Sigue sin leer lo que va dentro"],
+    ["Proxy (aplicación)", "7", "El contenido del protocolo de la aplicación", "Más trabajo por cada conexión"],
+    ["Nueva generación (NGFW)", "3 a 7", "Todo lo anterior, con prevención de intrusiones", "Más complejo de configurar y de mantener"]
+  ].map(function (f) { return "<tr>" + f.map(function (c) { return "<td>" + c + "</td>"; }).join("") + "</tr>"; }).join("");
+
+  /* ---------------- control de modos ---------------- */
+  function entrar(i) {
+    est.paso = i;
+    var m = MODOS[i];
+    TODOS.forEach(function (id) { $(id).hidden = m.b.indexOf(id) < 0; });
+    EXTRAS.forEach(function (id) { $(id).style.display = m.extras.indexOf(id) < 0 ? "none" : ""; });
+    $("extras").style.display = m.extras.length ? "" : "none";
+    $("escHint").textContent = m.hint;
+    S1.ids = BASE.slice(); S1.res = null; S1.hits = {};
+    est.conEstado = i >= 4;
+    est.tabla = [];
+    llenarPaq();
+    repintarBotones();
+    listaUI.pintar();
+    pintarVeredicto(null);
+    pintarEstado();
+    if (i === 2) pintarMatch();
+    if (i === 6) pintarCeldas();
+  }
+  function liberar(i) {
+    est.l[i] = true;
+    if (est.paso === i) { repintarBotones(); pintarVeredicto(null); pintarDetalle(); if (i === 6) pintarCeldas(); }
+  }
+
+  /* ---------------- chequeos de cada paso ---------------- */
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+
+  B.opcionMultiple(cuerpo("chk1"), {
+    pregunta: "Antes de ver nada: un visitante de Internet (203.0.113.50) manda un paquete TCP al <b>puerto 22</b> (SSH) del servidor web 172.16.0.10. Con la lista del escenario, ¿qué hace el firewall?",
+    opciones: [
+      "Lo deja pasar: va a un servidor de la DMZ, que está pensado para recibir visitas",
+      "Lo deniega: la única regla que abre el servidor a todo el mundo es la del puerto 443, y el SSH solo se permite desde la red interna",
+      "Lo deniega porque el SSH está prohibido en todas partes",
+      "Lo deja pasar pero lo anota en un registro"
+    ],
+    correcta: 1,
+    pistas: ["Mira la regla «Web pública»: ¿qué puerto abre? El servidor no se abre entero, solo ese puerto.", null,
+      "No está prohibido en todas partes: la regla «Administrar por SSH» lo permite. Fíjate desde dónde.",
+      "Las reglas de este firewall permiten o deniegan, no tienen una acción de «anotar»."],
+    explicacion: "La regla «Web pública» abre solo el 443. El SSH lo permite otra regla, pero solo con origen en la red interna. El visitante no coincide con ninguna regla de permitir y cae en «denegar lo demás». <b>Ahora envía paquetes</b> y comprueba la lista.",
+    alResolver: function () { pasos.completar(0); liberar(0); }
+  });
+
+  B.opcionMultiple(cuerpo("chk2"), {
+    pregunta: "Subes la regla «Denegar lo demás» al <b>primer lugar</b> de la lista. Un equipo interno (192.168.10.37) quiere abrir una página web por el puerto 443, que antes se permitía. ¿Qué pasa?",
+    opciones: [
+      "Se permite igual: la regla de navegar es más específica y gana",
+      "Se deniega: «denegar lo demás» coincide con todo, gana por ser la primera y las reglas de abajo ya no se miran",
+      "Se deniega solo ese equipo; los demás siguen navegando",
+      "El firewall detecta el error y avisa sin bloquear nada"
+    ],
+    correcta: 1,
+    pistas: ["El firewall no compara qué regla es más específica: solo mira el orden de arriba abajo.", null,
+      "La regla de arriba coincide con todos los paquetes, no solo con los de ese equipo.", "Un firewall no corrige reglas: las aplica en el orden en que están."],
+    explicacion: "Con primera coincidencia, el orden decide. «Denegar lo demás» coincide con cualquier paquete, así que al subirla bloquea todo. <b>Ahora puedes comprobarlo:</b> usa las flechas del escenario y también prueba el botón de agregar la regla del equipo .37, que al principio queda sin efecto. ¿Por qué?",
+    alResolver: function () { pasos.completar(1); liberar(1); }
+  });
+
+  B.numerico(cuerpo("chk3"), {
+    pregunta: "Una regla usa como origen la red $192.168.10.0/24$. ¿A cuántas direcciones IP de origen distintas se aplica? (Recuerda: $32 - 24$ bits quedan libres.)",
+    respuesta: 256,
+    tolerancia: 0,
+    pistas: ["Quedan $32 - 24 = 8$ bits de host. Cada bit puede valer 0 o 1.", "Con $8$ bits hay $2^8$ combinaciones."],
+    diagnostico: function (v) {
+      if (v === 254) return "Esos son los equipos útiles de la subred (se descuentan la dirección de red y el broadcast). El firewall solo compara bits: coincide con las 256 direcciones.";
+      if (v === 8) return "Esos son los bits libres, no las direcciones: cada bit duplica la cantidad.";
+      if (v === 255) return "Contaste del 0 al 255 sin contar el 0: son 256 direcciones, de la .0 a la .255.";
+      return null;
+    },
+    explicacion: "$2^{32-24} = 2^8 = 256$. La regla coincide con todas, de 192.168.10.0 a 192.168.10.255, aunque dos de ellas no se asignen a equipos. <b>Ahora el escenario muestra</b> cuántas direcciones cubre cada red del selector.",
+    alResolver: function () { est.chk3 = true; pasos.completar(2); liberar(2); pintarMatch(); }
+  });
+
+  B.opcionMultiple(cuerpo("chk4"), {
+    pregunta: "El equipo 192.168.10.37 abrió una web por el puerto 443 y el firewall <b>lo permitió</b> con la regla de navegar. Ahora llega la respuesta de la web (203.0.113.80, puerto 443) hacia el equipo (puerto 49152). Con un firewall <b>sin estado</b> y estas cuatro reglas, ¿qué pasa con la respuesta?",
+    opciones: [
+      "Pasa: es la respuesta a una petición que ya se permitió",
+      "Se deniega: viene de Internet hacia la red interna, ninguna regla lo permite y cae en «denegar lo demás»",
+      "Pasa porque el puerto de origen es 443",
+      "Se deniega porque las respuestas siempre se bloquean"
+    ],
+    correcta: 1,
+    pistas: ["Sin estado, el firewall no recuerda la petición. ¿Qué regla de permitir tiene como origen «cualquiera» y destino la red interna?", null,
+      "Ninguna regla mira el puerto de origen: las reglas hablan del puerto de destino.",
+      "Las respuestas no se bloquean por serlo: se bloquean si ninguna regla las permite. Con estado cambia."],
+    explicacion: "Un filtro sin estado mira cada paquete aislado. La respuesta tiene como origen un servidor de Internet y como destino un equipo interno, y no hay regla que lo permita. <b>Ahora activa «Con estado»</b> en el escenario y repite: primero envía la petición y después la respuesta.",
+    alResolver: function () { pasos.completar(3); liberar(3); }
+  });
+
+  B.opcionMultiple(cuerpo("chk5"), {
+    pregunta: "Alguien comprometió el servidor web de la DMZ (172.16.0.10) y desde él intenta abrir una conexión TCP al puerto 445 del equipo interno 192.168.10.37. Con la lista del escenario, ¿qué hace el firewall?",
+    opciones: [
+      "La permite: viene de un servidor de la propia empresa",
+      "La deniega: ninguna regla permite tráfico desde la DMZ hacia la red interna, y cae en «denegar lo demás»",
+      "La permite porque el origen está en una red privada",
+      "La deniega solo porque el puerto 445 es peligroso"
+    ],
+    correcta: 1,
+    pistas: ["El firewall no se fía de un origen solo porque sea «de la empresa»: mira las reglas.",
+      null,
+      "Las reglas no distinguen redes privadas de públicas: comparan el origen con la red de cada regla.",
+      "No hay ninguna regla sobre el puerto 445. Lo que decide es que nadie permitió ese origen hacia ese destino."],
+    explicacion: "La DMZ tiene confianza media: nada abre el camino de la DMZ hacia dentro. Si el servidor web estuviera en la red interna, el atacante ya estaría en ella. Eso es lo que compra la DMZ. <b>Ahora envía</b> ese paquete y también el del atacante contra la red interna.",
+    alResolver: function () { pasos.completar(4); liberar(4); }
+  });
+
+  B.opcionMultiple(cuerpo("chk6"), {
+    pregunta: "El equipo 192.168.10.37 escribe www.ejemplo.org. Antes de abrir la web consulta el DNS: un paquete <b>UDP al puerto 53</b>. Con las cuatro reglas de la tabla, ¿qué pasa con esa consulta?",
+    opciones: [
+      "Pasa: el equipo es de la red interna y esa regla permite navegar",
+      "Se deniega: la regla de navegar solo abre TCP 443 y 80, y UDP 53 cae en «denegar lo demás»",
+      "Pasa porque el DNS siempre está permitido en los firewalls",
+      "Se deniega solo si hay una regla que mencione el puerto 53"
+    ],
+    correcta: 1,
+    pistas: ["Fíjate en el protocolo: la regla de navegar pide TCP y la consulta es UDP.", null,
+      "Un firewall no trae permisos escondidos: solo cuenta lo que está escrito en la lista.",
+      "Al revés: nadie tiene que mencionar el puerto 53 para que se bloquee. Basta con que ninguna regla lo permita."],
+    explicacion: "La consulta no coincide con ninguna regla de permitir y se bloquea: <b>la navegación por nombre falla</b> aunque los puertos web estén abiertos. Es la errata de la unidad. <b>Ahora envía el paquete del DNS</b>, agrega la regla que falta con el botón y vuelve a enviarlo.",
+    alResolver: function () { pasos.completar(5); liberar(5); }
+  });
+  B.opcionMultiple(cuerpo("chk6b"), {
+    pregunta: "Un compañero dice: «el firewall bloquea el DNS aunque nadie lo pidió, debe de ser un fallo». ¿Qué le respondes?",
+    opciones: [
+      "Que es un fallo del software y hay que reiniciarlo",
+      "Que es la denegación por defecto: lo que no está permitido de forma explícita se bloquea, y por eso cada servicio necesita su regla",
+      "Que el DNS no se puede permitir en ningún firewall",
+      "Que la regla de navegar bloquea todo menos HTTP"
+    ],
+    correcta: 1,
+    pistas: ["Nada falló: el firewall hizo exactamente lo que dice la lista.", null,
+      "Sí se puede: en el escenario lo permites con una regla de UDP 53.",
+      "La regla de navegar permite TCP 443 y 80; no «bloquea» nada: lo que bloquea es la regla del final."],
+    explicacion: "Permitir solo lo necesario y denegar el resto es la forma segura de escribir un firewall. El precio es que hay que recordar cada servicio auxiliar (DNS, la hora, las actualizaciones).",
+    alResolver: function () { pasos.completar(5); }
+  });
+
+  B.numerico(cuerpo("chk7"), {
+    pregunta: "La tabla de conexiones del firewall aguanta $8$ entradas y ya hay $2$ conexiones de clientes de verdad. Cada SYN falso que nunca completa el apretón de manos ocupa $1$ entrada. ¿Cuántos SYN falsos hacen falta para llenarla?",
+    respuesta: 6,
+    tolerancia: 0,
+    pistas: ["Quedan libres $8 - 2$ entradas.", "Cada SYN falso ocupa una y no se libera."],
+    diagnostico: function (v) {
+      if (v === 8) return "Eso es la capacidad total. Ya hay 2 entradas ocupadas por clientes legítimos.";
+      if (v === 7) return "Con 7 falsos y 2 legítimos hay 9 entradas, más de las 8 que caben. Cuenta lo que queda libre.";
+      if (v === 2) return "Esas son las entradas ya ocupadas, no las que faltan.";
+      return null;
+    },
+    explicacion: "$8 - 2 = 6$. Con solo 6 paquetes SYN el atacante llena la tabla y el cliente siguiente es rechazado. Un ataque real manda miles por segundo, y por eso los firewalls limitan las conexiones a medias. <b>Ahora los botones del escenario están activos.</b>",
+    alResolver: function () { pasos.completar(6); liberar(6); }
+  });
+
+  B.opcionMultiple(cuerpo("chk8"), {
+    pregunta: "Un empleado del equipo 192.168.10.70 sube un archivo con datos de clientes a un sitio externo (203.0.113.99) por <b>HTTPS</b>, puerto 443. El firewall es un filtro de paquetes con las reglas del escenario. ¿Qué hace?",
+    opciones: [
+      "Lo bloquea, porque ve que el archivo contiene datos de clientes",
+      "Lo deja pasar: IP, protocolo y puerto cumplen la regla de navegar, y no ve lo que va dentro de la conexión cifrada",
+      "Lo bloquea porque el origen es un equipo interno",
+      "Lo deja pasar solo si el archivo es pequeño"
+    ],
+    correcta: 1,
+    pistas: ["Un filtro de paquetes no lee el contenido, y menos si va cifrado.", null,
+      "Los equipos internos tienen permiso de navegar por 443 y 80: es la primera regla.",
+      "El tamaño del archivo no es un dato que el filtro compare."],
+    explicacion: "Para el filtro es «TCP/443 hacia un sitio externo», lo que la regla 1 permite. Lo mismo pasa con un ataque escondido dentro de una conexión HTTPS permitida. Para ver el contenido harían falta otros mecanismos (proxy, NGFW, controles en el equipo), y el material señala justamente esta limitación.",
+    alResolver: function () { pasos.completar(7); liberar(7); }
+  });
+
+  pasos = B.pasos($("recorrido"), {
+    concepto: C,
+    alEntrar: entrar,
+    alTerminar: function () { location.hash = "retos"; }
+  });
+  for (var h = 0; h < 8; h++) est.l[h] = pasos.hecho(h);
+  est.chk3 = pasos.hecho(2);
+  entrar(0);
+
+  /* ---------------- hipotesis inicial ---------------- */
+  (function () {
+    var ta = $("hipotesis"), t = null;
+    ta.value = B.nota("firewall-reglas", "hipotesis");
+    function cita() {
+      var v = ta.value.trim(), el = $("citaHipo");
+      if (!el) return;
+      el.hidden = !v;
+      if (v) { el.textContent = ""; el.appendChild(document.createTextNode("Al principio escribiste: «" + v + "». ¿Se parece a una lista de reglas con denegación por defecto? ¿Qué te faltaba?")); }
+    }
+    ta.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { B.nota("firewall-reglas", "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; cita(); }, 500);
+    });
+    cita();
+  })();
+
+  /* ---------------- marcadores de estado de retos ---------------- */
+  function pintarEstados() {
+    [].forEach.call(document.querySelectorAll("[data-reto]"), function (el) {
+      var ok = C.retoOk(el.getAttribute("data-reto"));
+      el.textContent = ok ? "resuelto" : "pendiente";
+      el.classList.toggle("ok", ok);
+    });
+  }
+  C.alCambiar(pintarEstados);
+
+  /* ---------------- reto: ojo clinico ---------------- */
+  (function () {
+    var lista = montarLista($("ojoLista"), { ids: BASE.slice(), mover: false, res: null }, null);
+    lista.pintar();
+    var POOL = ["p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8", "p9", "p10"];
+    var cont = $("ojo");
+    cont.innerHTML = '<div class="ronda"></div><p class="afirm"></p>' +
+      '<div class="dos-op"><button type="button" class="opt" data-a="PERMITIR">Pasa</button><button type="button" class="opt" data-a="DENEGAR">Se bloquea</button></div>' +
+      '<div class="fb" aria-live="polite"></div><div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    var orden, ronda, aciertos, respondida;
+    function nueva() { orden = B.mezclar(POOL).slice(0, 5); ronda = 0; aciertos = 0; mostrar(); }
+    function txt(p) { return p.nom + ": " + p.src + ":" + p.sport + " → " + p.dst + ":" + p.dport + " (" + p.pr.toUpperCase() + ")"; }
+    function mostrar() {
+      respondida = false;
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 5 · aciertos " + aciertos;
+      cont.querySelector(".afirm").textContent = txt(PK[orden[ronda]]);
+      [].forEach.call(cont.querySelectorAll(".opt"), function (b) { b.disabled = false; b.className = "opt"; });
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+    }
+    cont.querySelector(".dos-op").addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || respondida) return;
+      respondida = true;
+      var p = PK[orden[ronda]], res = decidir(p, BASE, false, []), ok = b.getAttribute("data-a") === res.acc;
+      if (ok) aciertos++;
+      b.classList.add(ok ? "ok" : "mal");
+      if (!ok) cont.querySelector('[data-a="' + res.acc + '"]').classList.add("ok");
+      [].forEach.call(cont.querySelectorAll(".opt"), function (x) { x.disabled = true; });
+      var det = res.por === "regla" ? "La primera regla que coincide es la " + (res.i + 1) + " (" + RB[BASE[res.i]].n + ")" + (res.i === 3 ? ": nada permite este paquete y cae en denegar lo demás." : ".")
+        : "Ninguna regla coincide.";
+      cont.querySelector(".fb").innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No.</span> ') + (res.acc === "PERMITIR" ? "Pasa. " : "Se bloquea. ") + det +
+        (p.resp ? " Sin estado, la respuesta se juzga como un paquete cualquiera." : "");
+      var sig = cont.querySelector(".sig");
+      sig.hidden = false;
+      if (ronda === 4) {
+        var aprobo = aciertos >= 4;
+        C.reto("ojo", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertos + " de 5" + (aprobo ? ". Aprobado." : ". Necesitas 4 para aprobar.");
+        sig.textContent = "Otra tanda";
+      } else sig.textContent = "Siguiente ronda";
+    });
+    cont.querySelector(".sig").addEventListener("click", function () { if (ronda === 4) nueva(); else { ronda++; mostrar(); } });
+    nueva();
+  })();
+
+  /* ---------------- reto: construir ---------------- */
+  (function () {
+    var S2 = { ids: BASE.slice(), mover: true, res: null };
+    var OBJ = [
+      { t: "El equipo 192.168.10.37 ya no puede abrir webs por 443, pero el 192.168.10.70 sí.", ok: function () { return decidir(PK.p1, S2.ids, false, []).acc === "DENEGAR" && decidir(PK.p10, S2.ids, false, []).acc === "PERMITIR"; } },
+      { t: "La consulta DNS del equipo .37 (UDP 53) pasa.", ok: function () { return decidir(PK.p9, S2.ids, false, []).acc === "PERMITIR"; } },
+      { t: "Los visitantes siguen viendo www.ejemplo.org y el atacante no entra a la red interna.", ok: function () { return decidir(PK.p3, S2.ids, false, []).acc === "PERMITIR" && decidir(PK.p7, S2.ids, false, []).acc === "DENEGAR"; } }
+    ];
+    var avisado = false, ul = $("objetivos");
+    OBJ.forEach(function (o) { var li = document.createElement("li"); li.innerHTML = '<span class="m"></span><span>' + o.t + '</span>'; ul.appendChild(li); });
+    var lista = montarLista($("listaC"), S2, function () { evaluar(); });
+    function evaluar() {
+      var todos = true;
+      OBJ.forEach(function (o, i) { var ok = o.ok(); ul.children[i].classList.toggle("hecho", ok); if (!ok) todos = false; });
+      $("cBlq").textContent = S2.ids.indexOf("blq") >= 0 ? "Quitar la regla del equipo .37" : "Agregar: denegar al equipo .37 hacia TCP 443";
+      $("cDns").textContent = S2.ids.indexOf("dns") >= 0 ? "Quitar la regla de DNS" : "Agregar la regla de DNS";
+      if (todos && !avisado) { avisado = true; C.reto("construir", true); }
+    }
+    function cambiar() { lista.pintar(); evaluar(); }
+    $("cBlq").addEventListener("click", function () { alternar(S2, "blq"); cambiar(); });
+    $("cDns").addEventListener("click", function () { alternar(S2, "dns"); cambiar(); });
+    $("cReset").addEventListener("click", function () { S2.ids = BASE.slice(); cambiar(); });
+    cambiar();
+  })();
+
+  /* ---------------- reto: a mano ---------------- */
+  (function () {
+    var N;
+    var PREF = [23, 24, 25, 26, 27, 28, 29, 30];
+    function generar() { N = PREF[Math.floor(Math.random() * PREF.length)]; }
+    generar();
+    B.numerico($("mano"), {
+      pregunta: function () { return "Una regla de firewall usa como origen la red $192.168.10.0/" + N + "$. ¿Cuántas direcciones IP de origen distintas cubre?"; },
+      respuesta: function () { return Math.pow(2, 32 - N); },
+      tolerancia: 0,
+      pistas: [
+        function () { return "Bits de host: $32 - " + N + " = " + (32 - N) + "$."; },
+        function () { return "Cada bit duplica: $2^{" + (32 - N) + "}$."; }
+      ],
+      diagnostico: function (v) {
+        if (v === Math.pow(2, 32 - N) - 2) return "Restaste 2: eso cuenta los equipos útiles de una subred. El firewall compara bits y la regla coincide con las dos direcciones del borde también.";
+        if (v === 32 - N) return "Esos son los bits libres. La cantidad de direcciones es una potencia de 2 con ese exponente.";
+        if (v === N) return "Ese es el prefijo, no la cantidad de direcciones.";
+        return null;
+      },
+      explicacion: function () { return "$2^{32-" + N + "} = 2^{" + (32 - N) + "} = " + Math.pow(2, 32 - N) + "$ direcciones."; },
+      reintentable: true,
+      textoReintentar: "Otro ejercicio",
+      antesDeReintentar: generar,
+      alResolver: function (ok) { C.reto("mano", ok); }
+    });
+  })();
+
+  /* ---------------- reto: cazar el error ---------------- */
+  B.cazarError($("error"), {
+    variantes: [
+      {
+        intro: "El paquete es 192.168.10.37 hacia 172.16.0.10, TCP puerto 22. Alguien recorrió la lista original así:",
+        lineas: ["\\text{1. Regla 1: el puerto 22 no está entre 443 y 80. No coincide.}", "\\text{2. Regla 2: el origen es de la red interna, no «cualquiera». Sí coincide, pero el puerto 22 no es 443. No coincide.}",
+          "\\text{3. Regla 3: origen interno, destino 172.16.0.10, TCP 22. Coincide: PERMITIR.}", "\\text{4. Sigue con la regla 4, «denegar lo demás», que también coincide: DENEGAR.}"],
+        erronea: 3,
+        explicacion: "Con primera coincidencia, el firewall se detiene en la regla 3 y no mira la 4. El paquete se permite. (Y la línea 2 es una forma enrevesada de decir que no coincide: el puerto 22 no está en la regla 2.)"
+      },
+      {
+        intro: "¿Está 192.168.10.200 dentro de 192.168.10.0/26? Alguien lo razonó así:",
+        lineas: ["\\text{1. /26 deja 32 − 26 = 6 bits para el host.}", "\\text{2. 2⁶ = 128 direcciones por subred.}", "\\text{3. La subred llega de .0 a .127.}", "\\text{4. El .200 queda fuera.}"],
+        erronea: 1,
+        explicacion: "$2^6 = 64$, no 128. La subred llega de .0 a .63. El .200 queda fuera igual, pero la cuenta de la línea 2 estaba mal (y la 3 se apoyaba en ella)."
+      },
+      {
+        intro: "Un firewall con estado. El equipo 192.168.10.37 abre una conexión y llega la respuesta. Alguien describió lo que pasa:",
+        lineas: ["\\text{1. El .37 (puerto 49152) abre una conexión a 203.0.113.80 (puerto 443) y la regla 1 la permite.}", "\\text{2. El firewall anota en su tabla de estados: .37:49152 con 203.0.113.80:443.}",
+          "\\text{3. La respuesta llega con origen 203.0.113.80:443 y destino .37:49152: los extremos están intercambiados.}", "\\text{4. Como no coincide con la regla de navegar, se bloquea.}"],
+        erronea: 3,
+        explicacion: "Antes de mirar las reglas, el firewall con estado busca la respuesta en su tabla invirtiendo origen y destino. La encuentra y la permite sin pasar por la lista."
+      }
+    ],
+    alResolver: function (ok) { C.reto("error", ok); }
+  });
+
+  /* ---------------- retos: propiedades ---------------- */
+  function prop(id, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple($(id), cfg);
+  }
+  prop("prop1", {
+    pregunta: "La regla «denegar lo demás» coincide con cualquier paquete. ¿Dónde debe ir en la lista?",
+    opciones: ["Al final", "Al principio", "En el medio", "Da igual, el firewall la reordena solo"],
+    correcta: 0,
+    pistas: [null, "Si va primero, coincide siempre y las demás reglas no llegan a mirarse: se bloquea todo.",
+      "Las reglas de abajo de ella nunca se evaluarían: coincide antes con todo.", "Un firewall aplica el orden que escribiste y no lo cambia."],
+    explicacion: "Con primera coincidencia, la regla que coincide con todo va al final: se aplica solo a lo que ninguna regla anterior quiso permitir."
+  });
+  prop("prop2", {
+    pregunta: "Con un firewall sin estado, la web funciona si agregas una regla que permite el tráfico desde Internet con puerto de origen 443 hacia la red interna. ¿Por qué es peor que usar una tabla de estados?",
+    opciones: [
+      "Porque deja pasar también paquetes falsos con puerto de origen 443 que no responden a nada que alguien pidió",
+      "Porque el puerto 443 es más lento",
+      "Porque esa regla bloquea las respuestas reales",
+      "Porque no se puede escribir una regla con puerto de origen"
+    ],
+    correcta: 0,
+    pistas: [null, "La velocidad no es el problema: el problema es qué más pasa por esa regla.", "No las bloquea: las permite, y también permite otras cosas.",
+      "Sí se pueden escribir, y es lo que haría falta; el problema es lo que abre."],
+    explicacion: "Esa regla no sabe si el paquete responde a algo. Cualquiera puede mandar paquetes con puerto de origen 443 hacia tu red. La tabla de estados solo deja entrar lo que cuadra con una conexión que alguien de dentro abrió."
+  });
+  prop("prop3", {
+    pregunta: "En una regla, el origen «cualquiera» (0.0.0.0/0). ¿Qué quiere decir exactamente?",
+    opciones: [
+      "Que no se compara ningún bit de la IP: coincide con cualquier dirección",
+      "Que solo coincide la dirección 0.0.0.0",
+      "Que coincide solo con las direcciones privadas",
+      "Que la regla se ignora"
+    ],
+    correcta: 0,
+    pistas: [null, "Eso sería 0.0.0.0/32. Con /0 no se compara ningún bit.", "Las privadas son otros rangos, como 192.168.0.0/16. Con /0 no hay ninguna restricción.", "La regla no se ignora: se aplica a todos los paquetes."],
+    explicacion: "El prefijo /0 tiene cero bits de red, así que $2^{32}$ direcciones coinciden. Es el «cualquiera» de las tablas de reglas y la ruta por defecto de una tabla de rutas."
+  });
+
+  /* ---------------- formula de memoria ---------------- */
+  B.ordenar($("formula"), {
+    pregunta: "La condición para que una IP esté dentro de la red de una regla:",
+    piezas: ["\\text{coincide} \\iff", "\\big(\\text{IP}", "\\,\\&\\,", "M\\big)", "=", "\\text{red}"],
+    distractores: ["\\,|\\,", "\\neq", "\\oplus"],
+    soluciones: [[0, 1, 2, 3, 4, 5]],
+    explicacion: "La IP, un AND con la máscara y el resultado igual a la dirección de red. Si es igual, la IP pertenece a la red de la regla.",
+    alResolver: function (ok) { C.reto("formula", ok); }
+  });
+
+  /* ---------------- vida real ---------------- */
+  var CODIGO = {
+ "py": [
+  [
+   "imp",
+   "import ipaddress"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   null,
+   "# reglas en orden: accion, origen, destino, protocolo, puertos"
+  ],
+  [
+   "reglas",
+   "reglas = ["
+  ],
+  [
+   "reglas",
+   "    (\"PERMITIR\", \"192.168.10.0/24\", \"0.0.0.0/0\", \"tcp\", [443, 80]),"
+  ],
+  [
+   "reglas",
+   "    (\"PERMITIR\", \"0.0.0.0/0\", \"172.16.0.10/32\", \"tcp\", [443]),"
+  ],
+  [
+   "reglas",
+   "    (\"PERMITIR\", \"192.168.10.0/24\", \"172.16.0.10/32\", \"tcp\", [22]),"
+  ],
+  [
+   "reglas",
+   "    (\"DENEGAR\", \"0.0.0.0/0\", \"0.0.0.0/0\", \"*\", []),"
+  ],
+  [
+   "reglas",
+   "]"
+  ],
+  [
+   "estado0",
+   "estado = set()"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "enred",
+   "def en_red(ip, cidr):"
+  ],
+  [
+   "enred",
+   "    return ipaddress.ip_address(ip) in ipaddress.ip_network(cidr)"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "verifica",
+   "assert en_red(\"192.168.10.37\", \"192.168.10.0/24\")"
+  ],
+  [
+   "verifica",
+   "assert not en_red(\"192.168.11.37\", \"192.168.10.0/24\")"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "def",
+   "def decidir(src, sport, dst, dport, proto):"
+  ],
+  [
+   "busca",
+   "    if (dst, dport, src, sport, proto) in estado:"
+  ],
+  [
+   "respuesta",
+   "        return \"PERMITIR\", \"estado\""
+  ],
+  [
+   "ciclo",
+   "    for i, (accion, o, d, pr, puertos) in enumerate(reglas):"
+  ],
+  [
+   "coincide",
+   "        if (en_red(src, o) and en_red(dst, d)"
+  ],
+  [
+   "coincide",
+   "                and pr in (\"*\", proto) and (not puertos or dport in puertos)):"
+  ],
+  [
+   "permite",
+   "            if accion == \"PERMITIR\":"
+  ],
+  [
+   "anota",
+   "                estado.add((src, sport, dst, dport, proto))"
+  ],
+  [
+   "devuelve",
+   "            return accion, f\"regla {i + 1}\""
+  ],
+  [
+   "fin",
+   "    return \"DENEGAR\", \"sin regla\""
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "paquetes",
+   "paquetes = ["
+  ],
+  [
+   "paquetes",
+   "    (\"192.168.10.37\", 49152, \"203.0.113.80\", 443, \"tcp\"),"
+  ],
+  [
+   "paquetes",
+   "    (\"203.0.113.80\", 443, \"192.168.10.37\", 49152, \"tcp\"),"
+  ],
+  [
+   "paquetes",
+   "    (\"203.0.113.50\", 50000, \"172.16.0.10\", 443, \"tcp\"),"
+  ],
+  [
+   "paquetes",
+   "    (\"203.0.113.50\", 50001, \"172.16.0.10\", 22, \"tcp\"),"
+  ],
+  [
+   "paquetes",
+   "    (\"192.168.10.37\", 53000, \"198.51.100.53\", 53, \"udp\"),"
+  ],
+  [
+   "paquetes",
+   "]"
+  ],
+  [
+   "bucle",
+   "for src, sport, dst, dport, proto in paquetes:"
+  ],
+  [
+   "llama",
+   "    accion, por = decidir(src, sport, dst, dport, proto)"
+  ],
+  [
+   "imprime",
+   "    print(f\"{src}:{sport} -> {dst}:{dport}/{proto}  {accion}  {por}\")"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "dns",
+   "reglas.insert(3, (\"PERMITIR\", \"192.168.10.0/24\", \"0.0.0.0/0\", \"udp\", [53]))"
+  ],
+  [
+   "repite",
+   "accion, por = decidir(*paquetes[4])"
+  ],
+  [
+   "pdns",
+   "print(\"con la regla de DNS:\", accion, por)"
+  ],
+  [
+   "ptabla",
+   "print(\"conexiones en la tabla:\", len(estado))"
+  ]
+ ],
+ "r": [
+  [
+   "reglas",
+   "reglas <- list("
+  ],
+  [
+   "reglas",
+   "  list(accion = \"PERMITIR\", origen = \"192.168.10.0/24\", destino = \"0.0.0.0/0\", proto = \"tcp\", puertos = c(443, 80)),"
+  ],
+  [
+   "reglas",
+   "  list(accion = \"PERMITIR\", origen = \"0.0.0.0/0\", destino = \"172.16.0.10/32\", proto = \"tcp\", puertos = 443),"
+  ],
+  [
+   "reglas",
+   "  list(accion = \"PERMITIR\", origen = \"192.168.10.0/24\", destino = \"172.16.0.10/32\", proto = \"tcp\", puertos = 22),"
+  ],
+  [
+   "reglas",
+   "  list(accion = \"DENEGAR\", origen = \"0.0.0.0/0\", destino = \"0.0.0.0/0\", proto = \"*\", puertos = NULL)"
+  ],
+  [
+   "reglas",
+   ")"
+  ],
+  [
+   "estado0",
+   "estado <- character(0)"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "enred",
+   "en_red <- function(ip, cidr) {"
+  ],
+  [
+   "enred",
+   "  p <- strsplit(cidr, \"/\", fixed = TRUE)[[1]]"
+  ],
+  [
+   "enred",
+   "  n <- as.integer(p[2])"
+  ],
+  [
+   "enred",
+   "  a <- as.integer(strsplit(ip, \".\", fixed = TRUE)[[1]])"
+  ],
+  [
+   "enred",
+   "  r <- as.integer(strsplit(p[1], \".\", fixed = TRUE)[[1]])"
+  ],
+  [
+   "enred",
+   "  for (k in 1:4) {"
+  ],
+  [
+   "enred",
+   "    bits <- max(0, min(8, n - 8 * (k - 1)))"
+  ],
+  [
+   "enred",
+   "    m <- bitwAnd(255L, bitwShiftL(255L, 8L - as.integer(bits)))"
+  ],
+  [
+   "enred",
+   "    if (bitwAnd(a[k], m) != bitwAnd(r[k], m)) return(FALSE)"
+  ],
+  [
+   "enred",
+   "  }"
+  ],
+  [
+   "enred",
+   "  TRUE"
+  ],
+  [
+   "enred",
+   "}"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "verifica",
+   "stopifnot(en_red(\"192.168.10.37\", \"192.168.10.0/24\"))"
+  ],
+  [
+   "verifica",
+   "stopifnot(!en_red(\"192.168.11.37\", \"192.168.10.0/24\"))"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "def",
+   "decidir <- function(src, sport, dst, dport, proto) {"
+  ],
+  [
+   "busca",
+   "  if (paste(dst, dport, src, sport, proto) %in% estado) {"
+  ],
+  [
+   "respuesta",
+   "    return(list(\"PERMITIR\", \"estado\"))"
+  ],
+  [
+   null,
+   "  }"
+  ],
+  [
+   "ciclo",
+   "  for (i in seq_along(reglas)) {"
+  ],
+  [
+   "ciclo",
+   "    r <- reglas[[i]]"
+  ],
+  [
+   "coincide",
+   "    if (en_red(src, r$origen) && en_red(dst, r$destino) &&"
+  ],
+  [
+   "coincide",
+   "        (r$proto == \"*\" || r$proto == proto) &&"
+  ],
+  [
+   "coincide",
+   "        (length(r$puertos) == 0 || dport %in% r$puertos)) {"
+  ],
+  [
+   "permite",
+   "      if (r$accion == \"PERMITIR\") {"
+  ],
+  [
+   "anota",
+   "        estado <<- c(estado, paste(src, sport, dst, dport, proto))"
+  ],
+  [
+   null,
+   "      }"
+  ],
+  [
+   "devuelve",
+   "      return(list(r$accion, paste(\"regla\", i)))"
+  ],
+  [
+   null,
+   "    }"
+  ],
+  [
+   null,
+   "  }"
+  ],
+  [
+   "fin",
+   "  list(\"DENEGAR\", \"sin regla\")"
+  ],
+  [
+   null,
+   "}"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "paquetes",
+   "paquetes <- list("
+  ],
+  [
+   "paquetes",
+   "  list(\"192.168.10.37\", 49152, \"203.0.113.80\", 443, \"tcp\"),"
+  ],
+  [
+   "paquetes",
+   "  list(\"203.0.113.80\", 443, \"192.168.10.37\", 49152, \"tcp\"),"
+  ],
+  [
+   "paquetes",
+   "  list(\"203.0.113.50\", 50000, \"172.16.0.10\", 443, \"tcp\"),"
+  ],
+  [
+   "paquetes",
+   "  list(\"203.0.113.50\", 50001, \"172.16.0.10\", 22, \"tcp\"),"
+  ],
+  [
+   "paquetes",
+   "  list(\"192.168.10.37\", 53000, \"198.51.100.53\", 53, \"udp\")"
+  ],
+  [
+   "paquetes",
+   ")"
+  ],
+  [
+   "bucle",
+   "for (p in paquetes) {"
+  ],
+  [
+   "llama",
+   "  d <- do.call(decidir, p)"
+  ],
+  [
+   "imprime",
+   "  cat(sprintf(\"%s:%d -> %s:%d/%s  %s  %s\\n\", p[[1]], p[[2]], p[[3]], p[[4]], p[[5]], d[[1]], d[[2]]))"
+  ],
+  [
+   null,
+   "}"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "dns",
+   "nueva <- list(accion = \"PERMITIR\", origen = \"192.168.10.0/24\", destino = \"0.0.0.0/0\", proto = \"udp\", puertos = 53)"
+  ],
+  [
+   "dns",
+   "reglas <- append(reglas, list(nueva), after = 3)"
+  ],
+  [
+   "repite",
+   "d <- do.call(decidir, paquetes[[5]])"
+  ],
+  [
+   "pdns",
+   "cat(sprintf(\"con la regla de DNS: %s %s\\n\", d[[1]], d[[2]]))"
+  ],
+  [
+   "ptabla",
+   "cat(sprintf(\"conexiones en la tabla: %d\\n\", length(estado)))"
+  ]
+ ]
+};
+  var SAL = ["192.168.10.37:49152 -> 203.0.113.80:443/tcp  PERMITIR  regla 1", "203.0.113.80:443 -> 192.168.10.37:49152/tcp  PERMITIR  estado", "203.0.113.50:50000 -> 172.16.0.10:443/tcp  PERMITIR  regla 2", "203.0.113.50:50001 -> 172.16.0.10:22/tcp  DENEGAR  regla 4", "192.168.10.37:53000 -> 198.51.100.53:53/udp  DENEGAR  regla 4", "con la regla de DNS: PERMITIR regla 4", "conexiones en la tabla: 3"];
+  (function () {
+    var REG0 = [["web"], ["pub"], ["adm"], ["den"]].map(function (a) { return RB[a[0]]; });
+    var DNSR = RB.dns;
+    var PAQ = [PK.p1, PK.p2, PK.p3, PK.p5, PK.p9];
+    var EV = [];
+    (function () {
+      var fase = 1, pk = -1, sal = 0, reglas = REG0.slice(), tabla = [], res = [null, null, null, null, null];
+      function foto(id, extra) {
+        EV.push(Object.assign({ id: id, fase: fase, pk: pk, ri: -1, cl: null, marks: [], est: tabla.slice(), reglas: reglas.slice(), sal: sal, res: res.slice(), acc: null, por: null, hit: false }, extra || {}));
+      }
+      function ejecutar(p) {
+        var marks = [];
+        var inv = clave(p.dst, p.dport, p.src, p.sport, p.pr);
+        var hit = tabla.indexOf(inv) >= 0;
+        foto("busca", { hit: hit });
+        if (hit) { foto("respuesta", { acc: "PERMITIR", por: "estado", hit: true }); return { acc: "PERMITIR", por: "estado" }; }
+        for (var i = 0; i < reglas.length; i++) {
+          var r = reglas[i];
+          foto("ciclo", { ri: i, marks: marks.slice() });
+          var c = [], ok = true;
+          c.push(enRed(p.src, r.o)); ok = c[0];
+          if (ok) { c.push(enRed(p.dst, r.d)); ok = c[1]; }
+          if (ok) { c.push(r.pr === "*" || r.pr === p.pr); ok = c[2]; }
+          if (ok) { c.push(!r.pt.length || r.pt.indexOf(p.dport) >= 0); ok = c[3]; }
+          var m2 = marks.concat([ok ? "si" : "no"]);
+          foto("coincide", { ri: i, cl: c, marks: m2 });
+          marks = m2;
+          if (ok) {
+            foto("permite", { ri: i, cl: c, marks: marks });
+            if (r.acc === "PERMITIR") { tabla.push(clave(p.src, p.sport, p.dst, p.dport, p.pr)); foto("anota", { ri: i, cl: c, marks: marks }); }
+            foto("devuelve", { ri: i, cl: c, marks: marks, acc: r.acc, por: "regla " + (i + 1) });
+            return { acc: r.acc, por: "regla " + (i + 1) };
+          }
+        }
+        return { acc: "DENEGAR", por: "sin regla" };
+      }
+      foto("imp"); foto("reglas"); foto("estado0"); foto("enred"); foto("verifica"); foto("def");
+      fase = 2; foto("paquetes");
+      for (var k = 0; k < PAQ.length; k++) {
+        pk = k;
+        foto("bucle"); foto("llama");
+        var d = ejecutar(PAQ[k]);
+        res[k] = d.acc + " · " + d.por;
+        sal++;
+        foto("imprime", { acc: d.acc, por: d.por });
+      }
+      fase = 3; pk = 4;
+      reglas = REG0.slice(0, 3).concat([DNSR], REG0.slice(3));
+      foto("dns");
+      foto("repite");
+      var d2 = ejecutar(PAQ[4]);
+      res[4] = d2.acc + " · " + d2.por;
+      sal++; foto("pdns", { acc: d2.acc, por: d2.por });
+      sal++; foto("ptabla", { fin: true });
+    })();
+
+    function narrar(e, ctx) {
+      var py = ctx.lang() === "py", ix = ctx.ix, p = e.pk >= 0 ? PAQ[e.pk] : null;
+      var nombrePaq = p ? "<b>" + p.src + ":" + p.sport + " → " + p.dst + ":" + p.dport + "/" + p.pr + "</b>" : "";
+      switch (e.id) {
+        case "imp": return py ? "Carga <b>ipaddress</b>, la librería estándar que sabe si una IP está dentro de una red."
+          : "En Python aquí se carga <b>ipaddress</b>. R no trae una librería de redes en su base: más abajo escribirás <b>en_red</b> a mano con operaciones de bits.";
+        case "reglas": return "La lista de reglas, en orden: acción, red de origen, red de destino, protocolo y puertos. Son las cuatro del material (UD6, Tabla 4) con la red 192.168.10.0/24. Una lista de puertos vacía (" + (py ? "<code>[]</code>" : "<code>NULL</code>") + ") significa «cualquiera».";
+        case "estado0": return "La tabla de estados empieza vacía: " + (py ? "un <b>set</b>, un conjunto de tuplas." : "un vector de textos, uno por conexión.");
+        case "enred": return py ? "<b>en_red</b> pregunta si una IP cae en una red: <code>ip_address(ip) in ip_network(cidr)</code>. Por dentro hace el AND con la máscara del paso 3."
+          : "<b>en_red</b>, escrita a mano. Parte la IP y la red en cuatro octetos, calcula la máscara de cada octeto con <code>bitwShiftL</code> y <code>bitwAnd</code> y compara octeto a octeto: la cuenta del paso 3.";
+        case "verifica": return "Dos comprobaciones: 192.168.10.37 sí está en 192.168.10.0/24 y 192.168.11.37 no. Si alguna fallara, el programa se detendría aquí. " + (py ? "(<code>assert</code>)" : "(<code>stopifnot</code>)");
+        case "def": return "Define <b>decidir</b>: recibe un paquete y devuelve la acción y el motivo. Todavía no se ejecuta.";
+        case "paquetes": return "Cinco paquetes de prueba, cada uno con origen, puerto de origen, destino, puerto de destino y protocolo. Son los mismos que enviaste en el escenario: la salida a una web, su respuesta, una visita al servidor, un SSH desde fuera y la consulta DNS.";
+        case "bucle": return "Toma el paquete número <b>" + (e.pk + 1) + "</b>: " + nombrePaq + ".";
+        case "llama": return "Se lo pasa a <b>decidir</b>.";
+        case "busca": return "Primero mira la tabla de estados: ¿este paquete es la respuesta de una conexión abierta? Busca la tupla con origen y destino <b>intercambiados</b>. " + (e.hit ? "<b>Sí está.</b>" : "<b>No está</b>: sigue con las reglas.");
+        case "respuesta": return "Es la respuesta de la conexión del paquete 1, que un equipo de dentro abrió. Se permite sin mirar la lista y devuelve «estado» como motivo.";
+        case "ciclo": return "Mira la regla <b>" + (e.ri + 1) + "</b> (en " + (py ? "Python" : "R") + " el índice del bucle es <b>i = " + ix(e.ri) + "</b>), de arriba abajo.";
+        case "coincide": {
+          var N = ["origen", "destino", "protocolo", "puerto"], partes = [];
+          e.cl.forEach(function (v, k) { partes.push(N[k] + " " + (v ? "sí" : "no")); });
+          var ok = e.cl.length === 4 && e.cl.every(Boolean);
+          var resto = e.cl.length < 4 && !e.cl[e.cl.length - 1] ? " (las comparaciones que faltan ya no se evalúan: el <code>and</code> se detiene en la primera que falla)" : "";
+          return "Compara las cuatro condiciones: <b>" + partes.join(", ") + "</b>" + resto + ". " + (ok ? "Coincide." : "<b>No coincide</b>: pasa a la siguiente regla.");
+        }
+        case "permite": return "La regla " + (e.ri + 1) + " coincide y su acción es <b>" + e.reglas[e.ri].acc + "</b>. " + (e.reglas[e.ri].acc === "PERMITIR" ? "Como permite, va a anotar la conexión." : "Como deniega, no anota nada en la tabla.");
+        case "anota": return "Anota la conexión en la tabla de estados: ahora tiene <b>" + e.est.length + "</b> " + (e.est.length === 1 ? "entrada" : "entradas") + ".";
+        case "devuelve": return "Devuelve <b>" + e.acc + "</b> y el motivo «" + e.por + "». Ahí se detiene: <b>primera coincidencia</b>, las reglas de abajo no se miran.";
+        case "imprime": return "Imprime el resultado del paquete " + (e.pk + 1) + ": <b>" + e.acc + "</b> (" + e.por + ").";
+        case "dns": return "Inserta la regla de DNS en la <b>posición 4</b>, justo antes de «denegar lo demás» (" + (py ? "<code>insert(3, ...)</code>, que cuenta desde 0" : "<code>append(..., after = 3)</code>, que la pone después de la tercera") + "). Si la pusieras al final, nunca se evaluaría.";
+        case "repite": return "Vuelve a preguntar por la consulta DNS, el quinto paquete.";
+        case "pdns": return "Con la regla nueva, la consulta DNS se permite por la regla 4: <b>" + e.acc + " " + e.por + "</b>.";
+        case "ptabla": return "Cuenta las conexiones que quedaron anotadas: <b>3</b> (la salida a la web, la visita al servidor y la consulta DNS). Las respuestas y los paquetes denegados no se anotan.";
+      }
+      return "";
+    }
+    function regTxt(r) { return netTxt(r.o) + " → " + netTxt(r.d) + " · " + ptTxt(r); }
+    function visual(e, ant, ctx) {
+      var py = ctx.lang() === "py";
+      $("vrPaq").innerHTML = PAQ.map(function (p, k) {
+        var r = e ? e.res[k] : null, ahora = e && e.pk === k && !e.fin;
+        var cls = (ahora ? "ahora " : "") + (r ? (r.indexOf("PERMITIR") === 0 ? "pasa" : "cae") : "");
+        return '<div class="' + cls + '"><span>' + (k + 1) + '</span><span>' + p.src + ":" + p.sport + " → " + p.dst + ":" + p.dport + "/" + p.pr + (r ? "<small>" + r + "</small>" : "") + "</span></div>";
+      }).join("");
+      var lista = e ? e.reglas : REG0, marks = e ? e.marks : [];
+      $("vrRegs").innerHTML = e ? lista.map(function (r, k) {
+        var cls = "rg", m = marks[k];
+        if (e.ri === k && (e.id === "ciclo" || e.id === "coincide")) cls += " mira";
+        if (m === "si") cls += " hit"; else if (m === "no") cls += " no";
+        return '<div class="' + cls + '"><span class="n">' + (k + 1) + '</span><span class="ac ' + (r.acc === "PERMITIR" ? "perm" : "den") + '">' + r.acc + '</span><span class="de"><b>' + esc(regTxt(r)) + '</b><small>' + (py ? "i = " : "i = ") + ctx.ix(k) + '</small></span><span></span></div>';
+      }).join("") : '<p class="vacio">Todavía no hay reglas.</p>';
+      $("vrEst").innerHTML = e && e.est.length ? '<div class="tabla-wrap"><table class="tp">' + e.est.map(function (k) { var a = k.split("|"); return "<tr><td>" + a[0] + ":" + a[1] + " ⇄ " + a[2] + ":" + a[3] + "</td><td>" + a[4].toUpperCase() + "</td></tr>"; }).join("") + "</table></div>" : '<p class="vacio">Vacía.</p>';
+      $("vrSalida").textContent = SAL.slice(0, e ? e.sal : 0).join("\n");
+    }
+    B.vidaReal($("vidareal"), {
+      codigo: CODIGO,
+      eventos: EV,
+      narrar: narrar,
+      vars: function (e, ctx) {
+        var v = [];
+        if (e && e.pk >= 0 && !e.fin) v.push('<span>paquete = <b>' + (e.pk + 1) + '</b></span>');
+        if (e && e.ri >= 0) v.push('<span class="vj">i = <b>' + ctx.ix(e.ri) + '</b></span>');
+        if (e && e.id !== "imp") v.push('<span>estado = <b>' + e.est.length + '</b> entradas</span>');
+        if (e && e.acc) v.push('<span>acción = <b>' + e.acc + '</b></span>');
+        return v;
+      },
+      visual: visual,
+      demora: function (e) { return !e ? 600 : (e.id === "devuelve" || e.id === "respuesta" || e.id === "pdns") ? 1100 : e.id === "coincide" ? 900 : 650; }
+    });
+
+    B.numerico($("vrPred").querySelector(".cuerpo"), {
+      pregunta: "Antes de reproducir: el quinto paquete es la consulta DNS (UDP, puerto 53), con la lista de cuatro reglas. ¿Cuántas reglas mira el programa, contando la que decide, antes de dar su veredicto?",
+      respuesta: 4,
+      tolerancia: 0,
+      pistas: ["Ninguna de las tres primeras permite UDP al puerto 53: la 1 pide TCP y las otras dos van al servidor de la DMZ.", "Entonces coincide con la última, la que coincide con todo."],
+      diagnostico: function (v) {
+        if (v === 1) return "Eso sería si la primera regla coincidiera. Pero la regla 1 pide TCP y esto es UDP.";
+        if (v === 3) return "Las tres primeras no coinciden, pero todavía falta mirar la cuarta, que es la que decide.";
+        if (v === 5) return "La lista de este momento tiene cuatro reglas: la quinta aparece más tarde, con el arreglo.";
+        return null;
+      },
+      explicacion: "Las reglas 1, 2 y 3 no coinciden, y la 4 («denegar lo demás») coincide con todo: <b>4 reglas miradas</b>, veredicto DENEGAR. Ahora dale a reproducir y compara.",
+      alResolver: function (ok) { C.reto("codigo1", ok); }
+    });
+    prop("codigo2", {
+      pregunta: "Un compañero quiere escribir «la red del equipo 192.168.10.37» y usa <code>ipaddress.ip_network('192.168.10.37/24')</code>. ¿Qué hace Python?",
+      opciones: [
+        "Da un error: la dirección tiene bits de host encendidos, no es una dirección de red",
+        "Funciona y devuelve la red 192.168.10.0/24",
+        "Funciona y devuelve solo al equipo, 192.168.10.37/32",
+        "Devuelve la red 192.168.10.37/24 sin cambios"
+      ],
+      correcta: 0,
+      pistas: [null, "Casi, pero por defecto Python no lo redondea por ti: exige que sea una red de verdad.", "El /24 pide 24 bits de red: no se queda solo con el equipo.", "Una red /24 empieza en una dirección con el último octeto en 0, no en 37."],
+      explicacion: "<code>ip_network</code> es estricto: levanta <code>ValueError: 192.168.10.37/24 has host bits set</code>. Para obtener la red hay que pedirlo con <code>strict=False</code>. La <code>en_red</code> de R de la página no valida eso: aplica la máscara a las dos direcciones y funcionaría igual."
+    });
+    prop("codigo3", {
+      pregunta: "En vez de <code>reglas.insert(3, ...)</code> (o <code>append(..., after = 3)</code> en R) escribes la regla de DNS al <b>final</b> de la lista, después de «denegar lo demás». ¿Qué pasa con la consulta DNS?",
+      opciones: [
+        "Sigue bloqueada: «denegar lo demás» coincide antes y la regla nueva nunca llega a evaluarse",
+        "Se permite: la última regla escrita es la que manda",
+        "Se permite, porque UDP no pasa por «denegar lo demás»",
+        "El programa da un error por tener una regla después de la denegación"
+      ],
+      correcta: 0,
+      pistas: [null, "En un firewall manda la primera regla que coincide, no la última.", "«Denegar lo demás» tiene protocolo «cualquiera»: también cubre UDP.", "El programa no valida el orden: simplemente se detiene en la primera coincidencia."],
+      explicacion: "La regla queda sombreada: nunca se evalúa. Es el error más común al agregar reglas a mano. En Python se evita con <code>insert</code> en la posición correcta y, en R, con el argumento <code>after</code>."
+    });
+  })();
+
+  /* ---------------- tarjetas ---------------- */
+  B.tarjetas($("tarjetas"), [
+    ["¿Cómo recorre un firewall su lista de reglas?", "De arriba abajo, hasta la primera que coincide. Hace lo que ella dice y no mira las de abajo (first match)."],
+    ["¿Qué cuatro comparaciones hace una regla?", "IP de origen, IP de destino, protocolo y puerto de destino. Todas tienen que cumplirse."],
+    ["¿Dónde va la regla «denegar lo demás»?", "Al final: coincide con todo, así que cualquier regla debajo de ella queda sin efecto."],
+    ["¿Cuándo está una IP en la red de una regla?", "Cuando $(\\text{IP} \\,\\&\\, M) = \\text{red}$. Ejemplo: $192.168.10.37 \\,\\&\\, 255.255.255.0 = 192.168.10.0$."],
+    ["¿Qué es una tabla de estados?", "La lista de conexiones que el firewall dejó pasar. Permite solo las respuestas que cuadran con ellas, con origen y destino intercambiados."],
+    ["¿Qué es una DMZ?", "Una zona intermedia (confianza media) con los servidores públicos. Desde ahí no se llega a la red interna salvo que una regla lo permita."],
+    ["¿Qué olvidó la tabla de reglas del material?", "El DNS (UDP 53). Con solo TCP 443 y 80, la consulta cae en «denegar todo» y la navegación por nombre falla."],
+    ["¿Qué no puede ver un filtro de paquetes?", "El contenido. Un ataque dentro de una conexión HTTPS permitida pasa, y tampoco frena amenazas desde dentro."]
+  ]);
+
+  /* ---------------- conexiones ---------------- */
+  B.conexiones("firewall-reglas");
+})();
+</script>
+</body>
+</html>

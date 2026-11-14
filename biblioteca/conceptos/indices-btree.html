@@ -1,0 +1,1863 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Índices B-Tree y planes de ejecución</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+/* ---------- las casillas del escenario (tabla e indice) ---------- */
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.esc-head .hint { font-size: 12.5px; color: var(--ink-2); }
+.ix-ctl { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+.ix-ctl:empty { display: none; }
+.ix-ctl .hint { font-size: 12.5px; color: var(--ink-2); }
+.ix-ctl button:disabled, .ix-ctl select:disabled, .ix-ctl input:disabled { opacity: .45; cursor: not-allowed; }
+.ix-ctl label { font-size: 13px; color: var(--ink-2); display: inline-flex; align-items: center; gap: 6px; }
+.ix-ctl select { font-family: var(--f-mono); font-size: 13px; padding: 5px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); }
+.ix-rot { font-family: var(--f-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); margin: 10px 0 4px; }
+.ix-cells { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 4px; margin: 4px 0 8px; }
+.ix-c { position: relative; border: 1px solid var(--line); border-radius: 6px; padding: 4px 1px 3px; text-align: center; font-family: var(--f-mono); font-size: 14px; background: var(--surface); color: var(--ink); font-variant-numeric: tabular-nums; min-width: 0; }
+.ix-c small { display: block; font-size: 9.5px; color: var(--ink-3); line-height: 1.25; overflow: hidden; text-overflow: clip; white-space: nowrap; }
+.ix-c.leida { background: var(--surface-2); color: var(--ink-2); }
+.ix-c.hit { background: color-mix(in oklab, var(--ok) 26%, var(--surface)); border-color: var(--ok); color: var(--ink); font-weight: 600; }
+.ix-c.act { box-shadow: 0 0 0 2px var(--accent); }
+.ix-c.fuera { opacity: .26; }
+.ix-c.mid { background: var(--accent-soft); border-color: var(--accent); font-weight: 600; }
+.ix-c.rango { border-color: var(--j); }
+.ix-tabla-ayuda { font-size: 12px; color: var(--ink-3); margin: 0; }
+.ix-kv { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 3px 12px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); font-family: var(--f-mono); font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.ix-kv dt { color: var(--ink-3); }
+.ix-kv dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
+.ix-kv dd.q { color: var(--accent); font-weight: 600; }
+.ix-nota { margin-top: 8px; font-size: 13px; color: var(--ink-2); min-height: 2.6em; overflow-wrap: anywhere; }
+.ix-nota b { color: var(--ink); font-weight: 500; }
+.ix-nota .mal { color: var(--bad); }
+.ix-nota .bien { color: var(--ok); }
+
+/* barras de comparacion */
+.ix-fila { display: grid; grid-template-columns: 78px minmax(0, 1fr) auto; gap: 8px; align-items: center; margin: 7px 0; font-family: var(--f-mono); font-size: 12px; color: var(--ink-2); }
+.ix-pista { height: 16px; background: var(--surface-2); border-radius: 4px; overflow: hidden; }
+.ix-barra { height: 100%; border-radius: 4px; min-width: 3px; transition: width .25s; }
+.ix-barra.j { background: var(--j); }
+.ix-barra.k { background: var(--k); }
+.ix-fila b { color: var(--ink); font-weight: 500; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* niveles del arbol */
+.ix-nivel { display: grid; grid-template-columns: 62px minmax(0, 1fr); gap: 8px; align-items: center; margin: 6px 0; font-family: var(--f-mono); font-size: 11.5px; color: var(--ink-2); }
+.ix-nodos { display: flex; flex-wrap: nowrap; gap: 3px; justify-content: center; align-items: center; min-height: 22px; overflow: hidden; }
+.ix-nodo { flex: 0 0 auto; height: 18px; min-width: 22px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface-2); }
+.ix-nodo.camino { background: var(--accent); border-color: var(--accent); }
+.ix-mas { color: var(--ink-3); font-size: 11px; padding: 0 4px; }
+.ix-nivel-t { text-align: center; font-size: 11px; color: var(--ink-3); }
+
+/* laboratorio de planes */
+.ix-opts { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 6px; }
+.ix-opts button { font-family: var(--f-mono); font-size: 12px; padding: 6px 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); color: var(--ink); cursor: pointer; }
+.ix-opts button[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.ix-opts button:disabled { opacity: .45; cursor: not-allowed; }
+.ix-qs { display: grid; gap: 5px; margin: 4px 0 8px; }
+.ix-qs button { text-align: left; font-family: var(--f-mono); font-size: 12px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); color: var(--ink); cursor: pointer; overflow-wrap: anywhere; }
+.ix-qs button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.ix-qs button:disabled { opacity: .5; cursor: not-allowed; }
+.ix-veredicto { font-family: var(--f-mono); font-size: 13px; margin: 6px 0; }
+.ix-veredicto.si { color: var(--ok); }
+.ix-veredicto.no { color: var(--bad); }
+.ix-tab { width: 100%; border-collapse: collapse; font-family: var(--f-mono); font-size: 12px; margin-top: 10px; }
+.ix-tab th { font-weight: 500; color: var(--ink-3); font-size: 11px; text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--line); }
+.ix-tab td { padding: 4px 6px; border-bottom: 1px solid var(--line-soft); color: var(--ink-2); }
+
+/* retos y bloques comunes */
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.ctx-ojo { font-size: 13px; color: var(--ink-2); margin: 6px 0; }
+.prog-pre { font-family: var(--f-mono); font-size: 13px; background: var(--surface-2); border-radius: 8px; padding: 10px 14px; margin: 8px 0; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ojo-opts3 { display: grid; grid-template-columns: 1fr; gap: 6px; margin-top: 10px; }
+.ojo-opts3 .opt { text-align: left; }
+.objetivos { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.objetivos li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.objetivos .m { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.objetivos li.hecho { color: var(--ink); }
+.objetivos li.hecho .m { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 3px var(--surface); }
+.grande { font-family: var(--f-mono); font-size: 14px; color: var(--ink-2); margin: 6px 0 12px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.grande b { font-size: 18px; color: var(--ink); font-weight: 500; }
+.salida { font-family: var(--f-mono); font-size: 12.5px; background: var(--surface-2); border-radius: 8px; padding: 8px 12px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); margin: 8px 0; }
+.cons-plan { margin: 6px 0; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; font-family: var(--f-mono); font-size: 12px; overflow-wrap: anywhere; }
+.cons-plan.si { border-color: var(--ok); background: var(--ok-soft); }
+.cons-plan.no { border-color: var(--line); }
+.cons-plan span { display: block; color: var(--ink-3); font-size: 11px; }
+.cons-chk { display: flex; flex-wrap: wrap; gap: 8px 14px; margin: 8px 0; }
+.cons-chk label { font-family: var(--f-mono); font-size: 12.5px; display: inline-flex; gap: 6px; align-items: center; }
+.vr-cel-t { margin: 6px 0 2px; }
+.vr-plan { font-family: var(--f-mono); font-size: 12px; margin: 8px 0; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); overflow-wrap: anywhere; min-height: 2.4em; }
+@media (max-width: 480px) {
+  .ix-c { font-size: 12.5px; }
+  .ix-fila { grid-template-columns: 62px minmax(0, 1fr) auto; }
+  .ix-nivel { grid-template-columns: 50px minmax(0, 1fr); }
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ Índices B-Tree y planes de ejecución</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Infraestructura y programación · Diseño de bases de datos · Base de datos (SM142051) · UD4</p>
+    <h1>Índices B-Tree y planes de ejecución</h1>
+    <p class="lede">
+      Buscar los pedidos de un cliente en una tabla de un millón de filas puede significar mirar <b>un millón de filas</b> o mirar unas <b>tres</b>.
+      La diferencia es un <b>índice</b>: una lista ordenada que la base mantiene aparte. Vas a recorrer la tabla fila por fila, a buscar por mitades en un índice,
+      a ver cómo se vuelve un árbol, y a leer el <b>plan de ejecución</b> que dice cuál de los dos caminos eligió la base.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> La tienda en línea tiene un millón de pedidos y quieres los del cliente 3. Sin ningún truco, ¿qué crees que hace la base de datos para encontrarlos? ¿Y cómo crees que un «índice» cambia eso? Escríbelo como te salga, aunque esté mal.</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: la base mira todas las filas una por una, y con un índice..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>De recorrer toda la tabla a bajar por un árbol</h2>
+      <p>Ocho pasos. Cada uno termina con un chequeo: hasta que no lo resuelves, el siguiente queda cerrado. Equivocarte aquí no resta nada, es parte del método.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="Sin índice">
+          <span class="etapa">Paso 1</span>
+          <h3>Sin índice, la base lee todas las filas</h3>
+          <p>Imagina que la tabla <b>pedidos</b> tiene 16 pedidos y quieres todos los del cliente 3. Las filas están en el orden en que se fueron guardando, no ordenadas por cliente. Para no dejarse ninguno, la base tiene que mirar <b>cada fila, una por una</b>. El material lo llama <b>escaneo secuencial</b> (sequential scan) y dice que su coste es lineal: crece igual que la tabla
+            <cite class="cita" data-fuente="bd4" data-pag="12" data-pimp="9" data-seccion="3.1 Qué es un índice" data-que="Sin índice la base hace un escaneo secuencial, con coste lineal; un índice es una estructura auxiliar ordenada, como el índice alfabético de un libro." data-cuando="Al terminar este paso"></cite>
+            <cite class="cita" data-fuente="bd4diapo" data-pag="21" data-seccion="Índices: qué es" data-que="Dos cajas lado a lado: O(n) del escaneo secuencial frente a O(log n) de la búsqueda con un B-Tree." data-cuando="Después de este paso"></cite>.</p>
+          <p>A la derecha está la tabla. Cada casilla es una fila: el número grande es su <code>id_cliente</code> y el chico su <code>id_pedido</code>. Los 16 pedidos son inventados aquí; los seis de la tienda del material tienen los clientes 1, 2, 1, 3, 4 y 2
+            <cite class="cita" data-fuente="bd2ej" data-pag="3" data-pimp="2" data-seccion="Código 2. Datos de ejemplo" data-que="Los cinco clientes, los seis productos, los seis pedidos y las nueve líneas de la tienda en línea, con sus valores." data-cuando="Después de este paso"></cite>.
+            Después de tu predicción podrás lanzar la búsqueda.</p>
+          <div class="check" id="chk1"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Lista ordenada">
+          <span class="etapa">Paso 2</span>
+          <h3>Un índice es una copia ordenada de la columna</h3>
+          <p>Un <b>índice</b> guarda cada valor de una columna (aquí <code>id_cliente</code>) junto con la fila donde está, pero <b>ordenados</b>. Es como el índice alfabético de un libro: no te lleva por todas las páginas, te dice dónde mirar.</p>
+          <p>Como las claves están en orden, no hace falta recorrerlas: miras la <b>del medio</b>. Si es mayor o igual que lo que buscas, esa clave y todo lo que hay a partir de ella sobra; si es menor, sobra todo lo que hay hasta ella. Descartas la mitad de golpe y repites con lo que queda. Lo que se busca es <b>dónde empieza</b> el cliente 3: como hay claves repetidas, se leen después las que sean iguales, que quedan juntas.</p>
+          <p>En la escena, el índice de los mismos 16 pedidos. Cuando resuelvas la predicción, el botón <b>Paso</b> hará un descarte cada vez.</p>
+          <div class="check" id="chk2"><p class="check-tit">Calcula con los datos en vivo</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Cuántos pasos">
+          <span class="etapa">Paso 3</span>
+          <h3>Cada paso descarta la mitad: crece como un logaritmo</h3>
+          <p>Si cada paso parte la lista en dos, después de $k$ pasos quedan $N / 2^k$ claves. Terminas cuando queda una sola. Eso ocurre cuando $2^k \ge N$, es decir, con
+            $k = \lceil \log_2 N \rceil$ pasos. Es el <b>$O(\log n)$</b> frente al $O(n)$ del recorrido completo (la página de <a href="logaritmos.html">Logaritmos</a> explica de dónde sale).</p>
+          <div class="fbloque">
+            <div data-tex="\text{pasos} \approx \lceil \log_2 N \rceil \qquad \text{frente a} \qquad \text{lecturas} = N" data-display></div>
+            <div class="vivo" id="vivo3"></div>
+          </div>
+          <p>Mueve el deslizador: el número de filas $N$ sube de 10 a un millón. La barra de arriba (sin índice) crece con la tabla; la de abajo, que cuenta pasos de búsqueda, casi no se mueve. En el material solo aparece la idea (O(n) frente a O(log n)), sin números: las cifras de esta escena son cuentas de esta página.</p>
+          <details class="profundizar">
+            <summary>¿Por qué el programa a veces da un paso más que $\lceil \log_2 N \rceil$?</summary>
+            <div>
+              <p>El bucle de la parte de vida real termina cuando <b>ya no queda ninguna clave</b> por revisar, no cuando queda una. En el peor caso eso añade un paso: con 16 claves, buscar una clave que cae en el extremo puede tardar 5 pasos en vez de 4. Para la clave 3 de la escena son exactamente 4. Con un millón de claves el resultado es 20, como pide la fórmula. La idea es la misma; solo cambia el último paso de contabilidad.</p>
+            </div>
+          </details>
+          <div class="check" id="chk3"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="El B-Tree">
+          <span class="etapa">Paso 4</span>
+          <h3>El B-Tree: un árbol con muchas claves por nodo</h3>
+          <p>Un índice real no es una lista larga. Se organiza como un <b>árbol equilibrado</b>: un nodo raíz que dice «las claves de este lado van por aquí, las de aquel por allá», nodos intermedios que afinan, y en el último nivel las <b>hojas</b> con las claves y la fila a la que apuntan. Para encontrar una clave se baja un nivel por vez, y «equilibrado» significa que todos los caminos tienen el mismo largo. El material resume el resultado: claves y rangos en pasos logarítmicos
+            <cite class="cita" data-fuente="bd4" data-pag="13" data-pimp="10" data-seccion="3.2 Índice B-Tree" data-que="Árbol equilibrado que encuentra claves y rangos en pasos logarítmicos, y la Figura 5 con CREATE INDEX idx_pedidos_cliente ON pedidos (id_cliente). No explica los nodos ni la altura." data-cuando="Al terminar este paso"></cite>
+            <cite class="cita" data-fuente="bd4" data-pag="23" data-pimp="20" data-seccion="Glosario" data-que="La entrada de B-Tree del glosario, junto a las de ANN, HNSW e integridad referencial." data-cuando="Después de este paso"></cite>.
+            Cómo es el árbol por dentro (nodos, orden, altura) <b>no está en el material</b>: lo que sigue es la explicación de esta página.</p>
+          <p>La diferencia con la búsqueda por mitades es que cada nodo guarda <b>muchas claves</b>, no una. Si un nodo tiene hasta $f$ hijos, cada paso descarta $f-1$ partes de $f$ y no solo la mitad. El número de niveles es</p>
+          <div class="fbloque">
+            <div data-tex="\text{niveles} = \lceil \log_f N \rceil" data-display></div>
+            <div class="vivo" id="vivo4"></div>
+          </div>
+          <p>Cambia $f$ y el tamaño de la tabla. En un motor real un nodo cabe en una página de disco y guarda cientos de claves, así que el árbol es <b>muy ancho y muy bajo</b>: con un millón de filas casi nunca pasa de tres o cuatro niveles.</p>
+          <details class="profundizar">
+            <summary>¿Y el B+Tree, los nodos que se parten y el orden del árbol?</summary>
+            <div>
+              <p>Los motores usan una variante, el B+Tree, que guarda todas las claves en las hojas y las enlaza entre sí (por eso los rangos son rápidos: se recorren las hojas seguidas). Cuando un nodo se llena al insertar, se parte en dos. Nada de esto está en el material de la unidad, que solo da el nombre y la idea logarítmica; aquí se dice para que sepas que existe. Para estudiarlo, el libro de Silberschatz, Korth y Sudarshan que aparece en la bibliografía de la UD4 trata los índices a fondo.</p>
+            </div>
+          </details>
+          <div class="check" id="chk4"><p class="check-tit">Calcula con los datos en vivo</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="EXPLAIN">
+          <span class="etapa">Paso 5</span>
+          <h3>EXPLAIN: ver qué camino eligió la base</h3>
+          <p>Tú no decides si la base usa el índice: lo decide ella. Para saber qué hizo se le pide el <b>plan de ejecución</b> con <code>EXPLAIN</code>. En PostgreSQL, <code>EXPLAIN ANALYZE</code> además ejecuta la consulta y mide. El material enseña la idea con dos comentarios: <b>Seq Scan</b> sin índice e <b>Index Scan</b> con él
+            <cite class="cita" data-fuente="bd4" data-pag="15" data-pimp="12" data-seccion="5.1 EXPLAIN (Figura 7)" data-que="EXPLAIN y EXPLAIN ANALYZE de PostgreSQL, y la Figura 7: SELECT * FROM pedidos WHERE id_cliente = 3 da Seq Scan sin índice e Index Scan con idx_pedidos_cliente. Son comentarios: no hay ninguna salida real." data-cuando="Al terminar este paso"></cite>
+            <cite class="cita" data-fuente="bd4diapo" data-pag="33" data-seccion="Rendimiento: EXPLAIN ANALYZE" data-que="La diapositiva de EXPLAIN ANALYZE." data-cuando="Después de este paso"></cite>.
+            El material <b>no trae salidas reales</b> de EXPLAIN ni tiempos medidos.</p>
+          <p>Aquí usamos SQLite, que viene con Python: su comando es <code>EXPLAIN QUERY PLAN</code> y escribe <b>SCAN</b> (recorre toda la tabla) o <b>SEARCH</b> (busca por un índice) donde PostgreSQL escribe Seq Scan e Index Scan. Los planes de la escena son salidas <b>reales</b> de SQLite 3.45.3 sobre los 16 pedidos. Elige el índice que existe y la consulta, y mira qué elige la base.</p>
+          <div class="check" id="chk5"><p class="check-tit">Elige y explica</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Compuestos">
+          <span class="etapa">Paso 6</span>
+          <h3>En un índice compuesto, el orden de las columnas importa</h3>
+          <p>Un índice puede abarcar dos columnas, por ejemplo <code>(id_cliente, estado)</code>. Piensa en una guía de teléfonos ordenada por apellido y, dentro de cada apellido, por nombre: te sirve para buscar «Gil», o «Gil, Pedro», pero no para buscar todos los «Pedro», porque están repartidos por toda la guía. Por eso el índice <b>(a, b)</b> acelera las consultas por <b>a</b> y por <b>a y b</b>, y <b>no</b> las que solo piden <b>b</b>
+            <cite class="cita" data-fuente="bd4" data-pag="13" data-pimp="10" data-seccion="3.3 Índices compuestos y únicos" data-que="El orden importa: (a, b) acelera a sola y a más b, no b sola. La Figura 6 crea idx_pedidos_cliente_estado ON pedidos (id_cliente, estado); CREATE UNIQUE INDEX hace de búsqueda y de restricción UNIQUE." data-cuando="Al terminar este paso"></cite>.</p>
+          <p>En la escena, prueba las consultas por <code>id_cliente</code>, por <code>estado</code> y por las dos, con cada índice. Fíjate en el texto entre paréntesis del plan: dice qué columnas usó para buscar.</p>
+          <div class="check" id="chk6"><p class="check-tit">Elige y explica</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Consultas que sabotean">
+          <span class="etapa">Paso 7</span>
+          <h3>Hay consultas que impiden usar el índice</h3>
+          <p>Tener un índice no basta: la consulta tiene que estar escrita de forma que pueda aprovecharlo. El material lista los errores típicos de rendimiento
+            <cite class="cita" data-fuente="bd4" data-pag="15" data-pimp="12" data-seccion="5.2 Errores de rendimiento" data-que="Cuatro errores: SELECT *, una función sobre la columna filtrada (YEAR(fecha_pedido) = 2024), un JOIN sin índice y un LIKE con comodín inicial (LIKE '%texto' frente a 'texto%'). Sigue en la página 16." data-cuando="Al terminar este paso"></cite>.
+            Los dos de esta escena son los más traicioneros:</p>
+          <ul>
+            <li><b>Una función sobre la columna</b>, como <code>YEAR(fecha_pedido) = 2024</code>. El índice guarda las fechas, no sus años: para comprobar cada una, la base tiene que calcular la función en todas las filas. La solución es reescribirla como un <b>rango</b>: <code>fecha_pedido &gt;= '2024-01-01' AND fecha_pedido &lt; '2025-01-01'</code>
+              <cite class="cita" data-fuente="bd4diapo" data-pag="37" data-seccion="Repaso 5" data-que="Por qué YEAR(fecha_pedido) = 2024 impide el índice y la reescritura correcta con un rango de fechas. Esa reescritura solo está en la diapositiva, no en el texto bd4." data-cuando="Después de este paso"></cite>.
+              SQLite no tiene <code>YEAR</code>; su equivalente es <code>strftime('%Y', fecha_pedido)</code> y se comporta igual.</li>
+            <li><b>Un comodín al inicio</b>: <code>LIKE '%viado'</code> no sabe por dónde empezar en una lista ordenada; <code>LIKE 'Env%'</code> sí podría, según el material.</li>
+          </ul>
+          <p>Prueba cada consulta con el índice sobre <code>fecha_pedido</code> y con el índice sobre <code>estado</code>.</p>
+          <details class="profundizar">
+            <summary>El LIKE 'Env%' en SQLite sigue recorriendo la tabla</summary>
+            <div>
+              <p>Lo comprobamos: en SQLite, con un índice sobre <code>estado</code>, <code>LIKE 'Env%'</code> da <b>SCAN</b>. La razón documentada es que el <code>LIKE</code> de SQLite no distingue mayúsculas y el índice normal sí, así que por defecto no se pueden usar juntos. El material habla de PostgreSQL y dice que <code>'texto%'</code> sí aprovecha el índice; como aquí no tenemos PostgreSQL, ese caso queda <b>sin ejecutar</b>. Es un buen ejemplo de por qué conviene mirar el plan en tu motor en lugar de suponer.</p>
+            </div>
+          </details>
+          <div class="check" id="chk7"><p class="check-tit">Elige y explica</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Costo y criterio">
+          <span class="etapa">Paso 8</span>
+          <h3>Cada índice acelera las lecturas y encarece las escrituras</h3>
+          <p>Un índice es una segunda copia ordenada, y hay que mantenerla al día. Cada <code>INSERT</code>, <code>UPDATE</code> y <code>DELETE</code> actualiza la tabla <b>y todos sus índices</b>, y además ocupan espacio en disco. El material lo resume diciendo que indexar de más es un error de diseño
+            <cite class="cita" data-fuente="bd4" data-pag="13" data-pimp="10" data-seccion="3.4 Coste de indexar" data-que="Cada INSERT, UPDATE y DELETE actualiza todos los índices; ocupan espacio; indexar de más es un error de diseño. Sigue en la página 14." data-cuando="Al terminar este paso"></cite>.
+            El material no da cifras. Como modelo simple de esta página: cada fila nueva cuesta <b>1 escritura en la tabla más 1 por cada índice</b>.</p>
+          <div class="fbloque">
+            <div data-tex="\text{escrituras} = m \cdot (1 + k)" data-display></div>
+            <div class="vivo" id="vivo8"></div>
+          </div>
+          <p>Con $m$ filas nuevas y $k$ índices. Entonces, ¿qué indexar? El material da la regla
+            <cite class="cita" data-fuente="bd4" data-pag="14" data-pimp="11" data-seccion="3.5 Qué indexar" data-que="Sí: columnas de WHERE selectivos, de JOIN (claves ajenas) y de ORDER BY. No: columnas con pocos valores distintos (un booleano) o tablas de escritura intensa donde el índice casi no se usa." data-cuando="Al terminar este paso"></cite>
+            <cite class="cita" data-fuente="bd4diapo" data-pag="25" data-seccion="Criterios para indexar" data-que="Los mismos criterios con marcas de sí y de no." data-cuando="Después de este paso"></cite>:
+            sí a las columnas que filtran con mucha selectividad, que unen tablas o que ordenan; no a las que tienen pocos valores distintos. En la escena, la tabla de abajo muestra cuántas filas devolvería una búsqueda en una tabla de un millón.</p>
+          <div class="check" id="chk8"><p class="check-tit">Calcula con los datos en vivo</p><div class="cuerpo"></div></div>
+          <p>Si al principio escribiste una hipótesis, vuelve a leerla ahora.</p>
+          <div class="cita" id="citaHipo" hidden></div>
+
+          <div class="destacado" id="destacado">
+            <p class="dest-tit">Una confusión muy común</p>
+            <h4>Si declaras una clave ajena, ¿la base crea sola un índice sobre ella?</h4>
+            <p>El texto del material dice que la clave primaria y, «en muchos motores», las claves ajenas y las UNIQUE reciben un índice automático. La diapositiva 22 ya corrige esto y deja solo las UNIQUE
+              <cite class="cita" data-fuente="bd4diapo" data-pag="22" data-seccion="B-Tree e idx_pedidos_cliente" data-que="Aquí solo se dice que, en muchos motores, las UNIQUE reciben índice automático (ya sin las claves ajenas). Corrige al texto bd4, página 13." data-cuando="Después de este paso"></cite>.
+              En PostgreSQL, el motor de los ejemplos del material, la regla es: índice automático para la PK y para UNIQUE, <b>no para las claves ajenas</b> (esto sale de su documentación; no lo ejecutamos aquí). El mismo texto sigue recomendando indexar las claves ajenas a mano, porque las usas en los JOIN.</p>
+            <div class="check" id="chk8b"><p class="check-tit">Predice</p><div class="cuerpo"></div></div>
+          </div>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+        </div>
+        <div class="ix-ctl" id="ixCtl"></div>
+        <div id="ixVista"></div>
+        <div id="ixKv"></div>
+        <div class="ix-nota" id="ixNota" aria-live="polite"></div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>Los mismos 16 pedidos, el mismo cliente 3. El programa busca primero <b>sin índice</b> (recorre las 16 filas contando), después <b>con un índice</b> (la búsqueda por mitades sobre las claves ordenadas, con un bucle explícito) y, en Python, le pide a SQLite el <b>plan de ejecución</b> de verdad. En esta máquina R no tiene SQLite ni <code>EXPLAIN</code>: hace el mismo conteo con vectores y cuatro líneas de comentario marcan lo que solo existe en Python. Elige un lenguaje y reproduce.</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir</p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="true">Python</button>
+            <button type="button" data-lang="r" aria-pressed="false">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">1 · recorrer sin índice</span><span data-f="2">2 · buscar por mitades</span><span data-f="3">3 · leer las iguales</span><span data-f="4">4 · el plan (SQLite)</span><span data-f="5">5 · comprobar</span>
+        </div>
+        <h3 class="mini-tit vr-tit">la tabla pedidos, en el orden en que se guardó (id_cliente)</h3>
+        <div class="ix-cells" id="vrTablaCel"></div>
+        <h3 class="mini-tit vr-tit">el índice: las mismas claves, ordenadas</h3>
+        <div class="ix-cells" id="vrIdxCel"></div>
+        <div class="vr-cuenta" id="vrCuenta"></div>
+        <div class="vr-plan" id="vrPlan"></div>
+        <h3 class="mini-tit vr-tit">lo que el programa lleva impreso</h3>
+        <div class="salida" id="vrLog"></div>
+      </div>
+    </div>
+
+    <h3 class="mini-tit" style="margin:20px 0 6px">Lo que imprime cada lenguaje</h3>
+    <div class="vr-grid">
+      <div class="card"><p class="mini-tit">Python</p><div class="salida" id="salidaPy"></div></div>
+      <div class="card"><p class="mini-tit">R</p><div class="salida" id="salidaR"></div></div>
+    </div>
+
+    <p class="vr-nota">Los dos programas hacen la misma cuenta: <b>16 lecturas sin índice y 4 pasos con índice</b>, con 2 filas halladas. Python añade las dos líneas del plan (<code>SCAN pedidos</code> y después <code>SEARCH pedidos USING INDEX idx_pedidos_cliente (id_cliente=?)</code>), que son la salida real de SQLite 3.45.3 y la única parte que R no puede mostrar. Las dos últimas líneas comparan con la librería: <code>bisect.bisect_left</code> en Python y <code>which</code> en R dan la misma posición, y el <code>COUNT(*)</code> de SQLite da las mismas 2 filas. El material de la unidad no trae este código, ni salidas de <code>EXPLAIN</code>: es de esta página.</p>
+
+    <details class="profundizar">
+      <summary>Con un millón de claves: la misma búsqueda en Python y en R</summary>
+      <div>
+        <p>El mismo bucle de recorrido y la misma búsqueda por mitades, con un millón de claves pares ordenadas y la clave 1 234 566 (es única, así que el recorrido puede parar al encontrarla). En Python:</p>
+        <pre class="prog-pre">n = 1_000_000
+claves = list(range(0, 2 * n, 2))
+objetivo = 1_234_566
+leidas = 0
+for valor in claves:
+    leidas += 1
+    if valor == objetivo:
+        break
+lo, hi = 0, len(claves)
+pasos = 0
+while lo &lt; hi:
+    pasos += 1
+    mid = (lo + hi) // 2
+    if claves[mid] &lt; objetivo:
+        lo = mid + 1
+    else:
+        hi = mid
+print("lineal:", leidas, "lecturas; binaria:", pasos, "pasos")</pre>
+        <p>Imprime <code>lineal: 617284 lecturas; binaria: 20 pasos</code>. En R:</p>
+        <pre class="prog-pre">n &lt;- 1000000
+claves &lt;- seq(0, 2 * n - 2, by = 2)
+objetivo &lt;- 1234566
+leidas &lt;- 0
+for (valor in claves) {
+  leidas &lt;- leidas + 1
+  if (valor == objetivo) break
+}
+lo &lt;- 1
+hi &lt;- length(claves) + 1
+pasos &lt;- 0
+while (lo &lt; hi) {
+  pasos &lt;- pasos + 1
+  mid &lt;- (lo + hi) %/% 2
+  if (claves[mid] &lt; objetivo) lo &lt;- mid + 1 else hi &lt;- mid
+}
+cat("lineal:", leidas, "lecturas; binaria:", pasos, "pasos\n")</pre>
+        <p>Imprime <code>lineal: 617284 lecturas; binaria: 20 pasos</code>. Con una clave única el recorrido llegó a 617 284 de 1 000 000 de lecturas; la búsqueda por mitades hizo 20 pasos, justo $\lceil \log_2 1\,000\,000 \rceil$.</p>
+      </div>
+    </details>
+
+    <details class="profundizar">
+      <summary>Medir el tiempo y el costo de escribir en SQLite (los números dependen de tu máquina)</summary>
+      <div>
+        <p>Con 20 000 pedidos y SQLite, así se mide cuánto tarda la consulta y cuánto cuesta insertar con 0, 1 y 3 índices. Los tiempos cambian de una máquina a otra y de una corrida a otra: esto es lo que imprimió <b>una</b> corrida en esta máquina, no una cifra del material.</p>
+        <pre class="prog-pre">import sqlite3
+import time
+
+con = sqlite3.connect(":memory:")
+con.execute("CREATE TABLE pedidos (id_pedido INTEGER PRIMARY KEY, id_cliente INTEGER, fecha_pedido TEXT, estado TEXT)")
+filas = [(i, (i * 7919) % 5000 + 1, "2024-01-15", "Enviado") for i in range(1, 20001)]
+con.executemany("INSERT INTO pedidos VALUES (?, ?, ?, ?)", filas)
+
+def medir():
+    t = time.perf_counter()
+    for _ in range(200):
+        con.execute("SELECT * FROM pedidos WHERE id_cliente = 3").fetchall()
+    return (time.perf_counter() - t) / 200 * 1000
+
+print("sin índice: %.3f ms por consulta" % medir())
+con.execute("CREATE INDEX idx_pedidos_cliente ON pedidos (id_cliente)")
+print("con índice: %.3f ms por consulta" % medir())
+
+def insertar(con2):
+    t = time.perf_counter()
+    con2.executemany("INSERT INTO pedidos VALUES (?, ?, ?, ?)", [(i + 20000, 1 + i % 5000, "2024-02-02", "Enviado") for i in range(1, 100001)])
+    return (time.perf_counter() - t) * 1000
+
+def base(n):
+    c = sqlite3.connect(":memory:")
+    c.execute("CREATE TABLE pedidos (id_pedido INTEGER PRIMARY KEY, id_cliente INTEGER, fecha_pedido TEXT, estado TEXT)")
+    for k in range(n):
+        c.execute("CREATE INDEX idx_%d ON pedidos (%s)" % (k, ["id_cliente", "estado", "fecha_pedido"][k]))
+    return c
+
+for n in (0, 1, 3):
+    print("100.000 INSERT con %d índice(s): %.0f ms" % (n, insertar(base(n))))</pre>
+        <p>Salida de esa corrida:</p>
+        <pre class="prog-pre">sin índice: 0.248 ms por consulta
+con índice: 0.002 ms por consulta
+100.000 INSERT con 0 índice(s): 39 ms
+100.000 INSERT con 1 índice(s): 62 ms
+100.000 INSERT con 3 índice(s): 116 ms</pre>
+        <p>El índice hizo la consulta más de cien veces más rápida (0.248 ms frente a 0.002 ms por consulta) y cada índice añadido encareció la carga de 100 000 filas: de 39 ms sin índices a 116 ms con tres, unas tres veces más. La proporción es el punto; las cifras exactas no se repiten.</p>
+      </div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>El LIKE que SQLite no acelera</h3><span class="estado" data-reto="codigo2"></span></div>
+        <div id="codigo2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Buscar por mitades en una lista sin ordenar</h3><span class="estado" data-reto="codigo3"></span></div>
+        <div id="codigo3"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: la biblioteca te avisa en el índice cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>¿SCAN o SEARCH?</h3><span class="estado" data-reto="ojo"></span></div>
+        <p class="desc">Un índice y una consulta. Decide sin ejecutar nada qué plan da SQLite. Apruebas con 4 de 5.</p>
+        <div id="ojo"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Construir</span><h3>Los índices justos</h3><span class="estado" data-reto="construir"></span></div>
+        <p class="desc">Marca y desmarca índices hasta que las tres consultas de la tienda usen un índice sin pasarte. Los planes son los reales de SQLite.</p>
+        <div class="cons-chk" id="consChk"></div>
+        <div id="consPlanes"></div>
+        <div class="grande" id="construirVivo"></div>
+        <ul class="objetivos" id="objetivos"></ul>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>Pasos, niveles y escrituras</h3><span class="estado" data-reto="mano"></span></div>
+        <p class="desc">Datos al azar. Haz la cuenta con papel antes de pedir pistas.</p>
+        <div id="mano"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Alguien se equivocó</h3><span class="estado" data-reto="error"></span></div>
+        <p class="desc">Una de las líneas tiene un error. Tócala.</p>
+        <div id="error"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Reescribir para usar el índice</h3><span class="estado" data-reto="prop1"></span></div>
+        <div id="prop1"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Qué columna no merece un índice</h3><span class="estado" data-reto="prop2"></span></div>
+        <div id="prop2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Qué acelera un índice compuesto</h3><span class="estado" data-reto="prop3"></span></div>
+        <div id="prop3"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Recordar a la fuerza es lo que fija. Arma la sentencia de memoria y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Fórmula de memoria</span><h3>Crear un índice compuesto</h3><span class="estado" data-reto="formula"></span></div>
+        <p class="desc">La sentencia que crea el índice sobre <code>pedidos</code> que acelera las consultas por <code>id_cliente</code> y por <code>id_cliente</code> y <code>estado</code>. Hay piezas de más que no pertenecen. No mires arriba.</p>
+        <div id="formula"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el material</h2>
+      <p class="lecturas-intro">Ya construiste la idea con las manos. Ahora ve a la versión del máster y comprueba que la reconoces. Los índices, los compuestos, su coste y el EXPLAIN están en la UD4 (teoría y diapositivas); los datos de la tienda, en el ejercicio de la UD2. Lo que el material <b>no</b> trae: cómo es un B-Tree por dentro (nodos, orden, altura, B+Tree), ninguna salida real de EXPLAIN, ningún tiempo medido ni cuánto acelera un índice, y los tipos de JOIN o los índices cubrientes. Cada entrada dice qué vas a encontrar y en qué momento conviene leerla. Si abres la biblioteca con doble clic, el enlace abre el PDF en esa página.</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> La tabla <code>pedidos</code> de esta página tiene 16 pedidos inventados, con ids de 5001 a 5016 (los seis pedidos de la tienda del material son los ids 5001 a 5006, con otros clientes y otras fechas). Las consultas, los índices y los planes son los de SQLite 3.45.3; PostgreSQL, el motor de los ejemplos del material, no se ejecutó.
+    La explicación del árbol (nodos, niveles, ramificación), el modelo de escrituras 1 + k, la comparación SCAN/SEARCH frente a Seq Scan/Index Scan y las trampas de SQLite no vienen en el material de la unidad: son de esta página. Tu progreso se guarda solo en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+/*
+  EJEMPLOS COMUNES DE LA RUTA "Bases de datos" (los reutilizan las demas paginas de la ruta):
+  La tienda en linea del ejercicio de la UD2 (bd2ej PDF 3, Codigo 1 y 2). Esquema:
+    clientes(id_cliente PK, nombre, email, ciudad, fecha_alta)
+    productos(id_producto PK, nombre, categoria, precio, stock)
+    pedidos(id_pedido PK, id_cliente FK, fecha_pedido, estado)
+    lineas_pedido(id_pedido, id_producto, cantidad, precio_unitario; PK (id_pedido, id_producto))
+  Pedidos del material: (5001, 1, '2024-01-10', 'Entregado') (5002, 2, '2024-01-12', 'Entregado') (5003, 1, '2024-02-05', 'Enviado')
+    (5004, 3, '2024-02-18', 'Pendiente') (5005, 4, '2024-03-02', 'Entregado') (5006, 2, '2024-03-15', 'Cancelado')
+  EJEMPLO DE ESTA PAGINA (indices): tabla pedidos de 16 filas inventadas, id_pedido 5001 a 5016, con
+    id_cliente = [4, 1, 7, 3, 9, 2, 5, 3, 8, 1, 6, 10, 2, 12, 5, 1], estado cicla Entregado/Enviado/Pendiente/Cancelado,
+    fecha_pedido 2023-02-15, 05, 08, 11 y despues 2024-01-15 a 2024-12-15. Se busca el cliente 3 (dos pedidos: 5004 y 5008).
+  Python: sqlite3 con ":memory:" (SQLite 3.45.3 en esta maquina). R: sin RSQLite ni sqldf; usa vectores, data.frame o dplyr.
+*/
+(function () {
+  "use strict";
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var RETOS = ["ojo", "construir", "mano", "error", "formula", "prop1", "prop2", "prop3", "codigo1", "codigo2", "codigo3"];
+  var C = B.concepto({ id: "indices-btree", retos: RETOS, pasos: 8 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+  function azar(a) { return a[Math.floor(Math.random() * a.length)]; }
+  function azarN(a, b) { return a + Math.floor(Math.random() * (b - a + 1)); }
+  function mil(n) {
+    var s = String(Math.round(n)), r = "", c = 0, i;
+    for (i = s.length - 1; i >= 0; i--) { r = s.charAt(i) + r; c++; if (c % 3 === 0 && i > 0) r = " " + r; }
+    return r;
+  }
+  function techo(N, base) { var L = 0, cap = 1; while (cap < N) { cap *= base; L++; } return L; }
+
+  /* ---------------- los datos: 16 pedidos ---------------- */
+  var CL = [4, 1, 7, 3, 9, 2, 5, 3, 8, 1, 6, 10, 2, 12, 5, 1];
+  var OBJ = 3;
+  var ESTADOS = ["Entregado", "Enviado", "Pendiente", "Cancelado"];
+  var INDICE = CL.map(function (c, k) { return { k: c, id: 5001 + k }; }).sort(function (a, b) { return a.k - b.k || a.id - b.id; });
+  var IXK = INDICE.map(function (x) { return x.k; });
+  var PLANES = {"-": ["SCAN pedidos", "SCAN pedidos", "SCAN pedidos", "SCAN pedidos", "SCAN pedidos", "SCAN pedidos", "SCAN pedidos"], "A": ["SEARCH pedidos USING INDEX idx_pedidos_cliente (id_cliente=?)", "SCAN pedidos", "SEARCH pedidos USING INDEX idx_pedidos_cliente (id_cliente=?)", "SCAN pedidos", "SCAN pedidos", "SCAN pedidos", "SCAN pedidos"], "B": ["SEARCH pedidos USING INDEX idx_pedidos_cliente_estado (id_cliente=?)", "SCAN pedidos", "SEARCH pedidos USING INDEX idx_pedidos_cliente_estado (id_cliente=? AND estado=?)", "SCAN pedidos", "SCAN pedidos", "SCAN pedidos", "SCAN pedidos"], "C": ["SCAN pedidos", "SEARCH pedidos USING INDEX idx_pedidos_estado (estado=?)", "SEARCH pedidos USING INDEX idx_pedidos_estado (estado=?)", "SCAN pedidos", "SCAN pedidos", "SCAN pedidos", "SCAN pedidos"], "D": ["SCAN pedidos", "SCAN pedidos", "SCAN pedidos", "SCAN pedidos", "SEARCH pedidos USING INDEX idx_pedidos_fecha (fecha_pedido>? AND fecha_pedido<?)", "SCAN pedidos", "SCAN pedidos"], "AB": ["SEARCH pedidos USING INDEX idx_pedidos_cliente (id_cliente=?)", "SCAN pedidos", "SEARCH pedidos USING INDEX idx_pedidos_cliente_estado (id_cliente=? AND estado=?)", "SCAN pedidos", "SCAN pedidos", "SCAN pedidos", "SCAN pedidos"], "AC": ["SEARCH pedidos USING INDEX idx_pedidos_cliente (id_cliente=?)", "SEARCH pedidos USING INDEX idx_pedidos_estado (estado=?)", "SEARCH pedidos USING INDEX idx_pedidos_cliente (id_cliente=?)", "SCAN pedidos", "SCAN pedidos", "SCAN pedidos", "SCAN pedidos"], "AD": ["SEARCH pedidos USING INDEX idx_pedidos_cliente (id_cliente=?)", "SCAN pedidos", "SEARCH pedidos USING INDEX idx_pedidos_cliente (id_cliente=?)", "SCAN pedidos", "SEARCH pedidos USING INDEX idx_pedidos_fecha (fecha_pedido>? AND fecha_pedido<?)", "SCAN pedidos", "SCAN pedidos"], "BC": ["SEARCH pedidos USING INDEX idx_pedidos_cliente_estado (id_cliente=?)", "SEARCH pedidos USING INDEX idx_pedidos_estado (estado=?)", "SEARCH pedidos USING INDEX idx_pedidos_cliente_estado (id_cliente=? AND estado=?)", "SCAN pedidos", "SCAN pedidos", "SCAN pedidos", "SCAN pedidos"], "BD": ["SEARCH pedidos USING INDEX idx_pedidos_cliente_estado (id_cliente=?)", "SCAN pedidos", "SEARCH pedidos USING INDEX idx_pedidos_cliente_estado (id_cliente=? AND estado=?)", "SCAN pedidos", "SEARCH pedidos USING INDEX idx_pedidos_fecha (fecha_pedido>? AND fecha_pedido<?)", "SCAN pedidos", "SCAN pedidos"], "CD": ["SCAN pedidos", "SEARCH pedidos USING INDEX idx_pedidos_estado (estado=?)", "SEARCH pedidos USING INDEX idx_pedidos_estado (estado=?)", "SCAN pedidos", "SEARCH pedidos USING INDEX idx_pedidos_fecha (fecha_pedido>? AND fecha_pedido<?)", "SCAN pedidos", "SCAN pedidos"], "ABC": ["SEARCH pedidos USING INDEX idx_pedidos_cliente (id_cliente=?)", "SEARCH pedidos USING INDEX idx_pedidos_estado (estado=?)", "SEARCH pedidos USING INDEX idx_pedidos_cliente_estado (id_cliente=? AND estado=?)", "SCAN pedidos", "SCAN pedidos", "SCAN pedidos", "SCAN pedidos"], "ABD": ["SEARCH pedidos USING INDEX idx_pedidos_cliente (id_cliente=?)", "SCAN pedidos", "SEARCH pedidos USING INDEX idx_pedidos_cliente_estado (id_cliente=? AND estado=?)", "SCAN pedidos", "SEARCH pedidos USING INDEX idx_pedidos_fecha (fecha_pedido>? AND fecha_pedido<?)", "SCAN pedidos", "SCAN pedidos"], "ACD": ["SEARCH pedidos USING INDEX idx_pedidos_cliente (id_cliente=?)", "SEARCH pedidos USING INDEX idx_pedidos_estado (estado=?)", "SEARCH pedidos USING INDEX idx_pedidos_cliente (id_cliente=?)", "SCAN pedidos", "SEARCH pedidos USING INDEX idx_pedidos_fecha (fecha_pedido>? AND fecha_pedido<?)", "SCAN pedidos", "SCAN pedidos"], "BCD": ["SEARCH pedidos USING INDEX idx_pedidos_cliente_estado (id_cliente=?)", "SEARCH pedidos USING INDEX idx_pedidos_estado (estado=?)", "SEARCH pedidos USING INDEX idx_pedidos_cliente_estado (id_cliente=? AND estado=?)", "SCAN pedidos", "SEARCH pedidos USING INDEX idx_pedidos_fecha (fecha_pedido>? AND fecha_pedido<?)", "SCAN pedidos", "SCAN pedidos"], "ABCD": ["SEARCH pedidos USING INDEX idx_pedidos_cliente (id_cliente=?)", "SEARCH pedidos USING INDEX idx_pedidos_estado (estado=?)", "SEARCH pedidos USING INDEX idx_pedidos_cliente_estado (id_cliente=? AND estado=?)", "SCAN pedidos", "SEARCH pedidos USING INDEX idx_pedidos_fecha (fecha_pedido>? AND fecha_pedido<?)", "SCAN pedidos", "SCAN pedidos"]};
+  var QS = [
+    "id_cliente = 3",
+    "estado = 'Enviado'",
+    "id_cliente = 3 AND estado = 'Enviado'",
+    "strftime('%Y', fecha_pedido) = '2024'",
+    "fecha_pedido >= '2024-01-01' AND fecha_pedido < '2025-01-01'",
+    "estado LIKE 'Env%'",
+    "estado LIKE '%viado'"
+  ];
+  var IDXS = {
+    "-": "ninguno",
+    "A": "(id_cliente)",
+    "B": "(id_cliente, estado)",
+    "C": "(estado)",
+    "D": "(fecha_pedido)"
+  };
+  function planDe(sub, q) { return PLANES[sub || "-"][q]; }
+  function usaIndice(sub, q) { return planDe(sub, q).indexOf("SEARCH") === 0; }
+
+  var est = { paso: 0, ok: [false, false, false, false, false, false, false, false], scan: { leidas: 0, hall: 0, timer: null }, bin: null,
+    e: 3, f: 100, lab: { sub: "-", q: 0 }, m: 1000, idxs: { A: false, B: false, C: false, D: false } };
+  var pasos;
+
+  function kv(pares) {
+    return '<dl class="ix-kv">' + pares.map(function (p) { return '<dt>' + p[0] + '</dt><dd' + (p[2] ? ' class="q"' : "") + '>' + p[1] + '</dd>'; }).join("") + '</dl>';
+  }
+  function nBin() { return { obj: OBJ, lo: 0, hi: 16, pasos: 0, mid: null, fin: false }; }
+  function Nactual() { return Math.round(Math.pow(10, est.e)); }
+
+  /* ---------------- pintar las casillas ---------------- */
+  function celdasTabla(leidas, actual, hits) {
+    var h = "", k;
+    for (k = 0; k < 16; k++) {
+      var cls = "ix-c";
+      if (k < leidas) cls += " leida";
+      if (hits && k < leidas && CL[k] === OBJ) cls += " hit";
+      if (actual === k) cls += " act";
+      h += '<div class="' + cls + '">' + CL[k] + '<small>' + (5001 + k) + '</small></div>';
+    }
+    return h;
+  }
+  function celdasIndice(o) {
+    var h = "", k;
+    for (k = 0; k < 16; k++) {
+      var cls = "ix-c";
+      if (o.rango && (k < o.lo || k >= o.hi)) cls += " fuera";
+      else if (o.rango) cls += " rango";
+      if (o.mid === k) cls += " mid";
+      if (o.hit && k >= o.hit[0] && k < o.hit[1]) cls += " hit";
+      if (o.act === k) cls += " act";
+      h += '<div class="' + cls + '">' + IXK[k] + '<small>' + (o.pos ? o.pos(k) : (k + 1)) + '</small></div>';
+    }
+    return h;
+  }
+
+  /* ---------------- controles por modo ---------------- */
+  var MODOS = [
+    { hint: "Lanza la búsqueda sin índice" },
+    { hint: "Descarta la mitad en cada paso" },
+    { hint: "Mueve el tamaño de la tabla" },
+    { hint: "Cambia las claves por nodo y el tamaño" },
+    { hint: "Elige un índice y una consulta" },
+    { hint: "Prueba el índice compuesto" },
+    { hint: "Funciones y comodines" },
+    { hint: "Cuenta las escrituras" }
+  ];
+
+  function controles() {
+    var i = est.paso, ok = est.ok[i], h = "", dis = ok ? "" : " disabled", o, n;
+    if (i === 0) {
+      h = '<button type="button" class="primary" data-a="scan"' + dis + '>Buscar id_cliente = 3 recorriendo</button><button type="button" class="ghost" data-a="scan0"' + dis + '>Reiniciar</button>';
+      if (!ok) h += '<span class="hint">Responde la predicción para buscar.</span>';
+    } else if (i === 1) {
+      h = '<label>Clave que se busca <select id="ixObj"' + dis + '>';
+      for (n = 1; n <= 12; n++) h += '<option value="' + n + '"' + (n === est.bin.obj ? " selected" : "") + '>' + n + '</option>';
+      h += '</select></label><button type="button" class="primary" data-a="paso"' + dis + '>Paso</button><button type="button" data-a="todo"' + dis + '>Hasta el final</button><button type="button" class="ghost" data-a="bin0"' + dis + '>Reiniciar</button>';
+      if (!ok) h += '<span class="hint">Responde la predicción para buscar.</span>';
+    } else if (i === 2 || i === 3) {
+      h = '<label>Filas N <input type="range" id="ixSlider" min="1" max="6" step="0.05" value="' + est.e + '"' + dis + ' style="width:150px"></label>';
+      h += '<button type="button" class="ghost" data-a="n16"' + dis + '>16</button><button type="button" class="ghost" data-a="n1k"' + dis + '>1 000</button><button type="button" class="ghost" data-a="n1m"' + dis + '>1 000 000</button>';
+      if (i === 3) {
+        h += '<span class="ix-opts" id="ixF">';
+        [2, 10, 100, 300].forEach(function (f) { h += '<button type="button" data-f="' + f + '" aria-pressed="' + (est.f === f) + '"' + dis + '>f = ' + f + '</button>'; });
+        h += '</span>';
+      }
+      if (!ok) h += '<span class="hint">Responde la predicción para mover.</span>';
+    } else if (i === 7) {
+      h = '<label>Filas nuevas m <select id="ixM"' + dis + '>';
+      [1000, 10000, 100000].forEach(function (m) { h += '<option value="' + m + '"' + (m === est.m ? " selected" : "") + '>' + mil(m) + '</option>'; });
+      h += '</select></label>';
+      if (!ok) h += '<span class="hint">Responde la predicción para mover.</span>';
+    }
+    $("ixCtl").innerHTML = h;
+  }
+
+  $("ixCtl").addEventListener("click", function (e) {
+    var b = e.target.closest ? e.target.closest("button[data-a], button[data-f]") : null;
+    if (!b || b.disabled) return;
+    if (b.hasAttribute("data-f")) { est.f = +b.getAttribute("data-f"); controles(); pintar(); return; }
+    var a = b.getAttribute("data-a");
+    if (a === "scan") correrScan();
+    else if (a === "scan0") { frenarScan(); est.scan = { leidas: 0, hall: 0, timer: null }; pintar(); }
+    else if (a === "paso") pasoBin();
+    else if (a === "todo") { while (!est.bin.fin) pasoBin(true); pintar(); }
+    else if (a === "bin0") { est.bin = nBin(); controles(); pintar(); }
+    else if (a === "n16") { est.e = Math.log(16) / Math.LN10; controles(); pintar(); }
+    else if (a === "n1k") { est.e = 3; controles(); pintar(); }
+    else if (a === "n1m") { est.e = 6; controles(); pintar(); }
+  });
+  $("ixCtl").addEventListener("input", function (e) {
+    if (e.target.id === "ixSlider") { est.e = +e.target.value; pintar(); }
+  });
+  $("ixCtl").addEventListener("change", function (e) {
+    if (e.target.id === "ixObj") { est.bin = nBin(); est.bin.obj = +e.target.value; pintar(); }
+    else if (e.target.id === "ixM") { est.m = +e.target.value; pintar(); }
+  });
+
+  function frenarScan() { if (est.scan.timer) { clearInterval(est.scan.timer); est.scan.timer = null; } }
+  function correrScan() {
+    frenarScan();
+    est.scan = { leidas: 0, hall: 0, timer: null };
+    est.scan.timer = setInterval(function () {
+      var s = est.scan;
+      if (s.leidas >= 16) { frenarScan(); pintar(); return; }
+      if (CL[s.leidas] === OBJ) s.hall++;
+      s.leidas++;
+      pintar();
+    }, 170);
+  }
+  function pasoBin(sinPintar) {
+    var b = est.bin;
+    if (b.fin) return;
+    b.pasos++;
+    b.mid = (b.lo + b.hi) >> 1;
+    if (IXK[b.mid] < b.obj) b.lo = b.mid + 1; else b.hi = b.mid;
+    if (b.lo >= b.hi) b.fin = true;
+    if (!sinPintar) pintar();
+  }
+
+  /* ---------------- el laboratorio de planes ---------------- */
+  var LAB = {
+    4: { idx: ["-", "A"], qs: [0, 1] },
+    5: { idx: ["-", "A", "B", "C"], qs: [0, 1, 2] },
+    6: { idx: ["-", "C", "D"], qs: [3, 4, 5, 6] }
+  };
+  function pintarLab(i) {
+    var cfg = LAB[i], ok = est.ok[i], lab = est.lab, h, plan, si;
+    if (cfg.idx.indexOf(lab.sub) < 0) lab.sub = cfg.idx[0];
+    if (cfg.qs.indexOf(lab.q) < 0) lab.q = cfg.qs[0];
+    h = '<p class="ix-rot">Índice que existe sobre pedidos</p><div class="ix-opts" id="labIdx">' +
+      cfg.idx.map(function (s) { return '<button type="button" data-s="' + s + '" aria-pressed="' + (lab.sub === s) + '">' + IDXS[s] + '</button>'; }).join("") + '</div>' +
+      '<p class="ix-rot">Consulta</p><div class="ix-qs" id="labQs">' +
+      cfg.qs.map(function (q) { return '<button type="button" data-q="' + q + '" aria-pressed="' + (lab.q === q) + '">WHERE ' + esc(QS[q]) + '</button>'; }).join("") + '</div>';
+    if (ok) {
+      plan = planDe(lab.sub, lab.q); si = plan.indexOf("SEARCH") === 0;
+      h += '<p class="ix-rot">EXPLAIN QUERY PLAN SELECT * FROM pedidos WHERE ' + esc(QS[lab.q]) + '</p><div class="salida">' + esc(plan) + '</div>' +
+        '<div class="ix-veredicto ' + (si ? "si" : "no") + '">' + (si ? "SEARCH: usa el índice, no recorre toda la tabla." : "SCAN: recorre las 16 filas.") + '</div>';
+    } else h += '<div class="salida">Responde la predicción para ver el plan.</div>';
+    $("ixVista").innerHTML = h;
+  }
+  $("ixVista").addEventListener("click", function (e) {
+    var b = e.target.closest ? e.target.closest("button[data-s], button[data-q]") : null;
+    if (!b || est.paso < 4 || est.paso > 6) return;
+    if (b.hasAttribute("data-s")) est.lab.sub = b.getAttribute("data-s");
+    else est.lab.q = +b.getAttribute("data-q");
+    pintar();
+  });
+
+  /* ---------------- pintar el escenario ---------------- */
+  function pintar() {
+    var i = est.paso, ok = est.ok[i], h = "", pares = [], nota = "", b, N, L, f, k, m;
+    if (i === 0) {
+      var s = est.scan;
+      h = '<p class="ix-rot">tabla pedidos, en el orden en que se guardó</p><div class="ix-cells">' + celdasTabla(s.leidas, s.timer ? s.leidas - 1 : -1, true) + '</div>' +
+        '<p class="ix-tabla-ayuda">número grande: id_cliente · número chico: id_pedido</p>';
+      pares = [["filas que tiene la tabla", "16"], ["filas leídas", ok ? s.leidas : "?", !ok], ["filas del cliente 3 halladas", ok ? s.hall : "?", !ok]];
+      nota = ok ? (s.leidas === 0 ? "Pulsa el botón y mira cuántas casillas se encienden." : s.leidas < 16 ? "Leyendo la fila " + s.leidas + "..." : "Leyó las <b>16</b> filas para devolver <b>2</b>. No podía parar antes: el cliente 3 podía aparecer más veces.") : "Cuando respondas, podrás lanzar la búsqueda.";
+    } else if (i === 1) {
+      b = est.bin;
+      h = '<p class="ix-rot">índice: las claves de id_cliente en orden (abajo, su posición)</p><div class="ix-cells">' +
+        celdasIndice({ rango: ok && !b.fin, lo: b.lo, hi: b.hi, mid: ok ? b.mid : null, hit: ok && b.fin ? hitRango(b) : null }) + '</div>' +
+        '<p class="ix-tabla-ayuda">recuadro azul: claves que quedan por revisar · morado: la del medio de este paso · verde: las encontradas</p>';
+      pares = [["clave que se busca", b.obj], ["pasos hechos", ok ? b.pasos : "?", !ok], ["claves por revisar", ok ? (b.hi - b.lo) : "?", !ok]];
+      if (ok && b.fin) { var c = b.hit = hitRango(b); pares.push(["claves iguales a la buscada", c[1] - c[0]]); }
+      nota = !ok ? "Cuando respondas, podrás dar pasos." : b.pasos === 0 ? "Pulsa <b>Paso</b>: se mira la clave del medio y se descarta la mitad." :
+        b.fin ? "Terminó en <b>" + b.pasos + "</b> pasos. " + (hitRango(b)[1] - hitRango(b)[0] ? "Desde esa posición, las claves iguales quedan juntas." : "La clave no está: el índice lo supo sin tocar la tabla.") :
+        "La del medio fue " + IXK[b.mid] + (IXK[b.mid] < b.obj ? ": es menor que " + b.obj + ", se descarta la parte de la izquierda." : ": es mayor o igual que " + b.obj + ", se descarta la parte de la derecha.");
+    } else if (i === 2) {
+      N = Nactual(); L = techo(N, 2);
+      h = '<p class="ix-rot">cuánto lee la base para encontrar una clave</p>' +
+        '<div class="ix-fila"><span>sin índice</span><div class="ix-pista"><div class="ix-barra j" style="width:100%"></div></div><b>' + mil(N) + '</b></div>' +
+        '<div class="ix-fila"><span>con índice</span><div class="ix-pista"><div class="ix-barra k" style="width:' + (ok ? Math.max(L / N * 100, 0) : 0) + '%"></div></div><b>' + (ok ? L : "?") + '</b></div>' +
+        '<p class="ix-tabla-ayuda">La barra de arriba es la tabla entera. La de abajo, a la misma escala, es la fracción de la tabla que se lee con el índice.</p>';
+      pares = [["filas N", mil(N)], ["lecturas sin índice", mil(N)], ["pasos con índice", ok ? L : "?", !ok], ["veces menos", ok ? B.fmt(N / L, 1) : "?", !ok]];
+      nota = ok ? "Con " + mil(N) + " filas, buscar por mitades cuesta unos <b>" + L + "</b> pasos. La tabla se multiplicó por " + mil(N / 10) + " desde N = 10 y los pasos apenas crecieron." : "Cuando respondas, podrás mover el tamaño de la tabla.";
+    } else if (i === 3) {
+      N = Nactual(); f = est.f; L = Math.max(1, techo(N, f));
+      h = '<p class="ix-rot">el árbol del índice, de la raíz a las hojas</p>';
+      if (ok) {
+        for (k = 1; k <= L; k++) {
+          var nodos = Math.pow(f, k - 1), vis = Math.min(nodos, 9), cel = "", t;
+          for (t = 0; t < vis; t++) cel += '<span class="ix-nodo' + (t === (vis >> 1) ? " camino" : "") + '"></span>';
+          if (nodos > vis) cel += '<span class="ix-mas">... ' + mil(nodos) + ' nodos</span>';
+          h += '<div class="ix-nivel"><span class="ix-nivel-t">' + (k === 1 ? "raíz" : k === L ? "hojas" : "nivel " + k) + '</span><div class="ix-nodos">' + cel + '</div></div>';
+        }
+        h += '<p class="ix-tabla-ayuda">morado: el camino de una búsqueda, un nodo por nivel. Cada nodo guarda hasta ' + (f - 1) + ' claves.</p>';
+      } else h += '<div class="salida">Responde la predicción para ver el árbol.</div>';
+      pares = [["filas N", mil(N)], ["hijos por nodo f", f], ["niveles", ok ? L : "?", !ok], ["nodos leídos por búsqueda", ok ? L : "?", !ok]];
+      nota = ok ? "Con f = " + f + " y " + mil(N) + " filas el árbol tiene <b>" + L + "</b> nivel" + (L > 1 ? "es" : "") + ": una búsqueda lee " + L + " nodo" + (L > 1 ? "s" : "") + " y se acabó." : "Cuando respondas, podrás cambiar f y N.";
+    } else if (i >= 4 && i <= 6) {
+      pintarLab(i);
+      if (ok) {
+        var pl = planDe(est.lab.sub, est.lab.q);
+        pares = [["índice", IDXS[est.lab.sub]], ["camino", pl.indexOf("SEARCH") === 0 ? "SEARCH (usa el índice)" : "SCAN (toda la tabla)"]];
+        nota = i === 4 ? "En el material, SEARCH sería <b>Index Scan</b> y SCAN sería <b>Seq Scan</b>." : i === 5 ? "Mira el paréntesis del plan: es la lista de columnas con las que buscó." : "Una función o un comodín inicial hacen que el índice no se pueda usar aunque exista.";
+      } else nota = "El plan se muestra cuando resuelves el chequeo.";
+    } else if (i === 7) {
+      m = est.m; k = 3;
+      var tot = ok ? m * (1 + k) : 0;
+      h = '<p class="ix-rot">escrituras al cargar ' + mil(m) + ' pedidos, con 0 y con 3 índices</p>';
+      if (ok) {
+        h += '<div class="ix-fila"><span>0 índices</span><div class="ix-pista"><div class="ix-barra j" style="width:' + (100 / 4) + '%"></div></div><b>' + mil(m) + '</b></div>' +
+          '<div class="ix-fila"><span>1 índice</span><div class="ix-pista"><div class="ix-barra j" style="width:50%"></div></div><b>' + mil(m * 2) + '</b></div>' +
+          '<div class="ix-fila"><span>3 índices</span><div class="ix-pista"><div class="ix-barra k" style="width:100%"></div></div><b>' + mil(m * 4) + '</b></div>';
+      } else h += '<div class="salida">Responde la predicción para ver las barras.</div>';
+      h += '<table class="ix-tab"><thead><tr><th>columna</th><th>valores distintos (en 16)</th><th>una búsqueda en 1 000 000 devuelve</th></tr></thead><tbody>' +
+        '<tr><td>fecha_pedido</td><td>16</td><td>1 fila</td></tr><tr><td>id_cliente</td><td>11</td><td>unas 91 000 filas</td></tr><tr><td>estado</td><td>4</td><td>250 000 filas</td></tr></tbody></table>' +
+        '<p class="ix-tabla-ayuda">Cuanto menos filas devuelve una búsqueda, más sirve el índice.</p>';
+      pares = [["filas nuevas m", mil(m)], ["índices k", 3], ["escrituras por fila", 1 + 3], ["escrituras en total", ok ? mil(tot) : "?", !ok]];
+      nota = ok ? "Cada fila nueva toca la tabla y los 3 índices: <b>4</b> escrituras. Con 0 índices serían " + mil(m) + " en total." : "Cuando respondas, verás las barras.";
+    }
+    if (!(i >= 4 && i <= 6)) $("ixVista").innerHTML = h;
+    $("ixKv").innerHTML = pares.length ? kv(pares) : "";
+    $("ixNota").innerHTML = nota;
+    $("escHint").textContent = MODOS[i].hint;
+    vivos();
+  }
+  function hitRango(b) {
+    var d = b.lo, n = 0;
+    while (d + n < 16 && IXK[d + n] === b.obj) n++;
+    return [d, d + n];
+  }
+  function vivos() {
+    var N = Nactual(), L = techo(N, 2), L4 = Math.max(1, techo(N, est.f)), ok = est.ok;
+    $("vivo3").innerHTML = "N = " + mil(N) + " filas<br>pasos con índice ≈ ⌈log₂ N⌉ = <b>" + (ok[2] ? L : "?") + "</b> · lecturas sin índice = <b>" + mil(N) + "</b>";
+    $("vivo4").innerHTML = "f = " + est.f + ", N = " + mil(N) + "<br>niveles = ⌈log_" + est.f + " N⌉ = <b>" + (ok[3] ? L4 : "?") + "</b>";
+    $("vivo8").innerHTML = "m = " + mil(est.m) + " filas nuevas, k = 3 índices<br>escrituras = " + mil(est.m) + " · (1 + 3) = <b>" + (ok[7] ? mil(est.m * 4) : "?") + "</b>";
+  }
+  function entrar(i) {
+    frenarScan();
+    est.paso = i;
+    est.scan = { leidas: 0, hall: 0, timer: null };
+    est.bin = nBin();
+    if (i === 2) est.e = 3;
+    if (i === 3) { est.e = 6; est.f = 100; }
+    est.lab = { sub: "-", q: LAB[i] ? LAB[i].qs[0] : 0 };
+    controles();
+    pintar();
+  }
+
+  /* ---------------- chequeos de cada paso ---------------- */
+  B.numerico(cuerpo("chk1"), {
+    pregunta: "La tabla pedidos tiene 16 filas, sin ningún índice y sin orden por cliente. Dos de ellas son del cliente 3. Para devolver todas las del cliente 3, ¿cuántas filas <b>lee</b> la base?",
+    respuesta: 16,
+    tolerancia: 0,
+    pistas: [
+      "La base no sabe dónde están las del cliente 3. Mira la lista de arriba: no está ordenada por cliente.",
+      "Para estar segura de no dejarse ninguna, tiene que revisar cada fila una vez."
+    ],
+    diagnostico: function (v) {
+      if (v === 2) return "2 son las que <b>encuentra</b>, no las que <b>lee</b>. Para encontrar esas dos tiene que mirar las demás también.";
+      if (v === 8) return "8 sería la mitad. Solo valdría si supiera que el cliente aparece una sola vez y pudiera parar al encontrarlo, y aquí puede haber más.";
+      if (v === 4 || v === 1) return "Muy pocas. Sin índice no hay forma de saltar a las filas del cliente 3: se mira todo.";
+      return null;
+    },
+    explicacion: "Lee las <b>16</b>: sin índice, el coste de una búsqueda es lineal, proporcional al tamaño de la tabla. <b>Ahora el botón está abierto</b>: lanza la búsqueda y mira cómo se encienden las casillas.",
+    alResolver: function () { est.ok[0] = true; controles(); pintar(); pasos.completar(0); }
+  });
+
+  B.numerico(cuerpo("chk2"), {
+    pregunta: "El índice tiene 16 claves ordenadas y buscas dónde empieza el cliente 3. Miras la clave del medio, la de la posición 9, que vale 5. Como 5 es mayor o igual que 3, el 3 no puede empezar más allá de esa posición: ya no hace falta mirar ni la del medio ni nada de lo que viene a partir de ella. ¿Cuántas claves quedan por revisar?",
+    respuesta: 8,
+    tolerancia: 0,
+    pistas: [
+      "Sobran la clave del medio y todas las de su derecha. Quedan las que están antes de la posición 9.",
+      "Las posiciones 1 a 8: la del medio era la 9."
+    ],
+    diagnostico: function (v) {
+      if (v === 16) return "16 serían todas: no descartaste nada. Se descarta la mitad de la derecha.";
+      if (v === 9) return "9 incluye la del medio. Esa ya se miró: vale 5, no 3, y si no hubiera un 3 antes de ella la búsqueda terminaría justo ahí. Por revisar quedan las posiciones 1 a 8.";
+      if (v === 7) return "7 sería la mitad de la derecha. Esa es la que sobra.";
+      return null;
+    },
+    explicacion: "Quedan <b>8</b>: de golpe pasaste de 16 a 8. Si repites, pasas a 4, a 2 y a 1. <b>Ahora el botón Paso está abierto</b>: míralo con la clave 3 y con otras.",
+    alResolver: function () { est.ok[1] = true; controles(); pintar(); pasos.completar(1); }
+  });
+
+  B.numerico(cuerpo("chk3"), {
+    pregunta: "La tabla pedidos de una tienda grande tiene <b>1 000 000 de filas</b> y su índice las guarda ordenadas. Buscando por mitades, ¿cuántos pasos hacen falta como mucho (aproximadamente)?",
+    respuesta: 20,
+    tolerancia: 0,
+    pistas: [
+      "Cada paso divide entre 2. ¿Cuántas veces puedes dividir 1 000 000 entre 2 hasta llegar a 1?",
+      "$2^{10} = 1\\,024$, casi mil. Entonces $2^{20}$ es casi un millón."
+    ],
+    diagnostico: function (v) {
+      if (v === 500000) return "500 000 es lo que queda tras <b>un</b> paso (la mitad). Hay que seguir dividiendo hasta llegar a 1.";
+      if (v === 1000000) return "1 000 000 son las lecturas <b>sin</b> índice. Con el índice, los pasos son un logaritmo.";
+      if (v === 1000) return "1 000 es $\\sqrt{N}$, no $\\log_2 N$. Cada paso divide entre 2, no entre mil.";
+      if (v === 10) return "10 sirve para unas 1 000 filas ($2^{10} = 1\\,024$). Un millón necesita 10 pasos más.";
+      return null;
+    },
+    explicacion: "$\\lceil \\log_2 1\\,000\\,000 \\rceil = 20$ pasos (porque $2^{19} = 524\\,288$ no alcanza y $2^{20} = 1\\,048\\,576$ sí). <b>Ahora el deslizador está abierto</b>: mira cómo 20 pasos conviven con un millón de filas.",
+    alResolver: function () { est.ok[2] = true; controles(); pintar(); pasos.completar(2); }
+  });
+
+  B.numerico(cuerpo("chk4"), {
+    pregunta: "Un índice B-Tree donde cada nodo tiene hasta <b>100 hijos</b> (f = 100) y la tabla tiene <b>1 000 000 de filas</b>. ¿Cuántos <b>niveles</b> tiene el árbol?",
+    respuesta: 3,
+    tolerancia: 0,
+    pistas: [
+      "Cada nivel multiplica por 100 las claves que alcanzas. ¿Cuántas veces hay que multiplicar 100 por sí mismo para llegar a un millón?",
+      "$100 \\cdot 100 = 10\\,000$ y $10\\,000 \\cdot 100 = 1\\,000\\,000$."
+    ],
+    diagnostico: function (v) {
+      if (v === 20) return "20 son los pasos con nodos de <b>una</b> sola clave (f = 2). Aquí cada nodo reparte entre 100 caminos.";
+      if (v === 6) return "6 sería con f = 10 ($10^6$ es un millón). Con f = 100 hacen falta menos niveles.";
+      if (v === 2) return "Con dos niveles solo alcanzas $100^2 = 10\\,000$ filas. Falta un nivel más.";
+      if (v === 100 || v === 10000) return "Eso es el número de nodos de un nivel o de todo el árbol, no cuántos niveles hay.";
+      return null;
+    },
+    explicacion: "$\\lceil \\log_{100} 1\\,000\\,000 \\rceil = 3$, porque $100^3 = 10^6$. <b>Ahora la escena muestra el árbol</b>: cambia f y N. Mientras más claves por nodo, más bajo queda el árbol.",
+    alResolver: function () { est.ok[3] = true; controles(); pintar(); pasos.completar(3); }
+  });
+
+  B.opcionMultiple(cuerpo("chk5"), {
+    pregunta: "Existe un índice sobre <code>id_cliente</code>. Ejecutas <code>EXPLAIN QUERY PLAN SELECT * FROM pedidos WHERE estado = 'Enviado'</code>. ¿Qué plan crees que da?",
+    opciones: [
+      "SCAN pedidos: recorre toda la tabla, porque el índice no está sobre estado",
+      "SEARCH pedidos USING INDEX ...: usa el índice de id_cliente de todos modos",
+      "Da error, porque falta un índice sobre estado",
+      "SEARCH, porque la tabla es pequeña"
+    ],
+    correcta: 0,
+    mezclar: true,
+    pistas: [
+      null,
+      "El índice está ordenado por id_cliente: por ese orden no se puede encontrar un estado sin mirar todas las claves.",
+      "La consulta es válida sin ningún índice: solo tarda más. La base simplemente recorre la tabla.",
+      "El tamaño de la tabla no hace que un índice sirva para otra columna."
+    ],
+    explicacion: "Un índice solo ayuda con la columna por la que está ordenado. Sobre <code>estado</code> no hay nada ordenado, así que el plan es <b>SCAN</b>. <b>Ahora la escena está abierta</b>: pruébalo y compara con la consulta por id_cliente.",
+    alResolver: function () { est.ok[4] = true; pintar(); pasos.completar(4); }
+  });
+
+  B.opcionMultiple(cuerpo("chk6"), {
+    pregunta: "Hay un índice compuesto sobre <code>(id_cliente, estado)</code>. ¿Cuál de estas consultas <b>no</b> puede usarlo para buscar?",
+    opciones: [
+      "WHERE estado = 'Enviado'",
+      "WHERE id_cliente = 3",
+      "WHERE id_cliente = 3 AND estado = 'Enviado'",
+      "Las tres pueden usarlo"
+    ],
+    correcta: 0,
+    mezclar: true,
+    pistas: [
+      null,
+      "Esa consulta pide la primera columna del índice: como el apellido en la guía de teléfonos, sí sirve.",
+      "Pide las dos columnas en el orden del índice: es justo para lo que se creó.",
+      "Hay una que se salta la primera columna, y sin ella no se sabe por dónde entrar."
+    ],
+    explicacion: "El índice está ordenado primero por <code>id_cliente</code> y, dentro de cada cliente, por <code>estado</code>. Los pedidos «Enviado» están repartidos entre todos los clientes: sin id_cliente no hay un tramo continuo donde mirar, y el plan es <b>SCAN</b>. <b>Ahora la escena está abierta</b>.",
+    alResolver: function () { est.ok[5] = true; pintar(); pasos.completar(5); }
+  });
+
+  B.opcionMultiple(cuerpo("chk7"), {
+    pregunta: "Existe un índice sobre <code>fecha_pedido</code>. ¿Cuál de estos filtros para «los pedidos de 2024» <b>sí</b> puede usarlo?",
+    opciones: [
+      "WHERE fecha_pedido >= '2024-01-01' AND fecha_pedido < '2025-01-01'",
+      "WHERE strftime('%Y', fecha_pedido) = '2024'",
+      "WHERE fecha_pedido LIKE '%2024%'",
+      "Ninguno: un índice sobre una fecha nunca sirve para un año"
+    ],
+    correcta: 0,
+    mezclar: true,
+    pistas: [
+      null,
+      "Aplica una función a la columna: el índice guarda fechas, no años, y la base tendría que calcular la función en cada fila.",
+      "Un comodín al inicio no sabe por dónde empezar en una lista ordenada.",
+      "Sí sirve, porque un año es un rango de fechas. Hay que escribirlo como rango."
+    ],
+    explicacion: "El año de 2024 es un <b>rango</b> de fechas, y un índice ordenado encuentra rangos: se baja hasta el 1 de enero y se leen fechas seguidas hasta el 31 de diciembre. Con la función o el comodín, la base pierde esa ventaja. <b>Ahora la escena está abierta</b>.",
+    alResolver: function () { est.ok[6] = true; pintar(); pasos.completar(6); }
+  });
+
+  B.numerico(cuerpo("chk8"), {
+    pregunta: "La tabla pedidos tiene <b>3 índices</b>. Cargas <b>1 000 pedidos</b> nuevos. Con el modelo de esta página (1 escritura en la tabla más 1 por cada índice, por fila), ¿cuántas escrituras se hacen en total?",
+    respuesta: 4000,
+    tolerancia: 0,
+    pistas: [
+      "Cada fila nueva escribe en la tabla una vez y en cada uno de los 3 índices una vez. ¿Cuántas escrituras son por fila?",
+      "$1 + 3 = 4$ por fila, y son 1 000 filas."
+    ],
+    diagnostico: function (v) {
+      if (v === 1000) return "1 000 sería sin ningún índice. Cada índice añade una escritura por fila.";
+      if (v === 3000) return "3 000 olvida la escritura en la tabla: son los índices <b>más</b> la tabla.";
+      if (v === 3) return "3 son las escrituras en índices por fila, y faltan la de la tabla y las 1 000 filas.";
+      if (v === 4) return "4 son las escrituras de <b>una</b> fila. Son 1 000 filas.";
+      return null;
+    },
+    explicacion: "$m \\cdot (1 + k) = 1\\,000 \\cdot (1 + 3) = 4\\,000$ escrituras, cuatro veces más que sin índices. Por eso se indexa lo que de verdad se consulta. <b>Ahora la escena está abierta</b>. Falta la confusión de abajo y los retos.",
+    alResolver: function () { est.ok[7] = true; controles(); pintar(); pasos.completar(7); }
+  });
+
+  B.opcionMultiple(cuerpo("chk8b"), {
+    pregunta: "En PostgreSQL creas <code>pedidos</code> con <code>id_cliente INT REFERENCES clientes(id_cliente)</code> (una clave ajena) y nada más. ¿Existe un índice sobre <code>pedidos.id_cliente</code>?",
+    opciones: [
+      "No: PostgreSQL indexa solo la clave primaria y las UNIQUE; la clave ajena hay que indexarla tú",
+      "Sí: toda clave ajena recibe un índice automático",
+      "Sí, pero solo si la tabla tiene más de mil filas",
+      "Depende de la versión del material que leas"
+    ],
+    correcta: 0,
+    mezclar: true,
+    pistas: [
+      null,
+      "Eso es lo que sugiere el texto del material («en muchos motores»), pero en PostgreSQL no ocurre; la diapositiva 22 ya lo corrige.",
+      "El tamaño de la tabla no hace que se cree un índice.",
+      "El motor no cambia con la versión del material: lo que cambia es lo bien que lo explica."
+    ],
+    explicacion: "No hay índice sobre la clave ajena: lo creas tú si vas a unir o filtrar por ella. Lo comprobamos en SQLite, que se comporta igual en este punto: la UNIQUE recibe un índice automático (<code>sqlite_autoindex_clientes_1</code>) y la clave ajena de <code>pedidos</code> no recibe ninguno (la lista de índices sale vacía). Para PostgreSQL es lo que dice su documentación; no lo ejecutamos. Es una errata del texto <b>bd4</b> que la diapositiva 22 corrige.",
+    alResolver: function () { /* sin candado: es una confusion, no un paso */ }
+  });
+
+  pasos = B.pasos($("recorrido"), {
+    concepto: C,
+    alEntrar: entrar,
+    alTerminar: function () { location.hash = "retos"; }
+  });
+  (function () { var q; for (q = 0; q < 8; q++) est.ok[q] = pasos.hecho(q); })();
+  entrar(0);
+
+  /* ---------------- hipotesis inicial ---------------- */
+  (function () {
+    var ta = $("hipotesis"), t = null;
+    ta.value = B.nota("indices-btree", "hipotesis");
+    function cita() {
+      var v = ta.value.trim(), el = $("citaHipo");
+      if (!el) return;
+      el.hidden = !v;
+      if (v) { el.textContent = ""; el.appendChild(document.createTextNode("Al principio escribiste: «" + v + "». ¿Se parece a lo que construimos? ¿Qué te faltaba?")); }
+    }
+    cita();
+    ta.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { B.nota("indices-btree", "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; cita(); }, 500);
+    });
+  })();
+
+  /* ---------------- marcadores de estado de retos ---------------- */
+  function pintarEstados() {
+    [].forEach.call(document.querySelectorAll("[data-reto]"), function (el) {
+      var ok = C.retoOk(el.getAttribute("data-reto"));
+      el.textContent = ok ? "resuelto" : "pendiente";
+      el.classList.toggle("ok", ok);
+    });
+  }
+  C.alCambiar(pintarEstados);
+
+  /* ---------------- reto: ojo clinico ---------------- */
+  function porqueScan(sub, q) {
+    if (sub === "-") return "No existe ningún índice: la única forma de buscar es recorrer toda la tabla.";
+    if (q === 3) return "La condición aplica una función a la columna (strftime sobre fecha_pedido): el índice guarda las fechas tal cual, no sus años, así que no sirve.";
+    if (q === 5) return "En SQLite, por defecto, el LIKE no usa un índice (su LIKE ignora mayúsculas y el índice normal no). El material habla de PostgreSQL, donde 'texto%' sí podría.";
+    if (q === 6) return "El comodín al inicio ('%viado') no deja saber por dónde empezar en el índice ordenado.";
+    if (q === 1 && sub === "B") return "El índice (id_cliente, estado) está ordenado primero por id_cliente: una consulta solo por estado no puede usarlo.";
+    return "El índice que existe, " + IDXS[sub] + ", no empieza por la columna que filtra la consulta.";
+  }
+  (function () {
+    var cont = $("ojo"), subs = ["-", "A", "B", "C", "D"], pares = [], p = {}, tipos, ronda, aciertos, respondida, actual;
+    subs.forEach(function (s) { QS.forEach(function (w, q) { pares.push({ sub: s, q: q, si: usaIndice(s, q) }); }); });
+    cont.innerHTML = '<div class="ronda"></div><p class="ctx-ojo">La tabla pedidos tiene 16 filas. Índice que existe y consulta; SQLite decide el plan.</p>' +
+      '<div class="prog-pre"></div>' +
+      '<div class="ojo-opts3"><button type="button" class="opt" data-a="si">SEARCH: usa el índice</button><button type="button" class="opt" data-a="no">SCAN: recorre toda la tabla</button></div>' +
+      '<div class="fb" aria-live="polite"></div><div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    function nueva() {
+      var nSi = azar([2, 3]), si = B.mezclar(pares.filter(function (x) { return x.si; })).slice(0, nSi), no = B.mezclar(pares.filter(function (x) { return !x.si; })).slice(0, 5 - nSi);
+      tipos = B.mezclar(si.concat(no));
+      ronda = 0; aciertos = 0;
+      mostrar();
+    }
+    function mostrar() {
+      respondida = false;
+      actual = tipos[ronda];
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 5 · aciertos " + aciertos;
+      cont.querySelector(".prog-pre").textContent = "índice que existe: " + (actual.sub === "-" ? "ninguno" : "idx sobre " + IDXS[actual.sub]) + "\nSELECT * FROM pedidos\nWHERE " + QS[actual.q] + ";";
+      [].forEach.call(cont.querySelectorAll(".ojo-opts3 .opt"), function (x) { x.disabled = false; x.className = "opt"; });
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+    }
+    cont.querySelector(".ojo-opts3").addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || respondida) return;
+      respondida = true;
+      var dijoSi = b.getAttribute("data-a") === "si", ok = dijoSi === actual.si;
+      if (ok) aciertos++;
+      b.classList.add(ok ? "ok" : "mal");
+      if (!ok) cont.querySelector('[data-a="' + (actual.si ? "si" : "no") + '"]').classList.add("ok");
+      [].forEach.call(cont.querySelectorAll(".ojo-opts3 .opt"), function (x) { x.disabled = true; });
+      cont.querySelector(".fb").innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No.</span> ') + "El plan real: <code>" + esc(planDe(actual.sub, actual.q)) + "</code>. " + (actual.si ? "Busca por el índice." : esc(porqueScan(actual.sub, actual.q)));
+      var sig = cont.querySelector(".sig");
+      sig.hidden = false;
+      if (ronda === 4) {
+        var aprobo = aciertos >= 4;
+        C.reto("ojo", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertos + " de 5" + (aprobo ? ". Aprobado." : ". Necesitas 4 para aprobar.");
+        sig.textContent = "Otra tanda";
+      } else sig.textContent = "Siguiente ronda";
+    });
+    cont.querySelector(".sig").addEventListener("click", function () {
+      if (ronda === 4) nueva(); else { ronda++; mostrar(); }
+    });
+    nueva();
+  })();
+
+  /* ---------------- reto: construir ---------------- */
+  (function () {
+    var sel = { A: false, B: false, C: false, D: false }, avisado = false, ul = $("objetivos"), CARGA = [0, 2, 4];
+    var OBJ_T = [
+      { t: "Las tres consultas de la carga usan un índice (las tres dicen SEARCH).", f: function (k, n) { return CARGA.every(function (q) { return usaIndice(k, q); }); } },
+      { t: "La consulta por cliente y estado busca por las dos columnas a la vez (id_cliente=? AND estado=?).", f: function (k) { return planDe(k, 2).indexOf("id_cliente=? AND estado=?") >= 0; } },
+      { t: "Y todo con 2 índices como máximo, para que cada INSERT cueste 3 escrituras o menos.", f: function (k, n) { return n <= 2 && CARGA.every(function (q) { return usaIndice(k, q); }); } }
+    ];
+    var logrados = [false, false, false];
+    OBJ_T.forEach(function (o) { var li = document.createElement("li"); li.innerHTML = '<span class="m"></span><span>' + o.t + '</span>'; ul.appendChild(li); });
+    $("consChk").innerHTML = ["A", "B", "C", "D"].map(function (s) { return '<label><input type="checkbox" data-s="' + s + '"> índice ' + IDXS[s] + '</label>'; }).join("");
+    function clave() { var k = ["A", "B", "C", "D"].filter(function (s) { return sel[s]; }).join(""); return k || "-"; }
+    function render() {
+      var k = clave(), n = k === "-" ? 0 : k.length;
+      $("consPlanes").innerHTML = CARGA.map(function (q) {
+        var p = planDe(k, q), si = p.indexOf("SEARCH") === 0;
+        return '<div class="cons-plan ' + (si ? "si" : "no") + '"><span>WHERE ' + esc(QS[q]) + '</span>' + esc(p) + '</div>';
+      }).join("");
+      $("construirVivo").innerHTML = "índices <b>" + n + "</b> · escrituras por INSERT <b>" + (1 + n) + "</b>";
+      OBJ_T.forEach(function (o, i) { if (!logrados[i] && o.f(k, n)) logrados[i] = true; ul.children[i].classList.toggle("hecho", logrados[i]); });
+      if (!avisado && logrados.every(Boolean)) { avisado = true; C.reto("construir", true); }
+    }
+    $("consChk").addEventListener("change", function (e) {
+      var t = e.target;
+      if (t.hasAttribute("data-s")) sel[t.getAttribute("data-s")] = t.checked;
+      render();
+    });
+    render();
+  })();
+
+  /* ---------------- reto: a mano ---------------- */
+  (function () {
+    var D;
+    function generar() {
+      var tipo = azar(["pasos", "niveles", "escrituras"], 0), p, k, m, g;
+      if (tipo === "pasos") { p = azarN(5, 12); D = { tipo: tipo, p: p, N: Math.pow(2, p), ans: p }; }
+      else if (tipo === "niveles") { var f = azar([10, 100]); k = f === 10 ? azarN(3, 6) : azarN(2, 3); D = { tipo: tipo, f: f, k: k, N: Math.pow(f, k), ans: k }; }
+      else { m = azar([200, 500, 1000, 2500]); g = azarN(1, 4); D = { tipo: tipo, m: m, g: g, ans: m * (1 + g) }; }
+    }
+    generar();
+    B.numerico($("mano"), {
+      pregunta: function () {
+        if (D.tipo === "pasos") return "Un índice guarda " + mil(D.N) + " claves ordenadas y se busca descartando la mitad en cada paso. ¿Cuántos pasos hacen falta como mucho? (Es una potencia de 2: $" + mil(D.N).replace(" ", "\\,") + " = 2^k$.)";
+        if (D.tipo === "niveles") return "Un B-Tree con " + D.f + " hijos por nodo indexa " + mil(D.N) + " filas. ¿Cuántos niveles tiene? (Es una potencia de " + D.f + ".)";
+        return "Cargas " + mil(D.m) + " pedidos en una tabla con " + D.g + " índice" + (D.g > 1 ? "s" : "") + ". Con 1 escritura en la tabla más 1 por índice y por fila, ¿cuántas escrituras son en total?";
+      },
+      respuesta: function () { return D.ans; },
+      tolerancia: 0,
+      pistas: [
+        function () {
+          if (D.tipo === "pasos") return "Pregunta por el exponente: ¿a qué potencia hay que elevar 2 para obtener ese número?";
+          if (D.tipo === "niveles") return "Cada nivel multiplica por " + D.f + ". ¿Cuántas veces hay que multiplicar " + D.f + " por sí mismo para llegar a " + mil(D.N) + "?";
+          return "Cada fila nueva escribe en la tabla (1) y en cada índice (" + D.g + "): cuenta cuántas escrituras son por fila.";
+        },
+        function () {
+          if (D.tipo === "pasos") return "$2^{" + D.p + "} = " + mil(D.N).replace(" ", "\\,") + "$: cuenta cuántos doses multiplicas.";
+          if (D.tipo === "niveles") return "$" + D.f + "^{k} = " + mil(D.N).replace(/ /g, "\\,") + "$: cuenta los ceros del resultado dividido entre los de " + D.f + ".";
+          return "$" + mil(D.m).replace(" ", "\\,") + " \\times (1 + " + D.g + ")$.";
+        }
+      ],
+      diagnostico: function (v) {
+        if (D.tipo === "pasos" && v === D.N) return "Eso son las lecturas <b>sin</b> índice. Con el índice, los pasos son el logaritmo.";
+        if (D.tipo === "pasos" && v === D.N / 2) return "Eso es lo que queda tras un paso. Hay que dividir hasta llegar a 1.";
+        if (D.tipo === "niveles" && v === D.N) return "Ese es el número de filas, no de niveles.";
+        if (D.tipo === "escrituras" && v === D.m * D.g) return "Olvidaste la escritura en la tabla: son los índices <b>más</b> la tabla.";
+        if (D.tipo === "escrituras" && v === D.m) return "Eso sería sin ningún índice. Cada índice añade una escritura por fila.";
+        return null;
+      },
+      explicacion: function () {
+        if (D.tipo === "pasos") return "$\\log_2 " + mil(D.N).replace(" ", "\\,") + " = " + D.p + "$ pasos.";
+        if (D.tipo === "niveles") return "$\\log_{" + D.f + "} " + mil(D.N).replace(/ /g, "\\,") + " = " + D.k + "$ niveles.";
+        return "$" + mil(D.m).replace(" ", "\\,") + " \\cdot (1 + " + D.g + ") = " + mil(D.ans).replace(" ", "\\,") + "$ escrituras.";
+      },
+      reintentable: true,
+      textoReintentar: "Otro ejercicio",
+      antesDeReintentar: generar,
+      alResolver: function (ok) { C.reto("mano", ok); }
+    });
+  })();
+
+  /* ---------------- reto: cazar el error ---------------- */
+  B.cazarError($("error"), {
+    variantes: [
+      {
+        intro: "Un índice guarda $1\\,000\\,000$ claves ordenadas. Alguien calcula cuántos pasos hace la búsqueda por mitades:",
+        lineas: ["\\text{cada paso descarta la mitad de lo que queda}",
+          "\\text{tras 1 paso quedan } 500\\,000 \\text{ claves}",
+          "\\text{para llegar a 1 hay que dividir: } 1\\,000\\,000 / 2 = 500\\,000 \\text{ pasos}",
+          "\\text{con el índice son unos } 500\\,000 \\text{ pasos}"],
+        erronea: 2,
+        explicacion: "Dividir una vez entre 2 solo da lo que queda <b>tras un paso</b>. Hay que dividir <b>repetidamente</b> hasta llegar a 1: $\\log_2 1\\,000\\,000 \\approx 20$ pasos, no 500 000."
+      },
+      {
+        intro: "Existe el índice compuesto <code>(id_cliente, estado)</code>. Alguien decide qué consultas lo usan:",
+        lineas: ["\\text{indice } (\\text{id\\_cliente}, \\text{estado})",
+          "\\text{WHERE id\\_cliente = 3: lo usa, empieza por la primera columna}",
+          "\\text{WHERE estado = 'Enviado': lo usa, porque estado está en el índice}",
+          "\\text{WHERE id\\_cliente = 3 AND estado = 'Enviado': lo usa, con las dos columnas}"],
+        erronea: 2,
+        explicacion: "Que una columna <b>esté en</b> el índice no basta: el orden importa. Sin <code>id_cliente</code> en el filtro no hay un tramo continuo donde buscar los «Enviado», y el plan es SCAN."
+      },
+      {
+        intro: "La tabla pedidos tiene 3 índices y se cargan 500 pedidos nuevos. Alguien cuenta las escrituras:",
+        lineas: ["\\text{cada fila nueva escribe en la tabla y en cada índice}",
+          "\\text{hay 3 índices}",
+          "\\text{escrituras por fila} = 3",
+          "\\text{500 filas} \\times 3 = 1\\,500 \\text{ escrituras}"],
+        erronea: 2,
+        explicacion: "Faltó la escritura en la <b>tabla</b>: por fila son $1 + 3 = 4$ escrituras, y el total es $500 \\cdot 4 = 2\\,000$."
+      }
+    ],
+    alResolver: function (ok) { C.reto("error", ok); }
+  });
+
+  /* ---------------- retos: propiedades ---------------- */
+  function prop(id, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple($(id), cfg);
+  }
+  prop("prop1", {
+    pregunta: "Existe un índice sobre <code>fecha_pedido</code>, pero <code>WHERE YEAR(fecha_pedido) = 2024</code> lo ignora y recorre toda la tabla. ¿Cuál reescritura <b>sí</b> permite usar el índice?",
+    opciones: [
+      "WHERE fecha_pedido >= '2024-01-01' AND fecha_pedido < '2025-01-01'",
+      "WHERE YEAR(fecha_pedido) = 2024 ORDER BY fecha_pedido",
+      "WHERE fecha_pedido LIKE '%2024%'",
+      "SELECT fecha_pedido FROM pedidos WHERE YEAR(fecha_pedido) = 2024"
+    ],
+    correcta: 0,
+    pistas: [null, "Sigue aplicando YEAR a la columna: el ORDER BY no cambia eso.", "Un comodín al inicio tampoco deja saber por dónde empezar en el índice.", "Pedir menos columnas no quita la función del WHERE."],
+    explicacion: "Un año es un <b>rango de fechas</b>: sin función sobre la columna y con límites claros, la base baja por el árbol hasta el 1 de enero y lee fechas seguidas. Es la reescritura de la diapositiva 37 (el texto de la unidad no la trae)."
+  });
+  prop("prop2", {
+    pregunta: "¿Cuál de estas columnas es la peor candidata a tener un índice B-Tree?",
+    opciones: [
+      "activo, un booleano con solo dos valores (verdadero y falso)",
+      "id_cliente, que usas en el JOIN de pedidos con clientes",
+      "fecha_pedido, por la que filtras rangos casi siempre",
+      "email, que además es UNIQUE"
+    ],
+    correcta: 0,
+    pistas: [null, "El material recomienda indexar las columnas de JOIN (las claves ajenas).", "Filtrar por fecha devuelve pocas filas de muchas: es un buen caso para un índice.", "Una UNIQUE ya tiene su índice automático para hacer cumplir la restricción."],
+    explicacion: "Con solo dos valores, una búsqueda devuelve <b>la mitad de la tabla</b>: leerla por el índice no ahorra casi nada, y cada INSERT tiene que mantener el índice. Es el caso que el material señala como «no» (diapositiva 26: un índice sobre un booleano)."
+  });
+  prop("prop3", {
+    pregunta: "Creas un índice compuesto sobre <code>(id_cliente, estado)</code>. ¿Qué consultas acelera?",
+    opciones: [
+      "Las de id_cliente solo y las de id_cliente con estado, pero no las de estado solo",
+      "Las de estado solo y las de id_cliente con estado, pero no las de id_cliente solo",
+      "Cualquier consulta que mencione alguna de las dos columnas",
+      "Solo las que mencionan las dos columnas a la vez"
+    ],
+    correcta: 0,
+    pistas: [null, "Al revés: el índice está ordenado primero por id_cliente, así que esa es la columna que no puede faltar.", "Si una de las dos columnas basta, hay una que no: la segunda sola no tiene tramo continuo.", "También sirve para la primera columna sola: un tramo de ese cliente."],
+    explicacion: "El índice <b>(a, b)</b> sirve para <b>a</b> y para <b>a y b</b>, y no para <b>b</b> sola. Lo comprobaste en la escena: el plan de <code>estado = 'Enviado'</code> con ese índice es SCAN."
+  });
+
+  /* ---------------- formula de memoria ---------------- */
+  B.ordenar($("formula"), {
+    piezas: ["\\texttt{CREATE INDEX}", "\\texttt{idx\\_pedidos\\_cliente\\_estado}", "\\texttt{ON}", "\\texttt{pedidos}", "\\texttt{(id\\_cliente,}", "\\texttt{estado)}"],
+    distractores: ["\\texttt{UNIQUE}", "\\texttt{(estado,}", "\\texttt{id\\_cliente)}"],
+    soluciones: [[0, 1, 2, 3, 4, 5]],
+    explicacion: "<code>CREATE INDEX idx_pedidos_cliente_estado ON pedidos (id_cliente, estado)</code>. El nombre va primero, después la tabla y entre paréntesis las columnas en el orden que importa: id_cliente primero. Es la Figura 6 del material.",
+    alResolver: function (ok) { C.reto("formula", ok); }
+  });
+
+  /* ---------------- vida real: el algoritmo en codigo ---------------- */
+  (function () {
+    var CODIGO = {
+ "py": [
+  [
+   "imp",
+   "import sqlite3"
+  ],
+  [
+   "imp",
+   "import bisect"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "datos",
+   "claves = [4, 1, 7, 3, 9, 2, 5, 3, 8, 1, 6, 10, 2, 12, 5, 1]   # id_cliente de 16 pedidos, en el orden en que se guardaron"
+  ],
+  [
+   "datos",
+   "objetivo = 3"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "ini1",
+   "leidas = 0"
+  ],
+  [
+   "ini1",
+   "hallados = 0"
+  ],
+  [
+   "forl",
+   "for valor in claves:                              # sin índice: se lee cada fila"
+  ],
+  [
+   "cmp",
+   "    leidas += 1"
+  ],
+  [
+   "cmp",
+   "    if valor == objetivo:"
+  ],
+  [
+   "hit",
+   "        hallados += 1"
+  ],
+  [
+   "p1",
+   "print(\"sin índice:\", leidas, \"filas leídas,\", hallados, \"halladas\")"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "ord",
+   "indice = sorted(claves)                           # el índice guarda las claves ordenadas"
+  ],
+  [
+   "ini2",
+   "lo, hi = 0, len(indice)"
+  ],
+  [
+   "ini2",
+   "pasos = 0"
+  ],
+  [
+   "wh",
+   "while lo < hi:                                    # en cada paso se descarta la mitad"
+  ],
+  [
+   "mid",
+   "    pasos += 1"
+  ],
+  [
+   "mid",
+   "    mid = (lo + hi) // 2"
+  ],
+  [
+   "cmp2",
+   "    if indice[mid] < objetivo:"
+  ],
+  [
+   "izq",
+   "        lo = mid + 1"
+  ],
+  [
+   null,
+   "    else:"
+  ],
+  [
+   "der",
+   "        hi = mid"
+  ],
+  [
+   "p2",
+   "print(\"con índice:\", pasos, \"pasos\")"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "ini3",
+   "j = lo"
+  ],
+  [
+   "ini3",
+   "encontradas = 0"
+  ],
+  [
+   "wh2",
+   "while j < len(indice) and indice[j] == objetivo:  # las claves iguales quedan juntas"
+  ],
+  [
+   "enc",
+   "    encontradas += 1"
+  ],
+  [
+   "enc",
+   "    j += 1"
+  ],
+  [
+   "p3",
+   "print(\"halladas por el índice:\", encontradas)"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "con",
+   "con = sqlite3.connect(\":memory:\")"
+  ],
+  [
+   "con",
+   "con.execute(\"CREATE TABLE pedidos (id_pedido INTEGER PRIMARY KEY, id_cliente INTEGER, fecha_pedido TEXT, estado TEXT)\")"
+  ],
+  [
+   "con",
+   "estados = [\"Entregado\", \"Enviado\", \"Pendiente\", \"Cancelado\"]"
+  ],
+  [
+   "con",
+   "filas = [(5001 + k, claves[k], \"2023-%02d-15\" % (3 * k + 2) if k < 4 else \"2024-%02d-15\" % (k - 3), estados[k % 4]) for k in range(16)]"
+  ],
+  [
+   "con",
+   "con.executemany(\"INSERT INTO pedidos VALUES (?, ?, ?, ?)\", filas)"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "pl1",
+   "sql = \"SELECT * FROM pedidos WHERE id_cliente = 3\""
+  ],
+  [
+   "pl1",
+   "plan = con.execute(\"EXPLAIN QUERY PLAN \" + sql).fetchall()"
+  ],
+  [
+   "pl1",
+   "print(\"sin índice:\", plan[0][3])"
+  ],
+  [
+   "cidx",
+   "con.execute(\"CREATE INDEX idx_pedidos_cliente ON pedidos (id_cliente)\")"
+  ],
+  [
+   "pl2",
+   "plan = con.execute(\"EXPLAIN QUERY PLAN \" + sql).fetchall()"
+  ],
+  [
+   "pl2",
+   "print(\"con índice:\", plan[0][3])"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "cmp3",
+   "print(lo == bisect.bisect_left(indice, objetivo))"
+  ],
+  [
+   "cmp4",
+   "print(hallados == con.execute(\"SELECT COUNT(*) FROM pedidos WHERE id_cliente = ?\", (objetivo,)).fetchone()[0])"
+  ]
+ ],
+ "r": [
+  [
+   "imp",
+   "# R no trae SQLite en esta máquina ni tiene EXPLAIN: aquí solo se cuentan los pasos"
+  ],
+  [
+   "datos",
+   "claves <- c(4, 1, 7, 3, 9, 2, 5, 3, 8, 1, 6, 10, 2, 12, 5, 1)   # id_cliente de 16 pedidos, en el orden en que se guardaron"
+  ],
+  [
+   "datos",
+   "objetivo <- 3"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "ini1",
+   "leidas <- 0"
+  ],
+  [
+   "ini1",
+   "hallados <- 0"
+  ],
+  [
+   "forl",
+   "for (valor in claves) {                           # sin índice: se lee cada fila"
+  ],
+  [
+   "cmp",
+   "  leidas <- leidas + 1"
+  ],
+  [
+   "cmp",
+   "  if (valor == objetivo) {"
+  ],
+  [
+   "hit",
+   "    hallados <- hallados + 1"
+  ],
+  [
+   null,
+   "  }"
+  ],
+  [
+   null,
+   "}"
+  ],
+  [
+   "p1",
+   "cat(\"sin índice:\", leidas, \"filas leídas,\", hallados, \"halladas\\n\")"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "ord",
+   "indice <- sort(claves)                            # el índice guarda las claves ordenadas"
+  ],
+  [
+   "ini2",
+   "lo <- 1"
+  ],
+  [
+   "ini2",
+   "hi <- length(indice) + 1"
+  ],
+  [
+   "ini2",
+   "pasos <- 0"
+  ],
+  [
+   "wh",
+   "while (lo < hi) {                                 # en cada paso se descarta la mitad"
+  ],
+  [
+   "mid",
+   "  pasos <- pasos + 1"
+  ],
+  [
+   "mid",
+   "  mid <- (lo + hi) %/% 2"
+  ],
+  [
+   "cmp2",
+   "  if (indice[mid] < objetivo) {"
+  ],
+  [
+   "izq",
+   "    lo <- mid + 1"
+  ],
+  [
+   null,
+   "  } else {"
+  ],
+  [
+   "der",
+   "    hi <- mid"
+  ],
+  [
+   null,
+   "  }"
+  ],
+  [
+   null,
+   "}"
+  ],
+  [
+   "p2",
+   "cat(\"con índice:\", pasos, \"pasos\\n\")"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "ini3",
+   "j <- lo"
+  ],
+  [
+   "ini3",
+   "encontradas <- 0"
+  ],
+  [
+   "wh2",
+   "while (j <= length(indice) && indice[j] == objetivo) {   # las claves iguales quedan juntas"
+  ],
+  [
+   "enc",
+   "  encontradas <- encontradas + 1"
+  ],
+  [
+   "enc",
+   "  j <- j + 1"
+  ],
+  [
+   null,
+   "}"
+  ],
+  [
+   "p3",
+   "cat(sprintf(\"halladas por el índice: %d\\n\", encontradas))"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "con",
+   "# Python crea aquí una base SQLite en memoria con la tabla pedidos (las mismas 16 filas)"
+  ],
+  [
+   "pl1",
+   "# y pide el plan de WHERE id_cliente = 3 sin índice: SCAN pedidos"
+  ],
+  [
+   "cidx",
+   "# luego crea idx_pedidos_cliente sobre id_cliente"
+  ],
+  [
+   "pl2",
+   "# y pide el plan otra vez: SEARCH pedidos USING INDEX idx_pedidos_cliente (R no trae SQLite ni EXPLAIN)"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "cmp3",
+   "print(lo == which(indice >= objetivo)[1])"
+  ],
+  [
+   "cmp4",
+   "print(hallados == sum(claves == objetivo))"
+  ]
+ ]
+};
+    var SAL_PY = "sin índice: 16 filas leídas, 2 halladas\ncon índice: 4 pasos\nhalladas por el índice: 2\nsin índice: SCAN pedidos\ncon índice: SEARCH pedidos USING INDEX idx_pedidos_cliente (id_cliente=?)\nTrue\nTrue";
+    var SAL_R = "sin índice: 16 filas leídas, 2 halladas\ncon índice: 4 pasos\nhalladas por el índice: 2\n[1] TRUE\n[1] TRUE";
+    var PL1 = "SCAN pedidos", PL2 = "SEARCH pedidos USING INDEX idx_pedidos_cliente (id_cliente=?)";
+    // eventos: una foto del estado despues de ejecutar cada linea
+    var EV = [], st = { fase: 1, leidas: 0, hall: 0, i: null, ord: false, lo: 0, hi: 16, mid: null, pasos: 0, j: null, enc: 0, con: false, p1: false, p2: false, log: [], cond: null };
+    function foto(id, extra) {
+      var e = {}, k;
+      Object.keys(st).forEach(function (x) { e[x] = st[x]; });
+      e.log = st.log.slice();
+      e.id = id; e.fin = false;
+      if (extra) Object.keys(extra).forEach(function (x) { e[x] = extra[x]; });
+      EV.push(e);
+    }
+    var i, mid;
+    foto("imp"); foto("datos"); foto("ini1");
+    for (i = 0; i < 16; i++) {
+      foto("forl", { i: i });
+      st.leidas++; foto("cmp", { i: i });
+      if (CL[i] === OBJ) { st.hall++; foto("hit", { i: i }); }
+    }
+    st.log.push(["sin índice: 16 filas leídas, 2 halladas", "sin índice: 16 filas leídas, 2 halladas"]);
+    foto("p1");
+    st.fase = 2; st.ord = true; foto("ord");
+    st.lo = 0; st.hi = 16; st.pasos = 0; foto("ini2");
+    while (st.lo < st.hi) {
+      st.cond = true; foto("wh");
+      st.pasos++; mid = (st.lo + st.hi) >> 1; st.mid = mid; foto("mid");
+      foto("cmp2");
+      if (IXK[mid] < OBJ) { st.lo = mid + 1; foto("izq"); } else { st.hi = mid; foto("der"); }
+    }
+    st.cond = false; foto("wh");
+    st.log.push(["con índice: " + st.pasos + " pasos", "con índice: " + st.pasos + " pasos"]);
+    foto("p2");
+    st.fase = 3; st.j = st.lo; st.enc = 0; st.mid = null; foto("ini3");
+    while (st.j < 16 && IXK[st.j] === OBJ) {
+      st.cond = true; foto("wh2");
+      st.enc++; st.j++; foto("enc");
+    }
+    st.cond = false; foto("wh2");
+    st.log.push(["halladas por el índice: " + st.enc, "halladas por el índice: " + st.enc]);
+    foto("p3");
+    st.fase = 4; st.con = true; foto("con");
+    st.p1 = true; st.log.push([PL1 === "" ? "" : "sin índice: " + PL1, null]); foto("pl1");
+    foto("cidx");
+    st.p2 = true; st.log.push(["con índice: " + PL2, null]); foto("pl2");
+    st.fase = 5;
+    st.log.push(["True", "[1] TRUE"]); foto("cmp3");
+    st.log.push(["True", "[1] TRUE"]); foto("cmp4");
+    EV[EV.length - 1].fin = true;
+
+    function narrar(e, ctx) {
+      var py = ctx.lang() === "py", ix = ctx.ix;
+      switch (e.id) {
+        case "imp": return py ? "Importa <code>sqlite3</code> (el motor de base de datos que trae Python) y <code>bisect</code>, que trae la búsqueda por mitades hecha, para comprobar al final." : "Comentario: R no trae SQLite en esta máquina ni tiene EXPLAIN. Aquí solo se cuentan pasos con vectores.";
+        case "datos": return "Prepara los <b>16 pedidos</b>: la lista de <code>id_cliente</code> en el orden en que se guardaron, y el cliente que se busca, el <b>3</b>.";
+        case "ini1": return "Dos contadores en cero: las filas <b>leídas</b> y las filas <b>halladas</b>.";
+        case "forl": return "Fila <b>" + (e.i + 1) + "</b> de 16 de la tabla. Índice " + ix(e.i) + " en " + (py ? "Python" : "R") + ": el cliente de esa fila es <b>" + CL[e.i] + "</b>.";
+        case "cmp": return "Cuenta una lectura (leídas = <b>" + e.leidas + "</b>) y compara " + CL[e.i] + " con 3: " + (CL[e.i] === OBJ ? "coinciden." : "no coinciden.");
+        case "hit": return "Era el cliente 3: suma una fila hallada (<b>" + e.hall + "</b>). Y sigue: no puede parar, podría haber más.";
+        case "p1": return "Imprime <b>sin índice: 16 filas leídas, 2 halladas</b>. Leyó toda la tabla para devolver dos filas.";
+        case "ord": return "El índice guarda las mismas claves, pero <b>ordenadas</b>. Ahora sí se puede buscar por mitades.";
+        case "ini2": return "Los límites de la búsqueda: <code>lo</code> en " + ix(0) + " y <code>hi</code> en " + ix(16) + " (uno más allá de la última clave). Y un contador de pasos en cero.";
+        case "wh": return e.cond ? "Mientras <code>lo &lt; hi</code> queden claves por revisar: lo = <b>" + ix(e.lo) + "</b>, hi = <b>" + ix(e.hi) + "</b>. Quedan <b>" + (e.hi - e.lo) + "</b> claves." : "Ya no queda ninguna clave por revisar (lo = hi = <b>" + ix(e.lo) + "</b>): <code>lo</code> es dónde empieza el cliente 3. El bucle termina.";
+        case "mid": return "Paso <b>" + e.pasos + "</b>: mira la clave del medio, la de la posición <b>" + ix(e.mid) + "</b>. Vale <b>" + IXK[e.mid] + "</b>.";
+        case "cmp2": return IXK[e.mid] < OBJ ? IXK[e.mid] + " es menor que 3: el 3 empieza <b>después</b> de esta posición." : IXK[e.mid] + " es mayor o igual que 3: el 3 empieza en esta posición o <b>antes</b>.";
+        case "izq": return "Descarta la parte de la izquierda: <code>lo</code> pasa a <b>" + ix(e.lo) + "</b>. Quedan " + (e.hi - e.lo) + " claves.";
+        case "der": return "Descarta la parte de la derecha: <code>hi</code> pasa a <b>" + ix(e.hi) + "</b>. Quedan " + (e.hi - e.lo) + " claves.";
+        case "p2": return "Imprime <b>con índice: 4 pasos</b>. Cuatro pasos frente a las 16 lecturas de antes.";
+        case "ini3": return "Desde donde empieza el 3, se leen las claves iguales, que en un índice ordenado quedan <b>juntas</b>: <code>j</code> arranca en <b>" + ix(e.j) + "</b>.";
+        case "wh2": return e.cond ? "La clave en la posición <b>" + ix(e.j) + "</b> es 3: se sigue." : "La clave en la posición <b>" + ix(e.j) + "</b> ya no es 3 (vale " + IXK[e.j] + "): se acabaron las iguales.";
+        case "enc": return "Cuenta una fila hallada (<b>" + e.enc + "</b>) y avanza <code>j</code> a <b>" + ix(e.j) + "</b>.";
+        case "p3": return "Imprime <b>halladas por el índice: 2</b>: las mismas dos filas, leyendo solo 4 claves para ubicarse y 2 para recogerlas.";
+        case "con": return py ? "Crea una base SQLite <b>en memoria</b> con la tabla <code>pedidos</code> y le inserta las mismas 16 filas." : "Comentario: esta parte solo existe en Python. R no tiene SQLite aquí.";
+        case "pl1": return py ? "Pide <code>EXPLAIN QUERY PLAN</code> de <code>WHERE id_cliente = 3</code> sin índice e imprime la descripción: <b>SCAN pedidos</b>, es decir, recorrer toda la tabla." : "Comentario: en Python aquí se imprime <b>SCAN pedidos</b>.";
+        case "cidx": return py ? "Crea el índice <code>idx_pedidos_cliente</code> sobre <code>id_cliente</code>: la base construye por dentro la estructura ordenada." : "Comentario: en Python aquí se crea el índice.";
+        case "pl2": return py ? "Vuelve a pedir el plan. Ahora imprime <b>SEARCH pedidos USING INDEX idx_pedidos_cliente (id_cliente=?)</b>: usa el índice." : "Comentario: en Python aquí se imprime el SEARCH. R no tiene EXPLAIN.";
+        case "cmp3": return py ? "<code>bisect_left</code> es la búsqueda por mitades de la librería: da la misma posición que el bucle. <b>True</b>." : "<code>which(indice &gt;= objetivo)[1]</code> da la primera posición con una clave de 3 o más: la misma que el bucle. <b>TRUE</b>.";
+        case "cmp4": return py ? "<code>SELECT COUNT(*)</code> le pregunta a SQLite cuántas filas son del cliente 3: dos, como contó el programa. <b>True</b>." : "<code>sum(claves == objetivo)</code> cuenta las filas del cliente 3: dos, como contó el programa. <b>TRUE</b>.";
+      }
+      return "";
+    }
+    function visual(e, anterior, ctx) {
+      var py = ctx.lang() === "py", ix = ctx.ix, leidas = e ? e.leidas : 0, act = e && e.fase === 1 && e.i !== null && e.i !== undefined ? e.i : -1;
+      $("vrTablaCel").innerHTML = celdasTabla(leidas, act, e ? e.fase === 1 || e.fase >= 2 : false);
+      var o = { pos: function (k) { return ix(k); } };
+      if (e && e.ord) {
+        o.rango = e.fase === 2 && e.id !== "ord"; o.lo = e.lo; o.hi = e.hi;
+        if (e.fase === 2 && e.mid !== null && (e.id === "mid" || e.id === "cmp2" || e.id === "izq" || e.id === "der")) o.mid = e.mid;
+        if (e.fase >= 3 && e.enc > 0) o.hit = [e.lo, e.lo + e.enc];
+        if (e.fase === 3 && e.j !== null && e.j < 16 && (e.id === "wh2")) o.act = e.j;
+        if (e.fase === 2 && e.cond === false) o.act = e.lo;
+        $("vrIdxCel").innerHTML = celdasIndice(o);
+      } else $("vrIdxCel").innerHTML = '<p class="ix-tabla-ayuda" style="grid-column:1/-1">El índice todavía no existe.</p>';
+      $("vrCuenta").innerHTML = e ? "filas leídas = <b>" + e.leidas + "</b> · pasos de búsqueda = <b>" + e.pasos + "</b> · halladas = <b>" + (e.fase >= 3 ? e.enc : e.hall) + "</b>" : "";
+      var pl = "";
+      if (e && e.con) {
+        if (py) {
+          pl = "plan sin índice: " + (e.p1 ? "<b>" + PL1 + "</b>" : "(aún no)") + "<br>plan con índice: " + (e.p2 ? "<b>" + esc(PL2) + "</b>" : "(aún no)");
+        } else pl = "R no tiene EXPLAIN: el plan solo se ve en Python.";
+      } else pl = "El plan de ejecución aparece en la fase 4.";
+      $("vrPlan").innerHTML = pl;
+      var lineas = e ? e.log.map(function (p) { return py ? p[0] : p[1]; }).filter(function (t) { return t !== null; }) : [];
+      $("vrLog").textContent = lineas.length ? lineas.join("\n") : "(aún no se imprimió nada)";
+    }
+    B.vidaReal($("vidareal"), {
+      codigo: CODIGO,
+      eventos: EV,
+      narrar: narrar,
+      vars: function (e, ctx) {
+        var v = [], ix = ctx.ix;
+        if (e && e.fase === 1 && e.i !== null) v.push('<span class="vj">fila = <b>' + ix(e.i) + '</b></span>');
+        if (e && e.fase === 1) v.push('<span>leídas = <b>' + e.leidas + '</b></span><span>halladas = <b>' + e.hall + '</b></span>');
+        if (e && e.fase === 2 && e.ord) {
+          v.push('<span class="vj">lo = <b>' + ix(e.lo) + '</b></span><span class="vk">hi = <b>' + ix(e.hi) + '</b></span>');
+          if (e.mid !== null) v.push('<span>mid = <b>' + ix(e.mid) + '</b></span>');
+          v.push('<span>pasos = <b>' + e.pasos + '</b></span>');
+        }
+        if (e && e.fase === 3) v.push('<span class="vj">j = <b>' + ix(e.j) + '</b></span><span>encontradas = <b>' + e.enc + '</b></span>');
+        return v;
+      },
+      visual: visual,
+      demora: function (e) { return !e ? 600 : e.id === "forl" || e.id === "cmp" || e.id === "hit" ? 220 : e.id === "mid" || e.id === "cmp2" || e.id === "izq" || e.id === "der" || e.id === "wh" || e.id === "wh2" || e.id === "enc" ? 650 : 900; }
+    });
+
+    $("salidaPy").textContent = SAL_PY;
+    $("salidaR").textContent = SAL_R;
+
+    B.numerico(cuerpo("vrPred"), {
+      pregunta: "Cambias el cliente buscado a un <b>11</b>, que no aparece en ninguno de los 16 pedidos. Sin índice, ¿cuántas filas lee el recorrido (la variable <code>leidas</code> al final del bucle)?",
+      respuesta: 16,
+      tolerancia: 0,
+      pistas: [
+        "Mira el bucle: no hay ningún <code>break</code>. ¿Qué le pasa al recorrido cuando el cliente no existe?",
+        "Para saber que no existe, hay que haber mirado todas las filas."
+      ],
+      diagnostico: function (v) {
+        if (v === 0) return "0 son las filas <b>halladas</b>. Leídas son otra cosa: las que revisó para llegar a esa conclusión.";
+        if (v === 1) return "No hay forma de saber en la primera fila que no existe: tiene que mirar todas.";
+        if (v === 8) return "La mitad no alcanza: sin índice no hay ningún criterio para descartar filas, ni siquiera cuando no está.";
+        return null;
+      },
+      explicacion: "Lee las <b>16</b>: este recorrido no tiene <code>break</code>, y aunque lo tuviera, un cliente que no existe obliga a mirar toda la tabla. Con el índice, en cambio, el mismo caso termina en 4 pasos sin tocar ninguna fila. Ahora dale a reproducir con el cliente 3.",
+      alResolver: function (ok) { C.reto("codigo1", ok); }
+    });
+    prop("codigo2", {
+      pregunta: "En SQLite creas un índice sobre <code>estado</code> y pides el plan de <code>WHERE estado LIKE 'Env%'</code>. El material (PostgreSQL) dice que un <code>LIKE</code> con el comodín al final puede usar el índice. ¿Qué plan dio SQLite en esta máquina?",
+      opciones: [
+        "SCAN pedidos: recorre toda la tabla, el índice no se usa",
+        "SEARCH pedidos USING INDEX idx_pedidos_estado (estado=?)",
+        "Un error, porque LIKE no se puede usar con índices",
+        "SEARCH, pero solo si pones el LIKE en mayúsculas"
+      ],
+      correcta: 0,
+      pistas: [null, "Eso es lo que esperarías según el texto, pero lo comprobamos y SQLite no lo hizo.", "LIKE funciona; lo que no hace es usar el índice por defecto.", "No es cuestión de cómo escribes el patrón: es una decisión de SQLite sobre cómo compara mayúsculas."],
+      explicacion: "Dio <b>SCAN pedidos</b>. La razón documentada es que el <code>LIKE</code> de SQLite no distingue mayúsculas y el índice normal sí. Lo que dice el material vale para PostgreSQL (que no ejecutamos aquí); de ahí la regla de oro: <b>mira el plan en tu motor</b>."
+    });
+    prop("codigo3", {
+      pregunta: "Aplicas por error la búsqueda por mitades a la lista <b>sin ordenar</b> <code>[4, 1, 7, 3, 9, 2, 5, 3, 8, 1, 6, 10, 2, 12, 5, 1]</code> buscando dónde empieza el 3. ¿Qué da el programa?",
+      opciones: [
+        "Termina en la posición 2 (desde 0), donde hay un 7: no encuentra el 3, aunque está",
+        "Encuentra el 3 igual, solo que tarda un paso más",
+        "Da un error de ejecución",
+        "Encuentra el primer 3 de la lista"
+      ],
+      correcta: 0,
+      pistas: [null, "La búsqueda por mitades descarta mitades enteras: si la lista no está ordenada, descarta partes donde sí estaba el 3.", "El programa no se rompe: da una respuesta equivocada con total confianza, que es peor.", "El primer 3 está en la posición 3, pero el programa nunca llega a mirarla."],
+      explicacion: "Dio <b>posición 2, valor 7</b> en Python (posición 3 en R, porque cuenta desde 1). La búsqueda por mitades solo vale sobre datos <b>ordenados</b>. Por eso el índice se mantiene ordenado siempre, y parte del costo de escribir (el paso 8) es colocar cada clave nueva en su lugar."
+    });
+  })();
+
+  /* ---------------- tarjetas ---------------- */
+  B.tarjetas($("tarjetas"), [
+    ["¿Qué es un índice?", "Una estructura auxiliar ordenada que guarda cada valor de una columna con la fila donde está, como el índice alfabético de un libro."],
+    ["¿Qué hace la base de datos si no hay índice?", "Un escaneo secuencial (Seq Scan): lee todas las filas. Su coste crece de forma lineal, $O(n)$."],
+    ["¿Por qué un índice B-Tree acelera la búsqueda?", "Porque está ordenado y es un árbol: baja un nivel por vez descartando casi todo lo demás. El coste es logarítmico, $O(\\log n)$."],
+    ["¿Cuántos niveles tiene un B-Tree?", "$\\lceil \\log_f N \\rceil$, con $f$ hijos por nodo. Los nodos guardan cientos de claves, así que el árbol es ancho y bajo."],
+    ["¿Qué muestra EXPLAIN?", "El plan de ejecución: si la base recorre toda la tabla (Seq Scan, en SQLite SCAN) o usa un índice (Index Scan, en SQLite SEARCH). EXPLAIN ANALYZE, en PostgreSQL, además ejecuta y mide."],
+    ["En un índice compuesto (a, b), ¿qué consultas acelera?", "Las de $a$ sola y las de $a$ y $b$. No las de $b$ sola: el orden de las columnas importa."],
+    ["Dos cosas que impiden usar un índice", "Una función sobre la columna filtrada (YEAR(fecha) = 2024, se reescribe como rango) y un LIKE con comodín inicial ('%texto')."],
+    ["¿Qué cuesta un índice?", "Cada INSERT, UPDATE y DELETE actualiza la tabla y todos sus índices, y ocupan espacio. Indexar de más es un error de diseño: se indexan los WHERE selectivos, los JOIN y los ORDER BY."]
+  ]);
+
+  /* ---------------- conexiones ---------------- */
+  B.conexiones("indices-btree");
+})();
+</script>
+</body>
+</html>

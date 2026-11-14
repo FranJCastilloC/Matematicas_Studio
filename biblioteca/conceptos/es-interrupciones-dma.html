@@ -1,0 +1,1485 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>E/S programada, interrupciones y DMA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+/* ---------- escenario ---------- */
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.esc-head .hint { font-size: 12.5px; color: var(--ink-2); }
+.esc-pn[hidden] { display: none; }
+.esc-nota { font-size: 12.5px; color: var(--ink-3); margin: 10px 0 0; }
+.ctl { display: grid; gap: 4px; margin: 8px 0; font-size: 13px; color: var(--ink-2); }
+.ctl label { display: flex; justify-content: space-between; gap: 8px; }
+.ctl label b { font-family: var(--f-mono); font-weight: 500; color: var(--ink); }
+.ctl input[type=range] { width: 100%; accent-color: var(--accent); }
+.ctl-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
+.cuenta { font-family: var(--f-mono); font-size: 12.5px; color: var(--ink-2); font-variant-numeric: tabular-nums; margin-top: 8px; overflow-wrap: anywhere; line-height: 1.6; }
+.cuenta b { color: var(--ink); font-weight: 500; }
+.cuenta b.pos { color: var(--pos); }
+.cuenta b.neg { color: var(--neg); }
+.cuenta .oculto { color: var(--accent); font-weight: 600; }
+.leyenda { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: var(--ink-2); margin-top: 6px; }
+.leyenda i { display: inline-block; width: 11px; height: 11px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+.leyenda i.pos { background: var(--pos); }
+.leyenda i.neg { background: var(--neg); }
+.leyenda i.acc { background: var(--accent); }
+.leyenda i.gris { background: var(--cell-zero); border: 1px solid var(--ink-3); }
+
+/* carriles de tiempo */
+.carriles { display: grid; gap: 8px; margin-top: 8px; }
+.carril { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 8px; align-items: center; }
+.carril .nm { font-size: 12.5px; font-weight: 600; color: var(--ink); line-height: 1.15; }
+.carril .nm small { display: block; font-family: var(--f-mono); font-size: 10.5px; font-weight: 400; color: var(--ink-3); }
+.celdas { display: grid; grid-template-columns: repeat(40, minmax(0, 1fr)); gap: 1px; }
+.celdas i { display: block; height: 22px; background: var(--cell-zero); border-radius: 1px; }
+.celdas i.r { background: var(--neg); }
+.celdas i.v { background: var(--pos); opacity: .85; }
+.celdas i.x { background: var(--accent); }
+.celdas i.g { background: var(--cell-zero); }
+.eje { font-family: var(--f-mono); font-size: 10.5px; color: var(--ink-3); display: flex; justify-content: space-between; margin: 2px 0 0 82px; }
+
+/* CPU de juguete */
+.cpu { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; margin-top: 8px; }
+.cpu .caja { border: 1px solid var(--line-soft); border-radius: 8px; background: var(--surface); padding: 8px 10px; min-width: 0; }
+.cpu .caja h4 { margin: 0 0 6px; font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); font-weight: 500; }
+.prog { font-family: var(--f-mono); font-size: 12px; display: grid; gap: 2px; }
+.prog div { display: grid; grid-template-columns: 38px minmax(0, 1fr); gap: 6px; padding: 2px 4px; border-radius: 4px; color: var(--ink-2); }
+.prog div.pc { background: var(--accent-soft); color: var(--ink); font-weight: 600; }
+.prog div.isr { background: color-mix(in oklab, var(--neg) 22%, var(--surface)); color: var(--ink); }
+.regs { font-family: var(--f-mono); font-size: 12.5px; display: grid; gap: 3px; color: var(--ink-2); }
+.regs b { color: var(--ink); font-weight: 500; }
+.pila { font-family: var(--f-mono); font-size: 12px; display: grid; gap: 3px; min-height: 40px; align-content: end; }
+.pila div { border: 1px solid var(--ink-3); border-radius: 4px; padding: 2px 6px; color: var(--ink); background: var(--surface-2); }
+.pila div.vacio { border-style: dashed; color: var(--ink-3); background: transparent; }
+.fases4 { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.fases4 span { font-size: 11.5px; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink-3); }
+.fases4 span.on { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); font-weight: 600; }
+.fases4 span.hecho { color: var(--ink-2); border-color: var(--ink-3); }
+.vect { width: 100%; border-collapse: collapse; font-family: var(--f-mono); font-size: 11.5px; margin-top: 6px; }
+.vect td, .vect th { text-align: left; padding: 2px 6px; border-bottom: 1px solid var(--line-soft); color: var(--ink-2); }
+.vect th { color: var(--ink-3); font-weight: 500; font-size: 10.5px; }
+.vect tr.on td { background: var(--accent-soft); color: var(--ink); font-weight: 600; }
+.msg { font-size: 13px; color: var(--ink); margin-top: 8px; min-height: 2.6em; }
+
+/* prioridades */
+.irqbtn { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.irqbtn button { font-size: 12.5px; }
+.regs2 { display: grid; gap: 4px; font-family: var(--f-mono); font-size: 12px; color: var(--ink-2); margin-top: 6px; }
+.regs2 b { color: var(--ink); font-weight: 500; }
+
+/* memoria del DMA */
+.memo8 { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 3px; margin: 6px 0; }
+.memo8 i { aspect-ratio: 1.3; border-radius: 4px; background: var(--cell-zero); display: grid; place-items: center; font-family: var(--f-mono); font-size: 10.5px; font-style: normal; color: var(--ink-3); }
+.memo8 i.ok { background: color-mix(in oklab, var(--pos) 45%, var(--cell-zero)); color: var(--ink); }
+.apiladas { margin-top: 10px; display: grid; gap: 6px; }
+.apiladas .fila { display: grid; grid-template-columns: 112px minmax(0, 1fr) 96px; gap: 8px; align-items: center; font-size: 12px; color: var(--ink-2); }
+.apiladas .barra { height: 10px; background: var(--surface-2); border-radius: 3px; overflow: hidden; display: flex; }
+.apiladas .barra i { display: block; height: 100%; transition: width .2s; }
+.apiladas .barra i.a { background: var(--pos); }
+.apiladas .barra i.m { background: var(--neg); }
+.apiladas b { font-family: var(--f-mono); font-weight: 500; text-align: right; font-variant-numeric: tabular-nums; color: var(--ink); }
+
+/* bus */
+.bus { display: grid; gap: 4px; margin-top: 8px; }
+.bus .fila { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 8px; align-items: center; font-size: 12px; color: var(--ink-2); }
+.slots { display: grid; grid-template-columns: repeat(16, minmax(0, 1fr)); gap: 2px; }
+.slots i { display: block; height: 22px; border-radius: 2px; background: var(--cell-zero); }
+.slots i.d { background: var(--accent); }
+.slots i.c { background: var(--pos); opacity: .85; }
+.slots i.b { background: var(--neg); }
+.vacio-msg { font-size: 13px; color: var(--ink-3); padding: 12px 0; }
+
+/* retos propios */
+.grande { font-family: var(--f-mono); font-size: 14px; color: var(--ink-2); margin: 6px 0 12px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.grande b { font-size: 16px; color: var(--ink); font-weight: 500; }
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.ojo-opts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
+.ojo-opts .opt { text-align: center; }
+.objetivos { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.objetivos li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.objetivos .m { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.objetivos li.hecho { color: var(--ink); }
+.objetivos li.hecho .m { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 3px var(--surface); }
+.enunciado { font-size: 14.5px; color: var(--ink); margin: 4px 0 12px; }
+.escena { font-size: 14.5px; color: var(--ink); margin: 8px 0 4px; }
+
+/* vida real */
+.vr-tabla2 { width: 100%; border-collapse: collapse; font-family: var(--f-mono); font-size: 12px; font-variant-numeric: tabular-nums; }
+.vr-tabla2 th { font-weight: 500; color: var(--ink-3); font-size: 11px; text-align: right; padding: 4px 6px; border-bottom: 1px solid var(--line); }
+.vr-tabla2 td { text-align: right; padding: 4px 6px; border-bottom: 1px solid var(--line-soft); color: var(--ink-2); }
+.vr-tabla2 th:first-child, .vr-tabla2 td:first-child { text-align: left; color: var(--ink); }
+.vr-tabla2 tr.on td { background: var(--accent-soft); color: var(--ink); font-weight: 600; }
+.vr-tabla2 td.nuevo { color: var(--accent); font-weight: 600; }
+.salidas { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: 12px; margin: 14px 0; }
+.salidas pre { margin: 0; padding: 10px 12px; background: var(--surface-2); border-radius: 8px; font-family: var(--f-mono); font-size: 12.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); }
+.salidas h4 { margin: 0 0 6px; font-family: var(--f-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); font-weight: 500; }
+.vr-cuenta { margin-top: 10px; font-family: var(--f-mono); font-size: 12.5px; color: var(--ink-2); overflow-wrap: anywhere; min-height: 1.4em; }
+.vr-cuenta b { color: var(--ink); font-weight: 500; }
+@media (max-width: 480px) {
+  .cpu { grid-template-columns: minmax(0, 1fr); }
+  .carril { grid-template-columns: 60px minmax(0, 1fr); }
+  .eje { margin-left: 68px; }
+  .apiladas .fila { grid-template-columns: 84px minmax(0, 1fr) 80px; }
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ E/S programada, interrupciones y DMA</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Infraestructura · Arquitectura de computadores · UD3</p>
+    <h1>E/S programada, interrupciones y DMA: cómo no perder millones de ciclos esperando</h1>
+    <p class="lede">
+      Un procesador hace miles de millones de pasos por segundo, pero un disco, un teclado o una tarjeta de red tardan millones de pasos en responder.
+      Hay tres formas de manejar esa espera: <b>preguntar sin parar</b>, <b>que el dispositivo avise</b> o <b>delegar todo el traslado en otro circuito</b>.
+      Esta página mide, con números concretos, cuántos ciclos cuesta cada una.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> Esperas una pizza que tarda 30 minutos. Puedes quedarte frente al horno abriéndolo cada segundo para mirar, o hacer otras cosas hasta que suene un timbre. Y si en vez de una pizza fueran cien, ¿quién las llevaría de la cocina a la mesa? Escribe cómo lo resolverías.</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: yo mientras tanto..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>Contar los ciclos que se pierden</h2>
+      <p>Siete pasos. Cada uno termina con un chequeo: hasta que no lo resuelves, el siguiente queda cerrado. Equivocarte aquí no resta nada, es parte del método.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="La espera">
+          <span class="etapa">Paso 1</span>
+          <h3>Un procesador que espera</h3>
+          <p>Un procesador de 3 GHz da 3 000 millones de pasos de reloj (ciclos) por segundo. Cada ciclo dura unos 0.3 nanosegundos. Un dispositivo, en cambio, tarda mucho más en tener listo un dato: un SSD, decenas de microsegundos; un disco duro, varios milisegundos; una tecla, unos 100 milisegundos
+            <cite class="cita" data-fuente="arq3" data-pag="7" data-pimp="4" data-seccion="1.4 Disparidad de velocidades (Tabla 2)" data-que="Una tabla de tiempos: ciclo de CPU de 0.3 ns, DRAM de 50 a 100 ns, SSD NVMe de 10 a 100 microsegundos, HDD de 5 a 10 milisegundos y una pulsación de tecla de unos 100 milisegundos." data-cuando="Al terminar este paso"></cite>.</p>
+          <p>Imagina que el procesador pidió un dato y no tiene nada más que hacer: <b>se queda preguntando "¿ya está?, ¿ya está?, ¿ya está?"</b> una y otra vez. A la derecha hay una línea de tiempo con 40 casillas. Las casillas rojas son ciclos en los que la CPU solo pregunta. Las verdes, ciclos en los que hace trabajo útil. El dispositivo tarda 2 milisegundos.</p>
+          <div class="check" id="chk1"><p class="check-tit">Predice antes de ver nada</p><div class="cuerpo"></div></div>
+          <details class="profundizar">
+            <summary>El material dice "seis órdenes de magnitud"</summary>
+            <div>
+              <p>La Tabla 2 del material compara un ciclo de 0.3 ns con un HDD de 5 a 10 ms y concluye que hay seis órdenes de magnitud. Con esas mismas cifras salen casi siete: $10\ \text{ms} / 0.3\ \text{ns} \approx 3.3 \times 10^7$. Seis solo valdrían entre 1 ns y 1 ms. Es un detalle menor, pero conviene saberlo para no desconfiar de tu cuenta cuando no coincida con el texto.</p>
+            </div>
+          </details>
+        </section>
+
+        <section class="paso card" data-titulo="Polling">
+          <span class="etapa">Paso 2</span>
+          <h3>E/S programada: preguntar sin parar</h3>
+          <p>La CPU no habla con el dispositivo directamente: lo hace a través de un <b>controlador</b>, que tiene tres tipos de registros: de <b>datos</b>, de <b>estado</b> (ocupado, listo, error) y de <b>control</b> (leer, escribir, iniciar)
+            <cite class="cita" data-fuente="arq3" data-pag="6" data-pimp="3" data-seccion="1.3 Controlador de E/S" data-que="Los registros de datos, estado y control del controlador, y que pueden estar mapeados en memoria o en un espacio de E/S independiente." data-cuando="Al empezar este paso"></cite>.</p>
+          <p>En la <b>E/S programada</b>, o <i>polling</i>, la CPU escribe "iniciar" en el registro de control y después lee el de estado en un bucle hasta que diga "listo": <code>mientras (estado ≠ LISTO): seguir consultando</code>. Es simple, pero la CPU queda bloqueada
+            <cite class="cita" data-fuente="arq3" data-pag="7" data-pimp="4" data-seccion="2 E/S programada (polling)" data-que="La espera activa: la CPU escribe en el registro de control y lee el de estado en un bucle. Simple, pero bloquea a la CPU." data-cuando="Después de este paso"></cite>.
+            Los ciclos perdidos son la frecuencia por el tiempo de espera:</p>
+          <div class="fbloque">
+            <div data-tex="P \;=\; f \cdot t" data-display></div>
+            <div class="vivo" id="vivoP"></div>
+          </div>
+          <p>Aquí $f = 3 \times 10^9$ ciclos por segundo y $t$ es lo que tarda el dispositivo. Mueve la espera, o toca un dispositivo real de los botones, y mira cómo crece el tramo rojo.</p>
+          <details class="profundizar">
+            <summary>¿Dónde están esos registros?</summary>
+            <div>
+              <p>El material dice que los registros pueden estar <b>mapeados en memoria</b> (se leen con las mismas instrucciones que la memoria) o en un <b>espacio de E/S independiente</b> (con instrucciones propias). Dos párrafos antes dice que el controlador se maneja "con las mismas instrucciones que usaría para acceder a memoria", lo que solo es cierto en el primer caso. No cambia nada de lo que sigue: aquí solo importa que la CPU lee un registro de estado una y otra vez.</p>
+            </div>
+          </details>
+          <div class="check" id="chk2"><p class="check-tit">Calcula con los datos en vivo</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Interrupciones">
+          <span class="etapa">Paso 3</span>
+          <h3>Que el dispositivo avise</h3>
+          <p>La idea contraria: la CPU manda la orden y se pone a hacer <b>otra cosa</b>. Cuando el dispositivo termina, activa una <b>línea de interrupción</b> y la CPU deja un momento lo que hace para atenderlo
+            <cite class="cita" data-fuente="arq3" data-pag="8" data-pimp="5" data-seccion="2.1 y 2.2 Interrupciones y comparativa (Tabla 3)" data-que="E/S por interrupciones (el dispositivo avisa, la CPU queda libre) y la tabla comparativa de las tres técnicas: polling, interrupciones y DMA." data-cuando="Al terminar este paso"></cite>.
+            El trozo de código que la atiende se llama <b>ISR</b> (rutina de servicio de la interrupción).</p>
+          <p>No es gratis: atender el aviso cuesta unas decenas o centenas de ciclos (guardar el estado, hacer el trabajo, restaurarlo). En esta página usamos <b>100 ciclos</b> por ISR. El material hace la cuenta del polling con los mismos números de esta línea de tiempo
+            <cite class="cita" data-fuente="arq3" data-pag="8" data-pimp="5" data-seccion="Ejemplo: el coste del polling" data-que="El cálculo de 3·10⁹ ciclos por segundo por 2 ms = 6 000 000 de ciclos perdidos, frente a solo decenas o centenas de ciclos con interrupciones." data-cuando="Después de este paso"></cite>.
+            Abajo de la línea del polling aparece ahora la de las interrupciones: verde mientras espera, y una casilla azul con la ISR (dibujada mucho más grande que en la realidad).</p>
+          <div class="fbloque">
+            <div data-tex="P_{\text{polling}} = f\,t \qquad P_{\text{interr.}} \approx c" data-display></div>
+            <div class="vivo" id="vivoI"></div>
+          </div>
+          <p>Aquí $c$ es el costo de la ISR, 100 ciclos. Fíjate en la letra pequeña: la Tabla 3 del material dice que con interrupciones la CPU pierde "ninguno" mientras espera. Es cierto <i>mientras espera</i>, pero omite lo que cuesta la ISR cada vez que el dispositivo avisa.</p>
+          <div class="check" id="chk3"><p class="check-tit">Predice antes de ver el número</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="El aviso">
+          <span class="etapa">Paso 4</span>
+          <h3>Qué pasa cuando llega el aviso</h3>
+          <p>Al final de <b>cada</b> instrucción, la CPU comprueba si hay una interrupción pendiente. Si la hay, hace cuatro cosas
+            <cite class="cita" data-fuente="arq3" data-pag="9" data-pimp="6" data-seccion="3.1 Mecanismo de interrupción (Figura 1)" data-que="Los cuatro pasos: termina la instrucción en curso, guarda PC y flags en la pila, salta a la ISR, restaura y reanuda." data-cuando="Al terminar este paso"></cite>:</p>
+          <ol>
+            <li><b>Termina</b> la instrucción que estaba ejecutando.</li>
+            <li><b>Guarda</b> el contador de programa (PC) y los flags en la <b>pila</b>.</li>
+            <li><b>Salta</b> a la ISR. Para saber a cuál, consulta una tabla en memoria, el <b>vector de interrupciones</b>.</li>
+            <li><b>Restaura</b> lo guardado y reanuda el programa justo donde iba.</li>
+          </ol>
+          <p>A la derecha hay una CPU de juguete que ejecuta un programa de 4 líneas que suma dos números (cargar a, cargar b, sumar, guardar). Las direcciones del programa y de la ISR son ilustrativas: el material solo da el ejemplo de una tabla con teclado, disco y temporizador
+            <cite class="cita" data-fuente="arq3diapo" data-pag="17" data-seccion="Mecanismo de interrupción" data-que="Los cuatro pasos en una diapositiva, con la explicación de por qué se guarda el estado y por qué se usa una pila (para poder anidar)." data-cuando="Para repasar después de este paso"></cite>.
+            Para el chequeo, imagina que el aviso llega justo mientras se ejecuta la <b>suma</b> (la tercera instrucción, en la dirección <code>0x12</code>).</p>
+          <div class="check" id="chk4"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+          <details class="profundizar">
+            <summary>Las direcciones de la tabla vector son de ejemplo</summary>
+            <div>
+              <p>La tabla de la diapositiva (teclado en <code>0x00A4</code>, disco en <code>0x00B8</code>, temporizador en <code>0x0020</code>) no sale de la teoría de la unidad: son valores ilustrativos. Lo mismo vale para los números de línea (IRQ). La diapositiva pone el disco en la IRQ6 y los canales de disco en la IRQ14 y 15 "SATA"; en los PC clásicos, la IRQ6 era el disquete y las 14 y 15 eran los canales IDE, no SATA. Es una simplificación histórica, no algo que debas memorizar.</p>
+            </div>
+          </details>
+        </section>
+
+        <section class="paso card" data-titulo="Prioridades">
+          <span class="etapa">Paso 5</span>
+          <h3>Interrupciones que interrumpen interrupciones</h3>
+          <p>Mientras la CPU atiende una ISR puede llegar otra interrupción. Cada fuente tiene una <b>prioridad</b>. La regla: una ISR solo la interrumpe una de <b>mayor</b> prioridad; las de igual o menor prioridad esperan. Cuando una interrumpe a otra se dice que están <b>anidadas</b>, y por eso el estado se guarda en una <b>pila</b>: el último guardado es el primero que se restaura
+            <cite class="cita" data-fuente="arq3" data-pag="10" data-pimp="7" data-seccion="3.3 Prioridades, máscara y anidadas (Tabla 4)" data-que="Niveles de prioridad, anidamiento, registro de máscara y la interrupción no enmascarable (NMI), con ejemplos de cada nivel en la Tabla 4." data-cuando="Al terminar este paso"></cite>.</p>
+          <p>Los ejemplos del material, de la más urgente a la menos: <b>máxima</b> (fallo de alimentación, error de memoria no corregible: son no enmascarables, NMI), <b>alta</b> (temporizador), <b>media</b> (disco, red) y <b>baja</b> (teclado, ratón). Un registro de <b>máscara</b> permite ignorar temporalmente las enmascarables.</p>
+          <div class="check" id="chk5"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+          <details class="profundizar">
+            <summary>Una diapositiva se contradice</summary>
+            <div>
+              <p>La diapositiva 19 de la unidad dice "alta: fallo de alimentación, media: fin de impresión, baja: refresco de pantalla", pero la Tabla 4 de la teoría da cuatro niveles con otras causas (y teclado y ratón como los de prioridad baja)
+                <cite class="cita" data-fuente="arq3diapo" data-pag="19" data-seccion="Prioridades y máscara" data-que="Prioridad, enmascaramiento, NMI y el ejemplo de una interrupción anidada: un fallo de alimentación sobre una ISR de impresión." data-cuando="Después del paso, para comparar con la Tabla 4"></cite>.
+                Úsala como ejemplo de anidamiento, no como tabla de prioridades. Aquí seguimos la Tabla 4 de la teoría.</p>
+            </div>
+          </details>
+        </section>
+
+        <section class="paso card" data-titulo="DMA">
+          <span class="etapa">Paso 6</span>
+          <h3>DMA: que otro mueva el bloque</h3>
+          <p>Las interrupciones resuelven la espera, pero tienen un problema cuando el dispositivo entrega un <b>bloque</b> de datos: hace falta una ISR <b>por palabra</b>. El <b>DMA</b> (acceso directo a memoria) lo evita: la CPU le dice al controlador DMA de dónde, adónde y cuántas palabras, y el controlador mueve el bloque entero por su cuenta y avisa con <b>una sola</b> interrupción al terminar
+            <cite class="cita" data-fuente="arq3" data-pag="11" data-pimp="8" data-seccion="4.1 y 4.2 Motivación y controlador DMA (Figura 2)" data-que="Por qué las interrupciones por palabra no escalan y los registros del controlador DMA: dirección de memoria, contador de palabras (se decrementa en cada transferencia) y control y estado." data-cuando="Al terminar este paso"></cite>
+            <cite class="cita" data-fuente="arq2" data-pag="13" data-pimp="10" data-seccion="4.7 DMA" data-que="La versión de la unidad 2: la CPU programa origen, destino y número de palabras, el controlador mueve los datos y avisa con una interrupción." data-cuando="Para repasar después de este paso"></cite>.</p>
+          <p>El controlador DMA tiene registros de <b>dirección</b> y de <b>contador</b>: en cada palabra, la dirección avanza y el contador baja; al llegar a cero, interrumpe a la CPU. A la derecha puedes ver ese contador bajar. Más abajo, el costo para un bloque de 8 KB: el material lo calcula con palabras de 4 bytes
+            <cite class="cita" data-fuente="arq3" data-pag="12" data-pimp="9" data-seccion="Ejemplo: interrupciones frente a DMA" data-que="El cálculo de 8 KB = 2 048 palabras de 4 bytes: 2 048 ISR de unos 100 ciclos = 204 800 ciclos, frente a unas decenas de ciclos y una interrupción con DMA." data-cuando="Después de este paso"></cite>.</p>
+          <div class="fbloque">
+            <div data-tex="P_{\text{interr.}} = N \cdot c \qquad P_{\text{DMA}} = p + c" data-display></div>
+            <div class="vivo" id="vivoD"></div>
+          </div>
+          <p>Con $N$ palabras, $c = 100$ ciclos por ISR y $p = 30$ ciclos para programar el DMA. El material dice "unas decenas de ciclos"; los 30 son una elección de esta página. Algunas diapositivas usan 10 000 palabras en vez de 2 048: es el mismo argumento con otro tamaño.</p>
+          <div class="check" id="chk6"><p class="check-tit">Calcula con los datos en vivo</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="El bus">
+          <span class="etapa">Paso 7</span>
+          <h3>El DMA también comparte el bus</h3>
+          <p>El DMA y la CPU usan el mismo bus para llegar a la memoria. Cuando el DMA toma el bus, la CPU puede quedarse esperando. Hay dos formas de repartirlo
+            <cite class="cita" data-fuente="arq3" data-pag="12" data-pimp="9" data-seccion="4.3 Ráfaga y robo de ciclo" data-que="Ráfaga: el DMA transfiere un bloque continuo, más rápido, y puede bloquear a la CPU. Robo de ciclo: una palabra y cede el bus, más lento, y la CPU progresa." data-cuando="Al terminar este paso"></cite>:</p>
+          <ul>
+            <li><b>Ráfaga:</b> el DMA se queda con el bus hasta terminar el bloque.</li>
+            <li><b>Robo de ciclo:</b> el DMA toma el bus para una sola palabra y lo devuelve.</li>
+          </ul>
+
+          <div class="destacado" id="destacado">
+            <p class="dest-tit">Una confusión muy común</p>
+            <h4>Si el DMA hace el traslado, ¿la CPU queda siempre libre?</h4>
+            <p>La Tabla 3 del material resume el DMA con "ninguno" en lo que pierde la CPU durante la transferencia. Es una buena aproximación, pero esconde algo: <b>el bus es uno solo</b>.</p>
+            <div class="check" id="chk7"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+          </div>
+          <p>Fuera del material: cuando una página de memoria virtual no está en la RAM, el sistema operativo la trae del disco, y esa lectura también se hace por DMA. Por eso conviene que el disco y el bus aguanten bien. Es el puente con la página siguiente de esta ruta, Disco duro y SSD.</p>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+        </div>
+
+        <!-- pasos 1 a 3: carriles -->
+        <div class="esc-pn" id="pnA">
+          <div class="ctl">
+            <label for="latRng">Espera del dispositivo <b id="latVal"></b></label>
+            <input type="range" id="latRng" min="0" max="21" step="1" value="17">
+          </div>
+          <div class="seg" id="preset" role="group" aria-label="Dispositivos reales" hidden>
+            <button type="button" data-us="50" aria-pressed="false">SSD NVMe 50 µs</button>
+            <button type="button" data-us="8000" aria-pressed="false">HDD 8 ms</button>
+            <button type="button" data-us="100000" aria-pressed="false">Tecla 100 ms</button>
+          </div>
+          <div class="carriles" id="carriles"></div>
+          <div class="eje"><span>pides el dato</span><span>el dispositivo termina</span></div>
+          <div class="leyenda"><span><i class="neg"></i>solo pregunta</span><span><i class="pos"></i>trabajo útil</span><span id="legIsr"><i class="acc"></i>atiende la ISR (sin escala)</span></div>
+          <div class="cuenta" id="aCuenta"></div>
+          <p class="esc-nota" id="aNota"></p>
+        </div>
+
+        <!-- paso 4: CPU de juguete -->
+        <div class="esc-pn" id="pnB" hidden>
+          <div class="cpu">
+            <div class="caja"><h4>Programa (a + b)</h4><div class="prog" id="prog"></div></div>
+            <div class="caja"><h4>Registros</h4><div class="regs" id="regs"></div><h4 style="margin-top:8px">Pila</h4><div class="pila" id="pila"></div></div>
+          </div>
+          <table class="vect" id="vect"></table>
+          <div class="fases4" id="fases4"></div>
+          <div class="ctl-row">
+            <button type="button" id="btnIrq">Llega una interrupción</button>
+            <button type="button" class="primary" id="btnPaso">Paso</button>
+            <button type="button" class="ghost" id="btnReinicia">Reiniciar</button>
+          </div>
+          <div class="msg" id="msgB" aria-live="polite"></div>
+        </div>
+
+        <!-- paso 5: prioridades -->
+        <div class="esc-pn" id="pnC" hidden>
+          <div class="irqbtn" id="irqbtn">
+            <button type="button" data-q="tec">Teclado (baja)</button>
+            <button type="button" data-q="disco">Disco (media)</button>
+            <button type="button" data-q="temp">Temporizador (alta)</button>
+            <button type="button" data-q="nmi">Fallo de alimentación (máxima)</button>
+          </div>
+          <div class="ctl-row"><button type="button" class="primary" id="btnFin">Termina la ISR actual</button><button type="button" class="ghost" id="btnReC">Reiniciar</button></div>
+          <div class="cpu">
+            <div class="caja"><h4>Pila (arriba, la que corre)</h4><div class="pila" id="pilaC"></div></div>
+            <div class="caja"><h4>Esperando</h4><div class="regs2" id="pendC"></div><h4 style="margin-top:8px">Orden en que terminaron</h4><div class="regs2" id="ordenC"></div></div>
+          </div>
+          <div class="msg" id="msgC" aria-live="polite"></div>
+        </div>
+
+        <!-- paso 6: DMA -->
+        <div class="esc-pn" id="pnD" hidden>
+          <div class="seg" id="bloqueSeg" role="group" aria-label="Tamaño del bloque">
+            <button type="button" data-kb="4" aria-pressed="false">4 KB</button>
+            <button type="button" data-kb="8" aria-pressed="true">8 KB</button>
+            <button type="button" data-kb="32" aria-pressed="false">32 KB</button>
+          </div>
+          <div class="cuenta" id="dCuenta"></div>
+          <div class="apiladas" id="dBarra"></div>
+          <h4 class="mini-tit" style="margin-top:14px">El contador del DMA, con un bloque de 8 palabras</h4>
+          <div class="memo8" id="memo8"></div>
+          <div class="cuenta" id="dmaRegs"></div>
+          <div class="ctl-row"><button type="button" class="primary" id="btnDma">Paso del DMA</button><button type="button" class="ghost" id="btnDmaRe">Reiniciar</button></div>
+        </div>
+
+        <!-- paso 7: bus -->
+        <div class="esc-pn" id="pnE" hidden>
+          <div id="busVacio" class="vacio-msg">Responde la predicción para ver cómo se reparte el bus.</div>
+          <div id="busPanel" hidden>
+            <div class="seg" id="modoSeg" role="group" aria-label="Modo del DMA">
+              <button type="button" data-m="rafaga" aria-pressed="true">Ráfaga</button>
+              <button type="button" data-m="robo" aria-pressed="false">Robo de ciclo</button>
+            </div>
+            <div class="bus" id="bus"></div>
+            <div class="leyenda"><span><i class="acc"></i>el DMA usa el bus</span><span><i class="pos"></i>la CPU usa el bus</span><span><i class="neg"></i>la CPU espera el bus</span></div>
+            <div class="cuenta" id="busCuenta"></div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>Los tres costos del paso a paso, escritos como los contaría un programa: el polling, 2 048 interrupciones y un DMA. Elige Python o R, dale a reproducir y mira cuántos ciclos de CPU se pierden en cada caso. El bucle largo no se anima vuelta por vuelta: se ven las dos primeras y después un salto al final.</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir</p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="true">Python</button>
+            <button type="button" data-lang="r" aria-pressed="false">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">1 · polling</span><span data-f="2">2 · interrupciones</span><span data-f="3">3 · DMA</span><span data-f="4">4 · comprobar</span>
+        </div>
+        <h3 class="mini-tit vr-tit">Ciclos de CPU perdidos, por método</h3>
+        <div class="tabla-wrap" style="overflow-x:auto"><table class="vr-tabla2" id="vrTabla"></table></div>
+        <div class="vr-cuenta" id="vrCuenta"></div>
+      </div>
+    </div>
+
+    <div class="salidas">
+      <div><h4>Lo que imprime Python</h4><pre>6000000
+204800
+130
+1575.4
+True True</pre></div>
+      <div><h4>Lo que imprime R</h4><pre>[1] 6000000
+[1] 204800
+[1] 130
+[1] 1575.4
+[1] TRUE TRUE</pre></div>
+    </div>
+
+    <p class="vr-nota">Aquí no hay una función de librería que mida el costo de la E/S, así que el programa se verifica contra la cuenta cerrada: <code>3e9 * 0.002</code> da los 6 000 000 del polling y <code>2048 * 100</code> da los 204 800 de las interrupciones, y la última línea comprueba que las dos cuentas coinciden con los bucles. El DMA no tiene fórmula de librería: son 30 ciclos para programarlo más 100 de la única interrupción, 130, y los 204 800 son 1 575.4 veces más. Los datos de la página (30, 100, 2 048) son inventados y los dos bucles de DMA y polling son un modelo: el contador del DMA baja solo, sin gastar ciclos de CPU. El material no trae código de ningún tipo para este tema, ni en R. En R la primera línea, <code>options(scipen = 999)</code>, evita que <code>print</code> escriba 6e+06.</p>
+
+    <details class="profundizar">
+      <summary>La versión sin bucles</summary>
+      <div>
+        <p>Cada bucle es una cuenta que se puede escribir de una sola vez. En Python: <code>print(round(3e9 * 0.002), 2048 * 100)</code> imprime <code>6000000 204800</code>. En R, con <code>options(scipen = 999)</code>: <code>print(round(3e9 * 0.002)); print(2048 * 100)</code> imprime <code>[1] 6000000</code> y <code>[1] 204800</code>. Los bucles de arriba sirven para ver el algoritmo; la multiplicación, para comprobar que no te equivocaste.</p>
+      </div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>6e+06 en vez de 6000000</h3><span class="estado" data-reto="codigo2"></span></div>
+        <div id="codigo2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>1:0 en R</h3><span class="estado" data-reto="codigo3"></span></div>
+        <div id="codigo3"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: la biblioteca te avisa en el índice cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>¿Qué técnica conviene?</h3><span class="estado" data-reto="ojo"></span></div>
+        <p class="desc">Una situación y tres técnicas. Decide sin calcular. Apruebas con 4 de 5.</p>
+        <div id="ojo"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Construir</span><h3>Encuentra los casos</h3><span class="estado" data-reto="construir"></span></div>
+        <p class="desc">Mueve la espera y el tamaño del bloque hasta cumplir cada objetivo. La CPU es de 3 GHz y cada ISR cuesta 100 ciclos. Se marcan solos.</p>
+        <div class="ctl"><label for="cLat">Espera del dispositivo <b id="cLatV"></b></label><input type="range" id="cLat" min="0" max="21" step="1" value="10"></div>
+        <div class="ctl"><label for="cPal">Palabras del bloque <b id="cPalV"></b></label><input type="range" id="cPal" min="0" max="7" step="1" value="0"></div>
+        <div class="grande" id="constrVivo"></div>
+        <ul class="objetivos" id="objetivos"></ul>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>Calcúlalo con lápiz</h3><span class="estado" data-reto="mano"></span></div>
+        <p class="desc">Un bloque que llega con una interrupción por palabra. Haz la cuenta completa antes de pedir pistas.</p>
+        <div class="enunciado" id="manoDatos"></div>
+        <div id="mano"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Alguien se equivocó</h3><span class="estado" data-reto="error"></span></div>
+        <p class="desc">Una de las líneas tiene un error. Tócala.</p>
+        <div id="error"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Por qué gana el DMA</h3><span class="estado" data-reto="prop1"></span></div>
+        <div id="prop1"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Una ISR de baja interrumpida</h3><span class="estado" data-reto="prop2"></span></div>
+        <div id="prop2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Qué va a la pila</h3><span class="estado" data-reto="prop3"></span></div>
+        <div id="prop3"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Ráfaga o robo de ciclo</h3><span class="estado" data-reto="prop4"></span></div>
+        <div id="prop4"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Una espera muy corta</h3><span class="estado" data-reto="prop5"></span></div>
+        <div id="prop5"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Recordar a la fuerza es lo que fija. Arma la fórmula y el orden del aviso de memoria y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Fórmula de memoria</span><h3>Los ciclos perdidos por polling</h3><span class="estado" data-reto="formula"></span></div>
+        <p class="desc">Frecuencia, tiempo y el resultado. Hay piezas de más que no pertenecen. No mires arriba.</p>
+        <div id="formula"></div>
+      </article>
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Orden de memoria</span><h3>Los cuatro pasos de una interrupción</h3><span class="estado" data-reto="orden"></span></div>
+        <p class="desc">Ordena lo que hace la CPU cuando llega el aviso. Hay dos pasos que no existen.</p>
+        <div id="ordenPasos"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el material</h2>
+      <p class="lecturas-intro">Ya construiste la idea con las manos. Ahora ve a la versión técnica del máster y comprueba que la reconoces. Cada entrada dice qué vas a encontrar y en qué momento conviene leerla. Si abres la biblioteca con doble clic, el enlace abre el PDF en esa página.</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> La CPU de 3 GHz, las esperas de 2 ms, 8 KB y 2 048 palabras de 4 bytes y los 6 000 000 y 204 800 ciclos vienen del material. El costo de 100 ciclos por ISR es el del material ("unos 100"); los 30 ciclos para programar el DMA, las direcciones de la CPU de juguete, el reparto del bus en 16 casillas y las rondas de los retos son inventados. El material no trae latencias de interrupción medidas, ni una traza de un DMA con valores de dirección y contador, ni código en ningún lenguaje para este tema: eso es de esta página. Tu progreso se guarda solo en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+(function () {
+  "use strict";
+  /*
+    Ejemplo comun de la ruta "Arquitectura de computadores" (ya dejado por la pagina de Jerarquia de memoria):
+    el byte 0110 1101 (109) y el byte 0000 1101 (13); un programa de 4 lineas que suma dos numeros;
+    una cache de 4 lineas; un disco de 7200 rpm; las cargas A a E del ejercicio de UD2.
+    En esta pagina: CPU de 3 GHz, dispositivo de 2 ms (6 000 000 ciclos perdidos), bloque de 8 KB = 2048 palabras,
+    ISR de 100 ciclos (204 800 ciclos con una interrupcion por palabra), DMA = 30 + 100 = 130 ciclos;
+    el programa de 4 lineas a + b en las direcciones 0x10 a 0x13 y la ISR del teclado en 0x00A4.
+  */
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var RETOS = ["ojo", "construir", "mano", "error", "formula", "orden", "prop1", "prop2", "prop3", "prop4", "prop5", "codigo1", "codigo2", "codigo3"];
+  var C = B.concepto({ id: "es-interrupciones-dma", retos: RETOS, pasos: 7 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  /* ---------------- utilidades ---------------- */
+  var NBSP = "\u00a0";
+  function num2(v) { return String(Math.round(v * 100) / 100); }
+  function num1(v) { return String(Math.round(v * 10) / 10); }
+  function miles(n) { return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, NBSP); }
+  function fmtUs(us) {
+    if (us < 1) return num2(us * 1000) + " ns";
+    if (us < 1000) return num2(us) + " µs";
+    return num2(us / 1000) + " ms";
+  }
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+  function hex(n, w) { var s = n.toString(16).toUpperCase(); while (s.length < w) s = "0" + s; return "0x" + s; }
+
+  /* ---------------- datos ---------------- */
+  var LAT = [0.01, 0.02, 0.03, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 8000, 10000, 100000];
+  var PAL = [64, 128, 256, 512, 1024, 2048, 4096, 8192];
+  var ISR = 100, PROG = 30, CPUS = 3000; // ciclos por microsegundo
+  function ciclos(us) { return Math.round(us * CPUS); }
+
+  var est = { paso: 0, chk1: false, chk2: false, chk3: false, chk4: false, chk5: false, chk6: false, chk7: false, li: 17, kb: 8, modo: "rafaga" };
+  var pasos;
+  var HINTS = [
+    "El número de ciclos aún está oculto: predice primero",
+    "Mueve la espera o toca un dispositivo",
+    "Compara las dos líneas de tiempo",
+    "Prueba el aviso después de responder",
+    "Lanza interrupciones en distinto orden",
+    "Cambia el tamaño del bloque",
+    "Compara ráfaga y robo de ciclo"
+  ];
+
+  /* ---------------- panel A: carriles ---------------- */
+  function pintarA() {
+    var us = LAT[est.li], cic = ciclos(us), p = est.paso;
+    $("latVal").textContent = fmtUs(us);
+    $("latRng").value = est.li;
+    $("latRng").disabled = !est.chk1;
+    $("preset").hidden = p < 1;
+    var bs = $("preset").querySelectorAll("button");
+    [].forEach.call(bs, function (b) { b.setAttribute("aria-pressed", String(+b.getAttribute("data-us") === us)); });
+    var h = "", i, c1 = "", c2 = "";
+    for (i = 0; i < 40; i++) c1 += '<i class="' + (i < 32 ? "r" : "v") + '"></i>';
+    for (i = 0; i < 40; i++) c2 += '<i class="' + (i < 32 ? "v" : i === 32 ? "x" : "v") + '"></i>';
+    h += '<div class="carril"><div class="nm">Polling<small>pregunta</small></div><div class="celdas">' + c1 + '</div></div>';
+    if (p >= 2) h += '<div class="carril"><div class="nm">Interrup.<small>avisa</small></div><div class="celdas">' + c2 + '</div></div>';
+    $("carriles").innerHTML = h;
+    $("legIsr").hidden = p < 2;
+    var ocP = !est.chk1;
+    var t = 'Ciclos perdidos con polling: <b class="neg">' + (ocP ? '<span class="oculto">?</span>' : miles(cic)) + '</b>';
+    if (!ocP) t += ' (' + fmtUs(us) + ' a 3 GHz)';
+    if (p >= 2) {
+      t += '<br>Ciclos perdidos con interrupciones: <b class="pos">' + (est.chk3 ? "≈ " + ISR : '<span class="oculto">?</span>') + '</b>';
+      if (est.chk3) t += ' (la ISR)';
+    }
+    $("aCuenta").innerHTML = t;
+    $("vivoP").innerHTML = ocP ? "P = 3·10⁹ × t = ?" : "P = 3·10⁹ × " + num2(us / 1e6) + " s = <b>" + miles(cic) + "</b> ciclos";
+    $("vivoI").innerHTML = ocP ? "" : "polling: <b>" + miles(cic) + "</b> ciclos · interrupciones: <b>" + (est.chk3 ? "≈ " + ISR : "?") + "</b> ciclos";
+    $("aNota").textContent = p === 0
+      ? "Cada casilla es un trozo igual de la espera. La CPU de 3 GHz da 3 000 ciclos por microsegundo."
+      : p === 1 ? "Entre más lenta la espera, más rojo, pero las casillas son proporcionales: lo que crece es el número que hay detrás."
+      : "Con 2 ms, el polling pierde millones de ciclos y la interrupción, unas centenas. Si el dispositivo fuera rapidísimo, podría no valer la pena.";
+  }
+  $("latRng").addEventListener("input", function () { est.li = +this.value; pintarA(); });
+  [].forEach.call($("preset").querySelectorAll("button"), function (b) {
+    b.addEventListener("click", function () {
+      var us = +b.getAttribute("data-us");
+      est.li = LAT.indexOf(us);
+      pintarA();
+    });
+  });
+
+  /* ---------------- panel B: CPU de juguete ---------------- */
+  var PROGRAMA = [["0x10", "CARGAR A, [a]"], ["0x11", "CARGAR B, [b]"], ["0x12", "SUMAR A, B"], ["0x13", "GUARDAR [r], A"]];
+  var ISR_DIR = 0xA4;
+  var cpu;
+  function cpuInicial() { return { pc: 0x10, flags: "0010", pila: [], irq: false, fase: "prog", msg: "El programa va en 0x10. Pulsa Paso para ejecutar una instrucción, o lanza una interrupción primero." }; }
+  cpu = cpuInicial();
+  var FASES4 = [["term", "1 · termina la instrucción"], ["guarda", "2 · guarda PC y flags"], ["salta", "3 · salta a la ISR"], ["rest", "4 · restaura y reanuda"]];
+  function pintarB() {
+    var bloq = !est.chk4;
+    var h = "";
+    PROGRAMA.forEach(function (f, i) { h += '<div class="' + (cpu.fase === "prog" || cpu.fase === "guarda" ? (0x10 + i === cpu.pc && cpu.fase === "prog" ? "pc" : "") : "") + '"><span>' + f[0] + '</span><span>' + f[1] + '</span></div>'; });
+    var enIsr = cpu.fase === "salta" || cpu.fase === "isr" || cpu.fase === "rest";
+    h += '<div class="' + (enIsr ? "isr" : "") + '"><span>0x00A4</span><span>ISR del teclado</span></div>';
+    $("prog").innerHTML = h;
+    $("regs").innerHTML = 'PC = <b>' + (bloq ? "?" : hex(cpu.pc, cpu.pc < 0x100 && cpu.pc !== ISR_DIR ? 2 : 4)) + '</b><br>flags = <b>' + (bloq ? "?" : cpu.flags) + '</b><br>aviso pendiente = <b>' + (cpu.irq ? "sí" : "no") + '</b>';
+    var p = "";
+    if (!cpu.pila.length) p = '<div class="vacio">vacía</div>';
+    for (var i = cpu.pila.length - 1; i >= 0; i--) p += '<div>PC ' + hex(cpu.pila[i].pc, 2) + ' · flags ' + cpu.pila[i].flags + '</div>';
+    $("pila").innerHTML = bloq ? '<div class="vacio">?</div>' : p;
+    $("vect").innerHTML = '<tr><th>fuente</th><th>dirección de la ISR (ejemplo)</th></tr>' +
+      '<tr class="' + (enIsr ? "on" : "") + '"><td>teclado</td><td>0x00A4</td></tr><tr><td>disco</td><td>0x00B8</td></tr><tr><td>temporizador</td><td>0x0020</td></tr>';
+    var f4 = "", orden = ["term", "guarda", "salta", "rest"];
+    var actual = cpu.fase === "prog" ? (cpu.irq ? "term" : "") : cpu.fase === "guarda" ? "term" : cpu.fase === "salta" ? "guarda" : cpu.fase === "isr" ? "salta" : cpu.fase === "rest" ? "isr" : "";
+    FASES4.forEach(function (f, k) {
+      var cls = "";
+      var hechoHasta = cpu.fase === "prog" ? -1 : cpu.fase === "guarda" ? 0 : cpu.fase === "salta" ? 1 : cpu.fase === "isr" ? 2 : 2;
+      if (k <= hechoHasta) cls = "hecho";
+      if (cpu.fase === "rest" && k === 3) cls = "on";
+      if (cpu.fase === "prog" && cpu.irq && k === 0) cls = "on";
+      f4 += '<span class="' + cls + '">' + f[1] + '</span>';
+    });
+    void orden; void actual;
+    $("fases4").innerHTML = f4;
+    $("msgB").textContent = bloq ? "Responde la predicción para activar la CPU." : cpu.msg;
+    $("btnIrq").disabled = bloq || cpu.irq || cpu.fase !== "prog";
+    $("btnPaso").disabled = bloq;
+    $("btnReinicia").disabled = bloq;
+  }
+  $("btnIrq").addEventListener("click", function () {
+    cpu.irq = true;
+    cpu.msg = "La línea de interrupción está activa. La CPU no la atiende todavía: primero termina la instrucción en curso (pulsa Paso).";
+    pintarB();
+  });
+  $("btnPaso").addEventListener("click", function () {
+    if (cpu.fase === "prog") {
+      var ins = PROGRAMA[cpu.pc - 0x10][1], dir = hex(cpu.pc, 2);
+      cpu.pc = cpu.pc === 0x13 ? 0x10 : cpu.pc + 1;
+      if (cpu.irq) {
+        cpu.fase = "guarda";
+        cpu.msg = "Terminó " + ins + " (" + dir + "). Ahora el PC ya apunta a la siguiente instrucción, " + hex(cpu.pc, 2) + ". Se comprueba el aviso: hay uno pendiente.";
+      } else {
+        cpu.msg = "Se ejecutó " + ins + " (" + dir + "). El PC avanza a " + hex(cpu.pc, 2) + (cpu.pc === 0x10 ? " (el programa vuelve a empezar)." : ".");
+      }
+    } else if (cpu.fase === "guarda") {
+      cpu.pila.push({ pc: cpu.pc, flags: cpu.flags });
+      cpu.irq = false;
+      cpu.fase = "salta";
+      cpu.msg = "Se guardan en la pila el PC (" + hex(cpu.pc, 2) + ") y los flags (" + cpu.flags + "): lo mínimo para poder volver.";
+    } else if (cpu.fase === "salta") {
+      cpu.pc = ISR_DIR;
+      cpu.fase = "isr";
+      cpu.msg = "La CPU consulta el vector, ve que el teclado tiene su ISR en 0x00A4 y salta allí: PC = 0x00A4.";
+    } else if (cpu.fase === "isr") {
+      cpu.flags = "1000";
+      cpu.fase = "rest";
+      cpu.msg = "La ISR hace su trabajo y deja los flags en " + cpu.flags + ". Si no se hubieran guardado, el programa los vería cambiados sin saber por qué.";
+    } else if (cpu.fase === "rest") {
+      var s = cpu.pila.pop();
+      cpu.pc = s.pc; cpu.flags = s.flags;
+      cpu.fase = "prog";
+      cpu.msg = "Se restauran PC (" + hex(cpu.pc, 2) + ") y flags (" + cpu.flags + ") y el programa sigue exactamente donde iba, sin enterarse.";
+    }
+    pintarB();
+  });
+  $("btnReinicia").addEventListener("click", function () { cpu = cpuInicial(); pintarB(); });
+
+  /* ---------------- panel C: prioridades ---------------- */
+  var NOMQ = { tec: "teclado", disco: "disco", temp: "temporizador", nmi: "fallo de alimentación" };
+  var PRIO = { tec: 1, disco: 2, temp: 3, nmi: 4 };
+  var sc;
+  function scInicial() { return { pila: [], pend: [], orden: [], msg: "Lanza una interrupción: por ejemplo el disco, luego el teclado y luego el temporizador." }; }
+  sc = scInicial();
+  function pintarC() {
+    var bloq = !est.chk5;
+    var p = "", i;
+    if (!sc.pila.length) p = '<div class="vacio">ninguna ISR</div>';
+    for (i = sc.pila.length - 1; i >= 0; i--) p += '<div>' + (i === sc.pila.length - 1 ? "▶ " : "") + 'ISR ' + NOMQ[sc.pila[i]] + ' (prio. ' + PRIO[sc.pila[i]] + ')</div>';
+    $("pilaC").innerHTML = bloq ? '<div class="vacio">?</div>' : p;
+    $("pendC").innerHTML = sc.pend.length ? sc.pend.map(function (q) { return NOMQ[q] + " (" + PRIO[q] + ")"; }).join("<br>") : "nadie";
+    $("ordenC").innerHTML = sc.orden.length ? sc.orden.map(function (q, k) { return (k + 1) + ". " + NOMQ[q]; }).join("<br>") : "todavía ninguna";
+    $("msgC").textContent = bloq ? "Responde la predicción para activar el simulador." : sc.msg;
+    [].forEach.call($("irqbtn").querySelectorAll("button"), function (b) { b.disabled = bloq; });
+    $("btnFin").disabled = bloq || !sc.pila.length;
+    $("btnReC").disabled = bloq;
+  }
+  function llega(q) {
+    if (!sc.pila.length) { sc.pila.push(q); sc.msg = "La CPU estaba libre: atiende " + NOMQ[q] + " enseguida."; return; }
+    var top = sc.pila[sc.pila.length - 1];
+    if (PRIO[q] > PRIO[top]) { sc.pila.push(q); sc.msg = NOMQ[q] + " tiene más prioridad que " + NOMQ[top] + ": la interrumpe. El estado de " + NOMQ[top] + " queda guardado debajo, en la pila."; }
+    else { sc.pend.push(q); sc.msg = NOMQ[q] + " no tiene más prioridad que " + NOMQ[top] + ": tiene que esperar."; }
+  }
+  function termina() {
+    var q = sc.pila.pop();
+    sc.orden.push(q);
+    var mejor = null;
+    sc.pend.forEach(function (x) { if (mejor === null || PRIO[x] > PRIO[mejor]) mejor = x; });
+    var top = sc.pila.length ? sc.pila[sc.pila.length - 1] : null;
+    if (mejor !== null && (top === null || PRIO[mejor] > PRIO[top])) {
+      sc.pend.splice(sc.pend.indexOf(mejor), 1);
+      sc.pila.push(mejor);
+      sc.msg = "Termina " + NOMQ[q] + ". Hay alguien esperando con más prioridad que lo que sigue: entra " + NOMQ[mejor] + ".";
+    } else if (top !== null) {
+      sc.msg = "Termina " + NOMQ[q] + ". Se restaura el estado de " + NOMQ[top] + " y esa ISR sigue por donde iba.";
+    } else {
+      sc.msg = "Termina " + NOMQ[q] + ". La CPU vuelve al programa principal.";
+    }
+  }
+  [].forEach.call($("irqbtn").querySelectorAll("button"), function (b) { b.addEventListener("click", function () { llega(b.getAttribute("data-q")); pintarC(); }); });
+  $("btnFin").addEventListener("click", function () { termina(); pintarC(); });
+  $("btnReC").addEventListener("click", function () { sc = scInicial(); pintarC(); });
+
+  /* ---------------- panel D: DMA ---------------- */
+  var dma = { dir: 0, cont: 8 };
+  function pintarD() {
+    var N = est.kb * 256, conIsr = N * ISR, conDma = PROG + ISR, oc = !est.chk6;
+    [].forEach.call($("bloqueSeg").querySelectorAll("button"), function (b) { b.setAttribute("aria-pressed", String(+b.getAttribute("data-kb") === est.kb)); });
+    $("dCuenta").innerHTML = 'Bloque de <b>' + est.kb + ' KB</b> = <b>' + miles(N) + '</b> palabras de 4 bytes.<br>' +
+      'Interrupción por palabra: ' + miles(N) + ' × ' + ISR + ' = <b class="neg">' + (oc ? '<span class="oculto">?</span>' : miles(conIsr)) + '</b> ciclos.<br>' +
+      'DMA: ' + PROG + ' + ' + ISR + ' = <b class="pos">' + (oc ? '<span class="oculto">?</span>' : conDma) + '</b> ciclos.' +
+      (oc ? '' : '<br>Es <b>' + num1(conIsr / conDma) + '</b> veces menos.');
+    if (oc) $("dBarra").innerHTML = "";
+    else {
+      var tope = Math.log10(32 * 256 * ISR), a = Math.log10(conIsr) / tope * 100, d = Math.log10(conDma) / tope * 100;
+      $("dBarra").innerHTML = '<div class="fila"><span>una ISR por palabra</span><span class="barra"><i class="m" style="width:' + a.toFixed(1) + '%"></i></span><b>' + miles(conIsr) + '</b></div>' +
+        '<div class="fila"><span>DMA</span><span class="barra"><i class="a" style="width:' + d.toFixed(1) + '%"></i></span><b>' + conDma + '</b></div>' +
+        '<div class="esc-nota">Las barras están en escala logarítmica.</div>';
+    }
+    $("vivoD").innerHTML = oc ? "" : "P_interr. = " + miles(N) + " × " + ISR + " = <b>" + miles(conIsr) + "</b> · P_DMA = " + PROG + " + " + ISR + " = <b>" + conDma + "</b>";
+    var m = "";
+    for (var i = 0; i < 8; i++) m += '<i class="' + (i < dma.dir ? "ok" : "") + '">' + (i < dma.dir ? i : "") + '</i>';
+    $("memo8").innerHTML = m;
+    $("dmaRegs").innerHTML = 'dirección = <b>' + dma.dir + '</b> · contador = <b>' + dma.cont + '</b>' + (dma.cont === 0 ? '<br>El contador llegó a cero: <b>una</b> interrupción a la CPU.' : '<br>La CPU no interviene: está haciendo otra cosa.');
+    $("btnDma").disabled = dma.cont === 0;
+  }
+  [].forEach.call($("bloqueSeg").querySelectorAll("button"), function (b) { b.addEventListener("click", function () { est.kb = +b.getAttribute("data-kb"); pintarD(); }); });
+  $("btnDma").addEventListener("click", function () { if (dma.cont > 0) { dma.dir++; dma.cont--; } pintarD(); });
+  $("btnDmaRe").addEventListener("click", function () { dma = { dir: 0, cont: 8 }; pintarD(); });
+
+  /* ---------------- panel E: bus ---------------- */
+  function pintarE() {
+    var oc = !est.chk7;
+    $("busVacio").hidden = !oc;
+    $("busPanel").hidden = oc;
+    if (oc) return;
+    var d = [], c = [], i;
+    for (i = 0; i < 16; i++) { d.push("-"); c.push("-"); }
+    var fin;
+    if (est.modo === "rafaga") {
+      for (i = 0; i < 8; i++) { d[i] = "d"; c[i] = "b"; }
+      for (i = 8; i < 16; i++) c[i] = "c";
+      fin = 8;
+    } else {
+      for (i = 0; i < 16; i++) { if (i % 2 === 0) { d[i] = "d"; c[i] = "b"; } else c[i] = "c"; }
+      fin = 15;
+    }
+    function fila(nom, a) { var s = ""; a.forEach(function (x) { s += '<i class="' + (x === "-" ? "" : x) + '"></i>'; }); return '<div class="fila"><span>' + nom + '</span><div class="slots">' + s + '</div></div>'; }
+    $("bus").innerHTML = fila("DMA", d) + fila("CPU", c);
+    [].forEach.call($("modoSeg").querySelectorAll("button"), function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-m") === est.modo)); });
+    $("busCuenta").innerHTML = est.modo === "rafaga"
+      ? 'Bloque de 8 palabras: el DMA termina en la casilla <b>' + fin + '</b>, pero la CPU espera <b class="neg">8 casillas seguidas</b> sin poder usar el bus.'
+      : 'Bloque de 8 palabras: el DMA termina en la casilla <b>' + fin + '</b> (más lento), pero la CPU solo espera <b class="neg">1 casilla cada 2</b>: no se queda parada del todo.';
+  }
+  [].forEach.call($("modoSeg").querySelectorAll("button"), function (b) { b.addEventListener("click", function () { est.modo = b.getAttribute("data-m"); pintarE(); }); });
+
+  /* ---------------- paneles por paso ---------------- */
+  function mostrar(id) { ["pnA", "pnB", "pnC", "pnD", "pnE"].forEach(function (p) { $(p).hidden = p !== id; }); }
+  function entrar(i) {
+    est.paso = i;
+    $("escHint").textContent = HINTS[i];
+    if (i <= 2) { mostrar("pnA"); pintarA(); }
+    else if (i === 3) { mostrar("pnB"); pintarB(); }
+    else if (i === 4) { mostrar("pnC"); pintarC(); }
+    else if (i === 5) { mostrar("pnD"); pintarD(); }
+    else { mostrar("pnE"); pintarE(); }
+  }
+
+  /* ---------------- chequeos ---------------- */
+  B.opcionMultiple(cuerpo("chk1"), {
+    pregunta: "El dispositivo tarda <b>2 ms</b> y la CPU de 3 GHz solo se queda preguntando. ¿Cuántos <b>ciclos de reloj</b> pasan mientras espera?",
+    opciones: ["Unos 6 000", "Unos 600 000", "Unos 6 000 000", "Unos 6 000 000 000"],
+    correcta: 2,
+    pistas: [
+      "Seis mil serían 2 microsegundos de espera. 2 milisegundos son mil veces más.",
+      "Con 600 000 ciclos la espera sería de 200 microsegundos. Faltan diez veces más.",
+      null,
+      "Seis mil millones serían 2 segundos enteros. 2 milisegundos son mil veces menos."
+    ],
+    explicacion: "3 000 millones de ciclos por segundo por 0.002 segundos son <b>6 000 000 de ciclos</b>: seis millones de veces la CPU pregunta y no avanza nada. Ahora el escenario muestra el número y puedes mover la espera.",
+    alResolver: function () { est.chk1 = true; pintarA(); pasos.completar(0); }
+  });
+
+  B.numerico(cuerpo("chk2"), {
+    pregunta: "Un SSD tarda <b>0.5 ms</b> en tener listo un dato. Con polling en una CPU de 3 GHz, ¿cuántos <b>millones</b> de ciclos se pierden? Usa $P = f \\cdot t$.",
+    respuesta: 1.5,
+    tolerancia: 0.001,
+    pistas: [
+      "0.5 ms son 0.0005 segundos.",
+      "$3 \\times 10^9 \\times 0.0005 = 1\\,500\\,000$. Te pido el resultado en millones."
+    ],
+    diagnostico: function (v) {
+      if (v === 1500000) return "Esos son los ciclos. Te pido el número en millones: 1 500 000 es 1.5 millones.";
+      if (v === 6) return "Seis millones son los de 2 ms, el dato del paso anterior. Aquí la espera es cuatro veces menor.";
+      if (v === 15) return "Eso serían 5 ms. Aquí son 0.5 ms.";
+      return null;
+    },
+    explicacion: "$3 \\times 10^9 \\times 0.0005 = 1\\,500\\,000$ ciclos, o <b>1.5 millones</b>. Si en cambio esperas una tecla (100 ms), la cuenta sube a 300 millones. Pruébalo con los botones.",
+    alResolver: function () { est.chk2 = true; pintarA(); pasos.completar(1); }
+  });
+
+  B.opcionMultiple(cuerpo("chk3"), {
+    pregunta: "Con <b>interrupciones</b>, el mismo dispositivo de 2 ms, ¿cuántos de esos 6 000 000 de ciclos pierde la CPU? Una ISR cuesta unos 100 ciclos.",
+    opciones: [
+      "Los mismos 6 000 000: la espera cuesta igual",
+      "Ninguno: una interrupción no cuesta nada",
+      "Unos 100: los de la rutina que atiende el aviso",
+      "La mitad, unos 3 000 000"
+    ],
+    correcta: 2,
+    pistas: [
+      "Con interrupciones la CPU no está preguntando: está haciendo otra cosa.",
+      "No cuesta nada <i>mientras espera</i>. Pero cuando el aviso llega, hay que atenderlo: guardar el estado, hacer el trabajo, restaurar.",
+      null,
+      "La mitad no sale de ningún lado: la CPU o espera (polling) o hace otra cosa (interrupciones)."
+    ],
+    explicacion: "La CPU pierde solo lo que tarda la ISR: <b>unos 100 ciclos</b> contra 6 000 000. Seis cifras de diferencia a 2 ms. Eso sí: si el dispositivo avisara cada pocos ciclos, atender tantos avisos sí pesaría, y es lo que va a pasar en el paso 6.",
+    alResolver: function () { est.chk3 = true; pintarA(); pasos.completar(2); }
+  });
+
+  B.opcionMultiple(cuerpo("chk4"), {
+    pregunta: "El aviso llega mientras se ejecuta la <b>suma</b> (dirección <code>0x12</code>). La CPU termina la instrucción y atiende el aviso. ¿Qué dirección guarda en la pila como PC?",
+    opciones: ["0x12, la de la suma", "0x13, la siguiente", "0x00A4, la de la ISR", "0x10, el inicio del programa"],
+    correcta: 1,
+    pistas: [
+      "La suma ya terminó: volver a 0x12 la ejecutaría otra vez.",
+      null,
+      "0x00A4 es adonde va a saltar. Lo que se guarda es adonde tiene que volver.",
+      "No hace falta volver al inicio: el programa debe seguir donde iba."
+    ],
+    explicacion: "Se comprueba el aviso al <b>final</b> de la instrucción, cuando el PC ya apunta a la siguiente: se guarda <b>0x13</b>. Al restaurar, el programa sigue con GUARDAR como si nada. Ahora prueba tú: lanza una interrupción y ve avanzando con Paso.",
+    alResolver: function () { est.chk4 = true; pintarB(); pasos.completar(3); }
+  });
+
+  B.opcionMultiple(cuerpo("chk5"), {
+    pregunta: "Corre la ISR del <b>disco</b> (prioridad media). Llega el <b>teclado</b> (baja) y después el <b>temporizador</b> (alta). ¿En qué orden <b>terminan</b> las tres ISR?",
+    opciones: [
+      "Disco, teclado, temporizador (en orden de llegada)",
+      "Temporizador, disco, teclado",
+      "Teclado, temporizador, disco",
+      "Temporizador, teclado, disco"
+    ],
+    correcta: 1,
+    pistas: [
+      "Ese sería el orden de llegada si no hubiera prioridades. Pero una ISR de más prioridad sí interrumpe.",
+      null,
+      "El teclado tiene prioridad baja: no puede interrumpir al disco.",
+      "El teclado (baja) espera a que termine el disco (media), que a su vez estaba interrumpido."
+    ],
+    explicacion: "El temporizador (alta) interrumpe al disco y termina primero. Después el disco retoma y termina. El teclado (baja) nunca pudo interrumpir al disco: esperó, y es el <b>último</b>. Ahora compruébalo con los botones.",
+    alResolver: function () { est.chk5 = true; pintarC(); pasos.completar(4); }
+  });
+
+  B.numerico(cuerpo("chk6"), {
+    pregunta: "Un bloque de <b>8 KB</b> se lee en palabras de 4 bytes. Con una ISR de 100 ciclos <b>por palabra</b>, ¿cuántos ciclos de CPU consumen las interrupciones?",
+    respuesta: 204800,
+    tolerancia: 0,
+    pistas: [
+      "Primero cuenta las palabras: $8\\ \\text{KB} = 8192$ bytes, y cada palabra son 4 bytes.",
+      "$8192 / 4 = 2048$ palabras, una ISR por cada una: $2048 \\times 100$."
+    ],
+    diagnostico: function (v) {
+      if (v === 2048) return "Esas son las palabras (y las ISR). Falta multiplicar por los 100 ciclos de cada ISR.";
+      if (v === 819200) return "Eso es con 8 192 ISR, una por byte. Cada ISR atiende una palabra de 4 bytes.";
+      if (v === 8192) return "Esos son los bytes. La ISR es por palabra, y cada palabra son 4 bytes.";
+      return null;
+    },
+    explicacion: "$2048 \\times 100 = 204\\,800$ ciclos. Con DMA, la CPU solo programa el controlador y atiende una interrupción: unos 130 ciclos (30 + 100). Son <b>1 575 veces</b> menos. Ahora el escenario muestra las dos cuentas para 4, 8 y 32 KB.",
+    alResolver: function () { est.chk6 = true; pintarD(); pasos.completar(5); }
+  });
+
+  B.opcionMultiple(cuerpo("chk7"), {
+    pregunta: "El DMA mueve un bloque entre un dispositivo y la memoria mientras la CPU ejecuta un programa. ¿La CPU queda <b>siempre</b> libre?",
+    opciones: [
+      "Sí, el DMA no usa el bus de memoria",
+      "No: en modo ráfaga el DMA puede quedarse con el bus y la CPU debe esperar",
+      "No: el DMA necesita una interrupción por palabra",
+      "Sí, porque la memoria tiene un bus aparte para el DMA"
+    ],
+    correcta: 1,
+    pistas: [
+      "El DMA lee y escribe en memoria, así que sí necesita el bus.",
+      null,
+      "Eso es justo lo que el DMA evita: una sola interrupción, al final.",
+      "En el modelo del material hay un solo bus de memoria que se comparte."
+    ],
+    explicacion: "El DMA <b>es maestro del bus</b> mientras mueve datos. En ráfaga el bloque pasa seguido y más rápido, pero la CPU puede quedarse sin bus mientras tanto. En robo de ciclo el DMA suelta el bus tras cada palabra: más lento, pero la CPU progresa. La Tabla 3 del material dice que durante la transferencia la CPU pierde \"ninguno\" y no recoge este matiz. <b>Ahora cambia de modo</b> en el escenario.",
+    alResolver: function () { est.chk7 = true; pintarE(); pasos.completar(6); }
+  });
+
+  pasos = B.pasos($("recorrido"), {
+    concepto: C,
+    alEntrar: entrar,
+    alTerminar: function () { location.hash = "retos"; }
+  });
+  est.chk1 = pasos.hecho(0);
+  est.chk2 = pasos.hecho(1);
+  est.chk3 = pasos.hecho(2);
+  est.chk4 = pasos.hecho(3);
+  est.chk5 = pasos.hecho(4);
+  est.chk6 = pasos.hecho(5);
+  est.chk7 = pasos.hecho(6);
+  entrar(0);
+
+  /* ---------------- hipotesis inicial ---------------- */
+  (function () {
+    var ta = $("hipotesis"), t = null;
+    ta.value = B.nota("es-interrupciones-dma", "hipotesis");
+    ta.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { B.nota("es-interrupciones-dma", "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; }, 500);
+    });
+  })();
+
+  /* ---------------- marcadores de estado de retos ---------------- */
+  function pintarEstados() {
+    [].forEach.call(document.querySelectorAll("[data-reto]"), function (el) {
+      var ok = C.retoOk(el.getAttribute("data-reto"));
+      el.textContent = ok ? "resuelto" : "pendiente";
+      el.classList.toggle("ok", ok);
+    });
+  }
+  C.alCambiar(pintarEstados);
+
+  /* ---------------- reto: ojo clinico ---------------- */
+  var ESCENAS = [
+    { t: "Una tecla se pulsa unas pocas veces por segundo y entrega 1 byte cada vez.", r: "interr", p: "Entre pulsaciones pasan cientos de millones de ciclos: quedarse preguntando sería un desperdicio. Y un byte no justifica un DMA." },
+    { t: "Un controlador NVMe debe pasar 8 KB de golpe del disco a la RAM.", r: "dma", p: "Es un bloque: una ISR por palabra serían más de 2 000 interrupciones. El DMA lo mueve y avisa una vez." },
+    { t: "Un registro de estado de un chip pegado a la CPU queda listo en unos 20 ciclos.", r: "polling", p: "Esperar 20 ciclos cuesta menos que una ISR de 100. Este caso no viene en el material: es la consecuencia de hacer la cuenta." },
+    { t: "Una tarjeta de red recibe miles de paquetes de 1 500 bytes por segundo.", r: "dma", p: "Son bloques continuos. El DMA los lleva a la memoria sin gastar una ISR por palabra." },
+    { t: "El ratón se mueve y manda de vez en cuando un pequeño aviso de posición.", r: "interr", p: "Pocos datos, poco frecuentes, y la CPU tiene otras cosas que hacer entre aviso y aviso." },
+    { t: "Un temporizador debe avisar a la CPU cada milisegundo.", r: "interr", p: "Una vez por milisegundo la CPU hace unos 100 ciclos de ISR frente a 3 millones de ciclos libres. Quedarse preguntando los gastaría todos." },
+    { t: "Un disco debe entregar un archivo de 1 GB a la memoria.", r: "dma", p: "Muchísimas palabras seguidas: una interrupción por palabra sería inviable. Es el caso típico del DMA." }
+  ];
+  (function () {
+    var cont = $("ojo");
+    cont.innerHTML = '<div class="ronda"></div><div class="escena" id="ojoEscena"></div>' +
+      '<div class="ojo-opts"><button type="button" class="opt" data-a="polling">Polling</button><button type="button" class="opt" data-a="interr">Interrupciones</button><button type="button" class="opt" data-a="dma">DMA</button></div>' +
+      '<div class="fb" aria-live="polite"></div><div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    var orden, ronda, aciertos, respondida;
+    function nueva() { orden = B.mezclar(ESCENAS.map(function (_, i) { return i; })).slice(0, 5); ronda = 0; aciertos = 0; mostrarRonda(); }
+    function mostrarRonda() {
+      respondida = false;
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 5 · aciertos " + aciertos;
+      $("ojoEscena").textContent = ESCENAS[orden[ronda]].t;
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (b) { b.disabled = false; b.className = "opt"; });
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+    }
+    cont.querySelector(".ojo-opts").addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || respondida) return;
+      respondida = true;
+      var esc = ESCENAS[orden[ronda]], ok = b.getAttribute("data-a") === esc.r;
+      if (ok) aciertos++;
+      b.classList.add(ok ? "ok" : "mal");
+      if (!ok) cont.querySelector('[data-a="' + esc.r + '"]').classList.add("ok");
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (x) { x.disabled = true; });
+      cont.querySelector(".fb").innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No.</span> ') + esc.p;
+      var sig = cont.querySelector(".sig");
+      sig.hidden = false;
+      if (ronda === 4) {
+        var aprobo = aciertos >= 4;
+        C.reto("ojo", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertos + " de 5" + (aprobo ? ". Aprobado." : ". Necesitas 4 para aprobar.");
+        sig.textContent = "Otra tanda";
+      } else sig.textContent = "Siguiente ronda";
+    });
+    cont.querySelector(".sig").addEventListener("click", function () { if (ronda === 4) nueva(); else { ronda++; mostrarRonda(); } });
+    nueva();
+  })();
+
+  /* ---------------- reto: construir ---------------- */
+  (function () {
+    var OBJ = [
+      { t: "Que el polling pierda entre 1 000 000 y 2 000 000 de ciclos.", ok: function (cp, ci) { return cp >= 1e6 && cp <= 2e6; } },
+      { t: "Que el polling pierda menos ciclos que una sola ISR (menos de 100).", ok: function (cp, ci) { return cp < 100; } },
+      { t: "Que las interrupciones por palabra cuesten entre 100 000 y 300 000 ciclos.", ok: function (cp, ci) { return ci >= 1e5 && ci <= 3e5; } },
+      { t: "Que las interrupciones por palabra cuesten más de 400 000 ciclos.", ok: function (cp, ci) { return ci > 4e5; } }
+    ];
+    var logrados = [false, false, false, false], avisado = false;
+    var ul = $("objetivos");
+    OBJ.forEach(function (o) { var li = document.createElement("li"); li.innerHTML = '<span class="m"></span><span>' + o.t + '</span>'; ul.appendChild(li); });
+    function actualizar() {
+      var us = LAT[+$("cLat").value], N = PAL[+$("cPal").value], cp = ciclos(us), ci = N * ISR;
+      $("cLatV").textContent = fmtUs(us);
+      $("cPalV").textContent = miles(N);
+      $("constrVivo").innerHTML = "Polling: <b>" + miles(cp) + "</b> ciclos perdidos<br>Interrupciones por palabra: " + miles(N) + " × " + ISR + " = <b>" + miles(ci) + "</b> ciclos";
+      OBJ.forEach(function (o, i) { if (!logrados[i] && o.ok(cp, ci)) logrados[i] = true; ul.children[i].classList.toggle("hecho", logrados[i]); });
+      if (!avisado && logrados.every(Boolean)) { avisado = true; C.reto("construir", true); }
+    }
+    ["cLat", "cPal"].forEach(function (id) { $(id).addEventListener("input", actualizar); });
+    actualizar();
+  })();
+
+  /* ---------------- reto: a mano ---------------- */
+  (function () {
+    var D;
+    function generar() {
+      var ns = [512, 1000, 1024, 2048, 4096], cs = [50, 80, 100, 120, 200];
+      D = { N: ns[Math.floor(Math.random() * ns.length)], c: cs[Math.floor(Math.random() * cs.length)] };
+      D.T = D.N * D.c;
+      $("manoDatos").innerHTML = "Un dispositivo entrega un bloque de <b>" + miles(D.N) + "</b> palabras. Cada palabra provoca una interrupción y cada ISR cuesta <b>" + D.c + "</b> ciclos.";
+    }
+    var cfg = {
+      pregunta: "¿Cuántos ciclos de CPU consumen las ISR en total?",
+      respuesta: function () { return D.T; },
+      tolerancia: 0,
+      pistas: [
+        function () { return "Hay " + miles(D.N) + " interrupciones, una por palabra."; },
+        function () { return "Cada una cuesta " + D.c + " ciclos: multiplica " + D.N + " por " + D.c + "."; },
+        function () { return "$" + D.N + " \\times " + D.c + "$."; }
+      ],
+      diagnostico: function (v) {
+        if (v === D.N + D.c) return "Sumaste en lugar de multiplicar: son " + D.N + " ISR, cada una de " + D.c + " ciclos.";
+        if (v === D.N * 4 * D.c) return "Multiplicaste también por los 4 bytes de la palabra. Aquí ya te dan las palabras.";
+        if (v === D.N) return "Ese es el número de interrupciones. Falta lo que cuesta cada una.";
+        return null;
+      },
+      explicacion: function () { return D.N + " × " + D.c + " = " + miles(D.T) + " ciclos. Con DMA habrían sido " + (PROG + D.c) + " (30 + " + D.c + "), no importa el tamaño del bloque."; },
+      reintentable: true,
+      textoReintentar: "Otro ejercicio",
+      antesDeReintentar: generar,
+      alResolver: function (ok) { C.reto("mano", ok); }
+    };
+    generar();
+    B.numerico($("mano"), cfg);
+  })();
+
+  /* ---------------- reto: cazar el error ---------------- */
+  B.cazarError($("error"), {
+    variantes: [
+      {
+        intro: "Una CPU de 3 GHz espera 2 ms con polling. Alguien calculó los ciclos perdidos así:",
+        lineas: ["f = 3 \\times 10^{9}\\ \\text{ciclos/s}", "t = 2\\ \\text{ms} = 0.002\\ \\text{s}", "P = f \\cdot t = 3 \\times 10^{9} \\cdot 0.002", "P = 6\\,000\\ \\text{ciclos}"],
+        erronea: 3,
+        explicacion: "$3 \\times 10^{9} \\cdot 0.002 = 6 \\times 10^{6}$: son <b>6 000 000</b>, no 6 000. Se perdieron tres ceros."
+      },
+      {
+        intro: "Un bloque de 8 KB llega con una ISR por palabra de 4 bytes. Alguien calculó el costo así:",
+        lineas: ["8\\ \\text{KB} = 8\\,192\\ \\text{bytes}", "\\text{palabras} = 8\\,192 / 4 = 2\\,048", "\\text{ciclos} = 2\\,048 \\cdot 100 = 20\\,480"],
+        erronea: 2,
+        explicacion: "$2\\,048 \\cdot 100 = 204\\,800$. El material da justamente 204 800 ciclos: el error fue quitar un cero."
+      },
+      {
+        intro: "Corre la ISR del teclado (prioridad baja) y llega el temporizador (alta). Alguien describió lo que pasa así:",
+        lineas: ["\\text{1. El temporizador tiene más prioridad que el teclado: puede interrumpirlo.}", "\\text{2. El estado de la ISR del teclado se guarda en la pila.}", "\\text{3. Se ejecuta la ISR del temporizador.}", "\\text{4. Al terminar, la ISR del teclado se descarta y empieza el programa desde cero.}"],
+        erronea: 3,
+        explicacion: "Al terminar la ISR del temporizador se <b>restaura</b> el estado guardado y la ISR del teclado <b>reanuda</b> justo donde iba. Para eso se guardó en la pila."
+      }
+    ],
+    alResolver: function (ok) { C.reto("error", ok); }
+  });
+
+  /* ---------------- retos: propiedades ---------------- */
+  function prop(id, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple($(id), cfg);
+  }
+  prop("prop1", {
+    pregunta: "Un dispositivo entrega un bloque de 2 048 palabras. ¿Por qué el DMA le gana a las interrupciones por palabra?",
+    opciones: [
+      "Porque mueve todo el bloque y avisa con una sola interrupción al terminar",
+      "Porque el dispositivo se vuelve más rápido",
+      "Porque la ISR del DMA cuesta mucho menos ciclos",
+      "Porque el DMA no usa la memoria"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "El dispositivo tarda lo mismo. Lo que cambia es quién mueve los datos.",
+      "La ISR final cuesta lo mismo. Lo que baja es cuántas ISR hay: una en lugar de 2 048.",
+      "El DMA escribe en memoria: de hecho es su trabajo."],
+    explicacion: "Con interrupciones por palabra hay 2 048 ISR de unos 100 ciclos: 204 800 ciclos. Con DMA la CPU programa el controlador y atiende <b>una</b> interrupción."
+  });
+  prop("prop2", {
+    pregunta: "Corre una ISR de prioridad <b>baja</b> y llega una interrupción de prioridad <b>alta</b>. ¿Qué ocurre?",
+    opciones: [
+      "Se guarda el estado de la baja en la pila, se atiende la alta y después se reanuda la baja",
+      "La alta espera a que termine la baja",
+      "La baja se descarta y no vuelve a ejecutarse",
+      "La CPU se reinicia"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "Eso pasaría si la que llega tuviera igual o menor prioridad.",
+      "No se descarta nada: por eso se guarda su estado.",
+      "Las interrupciones anidadas son un mecanismo normal, no un fallo."],
+    explicacion: "Es una interrupción <b>anidada</b>. El estado de la ISR de baja prioridad queda en la pila y se restaura cuando la de alta prioridad termina."
+  });
+  prop("prop3", {
+    pregunta: "Cuando la CPU acepta una interrupción, ¿qué guarda en la pila antes de saltar a la ISR?",
+    opciones: [
+      "El contador de programa (PC) y los flags",
+      "Los datos que entregó el dispositivo",
+      "La tabla del vector de interrupciones",
+      "Una copia de toda la memoria"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "Los datos viven en el registro de datos del controlador, no en la pila.",
+      "La tabla es fija, está en memoria, y solo se consulta.",
+      "Sería carísimo y no hace falta: basta con poder volver."],
+    explicacion: "Se guarda lo mínimo para reanudar: <b>el PC y los flags</b>. Con eso el programa interrumpido sigue sin notar que hubo un aviso."
+  });
+  prop("prop4", {
+    pregunta: "¿Cuál es la diferencia entre el modo ráfaga y el robo de ciclo del DMA?",
+    opciones: [
+      "En ráfaga el bloque pasa más rápido pero la CPU puede quedarse sin bus; en robo de ciclo la CPU progresa pero el bloque tarda más",
+      "En ráfaga se usan interrupciones y en robo de ciclo no",
+      "El robo de ciclo es siempre más rápido que la ráfaga",
+      "No hay diferencia: son dos nombres del mismo modo"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "En los dos modos el DMA avisa una sola vez al final.",
+      "Es al revés: el robo de ciclo cede el bus tras cada palabra, así que tarda más.",
+      "Se reparten el bus de forma distinta."],
+    explicacion: "<b>Ráfaga:</b> bloque continuo, más rápido, la CPU puede bloquearse. <b>Robo de ciclo:</b> una palabra y cede el bus, más lento, la CPU progresa."
+  });
+  prop("prop5", {
+    pregunta: "Un registro queda listo en unos 20 ciclos y una ISR cuesta 100 ciclos. ¿Qué técnica cuesta menos a la CPU?",
+    opciones: [
+      "El polling: esperar 20 ciclos cuesta menos que atender una interrupción",
+      "Las interrupciones: nunca pierden tiempo",
+      "El DMA, porque no hay datos que mover",
+      "Da igual: las tres cuestan lo mismo"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "Las interrupciones pierden lo que cuesta la ISR, 100 ciclos, más que los 20 de la espera.",
+      "Un DMA tiene un costo fijo de programarlo y no mueve datos aquí.",
+      "Haz la cuenta: 20, 100 y 130."],
+    explicacion: "Polling pierde 20 ciclos; una interrupción, 100; un DMA, 130. Este caso no está en el material: sale de comparar los costos. La regla general es que el polling solo es razonable si la espera es más corta que una ISR."
+  });
+
+  /* ---------------- formula y orden de memoria ---------------- */
+  B.ordenar($("formula"), {
+    piezas: ["P", "=", "f", "\\cdot", "t"],
+    distractores: ["+", "\\dfrac{f}{t}", "t^2"],
+    soluciones: [[0, 1, 2, 3, 4], [0, 1, 4, 3, 2]],
+    explicacion: "Ciclos perdidos = frecuencia por tiempo de espera: los ciclos por segundo, multiplicados por los segundos.",
+    alResolver: function (ok) { C.reto("formula", ok); }
+  });
+  B.ordenar($("ordenPasos"), {
+    piezas: ["\\text{termina la instrucción}", "\\text{guarda PC y flags}", "\\text{salta a la ISR}", "\\text{restaura y reanuda}"],
+    distractores: ["\\text{borra la memoria}", "\\text{apaga el dispositivo}"],
+    soluciones: [[0, 1, 2, 3]],
+    explicacion: "Termina la instrucción en curso, guarda PC y flags en la pila, salta a la ISR y, al acabar, restaura y reanuda.",
+    alResolver: function (ok) { C.reto("orden", ok); }
+  });
+
+  /* ---------------- vida real ---------------- */
+  (function () {
+    var CODIGO = {
+      py: [
+        ["frec", "frecuencia = 3_000_000_000   # ciclos por segundo (3 GHz)"],
+        ["espera", "espera = 0.002               # el dispositivo tarda 2 ms"],
+        ["listo", "listo_en = round(frecuencia * espera)   # ciclo en que el dispositivo termina"],
+        [null, ""],
+        ["ciclo0", "ciclo = 0"],
+        ["perd0", "perdidos = 0"],
+        ["while1", "while ciclo < listo_en:      # polling: preguntar y volver a preguntar"],
+        ["perdsum", "    perdidos += 1"],
+        ["cicsum", "    ciclo += 1"],
+        ["print1", "print(perdidos)"],
+        [null, ""],
+        ["palabras", "palabras = 2048              # 8 KB en palabras de 4 bytes"],
+        ["isr", "isr = 100                    # ciclos de una rutina de interrupción"],
+        ["conisr0", "con_isr = 0"],
+        ["for2", "for p in range(palabras):    # una interrupción por palabra"],
+        ["sumisr", "    con_isr += isr"],
+        ["print2", "print(con_isr)"],
+        [null, ""],
+        ["programar", "programar = 30               # ciclos para programar el DMA"],
+        ["contador", "contador = palabras"],
+        ["direccion", "direccion = 0"],
+        ["while3", "while contador > 0:          # esto lo hace el controlador DMA, no la CPU"],
+        ["dirsum", "    direccion += 1"],
+        ["contsum", "    contador -= 1"],
+        ["condma", "con_dma = programar + isr    # la CPU programa y atiende una interrupción"],
+        ["print3", "print(con_dma)"],
+        [null, ""],
+        ["print4", "print(round(con_isr / con_dma, 1))"],
+        ["print5", "print(perdidos == round(3e9 * 0.002), con_isr == 2048 * 100)"]
+      ],
+      r: [
+        [null, "options(scipen = 999)         # imprime 6000000 y no 6e+06"],
+        ["frec", "frecuencia <- 3e9            # ciclos por segundo (3 GHz)"],
+        ["espera", "espera <- 0.002              # el dispositivo tarda 2 ms"],
+        ["listo", "listo_en <- round(frecuencia * espera)   # ciclo en que el dispositivo termina"],
+        [null, ""],
+        ["ciclo0", "ciclo <- 0"],
+        ["perd0", "perdidos <- 0"],
+        ["while1", "while (ciclo < listo_en) {   # polling: preguntar y volver a preguntar"],
+        ["perdsum", "  perdidos <- perdidos + 1"],
+        ["cicsum", "  ciclo <- ciclo + 1"],
+        [null, "}"],
+        ["print1", "print(perdidos)"],
+        [null, ""],
+        ["palabras", "palabras <- 2048             # 8 KB en palabras de 4 bytes"],
+        ["isr", "isr <- 100                   # ciclos de una rutina de interrupción"],
+        ["conisr0", "con_isr <- 0"],
+        ["for2", "for (p in 1:palabras) {      # una interrupción por palabra"],
+        ["sumisr", "  con_isr <- con_isr + isr"],
+        [null, "}"],
+        ["print2", "print(con_isr)"],
+        [null, ""],
+        ["programar", "programar <- 30              # ciclos para programar el DMA"],
+        ["contador", "contador <- palabras"],
+        ["direccion", "direccion <- 0"],
+        ["while3", "while (contador > 0) {       # esto lo hace el controlador DMA, no la CPU"],
+        ["dirsum", "  direccion <- direccion + 1"],
+        ["contsum", "  contador <- contador - 1"],
+        [null, "}"],
+        ["condma", "con_dma <- programar + isr   # la CPU programa y atiende una interrupción"],
+        ["print3", "print(con_dma)"],
+        [null, ""],
+        ["print4", "print(round(con_isr / con_dma, 1))"],
+        ["print5", "print(c(perdidos == round(3e9 * 0.002), con_isr == 2048 * 100))"]
+      ]
+    };
+
+    var EV = [];
+    (function () {
+      var fase = 1, perd = null, cic = null, cisr = null, cont = null, dir = null, cdma = null, pal = null, k;
+      function foto(id, extra) {
+        EV.push(Object.assign({ id: id, fase: fase, perd: perd, cic: cic, cisr: cisr, cont: cont, dir: dir, cdma: cdma, pal: pal, p: null, salto: false }, extra || {}));
+      }
+      foto("frec"); foto("espera"); foto("listo");
+      cic = 0; foto("ciclo0"); perd = 0; foto("perd0");
+      for (k = 1; k <= 2; k++) { foto("while1"); perd += 1; foto("perdsum"); cic += 1; foto("cicsum"); }
+      perd = 6000000; cic = 6000000; foto("while1", { salto: true });
+      foto("print1");
+      fase = 2; pal = 2048; foto("palabras"); foto("isr"); cisr = 0; foto("conisr0");
+      for (k = 0; k < 2; k++) { foto("for2", { p: k }); cisr += 100; foto("sumisr", { p: k }); }
+      cisr = 204800; foto("sumisr", { p: 2047, salto: true });
+      foto("print2");
+      fase = 3; foto("programar"); cont = 2048; foto("contador"); dir = 0; foto("direccion");
+      for (k = 1; k <= 2; k++) { foto("while3"); dir += 1; foto("dirsum"); cont -= 1; foto("contsum"); }
+      dir = 2048; cont = 0; foto("while3", { salto: true });
+      cdma = 130; foto("condma"); foto("print3");
+      fase = 4; foto("print4"); foto("print5");
+    })();
+
+    function nv(v) { return v === null ? "" : B.fmt(v, 0); }
+    function narrar(e, ctx) {
+      var ix = ctx.ix;
+      switch (e.id) {
+        case "frec": return "La CPU hace <b>3 000 millones</b> de ciclos por segundo.";
+        case "espera": return "El dispositivo tarda <b>2 ms</b> en tener el dato listo.";
+        case "listo": return "En ciclos: 3 000 000 000 × 0.002 = <b>6 000 000</b>. Se redondea para que sea un entero exacto.";
+        case "ciclo0": return "El reloj de la simulación empieza en cero.";
+        case "perd0": return "Todavía no se ha perdido ningún ciclo.";
+        case "while1": return e.salto
+          ? "El bucle da <b>6 000 000 de vueltas</b>; la animación salta al final. Ahora <b>ciclo = 6 000 000</b>, la condición ya es falsa y sale."
+          : "Pregunta de nuevo: ¿ya llegó el ciclo " + nv(listo()) + "? Todavía no.";
+        case "perdsum": return "Un ciclo más en el que la CPU no hace nada útil: <b>perdidos = " + nv(e.perd) + "</b>.";
+        case "cicsum": return "El reloj avanza: <b>ciclo = " + nv(e.cic) + "</b>.";
+        case "print1": return "Imprime <b>6 000 000</b>, los mismos del paso 1.";
+        case "palabras": return "Un bloque de 8 KB son <b>2 048 palabras</b> de 4 bytes.";
+        case "isr": return "Cada ISR cuesta <b>100 ciclos</b>.";
+        case "conisr0": return "La suma de ciclos de ISR empieza en cero.";
+        case "for2": return "Palabra número <b>" + ix(e.p) + "</b>: el dispositivo avisa con una interrupción.";
+        case "sumisr": return e.salto
+          ? "El bucle da <b>2 048 vueltas</b>; la animación salta al final: <b>con_isr = 204 800</b>."
+          : "Atender esa ISR cuesta 100 ciclos: <b>con_isr = " + nv(e.cisr) + "</b>.";
+        case "print2": return "Imprime <b>204 800</b>, el número del material.";
+        case "programar": return "Programar el controlador DMA (dirección, contador, control) cuesta unos <b>30 ciclos</b>: es una elección de esta página.";
+        case "contador": return "El registro contador del DMA recibe el número de palabras: <b>2 048</b>.";
+        case "direccion": return "El registro de dirección empieza en la palabra <b>0</b>.";
+        case "while3": return e.salto
+          ? "El controlador repite <b>2 048 veces</b>; se salta al final: <b>contador = 0</b>, <b>dirección = 2 048</b>. En ese momento avisa a la CPU."
+          : "Mientras el contador no llegue a cero, el DMA sigue moviendo palabras. La CPU no interviene.";
+        case "dirsum": return "La dirección avanza una palabra: <b>" + nv(e.dir) + "</b>.";
+        case "contsum": return "El contador baja: <b>" + nv(e.cont) + "</b>.";
+        case "condma": return "La CPU solo gastó programar (30) más una interrupción (100): <b>130 ciclos</b>.";
+        case "print3": return "Imprime <b>130</b>.";
+        case "print4": return "Las interrupciones por palabra cuestan 204 800 / 130 = <b>1 575.4</b> veces más.";
+        case "print5": return ctx.lang() === "py" ? "Comprueba que los bucles coinciden con las cuentas cerradas: Python imprime <b>True True</b>." : "Lo mismo en R: imprime <b>[1] TRUE TRUE</b> (un vector con los dos resultados).";
+      }
+      return "";
+    }
+    function listo() { return 6000000; }
+    function visual(e) {
+      var filas = [["polling", e ? e.perd : null, e && (e.id === "perdsum" || e.id === "while1") && e.fase === 1], ["interrupciones por palabra", e ? e.cisr : null, e && e.fase === 2 && (e.id === "sumisr")], ["DMA", e ? e.cdma : null, e && e.id === "condma"]];
+      var h = '<thead><tr><th>método</th><th>ciclos de CPU perdidos</th></tr></thead><tbody>';
+      filas.forEach(function (f) { h += '<tr' + (f[2] ? ' class="on"' : '') + '><td>' + f[0] + '</td><td' + (f[2] ? ' class="nuevo"' : '') + '>' + (f[1] === null ? "" : nv(f[1])) + '</td></tr>'; });
+      $("vrTabla").innerHTML = h + '</tbody>';
+      var c = "";
+      if (e) {
+        if (e.fase === 3 && e.cont !== null) c = "registros del DMA: dirección = <b>" + nv(e.dir) + "</b> · contador = <b>" + nv(e.cont) + "</b>";
+        else if (e.fase === 4) c = "204 800 / 130 = <b>1 575.4</b> veces más con interrupciones por palabra";
+        else if (e.fase === 2 && e.cisr !== null) c = "palabras atendidas: " + (e.p === null ? "" : e.salto ? "2 048" : (e.p + 1)) + " de 2 048";
+        else if (e.fase === 1 && e.cic !== null) c = "ciclo = <b>" + nv(e.cic) + "</b> de 6 000 000";
+      }
+      $("vrCuenta").innerHTML = c;
+    }
+    B.vidaReal($("vidareal"), {
+      codigo: CODIGO,
+      eventos: EV,
+      narrar: narrar,
+      vars: function (e, ctx) {
+        var v = [], ix = ctx.ix;
+        if (e && e.fase === 1 && e.cic !== null) { v.push('<span>ciclo = <b>' + nv(e.cic) + '</b></span>'); v.push('<span>perdidos = <b>' + nv(e.perd) + '</b></span>'); }
+        if (e && e.fase === 2 && e.p !== null) v.push('<span>p = <b>' + ix(e.p) + '</b></span>');
+        if (e && e.fase === 2 && e.cisr !== null) v.push('<span>con_isr = <b>' + nv(e.cisr) + '</b></span>');
+        if (e && e.fase === 3 && e.cont !== null) { v.push('<span>contador = <b>' + nv(e.cont) + '</b></span>'); v.push('<span>direccion = <b>' + nv(e.dir) + '</b></span>'); }
+        if (e && e.cdma !== null) v.push('<span>con_dma = <b>' + nv(e.cdma) + '</b></span>');
+        return v;
+      },
+      visual: visual,
+      demora: function (e) { return !e ? 600 : e.salto ? 1400 : e.id === "while1" || e.id === "for2" || e.id === "while3" ? 500 : 800; }
+    });
+
+    B.opcionMultiple(cuerpo("vrPred"), {
+      pregunta: "En el bucle de polling, ¿cuántas veces se ejecuta la línea <code>perdidos += 1</code>?",
+      opciones: ["2 000, una por milisegundo", "6 000", "6 000 000, una por ciclo de espera", "2 048, una por palabra"],
+      correcta: 2,
+      pistas: [
+        "El bucle no cuenta milisegundos: cuenta ciclos de reloj.",
+        "Seis mil serían microsegundos de espera. La espera es de 2 milisegundos.",
+        null,
+        "Las 2 048 palabras son del segundo bucle, el de las interrupciones."
+      ],
+      explicacion: "El bucle avanza un ciclo por vuelta y espera 6 000 000 ciclos: <b>6 000 000 vueltas</b>. Por eso la animación muestra las dos primeras y salta. Ahora dale a reproducir.",
+      alResolver: function (ok) { C.reto("codigo1", ok); }
+    });
+    prop("codigo2", {
+      pregunta: "Corres <code>print(6000000)</code> en R sin ninguna opción especial. ¿Qué imprime?",
+      opciones: [
+        "[1] 6e+06, la notación científica",
+        "[1] 6000000, igual que Python",
+        "Un error, porque el número es muy grande",
+        "[1] 6,000,000"
+      ],
+      correcta: 0,
+      pistas: [null,
+        "Python sí imprime 6000000, pero R elige la forma más corta.",
+        "R no da ningún error: simplemente escribe el número de otra forma.",
+        "R no inserta separadores de miles."],
+      explicacion: "R imprime <code>6e+06</code> porque es más corto que 6000000. Por eso el código de la página empieza con <code>options(scipen = 999)</code>, que desactiva la notación científica. Es el mismo número, pero cuesta leerlo si no lo sabes."
+    });
+    prop("codigo3", {
+      pregunta: "En R escribes <code>for (p in 1:palabras)</code>. Si <code>palabras</code> vale <b>0</b>, ¿cuántas vueltas da el bucle?",
+      opciones: [
+        "Dos vueltas, con p = 1 y p = 0, porque 1:0 cuenta hacia atrás",
+        "Ninguna, igual que range(0) en Python",
+        "Una sola vuelta, con p = 1",
+        "Un error por empezar en 1"
+      ],
+      correcta: 0,
+      pistas: [null,
+        "En Python, <code>range(0)</code> sí está vacío. R es distinto: <code>1:0</code> es el vector 1, 0.",
+        "El operador <code>:</code> en R sabe contar hacia atrás.",
+        "R no da error, y esa es justo la trampa."],
+      explicacion: "<code>1:0</code> es el vector <code>1, 0</code>: el bucle da <b>dos</b> vueltas. Para una secuencia que puede ser vacía, en R se usa <code>seq_len(palabras)</code>. Con 2 048 palabras no pasa, pero con un bloque vacío contarías dos interrupciones que no existen."
+    });
+  })();
+
+  /* ---------------- tarjetas ---------------- */
+  B.tarjetas($("tarjetas"), [
+    ["¿Cuántos ciclos pierde una CPU de 3 GHz esperando 2 ms con polling?", "$3 \\times 10^{9} \\times 0.002 = 6\\,000\\,000$ ciclos, sin hacer nada útil."],
+    ["¿Qué es el polling y cuál es su desventaja?", "La CPU lee el registro de estado en un bucle hasta que diga \"listo\". Es simple, pero bloquea la CPU durante toda la espera."],
+    ["¿Qué hace la CPU cuando llega una interrupción?", "Termina la instrucción en curso, guarda el PC y los flags en la pila, salta a la ISR y, al acabar, restaura y reanuda."],
+    ["¿Para qué sirve el vector de interrupciones?", "Es una tabla en memoria que asocia cada fuente de interrupción con la dirección de su ISR."],
+    ["¿Qué pasa si llega una interrupción de mayor prioridad durante una ISR?", "Se anida: el estado de la ISR en curso se guarda en la pila, se atiende la nueva y luego se reanuda la anterior. Las de igual o menor prioridad esperan."],
+    ["¿Qué es una interrupción no enmascarable (NMI)?", "Una interrupción de máxima prioridad (fallo de alimentación, error de memoria no corregible) que no se puede ignorar con el registro de máscara."],
+    ["¿Por qué el DMA gana a las interrupciones por palabra?", "Mueve el bloque entero sin que la CPU intervenga y avisa con una sola interrupción: 130 ciclos en lugar de 204 800 para 8 KB."],
+    ["Ráfaga frente a robo de ciclo", "Ráfaga: bloque continuo, más rápido, la CPU puede quedarse sin bus. Robo de ciclo: una palabra y cede el bus, más lento, la CPU progresa."]
+  ]);
+
+  /* ---------------- conexiones ---------------- */
+  B.conexiones("es-interrupciones-dma");
+})();
+</script>
+</body>
+</html>

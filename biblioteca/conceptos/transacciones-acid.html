@@ -1,0 +1,1840 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Transacciones y ACID (commit y rollback)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+/* ---------- escenario: guion de la transaccion y tablas ---------- */
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.esc-head .hint { font-size: 12.5px; color: var(--ink-2); }
+.ctl { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-bottom: 10px; }
+.ctl:empty { display: none; }
+.ctl .grupo { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-2); flex-wrap: wrap; }
+.ctl .grupo b { font-family: var(--f-mono); font-weight: 500; color: var(--ink-3); font-size: 11px; }
+.ctl .nota-bloq { font-size: 12.5px; color: var(--ink-2); }
+.seg.envuelve { flex-wrap: wrap; }
+.seg button:disabled { opacity: .45; cursor: not-allowed; }
+.dos { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 10px; }
+.tt { font-family: var(--f-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 4px; }
+.t2 { width: 100%; border-collapse: collapse; font-family: var(--f-mono); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.t2 th { font-weight: 500; color: var(--ink-3); font-size: 10.5px; text-align: left; padding: 3px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.t2 td { text-align: left; padding: 3px 6px; border-bottom: 1px solid var(--line-soft); color: var(--ink-2); overflow-wrap: anywhere; }
+.t2 tr.nuevo td { background: var(--accent-soft); color: var(--ink); }
+.t2 tr.malo td { background: var(--bad-soft); color: var(--bad); font-weight: 600; }
+.t2 tr.ok td { background: var(--ok-soft); color: var(--ink); }
+.t2 tr.prov td { background: var(--accent-soft); color: var(--ink); font-style: italic; }
+.t2 .marca { font-size: 10px; margin-left: 4px; }
+.guion { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 4px; }
+.guion li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 5px 9px; border-radius: 7px; background: var(--surface-2); border-left: 3px solid var(--line); }
+.guion .sql { font-family: var(--f-mono); font-size: 11.5px; color: var(--ink); overflow-wrap: anywhere; }
+.guion .tag { font-family: var(--f-mono); font-size: 10.5px; color: var(--ink-3); white-space: nowrap; }
+.guion li.hecha { border-left-color: var(--ok); }
+.guion li.hecha .tag { color: var(--ok); }
+.guion li.nunca { opacity: .55; }
+.guion li.rech { border-left-color: var(--bad); background: var(--bad-soft); }
+.guion li.rech .tag { color: var(--bad); font-weight: 600; }
+.guion li.des { border-left-color: var(--accent); }
+.guion li.des .sql { text-decoration: line-through; color: var(--ink-2); }
+.guion li.des .tag { color: var(--accent); font-weight: 600; }
+.guion li.omit { opacity: .4; }
+.guion li.omit .sql { text-decoration: line-through; }
+.guion li.corte { border-left-color: var(--bad); }
+.ops { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 6px; }
+.ops button { font-size: 12.5px; padding: 6px 10px; text-align: left; }
+.ops button:disabled { opacity: .45; cursor: not-allowed; }
+.msg { margin-top: 8px; padding: 8px 12px; border-radius: 8px; font-size: 13px; line-height: 1.45; background: var(--surface-2); color: var(--ink-2); min-height: 2.6em; border-left: 3px solid var(--line); }
+.msg.ok { border-left-color: var(--ok); background: var(--ok-soft); color: var(--ink); }
+.msg.mal { border-left-color: var(--bad); background: var(--bad-soft); color: var(--ink); }
+.kv { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 3px 12px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); font-family: var(--f-mono); font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.kv dt { color: var(--ink-3); }
+.kv dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
+.kv dd.mal { color: var(--bad); font-weight: 600; }
+.kv dd.ok { color: var(--ok); font-weight: 600; }
+.ses { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+.ses .col { background: var(--surface-2); border-radius: 8px; padding: 8px 10px; min-height: 7em; }
+.ses .lin { font-family: var(--f-mono); font-size: 11.5px; color: var(--ink); padding: 3px 0; border-bottom: 1px solid var(--line-soft); overflow-wrap: anywhere; }
+.ses .lin.lee { color: var(--accent); font-weight: 600; }
+.ses .lin.vacio { color: var(--ink-3); border-bottom: 0; }
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.prog-pre { font-family: var(--f-mono); font-size: 13px; background: var(--surface-2); border-radius: 8px; padding: 10px 14px; margin: 8px 0; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ojo-opts { display: grid; grid-template-columns: 1fr; gap: 6px; margin-top: 10px; }
+.ojo-opts .opt { text-align: left; }
+.objetivos { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.objetivos li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.objetivos .m { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.objetivos li.hecho { color: var(--ink); }
+.objetivos li.hecho .m { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 3px var(--surface); }
+.cons-ctl { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin: 8px 0; }
+.grande { font-family: var(--f-mono); font-size: 14px; color: var(--ink-2); margin: 6px 0 12px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.grande b { font-size: 16px; color: var(--ink); font-weight: 500; }
+.salida { font-family: var(--f-mono); font-size: 12.5px; background: var(--surface-2); border-radius: 8px; padding: 8px 12px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); margin: 8px 0; }
+.vr-tabla th, .vr-tabla td { text-align: left; }
+.vr-tabla td.pl { text-align: left; white-space: nowrap; }
+.vr-dos { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 12px; }
+.vr-tabla tr.nuevo td { background: var(--accent-soft); color: var(--ink); }
+.vr-tabla tr.prov td { background: var(--accent-soft); color: var(--ink); font-style: italic; }
+.vr-tabla tr.hl td { background: var(--accent-soft); color: var(--ink); font-weight: 600; }
+.tabla-wrap { overflow-x: auto; margin-top: 6px; }
+.tabla { width: 100%; border-collapse: collapse; font-family: var(--f-mono); font-size: 12px; font-variant-numeric: tabular-nums; }
+.tabla th { font-weight: 500; color: var(--ink-3); font-size: 11px; padding: 4px 8px; border-bottom: 1px solid var(--line); }
+.tabla td { padding: 4px 8px; border-bottom: 1px solid var(--line-soft); color: var(--ink-2); }
+.prog-sql { font-family: var(--f-mono); font-size: 12.5px; background: var(--surface-2); border-radius: 8px; padding: 10px 14px; margin: 8px 0; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (max-width: 560px) {
+  .dos, .vr-dos, .ses { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ Transacciones y ACID (commit y rollback)</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Infraestructura · Transacciones, seguridad y datos para IA · UD2 y UD5</p>
+    <h1>Transacciones y ACID (commit y rollback)</h1>
+    <p class="lede">
+      Registrar un pedido no es una sola operación: son <b>varias</b> (el pedido y cada una de sus líneas). Vas a cortar el proceso a la mitad, a ver qué queda guardado
+      en la tienda en línea del máster, y a descubrir cómo una <b>transacción</b> convierte esas operaciones en una sola: o se hacen todas, o no se hace ninguna.
+      En el camino aparecen las cuatro letras de <b>ACID</b>, el <code>COMMIT</code>, el <code>ROLLBACK</code> y qué pasa cuando dos personas usan la base a la vez.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> Una tienda registra un pedido nuevo: primero guarda el pedido y luego guarda sus líneas (qué productos y cuántos). Si la luz se va justo entre las dos cosas, ¿qué crees que debería quedar guardado: lo que alcanzó a hacerse, o nada? ¿Y qué pasa si el pedido ya se había guardado y alguien lo consulta antes de que terminen las líneas? Escríbelo como te salga, aunque esté mal.</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: si se va la luz a la mitad, queda... y lo que alguien consulta en medio es..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>Cortar el proceso a la mitad, y ver qué se salva</h2>
+      <p>Siete pasos. Cada uno termina con un chequeo: hasta que no lo resuelves, el siguiente queda cerrado. Equivocarte aquí no resta nada, es parte del método.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="Un pedido a medias">
+          <span class="etapa">Paso 1</span>
+          <h3>Un pedido a medias</h3>
+          <p>A la derecha tienes un guion de tres sentencias SQL para registrar el pedido <b>5007</b> de Ana Molina en la tienda en línea: primero el pedido y luego dos líneas (un teclado y una webcam). El material lo cuenta con estas palabras: registrar un pedido son <b>dos pasos</b>, y si el sistema falla justo entre ellos, la base queda con <b>un pedido sin ninguna línea</b>, un estado inconsistente
+            <cite class="cita" data-fuente="bd2" data-pag="15" data-pimp="12" data-seccion="6.1 El concepto de transacción y las propiedades ACID" data-que="La definición de transacción, las cuatro propiedades ACID en una frase cada una y el ejemplo del pedido sin líneas si el sistema falla entre los dos INSERT." data-cuando="Al terminar este paso"></cite>
+            <cite class="cita" data-fuente="bd2diapo" data-pag="44" data-seccion="Transacciones: ejemplo" data-que="El mismo ejemplo en una diapositiva: INSERT pedidos, INSERT lineas_pedido y COMMIT, con la frase de que la atomicidad impide el estado inconsistente." data-cuando="Después de este paso"></cite>.</p>
+          <p>Por ahora <b>no hay transacción</b>: cada sentencia se confirma sola en cuanto termina. Con el interruptor «qué falla» podrás cortar la luz en distintos momentos. Todavía no puedes tocar nada: primero apuesta.</p>
+          <div class="check" id="chk1"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="BEGIN, COMMIT, ROLLBACK">
+          <span class="etapa">Paso 2</span>
+          <h3>BEGIN, COMMIT y ROLLBACK: el guion se vuelve una sola cosa</h3>
+          <p>Una <b>transacción</b> es un conjunto de operaciones SQL que se ejecutan como una unidad indivisible. Se abre con <code>BEGIN TRANSACTION</code> (o <code>START TRANSACTION</code>, según el motor), se confirma con <code>COMMIT</code>, que hace permanentes todos sus cambios, o se deshace con <code>ROLLBACK</code>, que revierte todo lo hecho desde que se abrió
+            <cite class="cita" data-fuente="bd2" data-pag="16" data-pimp="13" data-seccion="6.2 COMMIT, ROLLBACK y aislamiento; Código 13" data-que="BEGIN, COMMIT y ROLLBACK en dos frases y el Código 13, un pedido 5007 con una línea dentro de una transacción." data-cuando="Al terminar este paso"></cite>
+            <cite class="cita" data-fuente="bd2ej" data-pag="7" data-pimp="6" data-seccion="Solución 10: nuevo pedido dentro de una transacción" data-que="El guion que usa esta página: BEGIN, el INSERT del pedido 5007 de Ana Molina, dos INSERT de líneas y COMMIT, con la explicación de que un ROLLBACK revertiría también el pedido." data-cuando="Después de este paso"></cite>.</p>
+          <div class="fbloque">
+            <div data-tex="\text{estado final}\;=\;\begin{cases}\text{todo lo que escribió el guion} & \text{si llegó el COMMIT}\\[2pt]\text{el estado de antes del BEGIN} & \text{si hubo ROLLBACK o falló antes del COMMIT}\end{cases}" data-display></div>
+            <div class="vivo" id="vivo2"></div>
+          </div>
+          <p>Ahora el escenario deja elegir <b>con transacción</b>. Fíjate en el rótulo de cada sentencia: la <b>deshecha</b> sí se ejecutó, pero la transacción la borró al no confirmarse.</p>
+          <details class="profundizar">
+            <summary>Dos pedidos 5007 distintos en el material</summary>
+            <div>
+              <p>El material usa el mismo número de pedido con datos distintos en dos lugares. El Código 13 de la teoría (y la diapositiva 45) registra el 5007 del cliente 3 con una línea del producto 104 (dos unidades a 89.50). La solución 10 del ejercicio registra el 5007 de Ana Molina (cliente 5) con dos líneas, el producto 101 y el 105. Aquí uso el de la solución 10 porque tiene <b>dos</b> líneas y así hay un «a medias» que ver. La idea es idéntica.</p>
+            </div>
+          </details>
+          <div class="check" id="chk2"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="La transferencia">
+          <span class="etapa">Paso 3</span>
+          <h3>La transferencia: algo que no debe cambiar</h3>
+          <p>El ejemplo clásico del material no es un pedido, es el <b>dinero</b>: una transferencia entre dos cuentas son dos <code>UPDATE</code>, uno que resta y otro que suma. Si falla el segundo después de haberse ejecutado el primero, «el rollback garantiza que no se produzca una pérdida de dinero por una actualización parcial»
+            <cite class="cita" data-fuente="bd5" data-pag="7" data-pimp="5" data-seccion="6. Conexiones y transacciones, Tabla 4 y Figura 2" data-que="La Tabla 4 (pool, transacción, commit, rollback) y la Figura 2: la transferencia de 100 entre las cuentas 1 y 2 con try, except y finally." data-cuando="Al terminar este paso"></cite>.
+            Aquí aparece la <b>C</b> de ACID, la <b>consistencia</b>: la base pasa de un estado válido a otro estado válido. En la transferencia hay una regla que se puede contar: el dinero total no cambia.</p>
+          <div class="fbloque">
+            <div data-tex="s_1 + s_2 \;=\; \text{constante}\quad(\text{lo que sale de una cuenta entra en la otra})" data-display></div>
+            <div class="vivo" id="vivo3"></div>
+          </div>
+          <p>Las cuentas y los saldos (300 y 200 euros) son inventados: la Figura 2 solo trae la transferencia de 100 entre las cuentas 1 y 2. A la derecha puedes hacer la transferencia con y sin transacción, y cortarla entre los dos <code>UPDATE</code>.</p>
+          <details class="profundizar">
+            <summary>El patrón try, except y finally, y los fallos de la Figura 2</summary>
+            <div>
+              <p>La Figura 2 del material pone <code>commit()</code> al final del <code>try</code>, el <code>rollback()</code> en el <code>except</code> y, en el <code>finally</code>, el cierre del cursor y la devolución de la conexión al <b>pool</b> (el conjunto de conexiones ya abiertas que se reutilizan, porque abrir una es caro). El orden importa: el <code>finally</code> corre siempre, haya o no error. Pero el código copiado tal cual no funciona: escribe <code>conexión</code> con tilde y luego usa <code>conexion</code> (NameError); <code>cursor</code> y <code>conexion</code> se asignan dentro del <code>try</code>, así que si <code>getconn()</code> falla el <code>finally</code> lanza otro NameError; <code>log</code> no está definido y no se comprueba que la cuenta tenga saldo.</p>
+            </div>
+          </details>
+          <div class="check" id="chk3"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Cuando falla el motor">
+          <span class="etapa">Paso 4</span>
+          <h3>Cuando falla el motor, no la luz</h3>
+          <p>No todos los fallos son un corte de luz. A veces es la propia base la que rechaza una sentencia porque rompe una regla (las que viste en la página de integridad referencial). Entonces el programa tiene que <b>capturar el error y ejecutar ROLLBACK</b> a mano: si no hay transacción, no hay nada que deshacer.</p>
+          <p>El ejercicio de la UD5 trae justo ese caso: insertar un artículo y su embedding en una transacción, con <code>BEGIN</code>, los dos <code>INSERT</code>, <code>commit()</code> y, en el <code>except</code>, <code>rollback()</code>
+            <cite class="cita" data-fuente="bd5ej" data-pag="5" data-pimp="4" data-seccion="Solución 3: inserción atómica de artículo y embedding" data-que="La función con BEGIN, los dos INSERT, commit y rollback en el except. Ojo con dos erratas: la sangría del except está rota y la explicación de por qué falla la segunda inserción es falsa." data-cuando="Al terminar este paso"></cite>.
+            En el escenario, la segunda línea del pedido <b>repite</b> la primera: el par (id_pedido, id_producto) es la clave primaria de <code>lineas_pedido</code>, y no puede estar dos veces.</p>
+          <div class="fbloque">
+            <div data-tex="(\text{id\_pedido},\ \text{id\_producto})\ \text{debe ser único en}\ \mathtt{lineas\_pedido}" data-display></div>
+            <div class="vivo" id="vivo4"></div>
+          </div>
+          <details class="profundizar">
+            <summary>La explicación de la solución 3 no es la que ocurre</summary>
+            <div>
+              <p>La solución 3 dice que la segunda inserción podría fallar «por violar la clave foránea». Pero el artículo se inserta antes con el mismo id, así que la clave foránea nunca se viola. Lo que falla, comprobado en SQLite, es la clave primaria duplicada: <code>UNIQUE constraint failed: embeddings.id_articulo</code>, y el rollback deja el artículo sin insertar (0 filas). La clave foránea solo falla al insertar un embedding de un artículo que no existe (<code>FOREIGN KEY constraint failed</code>, con el <code>PRAGMA foreign_keys = ON</code> activo). Además, el <code>except</code> de esa solución está con tres espacios frente a los cuatro del <code>try</code>: tal cual, da <code>IndentationError</code>.</p>
+            </div>
+          </details>
+          <div class="check" id="chk4"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Durabilidad">
+          <span class="etapa">Paso 5</span>
+          <h3>Después del COMMIT: lo confirmado se queda</h3>
+          <p>La <b>D</b> de ACID es la <b>durabilidad</b>: una vez confirmada, una transacción persiste incluso ante un fallo del sistema. Es la otra cara del paso 2. Antes del <code>COMMIT</code> todo es provisional y un corte lo borra; después, ya no.
+            Las diapositivas lo resumen en cuatro cajas, una por letra: «Todo o nada», «Estado válido a válido», «Sin interferencias» y «Persiste tras confirmar»
+            <cite class="cita" data-fuente="bd2diapo" data-pag="43" data-seccion="Transacciones: las propiedades ACID" data-que="Las cuatro cajas A, C, I y D con su nombre y nada más: sin ejemplos. Los ejemplos de esta página llenan ese hueco." data-cuando="Al terminar este paso"></cite>.</p>
+          <div class="fbloque">
+            <div data-tex="\text{filas nuevas que sobreviven}\;=\;1\ \text{pedido}\;+\;2\ \text{líneas}\;=\;3\quad(\text{tras el COMMIT})" data-display></div>
+            <div class="vivo" id="vivo5"></div>
+          </div>
+          <details class="profundizar">
+            <summary>¿Cómo hace la base para no perder lo confirmado? (no viene en el material)</summary>
+            <div>
+              <p>El material nombra la durabilidad pero no explica cómo se logra. Casi todos los motores escriben los cambios en un registro (el «log» o diario) antes de darlos por buenos, y al reiniciar lo usan para rehacer lo confirmado y deshacer lo que no. La unidad de copias de seguridad menciona ese registro continuo (el WAL de PostgreSQL), pero tampoco lo desarrolla. En SQLite está comprobado: un programa que abre una transacción, inserta una fila y muere sin confirmar deja la base sin esa fila; si muere justo después del <code>COMMIT</code>, la fila sigue ahí.</p>
+            </div>
+          </details>
+          <div class="check" id="chk5"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+
+          <div class="destacado" id="destacado">
+            <p class="dest-tit">Una confusión muy común</p>
+            <h4>Si ya hice COMMIT y me arrepiento, ¿un ROLLBACK lo deshace?</h4>
+            <p>Piensa en lo que significa «confirmar»: el cambio ya es permanente. Después del <code>COMMIT</code> la transacción terminó.</p>
+            <div class="check" id="chk5b"><p class="check-tit">Predice</p><div class="cuerpo"></div></div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Dos sesiones">
+          <span class="etapa">Paso 6</span>
+          <h3>Dos sesiones a la vez: el aislamiento</h3>
+          <p>Hasta aquí había un solo usuario. La <b>I</b> de ACID es el <b>aislamiento</b>: las transacciones concurrentes no interfieren entre sí, como si se ejecutaran una detrás de otra. El material nombra tres fenómenos si no se cuida: <b>lecturas sucias</b> (leer datos de una transacción aún no confirmada), <b>lecturas no repetibles</b> y <b>lecturas fantasma</b>, y cuatro niveles de menor a mayor protección: Read Uncommitted, Read Committed, Repeatable Read y Serializable
+            <cite class="cita" data-fuente="bd2" data-pag="16" data-pimp="13" data-seccion="6.2 Fenómenos y niveles de aislamiento" data-que="Los tres fenómenos y los cuatro niveles en un párrafo, con la referencia a Date (2019). No hay ningún ejemplo con datos." data-cuando="Después de este paso"></cite>
+            <cite class="cita" data-fuente="bd5" data-pag="9" data-pimp="7" data-seccion="Tabla 6: niveles de aislamiento" data-que="La tabla de niveles con el problema que evita cada uno. Ojo: lista solo el problema nuevo de cada nivel, y afirma que la mayoría de los motores usan Read Committed por defecto (cierto en PostgreSQL, Oracle y SQL Server, no en MySQL con InnoDB)." data-cuando="Al terminar este paso"></cite>.
+            Aquí solo ves la idea con dos sesiones, A y B, y un pedido que A todavía no confirmó. El detalle de los niveles es el tema de la página «Niveles de aislamiento».</p>
+          <div class="fbloque">
+            <div data-tex="\text{lo que cuenta B}\;=\;\begin{cases}c & \text{si solo ve lo confirmado}\\ c + 1 & \text{si ve también lo que A no confirmó}\end{cases}" data-display></div>
+            <div class="vivo" id="vivo6"></div>
+          </div>
+          <p>El material no trae ningún ejemplo de estos fenómenos, así que el escenario usa un modelo sencillo. Que <b>SQLite</b> solo ofrece lectura confirmada (B no ve lo no confirmado de A) también está comprobado aquí, con dos conexiones a un mismo archivo; no es algo que diga el material.</p>
+          <div class="check" id="chk6"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="El patrón completo">
+          <span class="etapa">Paso 7</span>
+          <h3>El patrón completo, como lo escribe un programa</h3>
+          <p>Juntas, las cuatro letras: <b>A</b>tomicidad (todo o nada, lo que viste en los pasos 1 y 2), <b>C</b>onsistencia (de un estado válido a otro, paso 3), <b>I</b>slamiento (sin interferencias, paso 6) y <b>D</b>urabilidad (persiste tras confirmar, paso 5). Las dos primeras las defiendes tú con el patrón del programa: abrir, intentar, <code>COMMIT</code> si todo salió bien, <code>ROLLBACK</code> si no. Que la base se encargue de las transacciones y la concurrencia (ACID) es una de las seis funciones de un SGBD
+            <cite class="cita" data-fuente="bd1" data-pag="6" data-pimp="4" data-seccion="2.1 ¿Qué es un SGBD?" data-que="Las seis funciones de un SGBD (DDL, DML, acceso y seguridad, integridad, transacciones y concurrencia con ACID, recuperación) y ejemplos de motores. De ACID solo da el nombre." data-cuando="Después de este paso"></cite>
+            <cite class="cita" data-fuente="bd2diapo" data-pag="47" data-seccion="Pregunta de repaso" data-que="La pregunta de repaso: qué propiedad evita un pedido sin líneas si el sistema falla a mitad, con la respuesta (la atomicidad)." data-cuando="Al terminar este paso"></cite>.
+            El escenario te deja ahora combinar todo: el modo, la falla y la repetición. Puede servir de práctica antes de la parte 2, donde el mismo patrón se escribe en Python y en R.</p>
+          <p>Y un recordatorio del material de por qué esto importa en IA: cuando un sistema en producción registra nuevas interacciones que después sirven para reentrenar un modelo, «la falta de atomicidad puede introducir inconsistencias silenciosas» que degradan el conjunto de entrenamiento
+            <cite class="cita" data-fuente="bd2" data-pag="17" data-pimp="14" data-seccion="6.3 Transacciones y calidad del dato en proyectos de IA" data-que="Un párrafo: por qué comprender cuándo envolver una operación en una transacción explícita es tan relevante para quien diseña pipelines de datos como para quien administra la base." data-cuando="Después de este paso"></cite>.</p>
+          <div class="fbloque">
+            <div data-tex="\textbf{A}\text{tomicidad}\ \cdot\ \textbf{C}\text{onsistencia}\ \cdot\ \textbf{I}\text{slamiento}\ \cdot\ \textbf{D}\text{urabilidad}" data-display></div>
+            <div class="vivo" id="vivo7"></div>
+          </div>
+          <details class="profundizar">
+            <summary>Dos soluciones del ejercicio que dicen «transacción» y no la usan</summary>
+            <div>
+              <p>Las soluciones 11 y 12 de la UD2 también son operaciones de dos pasos (cambiar el estado del pedido 5004 y restar uno al stock del router; borrar las líneas del 5006 y luego el pedido). El texto dice que «deberían» ir en una transacción, y en la solución 11 no se usa ninguna
+                <cite class="cita" data-fuente="bd2ej" data-pag="8" data-pimp="7" data-seccion="Soluciones 11 y 12" data-que="Los dos UPDATE de la solución 11 sin BEGIN ni COMMIT aunque el texto dice que debería haber transacción, y los dos DELETE del 12 en el orden obligatorio." data-cuando="Después de este paso"></cite>.
+                Es el mismo problema del paso 1: si se corta entre los dos UPDATE, el pedido figura enviado y el stock no bajó.</p>
+            </div>
+          </details>
+          <div class="cita" id="citaHipo" hidden></div>
+          <div class="check" id="chk7"><p class="check-tit">Antes de seguir</p><div class="cuerpo"></div></div>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+        </div>
+        <div class="ctl" id="ctl"></div>
+
+        <div id="pnlP">
+          <p class="tt">el guion</p>
+          <ol class="guion" id="pGuion"></ol>
+          <div class="dos">
+            <div><p class="tt">pedidos</p><div id="pPe"></div></div>
+            <div><p class="tt">lineas_pedido</p><div id="pLi"></div></div>
+          </div>
+        </div>
+
+        <div id="pnlT" hidden>
+          <p class="tt">el guion</p>
+          <ol class="guion" id="tGuion"></ol>
+          <p class="tt">cuentas (saldos inventados)</p>
+          <div id="tCu"></div>
+        </div>
+
+        <div id="pnlS" hidden>
+          <div class="ses">
+            <div class="col"><p class="tt">sesión A</p><div id="sA"></div></div>
+            <div class="col"><p class="tt">sesión B</p><div id="sB"></div></div>
+          </div>
+          <div class="ops" id="sOps"></div>
+        </div>
+
+        <div class="msg" id="escMsg"></div>
+        <dl class="kv" id="escKv"></dl>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>El patrón del paso 7 escrito como lo haría un programa: tres pedidos que se intentan registrar, el primero sin transacción, el segundo con transacción y con una línea repetida (error), el tercero con transacción y sin error. Elige Python o R, dale a reproducir y mira las tablas (las filas en cursiva son <b>provisionales</b>: están dentro de una transacción abierta). Python usa <code>sqlite3</code> de la librería estándar, con una base de verdad en memoria; R, que en esta máquina no trae <code>RSQLite</code>, simula la transacción copiando los dos <code>data.frame</code> y descartando o conservando la copia.</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir</p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="true">Python</button>
+            <button type="button" data-lang="r" aria-pressed="false">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">1 · sin transacción</span><span data-f="2">2 · con error</span><span data-f="3">3 · con COMMIT</span><span data-f="4">4 · la librería</span>
+        </div>
+        <div class="vr-dos">
+          <div><h3 class="mini-tit vr-tit" id="vrT1">pedidos</h3><div class="tabla-wrap"><table class="tabla vr-tabla" id="vrPe"></table></div></div>
+          <div><h3 class="mini-tit vr-tit" id="vrT2">lineas</h3><div class="tabla-wrap"><table class="tabla vr-tabla" id="vrLi"></table></div></div>
+        </div>
+        <div class="vr-cuenta" id="vrCuenta"></div>
+        <h3 class="mini-tit vr-tit">lo que va imprimiendo el programa</h3>
+        <div class="salida" id="vrSal"></div>
+      </div>
+    </div>
+
+    <h3 class="mini-tit" style="margin:20px 0 6px">Lo que imprime cada lenguaje</h3>
+    <div class="vr-grid">
+      <div class="card"><p class="mini-tit">Python</p><div class="salida" id="salidaPy"></div></div>
+      <div class="card"><p class="mini-tit">R</p><div class="salida" id="salidaR"></div></div>
+    </div>
+
+    <p class="vr-nota">En Python, <code>sqlite3</code> hace de transacción de verdad: <code>BEGIN</code>, <code>COMMIT</code> y <code>ROLLBACK</code> se ejecutan como sentencias porque la conexión se abre con <code>isolation_level=None</code> (sin transacciones automáticas). La versión de la librería, <code>with con2:</code>, confirma sola si el bloque termina bien y deshace si sale una excepción: deja el pedido 5008 sin guardar, igual que el programa a mano (<code>True</code>). R no trae <code>RSQLite</code> en esta máquina: copia los dos <code>data.frame</code> antes de empezar y los restaura al fallar, y su resultado se comprueba con la cuenta a mano (<code>TRUE</code>). Los dos imprimen lo mismo, línea por línea. Estos programas no vienen en el material: lo único de código sobre el tema que trae son las soluciones 3, 8 y 10 de los ejercicios y la Figura 2 de la UD5.</p>
+
+    <details class="profundizar">
+      <summary>El mismo patrón con un gestor de contexto, sin repetir try y except</summary>
+      <div>
+        <p>En Python el bloque <code>with con:</code> equivale a «<code>COMMIT</code> al salir bien, <code>ROLLBACK</code> si hay una excepción», y lo hace por ti, aunque <b>no cierra</b> la conexión (comprobado: sigue abierta después del <code>with</code>):</p>
+        <pre class="prog-sql">import sqlite3
+con = sqlite3.connect(":memory:")
+con.execute("CREATE TABLE t (a INTEGER PRIMARY KEY)")
+try:
+    with con:
+        con.execute("INSERT INTO t VALUES (1)")
+        con.execute("INSERT INTO t VALUES (1)")
+except sqlite3.IntegrityError:
+    pass
+print(con.execute("SELECT COUNT(*) FROM t").fetchone()[0])</pre>
+        <p>Imprime <code>0</code>: la segunda inserción repetida falló y el <code>with</code> deshizo también la primera. Es la forma que usa el ejercicio de la UD5 en sus funciones: una conexión que se abre y se cierra con <code>with</code> y un rollback explícito dentro.</p>
+      </div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>El modo por defecto de sqlite3</h3><span class="estado" data-reto="codigo2"></span></div>
+        <div id="codigo2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>ROLLBACK después del COMMIT</h3><span class="estado" data-reto="codigo3"></span></div>
+        <div id="codigo3"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: la biblioteca te avisa en el índice cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>¿Qué queda guardado?</h3><span class="estado" data-reto="ojo"></span></div>
+        <p class="desc">Cinco casos. Decide sin dibujar nada; después te muestro por qué. Apruebas con 4 de 5.</p>
+        <div id="ojo"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Construir</span><h3>Provoca cuatro resultados</h3><span class="estado" data-reto="construir"></span></div>
+        <p class="desc">Elige el modo y qué falla hasta lograr los cuatro resultados. Cada uno pide una combinación distinta.</p>
+        <div class="cons-ctl">
+          <div class="grupo"><span class="hint">modo</span><div class="seg" id="consModo" role="group" aria-label="Modo"><button type="button" data-v="sin" aria-pressed="false">sin transacción</button><button type="button" data-v="con" aria-pressed="true">con transacción</button></div></div>
+        </div>
+        <div class="cons-ctl">
+          <div class="grupo"><span class="hint">qué falla</span><div class="seg envuelve" id="consFalla" role="group" aria-label="Qué falla"></div></div>
+        </div>
+        <div class="grande" id="construirVivo"></div>
+        <ul class="objetivos" id="objetivos"></ul>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>Cuenta el dinero</h3><span class="estado" data-reto="mano"></span></div>
+        <p class="desc">Datos al azar. Haz la cuenta con papel antes de pedir pistas.</p>
+        <div id="mano"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Alguien se equivocó</h3><span class="estado" data-reto="error"></span></div>
+        <p class="desc">Una de las líneas tiene un error. Tócala.</p>
+        <div id="error"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Qué propiedad evita el pedido sin líneas</h3><span class="estado" data-reto="prop1"></span></div>
+        <div id="prop1"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Se va la luz después del COMMIT</h3><span class="estado" data-reto="prop2"></span></div>
+        <div id="prop2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Por qué falla la solución 3 de la UD5</h3><span class="estado" data-reto="prop3"></span></div>
+        <div id="prop3"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Dos sesiones y una lectura</h3><span class="estado" data-reto="prop4"></span></div>
+        <div id="prop4"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Recordar a la fuerza es lo que fija. Arma el guion de la transacción y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Guion de memoria</span><h3>Registrar el pedido 5007 con sus dos líneas</h3><span class="estado" data-reto="formula"></span></div>
+        <p class="desc">Arma el guion que registra el pedido 5007 y sus dos líneas, y lo confirma. Hay piezas de más que no pertenecen. No mires arriba.</p>
+        <div id="formula"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el material</h2>
+      <p class="lecturas-intro">Ya construiste la idea con las manos. Ahora ve a la versión del máster y comprueba que la reconoces. Las transacciones y las propiedades ACID están en la UD2 (teoría y diapositivas), el ejemplo de la transferencia con try, except y finally en la UD5, y los guiones con BEGIN y ROLLBACK en los ejercicios de las dos unidades. Cada entrada dice qué vas a encontrar y en qué momento conviene leerla. Si abres la biblioteca con doble clic, el enlace abre el PDF en esa página.</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> Los pedidos y las líneas de la tienda en línea son los del ejercicio de la UD2 (seis pedidos y nueve líneas); el pedido 5007 de Ana Molina con el teclado 101 y la webcam 105 es el de la solución 10. Las cuentas y los saldos de la transferencia, las sesiones A y B y los datos de los programas de la parte 2 son inventados aquí.
+    Que SQLite rechace la clave primaria duplicada, que un programa que muere sin confirmar deje la base sin la fila, que un <code>ROLLBACK</code> después del <code>COMMIT</code> dé «cannot rollback - no transaction is active», que la conexión por defecto de <code>sqlite3</code> pierda lo no confirmado al cerrar y que la sesión B no vea lo no confirmado de A está comprobado en SQLite 3.45 con Python 3.13. El modelo de lecturas sucias del escenario no viene en el material de la unidad. Tu progreso se guarda solo en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+/*
+  EJEMPLOS COMUNES DE LA RUTA "Bases de datos relacionales y SQL" (los reutilizan las demas paginas de la ruta):
+  - La tienda en linea del ejercicio de la UD2 (bd2ej): clientes 1 Marta Ruiz (Madrid), 2 Javier Gomez (Barcelona), 3 Laura Sanchez (Valencia),
+    4 Diego Torres (Madrid), 5 Ana Molina (Sevilla, sin pedidos); pedidos 5001 c1 Entregado, 5002 c2 Entregado, 5003 c1 Enviado, 5004 c3 Pendiente,
+    5005 c4 Entregado, 5006 c2 Cancelado; productos 101 Teclado mecanico 79.90, 102 Monitor 27" 4K 349.00, 103 Raton inalambrico 29.90,
+    104 Disco SSD 1TB 89.50, 105 Webcam HD 39.90, 106 Router Wi-Fi 6 129.00.
+  - Lineas (bd2ej PDF 3): (5001,101,1,79.90), (5001,103,2,29.90), (5002,102,1,349.00), (5003,104,1,89.50), (5003,105,1,39.90),
+    (5004,106,1,129.00), (5005,101,1,79.90), (5005,102,1,349.00), (5006,103,3,29.90).
+  - Pedido nuevo de la solucion 10 (bd2ej PDF 7): 5007 de Ana Molina (cliente 5), lineas (5007,101,1,79.90) y (5007,105,1,39.90).
+  - Cuentas de la transferencia (inventadas; la Figura 2 de bd5 solo trae la transferencia de 100 entre las cuentas 1 y 2): saldos 300 y 200.
+*/
+(function () {
+  "use strict";
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var RETOS = ["ojo", "construir", "mano", "error", "formula", "prop1", "prop2", "prop3", "prop4", "codigo1", "codigo2", "codigo3"];
+  var C = B.concepto({ id: "transacciones-acid", retos: RETOS, pasos: 7 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+  function azar(a) { return a[Math.floor(Math.random() * a.length)]; }
+  function azarN(a, b) { return a + Math.floor(Math.random() * (b - a + 1)); }
+
+  /* ---------------- datos de la tienda ---------------- */
+  var PE0 = [[5001, 1, "Entregado"], [5002, 2, "Entregado"], [5003, 1, "Enviado"], [5004, 3, "Pendiente"], [5005, 4, "Entregado"], [5006, 2, "Cancelado"]];
+  var LI0 = [[5001, 101, 1, "79.90"], [5001, 103, 2, "29.90"], [5002, 102, 1, "349.00"], [5003, 104, 1, "89.50"], [5003, 105, 1, "39.90"],
+    [5004, 106, 1, "129.00"], [5005, 101, 1, "79.90"], [5005, 102, 1, "349.00"], [5006, 103, 3, "29.90"]];
+  var NUEVO_PE = [5007, 5, "Pendiente"];
+  var NUEVAS_LI = [[5007, 101, 1, "79.90"], [5007, 105, 1, "39.90"]];
+
+  function t2(cols, filas) {
+    return '<table class="t2"><thead><tr>' + cols.map(function (c) { return '<th>' + c + '</th>'; }).join("") + '</tr></thead><tbody>' +
+      filas.map(function (f) {
+        return '<tr class="' + (f.cls || "") + '">' + f.c.map(function (x) { return x === null ? '<td>NULL</td>' : '<td>' + x + '</td>'; }).join("") + '</tr>';
+      }).join("") + '</tbody></table>';
+  }
+  function seg(g, opts, val, dis, extra) {
+    return '<div class="seg' + (extra ? " " + extra : "") + '" data-g="' + g + '" role="group">' + opts.map(function (o) {
+      return '<button type="button" data-v="' + o[0] + '" aria-pressed="' + (val === o[0]) + '"' + (dis ? " disabled" : "") + '>' + o[1] + '</button>';
+    }).join("") + '</div>';
+  }
+  function grupo(et, html) { return '<div class="grupo"><b>' + et + '</b>' + html + '</div>'; }
+
+  /* ---------------- el simulador del guion del pedido ---------------- */
+  // modo: "sin" (cada sentencia se confirma sola) o "con" (BEGIN ... COMMIT)
+  // falla: "none", "1" (luz tras el pedido), "2" (tras la 1.a linea), "3" (tras la 2.a linea), "dup" (la 2.a linea repite a la 1.a), "commit" (luz tras el COMMIT)
+  var FALLAS = [["none", "nada falla"], ["1", "luz tras el pedido"], ["2", "luz tras la 1.ª línea"], ["3", "luz tras la 2.ª línea"], ["dup", "2.ª línea repetida"], ["commit", "luz tras el COMMIT"]];
+  function sim(modo, falla) {
+    var con = modo === "con", st = ["nunca", "nunca", "nunca", "nunca", "nunca", "nunca"]; // 0 BEGIN, 1 pedido, 2 linea 1, 3 linea 2, 4 COMMIT, 5 ROLLBACK
+    var corte = falla === "1" ? 1 : falla === "2" ? 2 : falla === "3" ? 3 : falla === "commit" ? 4 : 0;
+    var dup = falla === "dup", ped = 0, lin = 0, crash = false, rechazo = false, i, confirmado = false;
+    if (!con) st[0] = "omit";
+    else st[0] = "hecha";
+    for (i = 1; i <= 3 && !crash && !rechazo; i++) {
+      if (i === 3 && dup) { st[3] = "rech"; rechazo = true; break; }
+      st[i] = "hecha";
+      if (i === 1) ped = 1;
+      if (i === 2) lin = 1;
+      if (i === 3) lin = 2;
+      if (corte === i) crash = true;
+    }
+    if (con && !crash && !rechazo) {
+      st[4] = "hecha"; confirmado = true;
+      if (corte === 4) crash = true;
+    } else if (!con) st[4] = "omit";
+    var deshecho = false;
+    if (con && !confirmado) {
+      deshecho = true;
+      for (i = 1; i <= 3; i++) if (st[i] === "hecha") st[i] = "des";
+      ped = 0; lin = 0;
+      st[5] = rechazo ? "hecha" : "auto";
+    } else st[5] = "omit";
+    var cat = ped === 0 ? "nada" : (lin === 2 ? "todo" : lin === 0 ? "sinlineas" : "media");
+    var msg, tono = "";
+    if (!con) {
+      if (falla === "none") { msg = "Todo salió bien: cada sentencia se confirmó sola. Quedaron el pedido y sus 2 líneas."; tono = "ok"; }
+      else if (falla === "1") { msg = "Se fue la luz justo después del INSERT del pedido. Esa sentencia ya estaba confirmada y las líneas nunca se ejecutaron: el pedido 5007 quedó <b>sin ninguna línea</b>."; tono = "mal"; }
+      else if (falla === "2") { msg = "Se fue la luz después de la primera línea. Todo lo anterior ya estaba confirmado: el pedido quedó con <b>1 de sus 2 líneas</b>."; tono = "mal"; }
+      else if (falla === "3") { msg = "Se fue la luz después de la última línea. No faltaba nada: cada sentencia ya se había confirmado sola, así que quedó completo (aquí el corte no hizo daño)."; tono = "ok"; }
+      else { msg = "La segunda línea repite el par (5007, 101) y la base rechaza ese INSERT (clave primaria duplicada). Lo anterior ya estaba confirmado y nadie lo deshace: el pedido quedó con <b>1 de sus 2 líneas</b>."; tono = "mal"; }
+    } else {
+      if (falla === "none") { msg = "BEGIN, tres INSERT y COMMIT: todo se confirma junto. Quedaron el pedido y sus 2 líneas."; tono = "ok"; }
+      else if (falla === "dup") { msg = "La segunda línea repite el par (5007, 101) y la base rechaza ese INSERT. El programa captura el error y ejecuta <b>ROLLBACK</b>: se deshacen también el pedido y la primera línea. No queda nada del pedido 5007."; tono = "ok"; }
+      else if (falla === "commit") { msg = "Se fue la luz justo <b>después</b> del COMMIT. La transacción ya había terminado: al reiniciar, el pedido y sus 2 líneas siguen ahí (durabilidad)."; tono = "ok"; }
+      else { msg = "Se fue la luz <b>antes</b> del COMMIT. Al reiniciar, la base encuentra una transacción sin confirmar y la deshace: no queda nada del pedido 5007."; tono = "ok"; }
+    }
+    var consistente = (ped === 0 && lin === 0) || (ped === 1 && lin === 2);
+    return { st: st, ped: ped, lin: lin, cat: cat, msg: msg, tono: tono, consistente: consistente, confirmado: confirmado, deshecho: deshecho, crash: crash, rechazo: rechazo, con: con, falla: falla };
+  }
+  var TXT_SQL = [
+    "BEGIN;",
+    "INSERT INTO pedidos VALUES (5007, 5, 'Pendiente');",
+    "INSERT INTO lineas_pedido VALUES (5007, 101, 1, 79.90);",
+    "INSERT INTO lineas_pedido VALUES (5007, 105, 1, 39.90);",
+    "COMMIT;",
+    "ROLLBACK;"
+  ];
+  var ETIQ = { hecha: "hecha", nunca: "no llegó", rech: "rechazada", des: "deshecha", omit: "sin transacción", auto: "lo hace la base", corte: "" };
+  function etiquetaSent(i, r, falla) {
+    var e = r.st[i];
+    if (i === 4 && e === "hecha") return "confirmada";
+    if (i === 5 && e === "hecha") return "hecha por el programa";
+    if (i === 5 && e === "auto") return "al reiniciar";
+    if (i === 0 && e === "hecha") return "transacción abierta";
+    return ETIQ[e];
+  }
+  function guionHtml(r, falla, datos) {
+    var h = "";
+    var textos = TXT_SQL.slice();
+    if (falla === "dup") textos[3] = "INSERT INTO lineas_pedido VALUES (5007, 101, 1, 79.90);";
+    textos.forEach(function (t, i) {
+      if (i === 5 && (!datos || r.st[5] === "omit")) return;
+      var cls = r.st[i];
+      if (!datos) cls = "";
+      var etq = datos ? etiquetaSent(i, r, falla) : "";
+      var corta = datos && r.crash && ((falla === "1" && i === 1) || (falla === "2" && i === 2) || (falla === "3" && i === 3) || (falla === "commit" && i === 4));
+      h += '<li class="' + cls + (corta ? " corte" : "") + '"><span class="sql">' + esc(t) + '</span><span class="tag">' + (corta ? "luz se va aquí · " : "") + etq + '</span></li>';
+    });
+    return h;
+  }
+
+  /* ---------------- estado del escenario ---------------- */
+  var est = { paso: 0, ok: [false, false, false, false, false, false, false], okb: false };
+  var MODO = ["P", "P", "T", "P", "P", "S", "P"];
+  var HINTS = [
+    "Sin transacción: cada sentencia se confirma sola",
+    "Con BEGIN y COMMIT: todo o nada",
+    "Dos UPDATE y un dinero que no debe cambiar",
+    "Un INSERT que la base rechaza",
+    "Después del COMMIT",
+    "Dos sesiones y un pedido sin confirmar",
+    "Todo junto"
+  ];
+  var PERMITIDAS = { 0: ["none", "1", "2", "3"], 1: ["none", "1", "2", "3"], 3: ["none", "1", "2", "3", "dup"], 4: ["none", "1", "2", "3", "commit"], 6: ["none", "1", "2", "3", "dup", "commit"] };
+  var P = { modo: "sin", falla: "1" };
+  var T = { modo: "sin", falla: true };
+  var S;
+  var pasos;
+  function resetS() { S = { t: 0, nivel: "rc", fin: null, a: [], b: [], conf: 6, avista: 6, bve: null, lecturasB: 0 }; }
+  resetS();
+
+  /* ---------------- panel P: el pedido ---------------- */
+  function renderP() {
+    var hab = est.ok[est.paso], r = sim(P.modo, P.falla);
+    $("pGuion").innerHTML = guionHtml(r, P.falla, hab);
+    var pe = PE0.map(function (p) { return { c: [p[0], p[1], p[2]] }; });
+    var li = LI0.map(function (l) { return { c: [l[0], l[1], l[2]] }; });
+    if (hab) {
+      if (r.ped) pe.push({ cls: r.lin === 2 ? "ok" : "malo", c: NUEVO_PE.slice() });
+      if (r.lin >= 1) li.push({ cls: r.lin === 2 ? "ok" : "nuevo", c: [5007, 101, 1] });
+      if (r.lin >= 2) li.push({ cls: "ok", c: [5007, 105, 1] });
+    }
+    $("pPe").innerHTML = t2(["id", "cliente", "estado"], pe.map(function (f) { return { cls: f.cls, c: f.c }; }));
+    $("pLi").innerHTML = t2(["pedido", "prod.", "cant."], li);
+    $("escMsg").className = "msg" + (hab && r.tono ? " " + r.tono : "");
+    $("escMsg").innerHTML = hab ? r.msg : "Responde la predicción del paso para poder tocar los controles.";
+    if (hab) {
+      var sinL = r.ped && r.lin === 0 ? 1 : 0;
+      $("escKv").innerHTML = '<dt>pedidos</dt><dd>' + (6 + r.ped) + '</dd><dt>líneas</dt><dd>' + (9 + r.lin) + '</dd>' +
+        '<dt>pedido 5007</dt><dd class="' + (r.consistente ? "ok" : "mal") + '">' + (r.ped === 0 ? "no existe" : r.lin + " de 2 líneas") + '</dd>' +
+        '<dt>estado</dt><dd class="' + (r.consistente ? "ok" : "mal") + '">' + (r.consistente ? "consistente" : "inconsistente") + (sinL ? " (pedido sin líneas)" : "") + '</dd>';
+    } else $("escKv").innerHTML = "";
+  }
+
+  /* ---------------- panel T: la transferencia ---------------- */
+  function simT(modo, falla) {
+    var con = modo === "con", s1 = 300, s2 = 200, st = ["omit", "hecha", falla ? "nunca" : "hecha", "omit"], msg, tono;
+    if (con) { st[0] = "hecha"; st[3] = falla ? "des" : "hecha"; }
+    s1 = 200;
+    if (!falla) s2 = 300;
+    if (con && falla) { s1 = 300; st[1] = "des"; st[3] = "auto"; }
+    if (!falla) { msg = "Los dos UPDATE se ejecutaron: salieron 100 de la cuenta 1 y entraron 100 en la cuenta 2. El dinero total no cambió."; tono = "ok"; }
+    else if (!con) { msg = "Falló justo después del primer UPDATE. Sin transacción, ese cambio ya estaba confirmado: los 100 euros salieron de la cuenta 1 y no entraron en ninguna. <b>Desaparecieron 100 euros.</b>"; tono = "mal"; }
+    else { msg = "Falló justo después del primer UPDATE. El programa (o la base, al reiniciar) hace ROLLBACK: el primer UPDATE se deshace y los saldos vuelven a 300 y 200. No se perdió nada."; tono = "ok"; }
+    return { s1: s1, s2: s2, suma: s1 + s2, st: st, msg: msg, tono: tono, con: con };
+  }
+  function renderT() {
+    var hab = est.ok[2], r = simT(T.modo, T.falla);
+    var textos = ["BEGIN;", "UPDATE cuentas SET saldo = saldo - 100 WHERE id = 1;", "UPDATE cuentas SET saldo = saldo + 100 WHERE id = 2;", "COMMIT;"];
+    var h = "";
+    textos.forEach(function (t, i) {
+      var e = r.st[i], cls = hab ? e : "", etq = "";
+      if (hab) {
+        etq = e === "hecha" ? "hecha" : e === "nunca" ? "no llegó" : e === "des" ? "deshecha" : e === "auto" ? "al reiniciar" : "sin transacción";
+        if (i === 3 && e === "auto") etq = "ROLLBACK";
+        if (i === 3 && e === "hecha") etq = "confirmada";
+        if (i === 0 && e === "hecha") etq = "transacción abierta";
+        if (T.falla && i === 1) etq = (e === "des" ? "deshecha · " : "hecha · ") + "luz se va aquí";
+      }
+      h += '<li class="' + cls + (hab && T.falla && i === 1 ? " corte" : "") + '"><span class="sql">' + esc(t) + '</span><span class="tag">' + etq + '</span></li>';
+    });
+    $("tGuion").innerHTML = h;
+    $("tCu").innerHTML = t2(["id", "cuenta", "saldo"], [{ c: [1, "Cuenta 1", hab ? r.s1 : 300] }, { c: [2, "Cuenta 2", hab ? r.s2 : 200] }]);
+    $("escMsg").className = "msg" + (hab && r.tono ? " " + r.tono : "");
+    $("escMsg").innerHTML = hab ? r.msg : "Responde la predicción del paso para poder tocar los controles.";
+    $("escKv").innerHTML = hab ? '<dt>saldo 1 + saldo 2</dt><dd class="' + (r.suma === 500 ? "ok" : "mal") + '">' + r.s1 + ' + ' + r.s2 + ' = ' + r.suma + '</dd><dt>antes</dt><dd>300 + 200 = 500</dd>' : "";
+  }
+
+  /* ---------------- panel S: dos sesiones ---------------- */
+  var ACCIONES = ["A abre una transacción e inserta el pedido 5007", "B cuenta los pedidos", "A termina su transacción", "B vuelve a contar"];
+  function aplicarS(k) {
+    // k: "a1", "b1", "acom", "arol", "b2"
+    var vistaA;
+    if (k === "a1") { S.a.push({ t: "BEGIN;" }); S.a.push({ t: "INSERT INTO pedidos VALUES (5007, ...);" }); S.a.push({ t: "-- A cuenta: 7, con su pedido nuevo", lee: true }); S.avista = 7; S.t = 1; }
+    else if (k === "b1" || k === "b2") {
+      var abierta = S.t === 1;
+      var ve = (S.nivel === "ru" && abierta) ? S.conf + 1 : S.conf;
+      S.b.push({ t: "SELECT COUNT(*) FROM pedidos;" });
+      S.b.push({ t: "-- B ve: " + ve + (S.nivel === "ru" && abierta ? "  (lectura sucia)" : ""), lee: true });
+      S.bve = ve; S.lecturasB++;
+      if (k === "b1") S.v1 = ve;
+      S.t = k === "b1" ? 2 : 4;
+      S.ultB = { abierta: abierta, ve: ve };
+    } else if (k === "acom") { S.a.push({ t: "COMMIT;" }); S.conf = 7; S.avista = 7; S.fin = "commit"; S.t = 3; }
+    else if (k === "arol") { S.a.push({ t: "ROLLBACK;" }); S.avista = 6; S.fin = "rollback"; S.t = 3; }
+  }
+  function renderS() {
+    var hab = est.ok[5];
+    $("sA").innerHTML = S.a.length ? S.a.map(function (x) { return '<div class="lin' + (x.lee ? " lee" : "") + '">' + esc(x.t) + '</div>'; }).join("") : '<div class="lin vacio">(todavía no hizo nada)</div>';
+    $("sB").innerHTML = S.b.length ? S.b.map(function (x) { return '<div class="lin' + (x.lee ? " lee" : "") + '">' + esc(x.t) + '</div>'; }).join("") : '<div class="lin vacio">(todavía no hizo nada)</div>';
+    var t = S.t, b = "";
+    b += '<button type="button" data-s="a1"' + (hab && t === 0 ? "" : " disabled") + '>1 · A: BEGIN e INSERT</button>';
+    b += '<button type="button" data-s="b1"' + (hab && t === 1 ? "" : " disabled") + '>2 · B: contar pedidos</button>';
+    b += '<button type="button" data-s="acom"' + (hab && t === 2 ? "" : " disabled") + '>3 · A: COMMIT</button>';
+    b += '<button type="button" data-s="arol"' + (hab && t === 2 ? "" : " disabled") + '>3 · A: ROLLBACK</button>';
+    b += '<button type="button" data-s="b2"' + (hab && t === 3 ? "" : " disabled") + '>4 · B: contar otra vez</button>';
+    b += '<button type="button" class="ghost" data-s="reset"' + (hab ? "" : " disabled") + '>Reiniciar</button>';
+    $("sOps").innerHTML = b;
+    var msg = "", tono = "";
+    if (!hab) msg = "Responde la predicción del paso para poder tocar los botones.";
+    else if (t === 0) msg = "Hay 6 pedidos confirmados. Empieza con el botón 1: A abre una transacción y registra el pedido 5007 sin confirmarlo.";
+    else if (t === 1) msg = "A tiene su pedido nuevo (A cuenta 7), pero <b>no lo confirmó</b>. En disco hay 6. Ahora B cuenta con el nivel que elijas arriba.";
+    else if (t === 2) {
+      if (S.ultB.ve === 6) { msg = "B contó <b>6</b>: no ve el pedido sin confirmar. Es la lectura confirmada. Ahora A decide: COMMIT o ROLLBACK."; tono = "ok"; }
+      else { msg = "B contó <b>7</b>: vio el pedido de A antes de que A lo confirmara. Es una <b>lectura sucia</b>. Si A hace ROLLBACK, B habrá visto un pedido que nunca existió."; tono = "mal"; }
+    } else if (t === 3) msg = "A terminó con " + (S.fin === "commit" ? "COMMIT: el pedido 5007 es permanente" : "ROLLBACK: el pedido 5007 se descartó") + ". B puede contar otra vez.";
+    else {
+      var ve2 = S.bve;
+      if (S.fin === "commit") { msg = "B cuenta <b>" + ve2 + "</b>: ahora el pedido 5007 sí existe para todos."; tono = "ok"; }
+      else if (S.v1 === 7) { msg = "B cuenta <b>" + ve2 + "</b>. Pero antes contó 7: leyó un pedido que ya no existe. Eso es lo que evita el aislamiento."; tono = "mal"; }
+      else { msg = "B cuenta <b>" + ve2 + "</b>: el pedido 5007 se descartó y B nunca lo vio."; tono = "ok"; }
+    }
+    $("escMsg").className = "msg" + (tono ? " " + tono : "");
+    $("escMsg").innerHTML = msg;
+    $("escKv").innerHTML = hab ? '<dt>confirmados en disco</dt><dd>' + S.conf + '</dd><dt>A ve</dt><dd>' + S.avista + '</dd><dt>última lectura de B</dt><dd class="' + (S.bve === null ? "" : (S.bve === S.conf || (S.t === 4 && S.bve === S.conf) ? "ok" : "mal")) + '">' + (S.bve === null ? "-" : S.bve) + '</dd>' : "";
+  }
+
+  /* ---------------- controles del escenario ---------------- */
+  function controles() {
+    var i = est.paso, m = MODO[i], h = "", hab = est.ok[i];
+    if (m === "P") {
+      var perm = PERMITIDAS[i] || PERMITIDAS[6];
+      h += grupo("modo", seg("pmodo", [["sin", "sin transacción"], ["con", "con transacción"]], P.modo, i === 0 || !hab));
+      h += grupo("qué falla", seg("pfalla", FALLAS.filter(function (f) { return perm.indexOf(f[0]) >= 0; }), P.falla, !hab, "envuelve"));
+    } else if (m === "T") {
+      h += grupo("modo", seg("tmodo", [["sin", "sin transacción"], ["con", "con transacción"]], T.modo, !hab));
+      h += grupo("qué falla", seg("tfalla", [["no", "nada falla"], ["si", "falla entre los dos UPDATE"]], T.falla ? "si" : "no", !hab, "envuelve"));
+    } else {
+      h += grupo("nivel de B", seg("snivel", [["rc", "lectura confirmada"], ["ru", "lectura sucia (modelo)"]], S.nivel, !hab || S.t > 1, "envuelve"));
+    }
+    $("ctl").innerHTML = h;
+  }
+  $("ctl").addEventListener("click", function (e) {
+    var b = e.target.closest ? e.target.closest("button[data-v]") : null, g, v;
+    if (!b || b.disabled) return;
+    g = b.parentNode.getAttribute("data-g"); v = b.getAttribute("data-v");
+    if (g === "pmodo") P.modo = v;
+    else if (g === "pfalla") P.falla = v;
+    else if (g === "tmodo") T.modo = v;
+    else if (g === "tfalla") T.falla = v === "si";
+    else if (g === "snivel") S.nivel = v;
+    controles(); repintar();
+  });
+  $("sOps").addEventListener("click", function (e) {
+    var b = e.target.closest ? e.target.closest("button[data-s]") : null;
+    if (!b || b.disabled) return;
+    var k = b.getAttribute("data-s");
+    if (k === "reset") { var n = S.nivel; resetS(); S.nivel = n; }
+    else aplicarS(k);
+    controles(); repintar();
+  });
+
+  function repintar() {
+    var m = MODO[est.paso];
+    $("pnlP").hidden = m !== "P"; $("pnlT").hidden = m !== "T"; $("pnlS").hidden = m !== "S";
+    if (m === "P") renderP(); else if (m === "T") renderT(); else renderS();
+    vivos();
+  }
+  function vivos() {
+    var ok = est.ok, r = sim(P.modo, P.falla), rt = simT(T.modo, T.falla);
+    $("vivo2").innerHTML = ok[1] ? "pedidos = " + (6 + r.ped) + " · líneas = " + (9 + r.lin) + "<br>modo: " + (P.modo === "con" ? "con transacción" : "sin transacción") + " · falla: " + (FALLAS.filter(function (f) { return f[0] === P.falla; })[0][1]) : "antes: pedidos = 6 · líneas = 9<br>líneas del pedido 5007 al reiniciar = <b>?</b>";
+    $("vivo3").innerHTML = ok[2] ? "saldo 1 + saldo 2 = " + rt.s1 + " + " + rt.s2 + " = <b>" + rt.suma + "</b> (antes: 500)" : "saldo 1 + saldo 2 = 300 + 200 = 500<br>si falla entre los dos UPDATE, sin transacción: <b>?</b>";
+    $("vivo4").innerHTML = ok[3] ? "la 2.ª línea repite (5007, 101)<br>pedidos = " + (6 + r.ped) + " · líneas = " + (9 + r.lin) : "la 2.ª línea repite (5007, 101)<br>error de la base: <b>?</b>";
+    $("vivo5").innerHTML = ok[4] ? "pedidos = " + (6 + r.ped) + " · líneas = " + (9 + r.lin) + " (filas nuevas: " + (r.ped + r.lin) + ")" : "filas nuevas que sobreviven = <b>?</b>";
+    $("vivo6").innerHTML = ok[5] ? "c = " + S.conf + " pedidos confirmados · B cuenta " + (S.bve === null ? "-" : S.bve) : "c = 6 pedidos confirmados · B cuenta <b>?</b>";
+    $("vivo7").innerHTML = ok[6] ? "atómico: " + (r.consistente ? "sí" : "no") + " · estado: " + (r.consistente ? "consistente" : "inconsistente") : "A · C · I · D";
+  }
+  function entrar(i) {
+    est.paso = i;
+    $("escHint").textContent = HINTS[i];
+    if (i === 0) P = { modo: "sin", falla: "1" };
+    else if (i === 1) P = { modo: "con", falla: "2" };
+    else if (i === 2) T = { modo: "sin", falla: true };
+    else if (i === 3) P = { modo: "con", falla: "dup" };
+    else if (i === 4) P = { modo: "con", falla: "commit" };
+    else if (i === 5) resetS();
+    else if (i === 6) P = { modo: "con", falla: "none" };
+    controles();
+    repintar();
+  }
+
+  /* ---------------- chequeos de cada paso ---------------- */
+  B.opcionMultiple(cuerpo("chk1"), {
+    pregunta: "Sin transacción, cada sentencia se confirma sola. Se registra el pedido 5007 y la luz se va justo después del INSERT del pedido, antes de insertar ninguna línea. Al reiniciar, ¿qué hay en la base?",
+    opciones: [
+      "El pedido 5007 en la tabla pedidos, sin ninguna línea",
+      "Nada: la base descarta por sí sola lo que quedó a medias",
+      "El pedido 5007 con sus dos líneas, porque la base las completa",
+      "La base queda dañada y ya no se puede abrir"
+    ],
+    correcta: 0,
+    mezclar: true,
+    pistas: [
+      null,
+      "Para descartar lo hecho, la base necesitaría saber que el pedido y sus líneas van juntos. Sin transacción, eso nadie se lo dijo.",
+      "La base no adivina qué líneas faltaban: solo guarda lo que le pediste ejecutar.",
+      "Un corte de luz no daña una base por sí solo: lo que queda es el estado después de la última sentencia confirmada."
+    ],
+    explicacion: "Queda el pedido 5007 con <b>cero líneas</b>. El INSERT del pedido ya se había confirmado solo y las líneas nunca llegaron a ejecutarse. Es el estado inconsistente de las diapositivas. <b>Ahora el escenario te deja tocar</b>: corta la luz en distintos momentos.",
+    alResolver: function () { est.ok[0] = true; controles(); repintar(); pasos.completar(0); }
+  });
+
+  B.numerico(cuerpo("chk2"), {
+    pregunta: "Ahora con transacción: BEGIN, el INSERT del pedido, el INSERT de la primera línea, y la luz se va antes de la segunda línea. Hoy lineas_pedido tiene 9 filas. Al reiniciar, ¿cuántas filas tiene lineas_pedido?",
+    respuesta: 9,
+    tolerancia: 0,
+    pistas: [
+      "No hubo COMMIT. ¿Qué pasa con una transacción que no se confirmó?",
+      "La transacción se deshace entera, incluida la primera línea que sí alcanzó a insertarse."
+    ],
+    diagnostico: function (v) {
+      if (v === 10) return "Eso pasaría sin transacción: la primera línea ya estaba confirmada. Con BEGIN, sin COMMIT, se deshace.";
+      if (v === 11) return "Eso sería con las dos líneas dentro. La luz se fue antes de la segunda, y sin COMMIT nada de lo anterior se queda.";
+      return null;
+    },
+    explicacion: "Se queda en <b>9</b>. Sin COMMIT, la base deshace toda la transacción: ni el pedido ni la primera línea sobreviven. <b>Ahora puedes tocar</b> el selector de modo y comparar lo mismo con y sin transacción.",
+    alResolver: function () { est.ok[1] = true; controles(); repintar(); pasos.completar(1); }
+  });
+
+  B.numerico(cuerpo("chk3"), {
+    pregunta: "Las cuentas 1 y 2 tienen 300 y 200 euros (500 en total). Sin transacción, se hace una transferencia de 100 de la cuenta 1 a la 2, y falla justo después del primer UPDATE (el que resta). ¿Cuánto suman las dos cuentas al final?",
+    respuesta: 400,
+    tolerancia: 0,
+    pistas: [
+      "El primer UPDATE ya se confirmó solo: la cuenta 1 quedó con 200. El segundo UPDATE nunca se ejecutó.",
+      "Cuenta 1 = 200, cuenta 2 = 200 (sigue igual). Suma las dos."
+    ],
+    diagnostico: function (v) {
+      if (v === 500) return "Eso pasaría con transacción (ROLLBACK) o si la transferencia termina bien. Sin transacción, el primer UPDATE se quedó.";
+      if (v === 300) return "300 sería lo que queda si solo contaras la cuenta 1 y la 2 a cero. La cuenta 2 sigue con sus 200.";
+      return null;
+    },
+    explicacion: "$200 + 200 = 400$: se perdieron <b>100 euros</b>. La regla «el dinero total no cambia» se rompió. Con transacción, el ROLLBACK deshace el primer UPDATE y vuelve a $300 + 200 = 500$. <b>Ahora puedes probarlo.</b>",
+    alResolver: function () { est.ok[2] = true; controles(); repintar(); pasos.completar(2); }
+  });
+
+  B.opcionMultiple(cuerpo("chk4"), {
+    pregunta: "Con transacción, la segunda línea repite el par (5007, 101), que ya está en lineas_pedido. El pedido 5007 sí existe y el producto 101 también. ¿Qué error da SQLite en esa sentencia?",
+    opciones: [
+      "UNIQUE constraint failed: lineas_pedido.id_pedido, lineas_pedido.id_producto (clave primaria duplicada)",
+      "FOREIGN KEY constraint failed (la clave foránea no se cumple)",
+      "NOT NULL constraint failed: lineas_pedido.cantidad",
+      "No da ningún error: una línea repetida se ignora"
+    ],
+    correcta: 0,
+    mezclar: true,
+    pistas: [
+      null,
+      "La clave foránea pide que el pedido y el producto existan, y los dos existen. Lo que se repite es el par entero.",
+      "La cantidad sí se da (un 1). Ninguna columna queda vacía.",
+      "La base no ignora nada en silencio: una clave primaria no admite dos filas iguales."
+    ],
+    explicacion: "El par (id_pedido, id_producto) es la <b>clave primaria compuesta</b> de lineas_pedido, y no admite dos filas iguales: SQLite responde <code>UNIQUE constraint failed: lineas_pedido.id_pedido, lineas_pedido.id_producto</code> (comprobado). Es justo la confusión de la solución 3 de la UD5, que atribuye un error parecido a la clave foránea. <b>Ahora el escenario deja elegir «2.ª línea repetida»</b>.",
+    alResolver: function () { est.ok[3] = true; controles(); repintar(); pasos.completar(3); }
+  });
+
+  B.numerico(cuerpo("chk5"), {
+    pregunta: "Con transacción: BEGIN, el pedido 5007, sus dos líneas y COMMIT. Justo después del COMMIT se va la luz. Al reiniciar, ¿cuántas filas nuevas (del pedido 5007) hay entre pedidos y lineas_pedido?",
+    respuesta: 3,
+    tolerancia: 0,
+    pistas: [
+      "El COMMIT ya había terminado cuando se fue la luz: lo confirmado persiste.",
+      "Cuenta el pedido (1 fila) y sus dos líneas (2 filas)."
+    ],
+    diagnostico: function (v) {
+      if (v === 0) return "0 pasaría si la luz se hubiera ido antes del COMMIT. Después, ya es permanente.";
+      if (v === 2) return "Faltó contar la fila del pedido: el pedido y las dos líneas sobreviven.";
+      return null;
+    },
+    explicacion: "<b>3</b>: $1 + 2 = 3$. Esa es la durabilidad: una vez confirmada, la transacción persiste aunque el sistema falle. <b>Ahora puedes comparar</b> la luz antes y después del COMMIT.",
+    alResolver: function () { est.ok[4] = true; controles(); repintar(); pasos.completar(4); }
+  });
+
+  B.opcionMultiple(cuerpo("chk5b"), {
+    pregunta: "Hiciste COMMIT y un segundo después ejecutas ROLLBACK para arrepentirte. ¿Qué pasa con el pedido?",
+    opciones: [
+      "El pedido sigue ahí: el COMMIT ya lo hizo permanente y el ROLLBACK no tiene nada que deshacer",
+      "El ROLLBACK deshace el pedido, porque revierte todo lo último que se hizo",
+      "El ROLLBACK deshace solo la última línea",
+      "La base se bloquea hasta que hagas otro COMMIT"
+    ],
+    correcta: 0,
+    mezclar: true,
+    pistas: [
+      null,
+      "El material dice que el ROLLBACK revierte los cambios «desde que se abrió» la transacción. Con el COMMIT esa transacción ya se cerró.",
+      "El ROLLBACK no funciona por filas ni por sentencias sueltas: actúa sobre una transacción abierta.",
+      "No hay bloqueo: simplemente no hay ninguna transacción abierta que deshacer."
+    ],
+    explicacion: "El pedido <b>sigue ahí</b>. El ROLLBACK solo deshace lo hecho desde que se abrió la transacción abierta, y el COMMIT la cerró. En SQLite está comprobado: <code>ROLLBACK</code> después del <code>COMMIT</code> da <code>cannot rollback - no transaction is active</code>. Para «deshacer» algo ya confirmado hay que hacer otra operación (borrarlo), no un ROLLBACK.",
+    alResolver: function () { est.okb = true; vivos(); }
+  });
+
+  B.numerico(cuerpo("chk6"), {
+    pregunta: "Hay 6 pedidos confirmados. La sesión A abrió una transacción e insertó el pedido 5007, sin confirmarlo. La sesión B cuenta los pedidos con el nivel por defecto de SQLite (lectura confirmada: solo ve lo confirmado). ¿Cuántos pedidos cuenta B?",
+    respuesta: 6,
+    tolerancia: 0,
+    pistas: [
+      "B solo ve lo confirmado. ¿Está confirmado el pedido 5007?",
+      "No: A no hizo COMMIT. Para B, el pedido 5007 todavía no existe."
+    ],
+    diagnostico: function (v) {
+      if (v === 7) return "7 es lo que contaría B con una lectura sucia (viendo lo no confirmado de A), que SQLite no hace.";
+      return null;
+    },
+    explicacion: "<b>6</b>. Con lectura confirmada, B no ve el pedido de A hasta que A haga COMMIT; así B nunca lee algo que luego podría desaparecer. <b>Ahora el escenario deja jugar</b>: elige el nivel de B y recorre los cuatro botones, con COMMIT y con ROLLBACK.",
+    alResolver: function () { est.ok[5] = true; controles(); repintar(); pasos.completar(5); }
+  });
+
+  B.opcionMultiple(cuerpo("chk7"), {
+    pregunta: "En el patrón de la Figura 2 del material (try, except, finally para una transferencia), ¿dónde va el rollback?",
+    opciones: [
+      "En el except: si algo falla, se deshace todo lo hecho dentro del try",
+      "En el try, justo después del commit",
+      "En el finally, para que corra siempre, también cuando todo salió bien",
+      "En ninguna parte: el motor lo hace solo si el programa se cierra"
+    ],
+    correcta: 0,
+    mezclar: true,
+    pistas: [
+      null,
+      "Después del commit no queda nada que deshacer: el cambio ya es permanente.",
+      "Si el rollback corriera siempre, desharía también las transacciones que salieron bien. El finally sirve para cerrar recursos.",
+      "Aunque la base deshace lo no confirmado si el programa muere, el patrón escribe el rollback para actuar al instante y registrar el error."
+    ],
+    explicacion: "El <code>commit()</code> va al final del <code>try</code> (todo salió bien), el <code>rollback()</code> en el <code>except</code> (algo falló) y el cierre de la conexión en el <code>finally</code> (siempre). Recuerda las erratas del paso 3: esa figura, copiada tal cual, tiene un NameError por la tilde y otro por las variables que se crean dentro del <code>try</code>.",
+    alResolver: function () { est.ok[6] = true; repintar(); pasos.completar(6); }
+  });
+
+  pasos = B.pasos($("recorrido"), {
+    concepto: C,
+    alEntrar: entrar,
+    alTerminar: function () { location.hash = "retos"; }
+  });
+  for (var q = 0; q < 7; q++) est.ok[q] = pasos.hecho(q);
+  entrar(0);
+
+  /* ---------------- hipotesis inicial ---------------- */
+  (function () {
+    var ta = $("hipotesis"), t = null;
+    ta.value = B.nota("transacciones-acid", "hipotesis");
+    function cita() {
+      var v = ta.value.trim(), el = $("citaHipo");
+      if (!el) return;
+      el.hidden = !v;
+      if (v) { el.textContent = ""; el.appendChild(document.createTextNode("Al principio escribiste: «" + v + "». ¿Se parece a lo que viste? ¿Quedó lo que alcanzó a hacerse, o nada, cuando había una transacción?")); }
+    }
+    cita();
+    ta.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { B.nota("transacciones-acid", "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; cita(); }, 500);
+    });
+  })();
+
+  /* ---------------- marcadores de estado de retos ---------------- */
+  function pintarEstados() {
+    [].forEach.call(document.querySelectorAll("[data-reto]"), function (el) {
+      var ok = C.retoOk(el.getAttribute("data-reto"));
+      el.textContent = ok ? "resuelto" : "pendiente";
+      el.classList.toggle("ok", ok);
+    });
+  }
+  C.alCambiar(pintarEstados);
+
+  /* ---------------- reto: ojo clinico ---------------- */
+  var OPC_OJO = [
+    ["todo", "Queda el pedido y sus 2 líneas"],
+    ["nada", "No queda nada del pedido 5007"],
+    ["sinlineas", "Queda el pedido, sin ninguna línea"],
+    ["media", "Queda el pedido con 1 de sus 2 líneas"]
+  ];
+  var NOMBRES_OJO = { todo: "queda todo el pedido", nada: "no queda nada", sinlineas: "queda el pedido sin líneas", media: "queda el pedido con una línea" };
+  var COMBOS = [["sin", "none"], ["sin", "1"], ["sin", "2"], ["sin", "3"], ["sin", "dup"], ["con", "none"], ["con", "1"], ["con", "2"], ["con", "3"], ["con", "dup"], ["con", "commit"]];
+  var DESC_FALLA = {
+    none: "Todo funciona y el programa llega al final.",
+    "1": "La luz se va justo después del INSERT del pedido, antes de ninguna línea.",
+    "2": "La luz se va justo después del INSERT de la primera línea.",
+    "3": "La luz se va justo después del INSERT de la segunda línea.",
+    dup: "La segunda línea repite a la primera: la base rechaza ese INSERT (clave primaria duplicada) y el programa captura el error.",
+    commit: "La luz se va justo después del COMMIT."
+  };
+  function generarOjo(combo) {
+    var modo = combo[0], falla = combo[1], r = sim(modo, falla);
+    var txt = (modo === "con" ? "Con transacción (BEGIN, tres INSERT, COMMIT; si hay error, el programa hace ROLLBACK)." : "Sin transacción (cada sentencia se confirma sola).") + "\nRegistras el pedido 5007 con sus 2 líneas. " + DESC_FALLA[falla];
+    var why;
+    if (r.cat === "todo") why = modo === "con" ? (falla === "none" ? "Con COMMIT, todo se confirma junto." : "El COMMIT ya había terminado: lo confirmado persiste aunque se vaya la luz.") : (falla === "none" ? "Cada sentencia se confirmó sola y llegaron todas." : "Para cuando se fue la luz ya estaban hechas las tres sentencias y cada una confirmada sola: no faltaba nada.");
+    else if (r.cat === "nada") why = falla === "dup" ? "El programa capturó el error y ejecutó ROLLBACK: se deshizo todo lo de la transacción, también el pedido y la primera línea." : "No hubo COMMIT: al reiniciar, la base deshace la transacción entera.";
+    else if (r.cat === "sinlineas") why = "Sin transacción, el INSERT del pedido ya estaba confirmado y las líneas nunca llegaron: queda el pedido sin líneas.";
+    else why = falla === "dup" ? "Sin transacción, la primera línea ya estaba confirmada y no hay ROLLBACK que la deshaga: el pedido queda a medias." : "Sin transacción, la primera línea ya estaba confirmada y la segunda nunca llegó: el pedido queda a medias.";
+    return { txt: txt, ans: r.cat, why: why };
+  }
+  (function () {
+    var cont = $("ojo");
+    cont.innerHTML = '<div class="ronda"></div><div class="prog-pre"></div><div class="ojo-opts">' +
+      OPC_OJO.map(function (o) { return '<button type="button" class="opt" data-a="' + o[0] + '">' + o[1] + '</button>'; }).join("") +
+      '</div><div class="fb" aria-live="polite"></div><div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    var casos, ronda, aciertos, respondida, actual;
+    function nueva() {
+      casos = B.mezclar(COMBOS).slice(0, 5);
+      ronda = 0; aciertos = 0;
+      mostrar();
+    }
+    function mostrar() {
+      respondida = false;
+      actual = generarOjo(casos[ronda]);
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 5 · aciertos " + aciertos;
+      cont.querySelector(".prog-pre").textContent = actual.txt;
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (x) { x.disabled = false; x.className = "opt"; });
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+    }
+    cont.querySelector(".ojo-opts").addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || respondida) return;
+      respondida = true;
+      var ok = b.getAttribute("data-a") === actual.ans;
+      if (ok) aciertos++;
+      b.classList.add(ok ? "ok" : "mal");
+      if (!ok) cont.querySelector('[data-a="' + actual.ans + '"]').classList.add("ok");
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (x) { x.disabled = true; });
+      cont.querySelector(".fb").innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No.</span> ') + "Era: " + NOMBRES_OJO[actual.ans] + ". " + actual.why;
+      var sig = cont.querySelector(".sig");
+      sig.hidden = false;
+      if (ronda === 4) {
+        var aprobo = aciertos >= 4;
+        C.reto("ojo", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertos + " de 5" + (aprobo ? ". Aprobado." : ". Necesitas 4 para aprobar.");
+        sig.textContent = "Otra tanda";
+      } else sig.textContent = "Siguiente ronda";
+    });
+    cont.querySelector(".sig").addEventListener("click", function () {
+      if (ronda === 4) nueva(); else { ronda++; mostrar(); }
+    });
+    nueva();
+  })();
+
+  /* ---------------- reto: construir ---------------- */
+  (function () {
+    var OBJ = [
+      { t: "Deja el pedido 5007 <b>sin ninguna línea</b> (queda guardado y vacío).", f: function (r) { return r.cat === "sinlineas"; } },
+      { t: "Haz que <b>falle la luz</b> y, aun así, el pedido quede <b>completo</b> (el pedido y sus 2 líneas).", f: function (r) { return r.cat === "todo" && r.falla !== "none" && r.falla !== "dup"; } },
+      { t: "Haz que <b>algo falle</b> y no quede <b>ni rastro</b> del pedido 5007.", f: function (r) { return r.cat === "nada" && r.falla !== "none"; } },
+      { t: "Deja el pedido <b>a medias</b>: el pedido y solo 1 de sus 2 líneas.", f: function (r) { return r.cat === "media"; } }
+    ];
+    var logrados = [false, false, false, false], avisado = false, ul = $("objetivos"), modo = "con", falla = "none";
+    var TXT = { todo: "pedido y 2 líneas", nada: "ni rastro del pedido", sinlineas: "el pedido, sin líneas", media: "el pedido con 1 línea" };
+    OBJ.forEach(function (o) { var li = document.createElement("li"); li.innerHTML = '<span class="m"></span><span>' + o.t + '</span>'; ul.appendChild(li); });
+    $("consFalla").innerHTML = FALLAS.map(function (f) { return '<button type="button" data-v="' + f[0] + '" aria-pressed="' + (f[0] === falla) + '">' + f[1] + '</button>'; }).join("");
+    function render() {
+      var r = sim(modo, falla);
+      $("construirVivo").innerHTML = "modo <b>" + (modo === "con" ? "con transacción" : "sin transacción") + "</b> · " + (FALLAS.filter(function (f) { return f[0] === falla; })[0][1]) +
+        "<br>al reiniciar: <b>" + TXT[r.cat] + "</b> · filas nuevas: <b>" + (r.ped + r.lin) + "</b>";
+      OBJ.forEach(function (o, i) { if (!logrados[i] && o.f(r)) logrados[i] = true; ul.children[i].classList.toggle("hecho", logrados[i]); });
+      if (!avisado && logrados.every(Boolean)) { avisado = true; C.reto("construir", true); }
+    }
+    function marcar(id, v) { [].forEach.call($(id).children, function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-v") === v)); }); }
+    $("consModo").addEventListener("click", function (e) {
+      var b = e.target.closest("button"); if (!b) return;
+      modo = b.getAttribute("data-v"); marcar("consModo", modo); render();
+    });
+    $("consFalla").addEventListener("click", function (e) {
+      var b = e.target.closest("button"); if (!b) return;
+      falla = b.getAttribute("data-v"); marcar("consFalla", falla); render();
+    });
+    render();
+  })();
+
+  /* ---------------- reto: a mano ---------------- */
+  (function () {
+    var D;
+    function generar() {
+      var tipo = azar(["suma", "saldoCon", "saldoSin"]);
+      var a = azarN(4, 10) * 50, b = azarN(2, 6) * 50, t = azarN(1, 3) * 50, n = azarN(3, 5);
+      D = { tipo: tipo, a: a, b: b, t: t, n: n };
+      D.ans = tipo === "suma" ? a + b - t : tipo === "saldoCon" ? a - (n - 1) * t : a - n * t;
+    }
+    generar();
+    B.numerico($("mano"), {
+      pregunta: function () {
+        if (D.tipo === "suma") return "La cuenta 1 tiene " + D.a + " euros y la cuenta 2 tiene " + D.b + ". Sin transacción, transfieres " + D.t + " de la 1 a la 2: el primer UPDATE (restar) se ejecuta y el segundo (sumar) falla. ¿Cuánto suman las dos cuentas al final?";
+        if (D.tipo === "saldoCon") return "La cuenta 1 tiene " + D.a + " euros. Se hacen " + D.n + " transferencias de " + D.t + " euros hacia otra cuenta, cada una en su propia transacción con COMMIT. La última falla entre sus dos UPDATE y el programa hace ROLLBACK. ¿Cuánto queda en la cuenta 1?";
+        return "La cuenta 1 tiene " + D.a + " euros. Se hacen " + D.n + " transferencias de " + D.t + " euros hacia otra cuenta, <b>sin transacción</b>. La última falla entre sus dos UPDATE, justo después del que resta. ¿Cuánto queda en la cuenta 1?";
+      },
+      respuesta: function () { return D.ans; },
+      tolerancia: 0,
+      pistas: [
+        function () {
+          if (D.tipo === "suma") return "El primer UPDATE ya quedó confirmado: la cuenta 1 perdió " + D.t + ". El segundo no se ejecutó.";
+          if (D.tipo === "saldoCon") return "Las primeras " + (D.n - 1) + " transferencias terminaron bien. La última se deshace: no cuenta.";
+          return "Sin transacción, el UPDATE que resta de la última transferencia también se quedó: cuentan las " + D.n + ".";
+        },
+        function () {
+          if (D.tipo === "suma") return D.a + " − " + D.t + " = " + (D.a - D.t) + " en la cuenta 1, y la cuenta 2 sigue con " + D.b + ". Suma las dos.";
+          if (D.tipo === "saldoCon") return D.a + " − " + (D.n - 1) + " × " + D.t + " = " + D.ans + ".";
+          return D.a + " − " + D.n + " × " + D.t + " = " + D.ans + ".";
+        }
+      ],
+      diagnostico: function (v) {
+        if (D.tipo === "suma" && v === D.a + D.b) return "Eso sería lo que suman si no hubiera pasado nada (o con ROLLBACK). Sin transacción el primer UPDATE se quedó.";
+        if (D.tipo === "saldoCon" && v === D.a - D.n * D.t) return "Eso cuenta también la última transferencia, la que falló. Con ROLLBACK esa se deshace.";
+        if (D.tipo === "saldoSin" && v === D.a - (D.n - 1) * D.t) return "Eso supone que la última se deshizo. Sin transacción su UPDATE de restar ya estaba confirmado.";
+        return null;
+      },
+      explicacion: function () {
+        if (D.tipo === "suma") return "La cuenta 1 queda en " + (D.a - D.t) + " y la 2 en " + D.b + ": suman <b>" + D.ans + "</b>, " + D.t + " menos que antes.";
+        if (D.tipo === "saldoCon") return D.a + " − " + (D.n - 1) + " × " + D.t + " = <b>" + D.ans + "</b>: la transferencia fallida no deja rastro.";
+        return D.a + " − " + D.n + " × " + D.t + " = <b>" + D.ans + "</b>: la última transferencia dejó su resta a medias.";
+      },
+      reintentable: true,
+      textoReintentar: "Otro ejercicio",
+      antesDeReintentar: generar,
+      alResolver: function (ok) { C.reto("mano", ok); }
+    });
+  })();
+
+  /* ---------------- reto: cazar el error ---------------- */
+  B.cazarError($("error"), {
+    variantes: [
+      {
+        intro: "Sin transacción, se registra el pedido 5007 y falla la luz justo antes de la segunda línea. Alguien razona:",
+        lineas: ["\\text{INSERT del pedido: 7 pedidos y 9 líneas}",
+          "\\text{INSERT de la 1.ª línea: 7 pedidos y 10 líneas}",
+          "\\text{se va la luz antes de la 2.ª línea}",
+          "\\text{ROLLBACK automático: vuelven 6 pedidos y 9 líneas}"],
+        erronea: 3,
+        explicacion: "No hay ROLLBACK porque no hay transacción: cada sentencia se confirmó sola. Queda el pedido con 1 de sus 2 líneas: <b>7 pedidos y 10 líneas</b>."
+      },
+      {
+        intro: "Alguien confirma un pedido y después quiere deshacerlo. Escribe estos pasos:",
+        lineas: ["\\text{BEGIN; INSERT del pedido 5007; INSERT de sus 2 líneas}",
+          "\\text{COMMIT: el pedido y las líneas ya son permanentes}",
+          "\\text{se arrepiente y ejecuta ROLLBACK}",
+          "\\text{el ROLLBACK deshace el pedido 5007}"],
+        erronea: 3,
+        explicacion: "El COMMIT ya cerró la transacción: el ROLLBACK no tiene nada que deshacer (SQLite incluso avisa: «cannot rollback - no transaction is active»). El pedido <b>sigue ahí</b>."
+      },
+      {
+        intro: "Con transacción, una transferencia de 100 entre las cuentas 1 y 2 (saldos 300 y 200) falla justo después del primer UPDATE y se hace ROLLBACK:",
+        lineas: ["\\text{saldos iniciales: 300 y 200, suman 500}",
+          "\\text{primer UPDATE: la cuenta 1 queda en 200}",
+          "\\text{el segundo UPDATE falla y se hace ROLLBACK}",
+          "\\text{saldos finales: 200 y 200, suman 400}"],
+        erronea: 3,
+        explicacion: "El ROLLBACK deshace <b>también el primer UPDATE</b>: los saldos vuelven a 300 y 200, y suman 500. Que sumen 400 es lo que pasa <i>sin</i> transacción."
+      }
+    ],
+    alResolver: function (ok) { C.reto("error", ok); }
+  });
+
+  /* ---------------- retos: propiedades ---------------- */
+  function prop(id, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple($(id), cfg);
+  }
+  prop("prop1", {
+    pregunta: "Según la pregunta de repaso del material: ¿qué propiedad ACID impide que un pedido quede registrado sin sus líneas si el sistema falla a mitad de la operación?",
+    opciones: [
+      "La atomicidad: la transacción se ejecuta por completo o no se ejecuta",
+      "La durabilidad: lo confirmado persiste",
+      "El aislamiento: las transacciones concurrentes no se ven entre sí",
+      "La consistencia: la base pasa de un estado válido a otro, y por eso no necesita transacciones"
+    ],
+    correcta: 0,
+    pistas: [null, "La durabilidad actúa después del COMMIT, y aquí el fallo ocurre antes.", "El aislamiento habla de dos sesiones a la vez; aquí hay una sola.", "La consistencia es el resultado que se busca, pero la que lo logra «todo o nada» es otra: la que obliga a que se haga completo o no se haga."],
+    explicacion: "La <b>atomicidad</b>: la transacción es una unidad indivisible, o se completa toda o no se hace nada. De ella sale la consistencia (nunca queda un pedido sin líneas), pero la propiedad que lo garantiza es la atomicidad. Es la respuesta de la diapositiva 47."
+  });
+  prop("prop2", {
+    pregunta: "Con transacción, haces COMMIT y un instante después se va la luz. Al reiniciar, ¿qué propiedad ACID garantiza que el pedido siga ahí?",
+    opciones: [
+      "La durabilidad: una transacción confirmada persiste incluso ante un fallo del sistema",
+      "La atomicidad: todo o nada",
+      "El aislamiento: nadie más lo ve",
+      "Ninguna: el COMMIT solo avisa y la base guarda el pedido cuando puede"
+    ],
+    correcta: 0,
+    pistas: [null, "La atomicidad habla de que se haga completo o nada. Aquí ya se hizo completo; la pregunta es si se conserva.", "El aislamiento es sobre lo que ven otras sesiones, no sobre sobrevivir a un corte.", "El COMMIT es una promesa: cuando termina, el cambio ya es permanente."],
+    explicacion: "<b>Durabilidad</b>, la D de ACID: «una vez confirmada, una transacción persiste incluso ante un fallo del sistema». El material la nombra pero no explica cómo lo logra el motor (casi siempre, con un registro de cambios)."
+  });
+  prop("prop3", {
+    pregunta: "En la solución 3 de la UD5 se insertan un artículo y su embedding con el mismo id en una transacción, con rollback en el except. El texto dice que la segunda inserción podría fallar por violar la clave foránea. Probado en SQLite, ¿qué falla de verdad?",
+    opciones: [
+      "La clave primaria duplicada (UNIQUE constraint failed: embeddings.id_articulo), no la foránea",
+      "La clave foránea, tal como dice el texto",
+      "Un CHECK sobre el vector",
+      "Nada falla: la transacción se completa y se confirma"
+    ],
+    correcta: 0,
+    pistas: [null, "El artículo se insertó antes, con ese mismo id: el padre existe, así que la clave foránea sí se cumple.", "El enunciado no define ningún CHECK en esa tabla.", "La solución usa un caso en que la segunda inserción falla a propósito para que el rollback tenga sentido."],
+    explicacion: "El mapa de citas lo comprobó: la clave foránea nunca se viola con ese orden. Lo que falla es la <b>clave primaria duplicada</b> (<code>UNIQUE constraint failed: embeddings.id_articulo</code>) y el rollback deja el artículo sin insertar. La foránea solo falla si insertas un embedding de un artículo que no existe. Es una errata de la explicación del material; el rollback sí funciona como dice."
+  });
+  prop("prop4", {
+    pregunta: "La sesión A abrió una transacción e insertó una fila sin confirmar. La sesión B, con lectura confirmada, cuenta las filas. Después A hace ROLLBACK y B cuenta otra vez. ¿Qué ve B?",
+    opciones: [
+      "Las dos veces el mismo número: nunca vio la fila de A",
+      "Primero una fila más y después una menos: vio algo que luego desapareció",
+      "Un error en la segunda lectura, porque A deshizo su transacción",
+      "Una fila más las dos veces, porque el ROLLBACK no afecta a B"
+    ],
+    correcta: 0,
+    pistas: [null, "Eso es una lectura sucia, y la lectura confirmada la evita: B solo ve lo confirmado.", "B no tiene ningún error: A y B son sesiones independientes.", "El ROLLBACK de A descarta su fila para todos; B nunca la tuvo en cuenta."],
+    explicacion: "Con lectura confirmada, B solo ve lo que A confirmó. La fila de A no estuvo confirmada nunca, así que B cuenta lo mismo las dos veces. Lo que vio «una fila más y luego una menos» sería una <b>lectura sucia</b>, el fenómeno que evitan Read Committed y los niveles superiores."
+  });
+
+  /* ---------------- guion de memoria ---------------- */
+  B.ordenar($("formula"), {
+    piezas: ["\\mathtt{BEGIN;}", "\\mathtt{INSERT\\ INTO\\ pedidos\\ \\ldots}", "\\mathtt{INSERT\\ INTO\\ lineas\\_pedido\\ (5007,\\ 101,\\ \\ldots)}", "\\mathtt{INSERT\\ INTO\\ lineas\\_pedido\\ (5007,\\ 105,\\ \\ldots)}", "\\mathtt{COMMIT;}"],
+    distractores: ["\\mathtt{ROLLBACK;}", "\\mathtt{SAVEPOINT\\ pedido;}"],
+    soluciones: [[0, 1, 2, 3, 4], [0, 1, 3, 2, 4]],
+    explicacion: "Primero se <b>abre</b> la transacción (<code>BEGIN</code>), luego van las sentencias que forman la unidad: el pedido y, <b>después</b> del pedido, sus líneas (la clave foránea exige que el pedido ya exista); las dos líneas pueden ir en cualquier orden. Al final se <b>confirma</b> con <code>COMMIT</code>. El <code>ROLLBACK</code> es el camino contrario, para cuando algo falla, y el <code>SAVEPOINT</code> es una función de otros motores que el material no menciona.",
+    alResolver: function (ok) { C.reto("formula", ok); }
+  });
+
+  /* ---------------- vida real: el algoritmo en codigo ---------------- */
+  (function () {
+    var CODIGO = {
+  "py": [
+    [
+      "imp",
+      "import sqlite3"
+    ],
+    [
+      null,
+      ""
+    ],
+    [
+      "esq",
+      "esquema = \"\"\""
+    ],
+    [
+      "esq",
+      "CREATE TABLE pedidos (id_pedido INTEGER PRIMARY KEY, id_cliente INTEGER);"
+    ],
+    [
+      "esq",
+      "CREATE TABLE lineas (id_pedido, id_producto, PRIMARY KEY (id_pedido, id_producto));"
+    ],
+    [
+      "esq",
+      "\"\"\""
+    ],
+    [
+      "con",
+      "con = sqlite3.connect(\":memory:\", isolation_level=None)   # sin transacciones automáticas"
+    ],
+    [
+      "con",
+      "con.executescript(esquema)"
+    ],
+    [
+      null,
+      ""
+    ],
+    [
+      "intn",
+      "intentos = [(5007, False, [101, 105, 101]), (5008, True, [101, 105, 101]), (5009, True, [101, 105])]"
+    ],
+    [
+      null,
+      ""
+    ],
+    [
+      "forn",
+      "for intento in intentos:"
+    ],
+    [
+      "desemp",
+      "    nuevo, con_tx, productos = intento"
+    ],
+    [
+      "ifb",
+      "    if con_tx:"
+    ],
+    [
+      "begin",
+      "        con.execute(\"BEGIN\")"
+    ],
+    [
+      "try",
+      "    try:"
+    ],
+    [
+      "insp",
+      "        con.execute(\"INSERT INTO pedidos VALUES (?, 5)\", (nuevo,))"
+    ],
+    [
+      "forp",
+      "        for p in productos:"
+    ],
+    [
+      "insl",
+      "            con.execute(\"INSERT INTO lineas VALUES (?, ?)\", (nuevo, p))"
+    ],
+    [
+      "ifc",
+      "        if con_tx:"
+    ],
+    [
+      "commit",
+      "            con.execute(\"COMMIT\")"
+    ],
+    [
+      "pok",
+      "        print(nuevo, \"completo\")"
+    ],
+    [
+      "exc",
+      "    except sqlite3.IntegrityError as e:"
+    ],
+    [
+      "ifr",
+      "        if con_tx:"
+    ],
+    [
+      "rollb",
+      "            con.execute(\"ROLLBACK\")"
+    ],
+    [
+      "pfa",
+      "        print(nuevo, \"falló:\", e)"
+    ],
+    [
+      "cped",
+      "    n_ped = con.execute(\"SELECT COUNT(*) FROM pedidos\").fetchone()[0]"
+    ],
+    [
+      "clin",
+      "    n_lin = con.execute(\"SELECT COUNT(*) FROM lineas\").fetchone()[0]"
+    ],
+    [
+      "pcu",
+      "    print(\"pedidos:\", n_ped, \"líneas:\", n_lin)"
+    ],
+    [
+      null,
+      ""
+    ],
+    [
+      "c2",
+      "con2 = sqlite3.connect(\":memory:\"); con2.executescript(esquema)   # modo por defecto de sqlite3"
+    ],
+    [
+      "wwith",
+      "try:"
+    ],
+    [
+      "wwith",
+      "    with con2:                      # COMMIT si todo sale bien, ROLLBACK si hay una excepción"
+    ],
+    [
+      "wins",
+      "        con2.execute(\"INSERT INTO pedidos VALUES (5008, 5)\")"
+    ],
+    [
+      "wins",
+      "        con2.executemany(\"INSERT INTO lineas VALUES (5008, ?)\", [(101,), (105,), (101,)])"
+    ],
+    [
+      "wexc",
+      "except sqlite3.IntegrityError:"
+    ],
+    [
+      "wexc",
+      "    pass"
+    ],
+    [
+      "n2",
+      "n2 = con2.execute(\"SELECT COUNT(*) FROM pedidos\").fetchone()[0]"
+    ],
+    [
+      "n1",
+      "n1 = con.execute(\"SELECT COUNT(*) FROM pedidos WHERE id_pedido = 5008\").fetchone()[0]"
+    ],
+    [
+      "cmp",
+      "print(n2 == n1)"
+    ]
+  ],
+  "r": [
+    [
+      "imp",
+      "# R base, sin librerías: en esta máquina no hay RSQLite, así que las tablas son data.frame"
+    ],
+    [
+      null,
+      ""
+    ],
+    [
+      "esq",
+      "pedidos <- data.frame(id_pedido = integer(), id_cliente = integer())"
+    ],
+    [
+      "esq",
+      "lineas <- data.frame(id_pedido = integer(), id_producto = integer())"
+    ],
+    [
+      "con",
+      "# (no hay conexión que abrir ni transacciones automáticas)"
+    ],
+    [
+      null,
+      "insertar_linea <- function(lineas, nuevo, p) {      # imita la clave primaria (id_pedido, id_producto)"
+    ],
+    [
+      null,
+      "  if (any(lineas$id_pedido == nuevo & lineas$id_producto == p)) {"
+    ],
+    [
+      null,
+      "    stop(\"UNIQUE constraint failed: lineas.id_pedido, lineas.id_producto\")"
+    ],
+    [
+      null,
+      "  }"
+    ],
+    [
+      null,
+      "  rbind(lineas, data.frame(id_pedido = nuevo, id_producto = p))"
+    ],
+    [
+      null,
+      "}"
+    ],
+    [
+      null,
+      ""
+    ],
+    [
+      "intn",
+      "intentos <- list(list(5007, FALSE, c(101, 105, 101)), list(5008, TRUE, c(101, 105, 101)), list(5009, TRUE, c(101, 105)))"
+    ],
+    [
+      null,
+      ""
+    ],
+    [
+      "forn",
+      "for (intento in intentos) {"
+    ],
+    [
+      "desemp",
+      "  nuevo <- intento[[1]]; con_tx <- intento[[2]]; productos <- intento[[3]]"
+    ],
+    [
+      "ifb",
+      "  if (con_tx) {"
+    ],
+    [
+      "begin",
+      "    pedidos0 <- pedidos; lineas0 <- lineas   # BEGIN: una copia de las dos tablas"
+    ],
+    [
+      null,
+      "  }"
+    ],
+    [
+      "try",
+      "  error <- tryCatch({"
+    ],
+    [
+      "insp",
+      "    pedidos <- rbind(pedidos, data.frame(id_pedido = nuevo, id_cliente = 5))"
+    ],
+    [
+      "forp",
+      "    for (p in productos) {"
+    ],
+    [
+      "insl",
+      "      lineas <- insertar_linea(lineas, nuevo, p)"
+    ],
+    [
+      null,
+      "    }"
+    ],
+    [
+      "ifc",
+      "    if (con_tx) {"
+    ],
+    [
+      "commit",
+      "      # COMMIT: no hay nada que hacer, los cambios ya están en las tablas"
+    ],
+    [
+      null,
+      "    }"
+    ],
+    [
+      "pok",
+      "    cat(sprintf(\"%d completo\\n\", nuevo))"
+    ],
+    [
+      null,
+      "    NULL"
+    ],
+    [
+      "exc",
+      "  }, error = function(e) conditionMessage(e))"
+    ],
+    [
+      null,
+      "  if (!is.null(error)) {"
+    ],
+    [
+      "ifr",
+      "    if (con_tx) {"
+    ],
+    [
+      "rollb",
+      "      pedidos <- pedidos0; lineas <- lineas0   # ROLLBACK: volver a la copia"
+    ],
+    [
+      null,
+      "    }"
+    ],
+    [
+      "pfa",
+      "    cat(sprintf(\"%d falló: %s\\n\", nuevo, error))"
+    ],
+    [
+      null,
+      "  }"
+    ],
+    [
+      "cped",
+      "  n_ped <- nrow(pedidos)"
+    ],
+    [
+      "clin",
+      "  n_lin <- nrow(lineas)"
+    ],
+    [
+      "pcu",
+      "  cat(sprintf(\"pedidos: %d líneas: %d\\n\", n_ped, n_lin))"
+    ],
+    [
+      null,
+      "}"
+    ],
+    [
+      null,
+      ""
+    ],
+    [
+      "c2",
+      "# (solo Python) con2: otra base con el modo por defecto de sqlite3 y el mismo esquema"
+    ],
+    [
+      "wwith",
+      "# (solo Python) with con2: confirma si todo sale bien y deshace si hay una excepción"
+    ],
+    [
+      "wins",
+      "# (solo Python) inserta el pedido 5008 y sus tres líneas; la tercera repite la primera"
+    ],
+    [
+      "wexc",
+      "# (solo Python) la excepción sale del with: ya se deshizo todo, y se ignora"
+    ],
+    [
+      "n2",
+      "# (solo Python) cuenta los pedidos de con2"
+    ],
+    [
+      "n1",
+      "n1 <- nrow(pedidos[pedidos$id_pedido == 5008, ])   # pedidos 5008 que quedaron"
+    ],
+    [
+      "cmp",
+      "print(n1 == 0)                                    # R se compara con la cuenta a mano: ninguno"
+    ]
+  ]
+};
+    var SAL_PY = "5007 falló: UNIQUE constraint failed: lineas.id_pedido, lineas.id_producto\npedidos: 1 líneas: 2\n5008 falló: UNIQUE constraint failed: lineas.id_pedido, lineas.id_producto\npedidos: 1 líneas: 2\n5009 completo\npedidos: 2 líneas: 4\nTrue";
+    var SAL_R = "5007 falló: UNIQUE constraint failed: lineas.id_pedido, lineas.id_producto\npedidos: 1 líneas: 2\n5008 falló: UNIQUE constraint failed: lineas.id_pedido, lineas.id_producto\npedidos: 1 líneas: 2\n5009 completo\npedidos: 2 líneas: 4\n[1] TRUE";
+    // eventos: una foto del estado despues de ejecutar cada linea
+    var EV = [], fase = 0, ped = [], lin = [], tx = false, sal = [], nuevo = null, conTx = null, pp = null, nPed = null, nLin = null, n2 = null, n1 = null, err = null, db = "main";
+    var INTENTOS = [[5007, false, [101, 105, 101]], [5008, true, [101, 105, 101]], [5009, true, [101, 105]]];
+    var MSG_ERR = "UNIQUE constraint failed: lineas.id_pedido, lineas.id_producto";
+    function foto(id, extra) {
+      EV.push(Object.assign({ id: id, fase: fase, db: db, ped: ped.map(function (x) { return x.slice(); }), lin: lin.map(function (x) { return x.slice(); }), tx: tx, sal: sal.slice(),
+        nuevo: nuevo, conTx: conTx, p: pp, nPed: nPed, nLin: nLin, n2: n2, n1: n1, err: err, dup: false, ultimo: null, msg: null, fin: false }, extra || {}));
+    }
+    foto("imp"); foto("esq"); foto("con"); foto("intn");
+    INTENTOS.forEach(function (it, idx) {
+      var nu = it[0], ctx = it[1], prods = it[2], k, dup = false, existe;
+      fase = idx + 1; nuevo = nu; conTx = ctx; pp = null; err = null;
+      foto("forn");
+      foto("desemp");
+      foto("ifb");
+      if (ctx) { tx = true; foto("begin"); }
+      foto("try");
+      ped.push([nu, 5, ctx]);
+      foto("insp", { ultimo: "ped" });
+      for (k = 0; k < prods.length; k++) {
+        pp = prods[k];
+        foto("forp");
+        existe = lin.some(function (l) { return l[0] === nu && l[1] === pp; });
+        if (existe) { dup = true; foto("insl", { dup: true }); break; }
+        lin.push([nu, pp, ctx]);
+        foto("insl", { ultimo: "lin" });
+      }
+      if (!dup) {
+        foto("ifc");
+        if (ctx) { ped.forEach(function (x) { x[2] = false; }); lin.forEach(function (x) { x[2] = false; }); tx = false; foto("commit"); }
+        sal.push(nu + " completo");
+        foto("pok", { msg: nu + " completo" });
+      } else {
+        err = MSG_ERR;
+        foto("exc", { dup: true });
+        foto("ifr");
+        if (ctx) { ped = ped.filter(function (x) { return !x[2]; }); lin = lin.filter(function (x) { return !x[2]; }); tx = false; foto("rollb"); }
+        sal.push(nu + " falló: " + MSG_ERR);
+        foto("pfa", { msg: nu + " falló: " + MSG_ERR });
+      }
+      pp = null;
+      nPed = ped.length; foto("cped");
+      nLin = lin.length; foto("clin");
+      sal.push("pedidos: " + nPed + " líneas: " + nLin);
+      foto("pcu");
+    });
+    // la version de la libreria, en otra base (con2)
+    var principal = { ped: ped.map(function (x) { return x.slice(); }), lin: lin.map(function (x) { return x.slice(); }) };
+    fase = 4; db = "con2"; ped = []; lin = []; tx = false; nuevo = null; conTx = null; pp = null; nPed = null; nLin = null; err = null;
+    foto("c2");
+    tx = true; foto("wwith");
+    ped = [[5008, 5, true]]; lin = [[5008, 101, true], [5008, 105, true]];
+    foto("wins", { dup: true });
+    ped = []; lin = []; tx = false; err = MSG_ERR;
+    foto("wexc", { dup: true });
+    n2 = 0; foto("n2");
+    n1 = principal.ped.filter(function (x) { return x[0] === 5008; }).length; foto("n1");
+    sal.push("@cmp");
+    foto("cmp", { fin: true });
+    var CUENTA_INSL = EV.filter(function (e) { return e.id === "insl"; }).length;
+
+    function narrar(e, ctx) {
+      var py = ctx.lang() === "py";
+      switch (e.id) {
+        case "imp": return py ? "Importa <code>sqlite3</code>, de la librería estándar de Python: trae una base de datos SQLite de verdad." : "Comentario: R base no tiene SQLite en esta máquina (falta <code>RSQLite</code>). Las dos tablas serán dos <code>data.frame</code>.";
+        case "esq": return py ? "Guarda en un texto el esquema: dos tablas, <code>pedidos</code> y <code>lineas</code>. La clave primaria de <code>lineas</code> es el par (id_pedido, id_producto): no puede repetirse." : "Crea las dos tablas vacías como <code>data.frame</code>. Un <code>data.frame</code> no tiene claves ni reglas: la regla de la clave primaria se imita más abajo.";
+        case "con": return py ? "Abre una base en memoria. Con <code>isolation_level=None</code> <b>no hay transacciones automáticas</b>: cada sentencia se confirma sola, salvo que tú escribas <code>BEGIN</code>. Después crea las tablas." : "Comentario: no hay conexión que abrir. Tampoco hay transacciones automáticas: cada <code>rbind</code> deja el cambio hecho.";
+        case "intn": return "Tres intentos de registrar un pedido: (número, ¿con transacción?, productos de sus líneas). El 5007 va sin transacción, el 5008 con transacción y el 5009 también. En los dos primeros, el tercer producto <b>repite</b> al primero (101).";
+        case "forn": return "Empieza el <b>intento " + e.fase + "</b> de 3.";
+        case "desemp": return "Separa el intento: pedido <b>" + e.nuevo + "</b>, " + (e.conTx ? "<b>con</b>" : "<b>sin</b>") + " transacción, productos " + (e.fase === 3 ? "[101, 105]" : "[101, 105, 101]") + ".";
+        case "ifb": return "¿Es con transacción? <b>" + (e.conTx ? "Sí" : "No") + "</b>.";
+        case "begin": return py ? "<code>BEGIN</code>: abre la transacción. Desde aquí, lo que se inserte es <b>provisional</b> (cursiva en las tablas) hasta que haya COMMIT o ROLLBACK." : "<b>Copia</b> las dos tablas antes de tocarlas: <code>pedidos0</code> y <code>lineas0</code>. Es el BEGIN de R: si algo falla, se vuelve a la copia.";
+        case "try": return py ? "Empieza el bloque protegido: si una sentencia lanza un error, el control salta al <code>except</code>." : "<code>tryCatch</code> protege el bloque: si algo lanza un error con <code>stop</code>, el control sale hacia el manejador de errores.";
+        case "insp": return "Inserta el pedido <b>" + e.nuevo + "</b> (cliente 5)." + (e.conTx ? " Queda <b>provisional</b>: todavía no hay COMMIT." : " Sin transacción, ya está confirmado.");
+        case "forp": return "Toma el siguiente producto: <b>" + e.p + "</b>.";
+        case "insl":
+          if (e.dup) return py ? "Intenta insertar la línea (" + e.nuevo + ", " + e.p + "), que <b>ya existe</b>. SQLite viola la clave primaria y lanza <code>sqlite3.IntegrityError</code>: la línea no se inserta y el programa salta al <code>except</code>." : "La función compara con las líneas ya guardadas, ve que (" + e.nuevo + ", " + e.p + ") ya existe y lanza <code>stop</code> con el mismo mensaje que SQLite. La línea no se añade.";
+          return "Inserta la línea (" + e.nuevo + ", " + e.p + ")." + (e.conTx ? " Provisional." : " Ya confirmada.");
+        case "ifc": return "Terminó el bucle sin error. ¿Es con transacción? <b>" + (e.conTx ? "Sí" : "No") + "</b>.";
+        case "commit": return py ? "<code>COMMIT</code>: lo provisional se vuelve <b>permanente</b>. La transacción termina." : "Comentario: en R no hay nada que confirmar; los cambios ya están en los <code>data.frame</code>. Se descarta la copia.";
+        case "pok": return "Imprime <b>" + e.msg + "</b>.";
+        case "exc": return py ? "Salta aquí porque la sentencia anterior lanzó <code>IntegrityError</code>. La variable <code>e</code> guarda el mensaje: <b>" + MSG_ERR + "</b>." : "El manejador de <code>tryCatch</code> recibe el error y devuelve su mensaje, que queda en <code>error</code>: <b>" + MSG_ERR + "</b>.";
+        case "ifr": return "¿Había transacción? <b>" + (e.conTx ? "Sí: hay que deshacer lo provisional" : "No: no hay nada que deshacer, lo anterior ya está confirmado") + "</b>.";
+        case "rollb": return py ? "<code>ROLLBACK</code>: se descarta todo lo provisional, el pedido y la primera línea. Las tablas vuelven a como estaban al hacer BEGIN." : "<b>ROLLBACK</b> a mano: se restauran los <code>data.frame</code> a las copias <code>pedidos0</code> y <code>lineas0</code>.";
+        case "pfa": return "Imprime <b>" + e.msg + "</b>.";
+        case "cped": return py ? "Cuenta los pedidos de la base: <b>" + e.nPed + "</b>." : "Cuenta las filas de <code>pedidos</code>: <b>" + e.nPed + "</b>.";
+        case "clin": return py ? "Cuenta las líneas de la base: <b>" + e.nLin + "</b>." : "Cuenta las filas de <code>lineas</code>: <b>" + e.nLin + "</b>.";
+        case "pcu": return "Imprime <b>pedidos: " + e.nPed + " líneas: " + e.nLin + "</b>." + (e.fase === 1 ? " Sin transacción quedó un pedido a medias: el 5007 con 2 líneas, aunque el intento falló." : e.fase === 2 ? " Con transacción, el intento fallido no dejó nada: sigue 1 pedido y 2 líneas (las del 5007)." : " El 5009 se confirmó completo: ahora 2 pedidos y 4 líneas.");
+        case "c2": return py ? "Abre <b>otra base</b> con el modo por defecto de <code>sqlite3</code>, que abre las transacciones por su cuenta antes de un INSERT, y crea el mismo esquema." : "Comentario: esta parte es solo de Python (la versión de la librería). R se compara con la cuenta a mano.";
+        case "wwith": return py ? "Entra a <code>with con2:</code>: este bloque hace <b>COMMIT</b> si termina bien y <b>ROLLBACK</b> si sale una excepción, sin que lo escribas." : "Comentario: <code>with</code> es de Python; en R se hizo la copia a mano.";
+        case "wins": return py ? "Inserta el pedido 5008 y sus líneas; la tercera <b>repite</b> la primera y lanza <code>IntegrityError</code>. Las filas son provisionales." : "Comentario: en Python se inserta el 5008 con sus tres líneas y la tercera repite la primera.";
+        case "wexc": return py ? "La excepción sale del <code>with</code>: <b>ya hizo ROLLBACK</b>. El <code>except</code> la ignora con <code>pass</code>. La base de la librería queda sin el pedido." : "Comentario: la excepción deshizo todo en Python.";
+        case "n2": return py ? "Cuenta los pedidos de <code>con2</code>: <b>0</b>." : "Comentario: en Python se cuentan los pedidos de <code>con2</code> (0).";
+        case "n1": return py ? "Cuenta cuántos pedidos 5008 quedaron en la base del programa a mano: <b>0</b>." : "Cuenta cuántos pedidos 5008 quedaron en <code>pedidos</code>: <b>0</b>.";
+        case "cmp": return py ? "Compara las dos bases: <code>0 == 0</code> da <b>True</b>. El programa a mano y el bloque <code>with</code> hacen lo mismo." : "Compara con la cuenta a mano: ninguno quedó, <b>TRUE</b>. (R no puede compararse con una base de verdad.)";
+      }
+      return "";
+    }
+    function filasPed(e) {
+      var h = '<thead><tr><th>id_pedido</th><th>id_cliente</th></tr></thead><tbody>';
+      e.ped.forEach(function (x, i) {
+        var cls = x[2] ? "prov" : (e.ultimo === "ped" && i === e.ped.length - 1 ? "nuevo" : "");
+        h += '<tr class="' + cls + '"><td class="pl">' + x[0] + '</td><td>' + x[1] + '</td></tr>';
+      });
+      if (!e.ped.length) h += '<tr><td class="pl" colspan="2">vacía</td></tr>';
+      return h + '</tbody>';
+    }
+    function filasLin(e) {
+      var h = '<thead><tr><th>id_pedido</th><th>id_producto</th></tr></thead><tbody>';
+      e.lin.forEach(function (x, i) {
+        var cls = x[2] ? "prov" : (e.ultimo === "lin" && i === e.lin.length - 1 ? "nuevo" : "");
+        h += '<tr class="' + cls + '"><td class="pl">' + x[0] + '</td><td>' + x[1] + '</td></tr>';
+      });
+      if (!e.lin.length) h += '<tr><td class="pl" colspan="2">vacía</td></tr>';
+      return h + '</tbody>';
+    }
+    function visual(e, anterior, ctx) {
+      var base = e || { ped: [], lin: [], fase: 0, sal: [], db: "main", tx: false };
+      $("vrPe").innerHTML = filasPed(base);
+      $("vrLi").innerHTML = filasLin(base);
+      $("vrT1").textContent = base.db === "con2" ? "pedidos (con2, la base de la librería)" : "pedidos";
+      $("vrT2").textContent = base.db === "con2" ? "lineas (con2)" : "lineas";
+      var cu = "";
+      if (e) cu = "transacción: <b>" + (e.tx ? "abierta (lo provisional va en cursiva)" : "cerrada") + "</b>";
+      if (e && e.n2 !== null && e.id !== "c2") cu += " · pedidos de con2: <b>" + e.n2 + "</b>" + (e.n1 !== null ? " · pedidos 5008 del programa a mano: <b>" + e.n1 + "</b>" : "");
+      $("vrCuenta").innerHTML = cu;
+      var py = ctx.lang() === "py", lineas = (e ? e.sal : []).map(function (s) { return s === "@cmp" ? (py ? "True" : "[1] TRUE") : s; });
+      $("vrSal").textContent = lineas.length ? lineas.join("\n") : "(todavía no imprimió nada)";
+    }
+    B.vidaReal($("vidareal"), {
+      codigo: CODIGO,
+      eventos: EV,
+      narrar: narrar,
+      vars: function (e, ctx) {
+        var v = [];
+        if (e && e.fase >= 1 && e.fase <= 3 && e.nuevo !== null) v.push('<span class="vj">nuevo = <b>' + e.nuevo + '</b></span>');
+        if (e && e.fase >= 1 && e.fase <= 3 && e.conTx !== null) v.push('<span class="vk">con_tx = <b>' + (e.conTx ? (ctx.lang() === "py" ? "True" : "TRUE") : (ctx.lang() === "py" ? "False" : "FALSE")) + '</b></span>');
+        if (e && e.p !== null && e.fase <= 3) v.push('<span>p = <b>' + e.p + '</b></span>');
+        if (e && e.nPed !== null && e.fase <= 3) v.push('<span>n_ped = <b>' + e.nPed + '</b></span>');
+        if (e && e.nLin !== null && e.fase <= 3) v.push('<span>n_lin = <b>' + e.nLin + '</b></span>');
+        if (e && e.fase === 4 && e.n2 !== null) v.push('<span>n2 = <b>' + e.n2 + '</b></span>');
+        if (e && e.fase === 4 && e.n1 !== null) v.push('<span>n1 = <b>' + e.n1 + '</b></span>');
+        return v;
+      },
+      visual: visual,
+      demora: function (e) { return !e ? 600 : e.id === "forp" || e.id === "insl" ? 450 : e.id === "forn" ? 800 : 700; }
+    });
+
+    $("salidaPy").textContent = SAL_PY;
+    $("salidaR").textContent = SAL_R;
+
+    B.numerico(cuerpo("vrPred"), {
+      pregunta: "En total, en una corrida del programa, ¿cuántas veces se ejecuta la línea que inserta una línea de pedido (<code>INSERT INTO lineas</code> en Python, <code>insertar_linea</code> en R)? Cuenta también la que falla. (Piensa en cuántos productos tiene cada uno de los tres intentos.)",
+      respuesta: CUENTA_INSL,
+      tolerancia: 0,
+      pistas: [
+        "Esa línea está dentro de un bucle que recorre los productos del intento. Cuenta cuántos productos tiene cada uno: [101, 105, 101], [101, 105, 101] y [101, 105].",
+        "Cuando una línea falla, el bucle se corta: pero la línea que falla también se ejecutó (por eso lanza el error)."
+      ],
+      diagnostico: function (v) {
+        if (v === 9) return "9 serían 3 + 3 + 3. El tercer intento solo tiene 2 productos.";
+        if (v === 6) return "6 serían 3 + 3 sin contar el 5009. Cuéntalo también: son 2 líneas más.";
+        if (v === 7) return "Casi. 7 sería si no contaras la línea que falla en alguno de los dos primeros intentos: esa también se ejecuta, y por eso lanza el error.";
+        return null;
+      },
+      explicacion: "El intento 1 ejecuta la línea 3 veces (la tercera es la que falla, pero se ejecuta igual), el 2 también 3 veces y el 3 solo 2: $3 + 3 + 2 = 8$. Ahora dale a reproducir y fíjate en las filas en cursiva: son las que un ROLLBACK borra.",
+      alResolver: function (ok) { C.reto("codigo1", ok); }
+    });
+    prop("codigo2", {
+      pregunta: "En Python abres una base en un archivo con <code>sqlite3.connect(archivo)</code> (el modo por defecto), ejecutas un <code>INSERT</code> y cierras la conexión con <code>close()</code> sin llamar a <code>commit()</code>. Más tarde abres el archivo y cuentas las filas. ¿Qué pasa?",
+      opciones: [
+        "La fila no está: el modo por defecto abrió una transacción antes del INSERT y, sin commit, se descartó",
+        "La fila está: cada INSERT se confirma solo en sqlite3",
+        "La fila está solo si cerraste la conexión con close()",
+        "Da un error al cerrar sin commit"
+      ],
+      correcta: 0,
+      pistas: [null, "Eso pasa con isolation_level=None, el modo del programa de esta página, no con el modo por defecto.", "close() no confirma: al contrario, lo no confirmado se pierde.", "No da ningún error: sqlite3 descarta lo pendiente en silencio."],
+      explicacion: "Está comprobado: en el modo por defecto, <code>sqlite3</code> abre una transacción por su cuenta antes de un INSERT (<code>con.in_transaction</code> da <code>True</code>) y la deja abierta hasta que llamas a <code>con.commit()</code>. Al cerrar sin confirmar, la fila se pierde sin avisar. Por eso el programa de esta página usa <code>isolation_level=None</code> y escribe <code>BEGIN</code>, <code>COMMIT</code> y <code>ROLLBACK</code> a la vista."
+    });
+    prop("codigo3", {
+      pregunta: "En el programa de esta página, justo después de <code>con.execute(\"COMMIT\")</code> alguien agrega <code>con.execute(\"ROLLBACK\")</code> «por seguridad». ¿Qué ocurre en SQLite?",
+      opciones: [
+        "Lanza un error (<code>cannot rollback - no transaction is active</code>) y no deshace nada",
+        "Deshace el pedido que acaba de confirmar",
+        "No hace nada y no da ningún error",
+        "Cierra la conexión"
+      ],
+      correcta: 0,
+      pistas: [null, "El ROLLBACK solo deshace una transacción abierta, y el COMMIT acaba de cerrarla.", "Con la sentencia escrita a mano, SQLite sí avisa. Quien no avisa es el método con.rollback() de Python, que no hace nada si no hay transacción.", "Ninguna de las dos sentencias cierra la conexión."],
+      explicacion: "Comprobado: <code>con.execute(\"ROLLBACK\")</code> sin transacción abierta lanza <code>sqlite3.OperationalError: cannot rollback - no transaction is active</code>. El método <code>con.rollback()</code> de Python, en cambio, no hace nada y no avisa; en ningún caso deshace lo ya confirmado. En R no existe el problema porque la «transacción» es una copia que tú descartas."
+    });
+  })();
+
+  /* ---------------- tarjetas ---------------- */
+  B.tarjetas($("tarjetas"), [
+    ["¿Qué es una transacción?", "Un conjunto de operaciones SQL que se ejecutan como una unidad indivisible: o se completan todas, o no se completa ninguna."],
+    ["¿Qué hacen BEGIN, COMMIT y ROLLBACK?", "BEGIN abre la transacción. COMMIT hace permanentes sus cambios. ROLLBACK revierte todo lo hecho desde que se abrió."],
+    ["¿Qué significa ACID?", "Atomicidad (todo o nada), Consistencia (de un estado válido a otro), Aislamiento (sin interferencias) y Durabilidad (persiste tras confirmar)."],
+    ["¿Qué pasa si falla la luz antes del COMMIT?", "La base deshace la transacción entera al reiniciar: no queda nada de lo que se había insertado dentro."],
+    ["¿Y si falla después del COMMIT?", "Nada se pierde: lo confirmado persiste. Es la durabilidad."],
+    ["¿Un ROLLBACK deshace un COMMIT ya hecho?", "No. El COMMIT cierra la transacción y el ROLLBACK solo deshace una abierta. En SQLite da «cannot rollback - no transaction is active»."],
+    ["Sin transacción, ¿qué queda si se corta entre el pedido y sus líneas?", "Un pedido sin líneas (o con algunas): cada sentencia ya se confirmó sola y nadie la deshace."],
+    ["¿Qué falla de verdad en la solución 3 de la UD5?", "La clave primaria duplicada (UNIQUE constraint failed: embeddings.id_articulo), no la clave foránea como dice el texto."],
+    ["¿Qué pasa en Python si cierras sqlite3 sin commit?", "En el modo por defecto, lo no confirmado se pierde sin avisar. Con isolation_level=None escribes BEGIN y COMMIT tú."]
+  ]);
+
+  /* ---------------- conexiones ---------------- */
+  B.conexiones("transacciones-acid");
+})();
+</script>
+</body>
+</html>

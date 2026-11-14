@@ -1,0 +1,1588 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Segmentación (pipeline) y riesgos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+/* ---------- diagrama de ciclos ---------- */
+.cic { --n: 8; display: grid; gap: 3px; font-family: var(--f-mono); font-size: 11px; font-variant-numeric: tabular-nums; }
+.cic-r { display: grid; grid-template-columns: 96px repeat(var(--n), minmax(0, 1fr)); gap: 3px; align-items: stretch; }
+.cic-n { text-align: center; color: var(--ink-3); font-size: 10px; padding-bottom: 2px; }
+.cic-l { all: unset; box-sizing: border-box; display: block; padding: 4px 5px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-radius: 5px; cursor: pointer; font: inherit; font-size: 11px; }
+.cic-l:hover { background: var(--surface-2); }
+.cic-l:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.cic-r.sel .cic-l { background: var(--accent-soft); color: var(--ink); }
+.cic-l.desc { text-decoration: line-through; color: var(--ink-3); }
+.cic-c { position: relative; min-height: 25px; display: grid; place-items: center; border-radius: 4px; font-weight: 600; box-shadow: inset 0 0 0 1px var(--line-soft); }
+.cic-c.e-F { background: color-mix(in oklab, var(--j) 26%, var(--surface)); color: var(--j); box-shadow: none; }
+.cic-c.e-D { background: color-mix(in oklab, var(--k) 26%, var(--surface)); color: var(--k); box-shadow: none; }
+.cic-c.e-O { background: color-mix(in oklab, var(--accent) 26%, var(--surface)); color: var(--accent); box-shadow: none; }
+.cic-c.e-E { background: color-mix(in oklab, var(--pos) 26%, var(--surface)); color: var(--pos); box-shadow: none; }
+.cic-c.e-W { background: color-mix(in oklab, var(--ink-3) 26%, var(--surface)); color: var(--ink-2); box-shadow: none; }
+.cic-c.espera { background: color-mix(in oklab, var(--neg) 10%, var(--surface)); color: var(--neg); outline: 1.5px dashed var(--neg); outline-offset: -2px; box-shadow: none; }
+.cic-c.descartada { opacity: .5; }
+.cic-c.x { background: transparent; color: var(--neg); box-shadow: inset 0 0 0 1px var(--neg); }
+.cic-c.mem::after { content: "M"; position: absolute; top: 0; right: 2px; font-size: 8px; font-weight: 700; color: var(--ink); }
+.cic-c.nuevo { animation: parpadeo .5s ease; }
+.cic-ley { display: flex; flex-wrap: wrap; gap: 6px 10px; margin-top: 10px; font-size: 11.5px; color: var(--ink-2); }
+.cic-ley span { display: inline-flex; align-items: center; gap: 5px; }
+.cic-ley i { min-height: 0; display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 4px; font-style: normal; font-family: var(--f-mono); font-size: 10.5px; font-weight: 600; }
+.cic-ley i.espera { background: color-mix(in oklab, var(--neg) 10%, var(--surface)); color: var(--neg); outline: 1.5px dashed var(--neg); outline-offset: -2px; }
+.cic-ctl { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin-bottom: 10px; }
+.cic-ctl:empty { display: none; }
+.cic-ctl .hint { font-size: 12px; color: var(--ink-2); }
+.cic-ctl button.mas { font-family: var(--f-mono); padding: 5px 12px; }
+.cic-ctl input[type=range] { width: 200px; max-width: 100%; }
+.seg button:disabled { opacity: .45; cursor: not-allowed; }
+.cic-lect { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line); font-family: var(--f-mono); font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; line-height: 1.6; }
+.cic-lect b { color: var(--ink); font-weight: 500; font-size: 14.5px; }
+.cic-lect b.mal { color: var(--neg); }
+.cic-nota { margin-top: 8px; font-size: 13px; color: var(--ink-2); min-height: 2.6em; }
+.cic-nota b { color: var(--ink); font-weight: 500; }
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.esc-head .hint { font-size: 12.5px; color: var(--ink-2); }
+.cic-graf { width: 100%; height: auto; display: block; margin-top: 4px; }
+.cic-graf .ej { stroke: var(--ink-3); stroke-width: 1; }
+.cic-graf .gr { stroke: var(--line-soft); stroke-width: 1; }
+.cic-graf .tk { font: 10px var(--f-mono); fill: var(--ink-3); }
+.cic-graf .tit { font: 11.5px var(--f-body); fill: var(--ink-2); }
+.cic-graf .curva { fill: none; stroke: var(--accent); stroke-width: 2.4; }
+.cic-graf .tope { stroke: var(--neg); stroke-width: 1.4; stroke-dasharray: 5 4; }
+.cic-graf .tope-t { font: 500 10.5px var(--f-mono); fill: var(--neg); }
+.cic-graf .marca { fill: var(--ink); stroke: var(--surface); stroke-width: 2; }
+.cic-graf .marca-t { font: 500 11px var(--f-mono); fill: var(--ink); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+
+/* ---------- tablas pequeñas ---------- */
+.tabla-wrap { overflow-x: auto; margin-top: 10px; }
+.tabla { width: 100%; border-collapse: collapse; font-family: var(--f-mono); font-size: 12px; font-variant-numeric: tabular-nums; }
+.tabla th { font-weight: 500; color: var(--ink-3); font-size: 11px; text-align: right; padding: 4px 8px; border-bottom: 1px solid var(--line); }
+.tabla td { text-align: right; padding: 4px 8px; border-bottom: 1px solid var(--line-soft); color: var(--ink-2); }
+.tabla td.pl, .tabla th:first-child { text-align: left; }
+.tabla tr.sel td { background: var(--accent-soft); color: var(--ink); }
+.tabla td.hoy { box-shadow: inset 0 0 0 2px var(--accent); color: var(--ink); font-weight: 600; }
+.tabla td.bien { color: var(--pos); }
+.tabla td.mal { color: var(--neg); }
+.tabla td.oculto { color: var(--accent); font-weight: 600; }
+.tabla button.fila { all: unset; cursor: pointer; display: block; width: 100%; }
+.tabla button.fila:focus-visible { outline: 2px solid var(--focus); }
+.grande { font-family: var(--f-mono); font-size: 14px; color: var(--ink-2); margin: 6px 0 12px; font-variant-numeric: tabular-nums; }
+.grande b { font-size: 18px; color: var(--ink); font-weight: 500; }
+.deps { margin: 10px 0 0; padding: 0; list-style: none; font-size: 12.5px; color: var(--ink-2); display: grid; gap: 3px; }
+.deps code { font-family: var(--f-mono); font-size: .95em; color: var(--ink); }
+
+/* ---------- retos propios ---------- */
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.ctx-ojo { font-size: 13px; color: var(--ink-2); margin: 6px 0; }
+.prog-pre { font-family: var(--f-mono); font-size: 13px; background: var(--surface-2); border-radius: 8px; padding: 10px 14px; margin: 8px 0; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ojo-opts4 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
+.ojo-opts4 .opt { text-align: center; }
+.objetivos { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.objetivos li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.objetivos .m { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.objetivos li.hecho { color: var(--ink); }
+.objetivos li.hecho .m { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 3px var(--surface); }
+.orden-lista { display: grid; gap: 4px; margin: 8px 0; max-width: 360px; }
+.orden-fila { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto auto; gap: 6px; align-items: center; font-family: var(--f-mono); font-size: 13px; }
+.orden-fila .num { color: var(--ink-3); text-align: right; }
+.orden-fila button { padding: 3px 9px; font-family: var(--f-mono); }
+.salida { font-family: var(--f-mono); font-size: 12.5px; background: var(--surface-2); border-radius: 8px; padding: 8px 12px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); margin: 8px 0; }
+.salida .len { color: var(--ink-3); }
+.vr-tabla th, .vr-tabla td { text-align: center; }
+.vr-tabla td.pl { text-align: left; white-space: nowrap; }
+.vr-tabla td.cur { box-shadow: inset 0 0 0 2px var(--accent); font-weight: 600; color: var(--ink); }
+.vr-tabla td.dat { color: var(--neg); }
+.vr-tabla td.hecho { color: var(--ink); }
+.vr-tabla th small { color: var(--ink-3); font-weight: 400; }
+@media (max-width: 480px) {
+  .cic-r { grid-template-columns: 74px repeat(var(--n), minmax(0, 1fr)); gap: 2px; }
+  .cic-l { font-size: 10px; padding: 4px 3px; }
+  .cic-c { min-height: 22px; font-size: 10px; }
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ Segmentación (pipeline) y riesgos</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Infraestructura · Arquitectura de computadores · UD2</p>
+    <h1>Segmentación (pipeline) y riesgos</h1>
+    <p class="lede">
+      Una CPU no espera a que una instrucción termine para empezar la siguiente: las solapa, como una línea de ensamblaje.
+      Vas a verlo en un diagrama donde <b>cada fila es una instrucción y cada columna un ciclo de reloj</b>,
+      y vas a ver también cuándo un dato que aún no existe, un recurso ocupado o un salto obligan a esperar.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> Una CPU tarda 5 ciclos en ejecutar una instrucción: la busca, la interpreta, calcula sus operandos, la ejecuta y guarda el resultado. Tienes 100 instrucciones y no puedes hacer que el reloj vaya más rápido. ¿Cómo harías para terminar antes? Escríbelo como te salga, aunque esté mal.</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: mientras una se ejecuta, la siguiente..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>Solapar instrucciones y ver qué las frena</h2>
+      <p>Ocho pasos. Cada uno termina con un chequeo: hasta que no lo resuelves, el siguiente queda cerrado. Equivocarte aquí no resta nada, es parte del método.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="Una por una">
+          <span class="etapa">Paso 1</span>
+          <h3>Cinco fases, tres instrucciones</h3>
+          <p>Ejecutar una instrucción lleva cinco fases, una por ciclo. En el diagrama las llamamos con una letra:
+            <b>F</b> busca la instrucción en memoria (Fetch), <b>D</b> la interpreta (Decode), <b>O</b> calcula los operandos,
+            <b>E</b> hace la operación (Execute) y <b>W</b> guarda el resultado (Write-back)
+            <cite class="cita" data-fuente="arq2" data-pag="5" data-pimp="2" data-seccion="1.1 Ciclo de instrucción" data-que="Las cinco fases del ciclo de instrucción (búsqueda, decodificación, cálculo de operandos, ejecución y escritura de resultados), cada una con lo que hace." data-cuando="Al terminar este paso"></cite>.</p>
+          <p>Mira el diagrama de la derecha. Cada fila es una instrucción y cada columna un ciclo. Ahora la CPU trabaja <b>una por una</b>: hasta que una instrucción no termina, la siguiente no empieza.
+            Tres instrucciones, quince ciclos.</p>
+          <p>Fíjate en cualquier columna: en cada ciclo solo trabaja una fase y las otras cuatro partes de la CPU están sin hacer nada.</p>
+          <details class="profundizar">
+            <summary>¿Tres fases o cinco? Y una errata del Fetch</summary>
+            <div>
+              <p>En la UD1 el ciclo de instrucción tiene <b>tres</b> fases (buscar, decodificar, ejecutar)
+                <cite class="cita" data-fuente="arq1" data-pag="9" data-pimp="6" data-seccion="Ciclo de instrucción (3 fases)" data-que="El ciclo de instrucción en tres fases: búsqueda, decodificación y ejecución, y la nota de que se retoma en la UD2." data-cuando="Después de este paso"></cite>
+                y en la UD2 tiene <b>cinco</b>. No se contradicen: la UD2 parte la tercera en cálculo de operandos, ejecución y escritura. Es un nivel de detalle mayor. En esta página usamos las cinco, que son las de la Tabla 1 del pipeline.</p>
+              <p>Una errata: el material dice que en el Fetch "se usa el contador de programa para obtener de memoria la dirección de la siguiente instrucción". Es al revés: el PC <b>ya contiene</b> esa dirección, y lo que se trae de memoria es la instrucción, que va al registro IR.</p>
+            </div>
+          </details>
+          <div class="check" id="chk1"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Solapar">
+          <span class="etapa">Paso 2</span>
+          <h3>Una fase por instrucción, todas a la vez</h3>
+          <p>Cuando la fase F ya terminó con la instrucción 1, esa parte de la CPU queda libre. Puede buscar la instrucción 2 mientras la 1 se decodifica, y la 3 mientras la 2 se decodifica y la 1 calcula operandos. Eso es la <b>segmentación</b> o <b>pipeline</b>:
+            solapar la ejecución de varias instrucciones en distintas fases
+            <cite class="cita" data-fuente="arq2" data-pag="6" data-pimp="3" data-seccion="1.3 Segmentación (pipelining)" data-que="La definición del pipeline en un párrafo, la Tabla 1 con la unidad implicada en cada fase y los nombres de los tres riesgos." data-cuando="Al terminar este paso"></cite>
+            <cite class="cita" data-fuente="arq2diapo" data-pag="7" data-seccion="Pipeline" data-que="La misma idea en una diapositiva: el texto del pipeline y la Tabla 1. Los riesgos solo aparecen nombrados, y el título dice «pipeling» (errata)." data-cuando="Al terminar este paso"></cite>.</p>
+          <p>Cambia el número de instrucciones con los botones. Mira la primera fila: <b>sigue tardando 5 ciclos</b>. Lo que cambia es que ahora cada ciclo hay varias fases trabajando.</p>
+          <div class="fbloque"><div class="vivo" id="vivo2"></div></div>
+          <details class="profundizar">
+            <summary>Las reglas de este diagrama</summary>
+            <div>
+              <p>Para que las cuentas den limpias, el diagrama sigue unas reglas que son de esta página (el material no trae diagrama de ciclos ni dice cuántas fases tiene un procesador real):</p>
+              <ul>
+                <li>Cada fase dura un ciclo y atiende a una sola instrucción por ciclo.</li>
+                <li>Una instrucción lee sus registros en la fase O y escribe el resultado en la fase W, y no puede leer en el mismo ciclo en que otra escribe.</li>
+                <li>El resultado de una suma sale de la ALU al final de E. El de un LOAD sale de la memoria y llega <b>un ciclo más tarde</b>.</li>
+                <li>Una instrucción no se salta fases y no adelanta a la anterior.</li>
+              </ul>
+            </div>
+          </details>
+          <div class="check" id="chk2"><p class="check-tit">Antes de seguir</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="La cuenta">
+          <span class="etapa">Paso 3</span>
+          <h3>Cuántos ciclos y cuánto se gana</h3>
+          <p>Con <span data-tex="k"></span> fases y <span data-tex="n"></span> instrucciones sin ningún estorbo, la primera termina en el ciclo <span data-tex="k"></span> y cada una de las otras <span data-tex="n-1"></span> termina un ciclo después de la anterior. Una por una tardarían <span data-tex="n\cdot k"></span>.</p>
+          <div class="fbloque">
+            <div data-tex="\text{ciclos} = k + (n-1) = n + k - 1 \qquad\qquad \text{aceleración} = \frac{n\,k}{n+k-1}" data-display></div>
+            <div class="vivo" id="vivo3"></div>
+          </div>
+          <p>Mueve el deslizador de la derecha. Con <span data-tex="k=5"></span> la aceleración sube rápido y después se aplana: se acerca a 5 pero <b>nunca llega</b>, porque al principio hay que llenar el pipeline y al final vaciarlo. Con muchas instrucciones ese costo se reparte y casi no se nota.</p>
+          <details class="profundizar">
+            <summary>¿Y si hubiera más fases?</summary>
+            <div>
+              <p>La fórmula sirve para cualquier <span data-tex="k"></span>: con más fases el techo sube. Pero el material no dice cuántas fases tiene un procesador real, ni da una fórmula de aceleración: solo habla de las cinco fases de la Tabla 1. Esta cuenta es de la página.</p>
+            </div>
+          </details>
+          <div class="check" id="chk3"><p class="check-tit">Antes de seguir</p><div class="cuerpo"></div></div>
+
+          <div class="destacado" id="destacado">
+            <p class="dest-tit">Una confusión muy común</p>
+            <h4>Si la aceleración llega casi a 5, ¿cada instrucción es 5 veces más rápida?</h4>
+            <p>No. El pipeline no acorta lo que tarda una instrucción: aumenta cuántas instrucciones terminan por ciclo. Se llama <b>latencia</b> a lo que tarda una sola y <b>rendimiento</b> a cuántas terminan por unidad de tiempo. Mira otra vez la primera fila del diagrama del paso 2.</p>
+            <div class="check" id="chk3b"><p class="check-tit">Predice</p><div class="cuerpo"></div></div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Riesgo de datos">
+          <span class="etapa">Paso 4</span>
+          <h3>Cuando falta un dato que otra instrucción aún no escribió</h3>
+          <p>Un programa de cuatro líneas que suma <span data-tex="a+b"></span> y guarda el resultado en <span data-tex="c"></span> (el ejemplo clásico de la UD1
+            <cite class="cita" data-fuente="arq1" data-pag="14" data-pimp="11" data-seccion="3.5 Ejemplo integrador" data-que="El recorrido de a + b: el PC localiza la instrucción, se decodifica, se piden a y b, la ALU suma y el resultado va a memoria o a un registro." data-cuando="Antes de este paso"></cite>):</p>
+          <p class="prog-pre" style="margin:6px 0">LOAD R1,[a]
+LOAD R2,[b]
+ADD R3,R1,R2
+STORE [c],R3</p>
+          <p>El diagrama de la derecha muestra el programa <b>como si no hubiera ningún estorbo</b>: 8 ciclos. Pero la tercera línea necesita <b>R1 y R2</b> en su fase O, y esos registros los escriben las dos primeras en su fase W. Si la fase W de una todavía no ocurrió, la siguiente no puede leer el dato. Eso es un <b>riesgo de datos</b>: una instrucción necesita el resultado de otra anterior que todavía no completó su escritura
+            <cite class="cita" data-fuente="arq2" data-pag="6" data-pimp="3" data-seccion="Riesgos del pipeline: estructurales y de datos" data-que="Los riesgos estructurales y el comienzo de los riesgos de datos: la instrucción que necesita un resultado que otra anterior todavía no escribió." data-cuando="Al terminar este paso"></cite>.</p>
+          <p>Los registros viven en el banco de registros, que lee dos operandos y escribe uno en el mismo ciclo
+            <cite class="cita" data-fuente="arq2" data-pag="8" data-pimp="5" data-seccion="2.2 Banco de registros" data-que="El banco de registros con varios puertos (lee dos operandos y escribe uno por ciclo) y la Tabla 2 con PC, IR, MAR, MBR, SP y flags." data-cuando="Al terminar este paso"></cite>.
+            Por eso la regla: se lee en O y se escribe en W, y no se lee un registro en el ciclo en que se escribe.</p>
+          <div class="check" id="chk4"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Reenvío">
+          <span class="etapa">Paso 5</span>
+          <h3>Tomar el dato antes de que se escriba</h3>
+          <p>El resultado de un ADD ya existe cuando sale de la ALU, antes de llegar a la fase W. Con el <b>reenvío</b> (forwarding) ese resultado pasa directo de la salida de la ALU a la entrada de la operación que lo necesita, sin esperar a que se escriba en el registro
+            <cite class="cita" data-fuente="arq2" data-pag="7" data-pimp="4" data-seccion="Riesgos de datos y de control" data-que="El remedio del reenvío o cortocircuitado (tomar el resultado de la salida de la ALU) y los riesgos de control con predicción de saltos y anulación (flush)." data-cuando="Al terminar este paso"></cite>.
+            La salida de la ALU es la de la fase E
+            <cite class="cita" data-fuente="arq2" data-pag="10" data-pimp="7" data-seccion="3 La ALU" data-que="Qué hace la ALU: operaciones aritméticas y lógicas, entradas, salida y flags. Es de donde sale el dato que se reenvía." data-cuando="Al terminar este paso"></cite>.</p>
+          <p>Ojo con el LOAD: su dato viene de la memoria, y según la regla del diagrama llega <b>un ciclo más tarde</b> que el de una suma. Fíjate en la dependencia entre el segundo LOAD y el ADD.</p>
+          <div class="check" id="chk5"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+          <details class="profundizar">
+            <summary>¿Por qué el reenvío no arregla un LOAD?</summary>
+            <div>
+              <p>El reenvío adelanta un dato que <b>ya existe</b> en algún punto del pipeline. El dato de un LOAD no existe hasta que la memoria responde. Ningún cable puede entregarlo antes. La salida práctica es reordenar el programa para poner una instrucción independiente entre el LOAD y quien lo usa. Eso lo haces en el reto "Construir".</p>
+            </div>
+          </details>
+        </section>
+
+        <section class="paso card" data-titulo="Riesgo estructural">
+          <span class="etapa">Paso 6</span>
+          <h3>Cuando dos instrucciones quieren el mismo recurso</h3>
+          <p>Un <b>riesgo estructural</b> aparece cuando dos instrucciones, en fases distintas, necesitan a la vez el mismo recurso, por ejemplo un único puerto de acceso a memoria
+            <cite class="cita" data-fuente="arq2" data-pag="6" data-pimp="3" data-seccion="Riesgos estructurales" data-que="La definición del riesgo estructural con el ejemplo del único puerto de memoria, y sus dos remedios: duplicar el recurso o insertar burbujas." data-cuando="Al terminar este paso"></cite>.</p>
+          <p>En nuestro programa la fase F lee la <b>instrucción</b> de memoria, y en la fase E los LOAD y STORE leen o escriben <b>datos</b> en memoria. En el diagrama cada uso de la memoria lleva una <b>M</b> en la esquina. Si la memoria tiene un solo puerto, en una misma columna no puede haber dos M: gana el acceso a datos y la búsqueda espera.</p>
+          <p>El diagrama de la derecha muestra el programa con reenvío (9 ciclos) y sus M. Búscalas.</p>
+          <div class="check" id="chk6"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+          <details class="profundizar">
+            <summary>El remedio: separar la memoria de instrucciones y la de datos</summary>
+            <div>
+              <p>Duplicar el recurso es lo que hace la arquitectura Harvard: una memoria (y un bus) para instrucciones y otra para datos, y la versión que usan los procesadores modernos, que separa las cachés
+                <cite class="cita" data-fuente="arq1" data-pag="11" data-pimp="8" data-seccion="Figura 2: Harvard modificada" data-que="El diagrama de la Harvard modificada de los computadores actuales: memoria principal unificada, y por dentro una I-Cache y una D-Cache separadas con flujos de instrucciones y de datos." data-cuando="Después de este paso"></cite>
+                <cite class="cita" data-fuente="arq2" data-pag="17" data-pimp="14" data-seccion="6.7 Niveles múltiples" data-que="La caché L1 dividida en instrucciones y datos, y la L2 y L3 más grandes y lentas." data-cuando="Después de este paso"></cite>.
+                Con dos cachés L1, buscar una instrucción y leer un dato no chocan.</p>
+            </div>
+          </details>
+        </section>
+
+        <section class="paso card" data-titulo="Riesgo de control">
+          <span class="etapa">Paso 7</span>
+          <h3>Saltos: no sabes qué buscar hasta que se resuelven</h3>
+          <p>Una instrucción de salto, como <code>BEQ R4,R0,fin</code> ("salta a <code>fin</code> si R4 vale lo mismo que R0"), decide cuál es la siguiente instrucción. Pero el salto se resuelve en su fase E. Hasta entonces la CPU ya está buscando instrucciones, y no sabe si son las correctas. Es un <b>riesgo de control</b>.</p>
+          <p>Hay tres maneras de tratarlo
+            <cite class="cita" data-fuente="arq2" data-pag="7" data-pimp="4" data-seccion="Riesgos de control" data-que="Por qué un salto no deja saber la siguiente instrucción, la predicción de saltos, la anulación (flush) de lo buscado por error y el silicio que se dedica a los predictores." data-cuando="Al terminar este paso"></cite>:
+            <b>esperar</b> a que el salto se resuelva; <b>predecir</b> si se tomará y seguir por ese camino; y si la predicción falla, <b>descartar</b> (flush) lo que se buscó por error y empezar otra vez.</p>
+          <p>El diagrama de la derecha muestra el programa como si el salto no costara nada. Las filas tachadas, cuando las veas, son las instrucciones buscadas por el camino equivocado.</p>
+          <div class="check" id="chk7"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+          <details class="profundizar">
+            <summary>Los predictores reales</summary>
+            <div>
+              <p>Aquí el predictor es una regla fija: "siempre se toma" o "nunca se toma". Los reales recuerdan el historial de cada salto y aciertan casi siempre. El material dice que una predicción poco precisa "puede penalizar seriamente" a los programas con muchas decisiones, y que los procesadores dedican mucho silicio a los predictores. En un procesador con más fases, un salto mal predicho cuesta más ciclos que aquí. Los números son de la página.</p>
+            </div>
+          </details>
+        </section>
+
+        <section class="paso card" data-titulo="Medir">
+          <span class="etapa">Paso 8</span>
+          <h3>CPI: ciclos por instrucción</h3>
+          <p>Para comparar configuraciones se divide el total de ciclos entre las instrucciones que se ejecutaron. Eso es el <b>CPI</b> (ciclos por instrucción). Su inverso es el <b>IPC</b> (instrucciones por ciclo), que sí aparece en la UD1
+            <cite class="cita" data-fuente="arq1" data-pag="16" data-pimp="13" data-seccion="4.1 Frecuencia de reloj e IPC" data-que="Los GHz como ciclos por segundo, el IPC como instrucciones por ciclo y el ejemplo de dos procesadores A y B que se comparan por instrucciones por segundo." data-cuando="Al terminar este paso"></cite>.</p>
+          <div class="fbloque">
+            <div data-tex="\text{CPI} = \frac{\text{ciclos}}{n} \qquad\qquad \text{IPC} = \frac{n}{\text{ciclos}} = \frac{1}{\text{CPI}}" data-display></div>
+          </div>
+          <p>El material de la UD2 no cuantifica el pipeline: no trae diagrama de ciclos, número de fases, aceleración ni CPI. Todo lo de esta página es la forma de verlo con números.</p>
+          <p>La tabla de la derecha compara el programa de cuatro líneas en cuatro configuraciones. Fíjate en el caso sin ningún riesgo: 8 ciclos para 4 instrucciones no es CPI 1, porque falta llenar el pipeline.</p>
+          <div class="cita" id="citaHipo" hidden></div>
+          <div class="check" id="chk8"><p class="check-tit">Antes de seguir</p><div class="cuerpo"></div></div>
+          <details class="profundizar">
+            <summary>De CPI a tiempo de ejecución</summary>
+            <div>
+              <p>El tiempo total es <span data-tex="n \cdot \text{CPI} \cdot T"></span>, con <span data-tex="T"></span> la duración de un ciclo. Esta fórmula no está en el material de la unidad. La siguiente página de la ruta, "Frecuencia, IPC y ley de Amdahl", la usa para ver por qué subir los GHz no basta.</p>
+            </div>
+          </details>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+        </div>
+        <div class="cic-ctl" id="cicCtl"></div>
+        <div id="cicWrap">
+          <div id="cic" role="img" aria-label="Diagrama de ciclos: cada fila es una instrucción y cada columna un ciclo"></div>
+          <div class="cic-ley">
+            <span><i class="cic-c e-F">F</i> Fetch</span><span><i class="cic-c e-D">D</i> Decode</span><span><i class="cic-c e-O">O</i> Operandos</span><span><i class="cic-c e-E">E</i> Execute</span><span><i class="cic-c e-W">W</i> Write-back</span><span><i class="espera">D</i> espera (burbuja)</span>
+          </div>
+        </div>
+        <svg id="cicGraf" class="cic-graf" viewBox="0 0 440 190" role="img" aria-label="Aceleración del pipeline según el número de instrucciones" hidden></svg>
+        <div class="cic-lect" id="cicLect"></div>
+        <div class="cic-nota" id="cicNota"></div>
+        <div id="cicExtra"></div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>El diagrama del paso 5, escrito como lo haría un programa: para cada instrucción y cada fase, el ciclo en que entra. Elige Python o R, dale a reproducir y mira cómo se llena la tabla, primero sin reenvío y después con él.</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir</p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="true">Python</button>
+            <button type="button" data-lang="r" aria-pressed="false">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">1 · sin reenvío</span><span data-f="2">2 · con reenvío</span><span data-f="3">3 · comprobar</span>
+        </div>
+        <h3 class="mini-tit vr-tit">entra: el ciclo en que cada instrucción entra a cada fase</h3>
+        <div class="tabla-wrap"><table class="tabla vr-tabla" id="vrTabla"></table></div>
+        <div class="vr-cuenta" id="vrCuenta"></div>
+        <h3 class="mini-tit vr-tit">El mismo resultado como diagrama</h3>
+        <div id="vrDiag"></div>
+      </div>
+    </div>
+
+    <h3 class="mini-tit" style="margin:20px 0 6px">Lo que imprime cada lenguaje</h3>
+    <div class="vr-grid">
+      <div class="card"><p class="mini-tit">Python</p><div class="salida" id="salidaPy"></div></div>
+      <div class="card"><p class="mini-tit">R</p><div class="salida" id="salidaR"></div></div>
+    </div>
+
+    <p class="vr-nota">Para el pipeline no hay una función de librería que compararse, así que el programa se verifica contra la fórmula del paso 3: con cuatro instrucciones independientes, <code>simular</code> tiene que dar <code>n + 5 - 1 = 8</code>, y da <code>True</code> en Python y <code>TRUE</code> en R. Los dos lenguajes dan los mismos números. El programa deja fuera el riesgo estructural y el de control: solo simula los de datos.</p>
+
+    <details class="profundizar">
+      <summary>Una sola fórmula para cada fase</summary>
+      <div>
+        <p>Todo el programa se reduce a una idea: la instrucción <code>i</code> entra a la fase <code>k</code> en el primer ciclo que cumple tres condiciones a la vez: a) ya terminó la fase anterior, b) la fase está libre porque la instrucción de arriba ya pasó a la siguiente, y c) el dato que necesita ya está disponible. El resultado es el <code>max</code> de las tres. Es la forma en que el diagrama "empuja" a una instrucción hacia la derecha cada vez que algo la frena.</p>
+      </div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>La tabla con filas repetidas</h3><span class="estado" data-reto="codigo2"></span></div>
+        <div id="codigo2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Pasar el código de Python a R</h3><span class="estado" data-reto="codigo3"></span></div>
+        <div id="codigo3"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: la biblioteca te avisa en el índice cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>¿Qué riesgo hay?</h3><span class="estado" data-reto="ojo"></span></div>
+        <p class="desc">Cinco fragmentos de programa. Decide el tipo de riesgo sin dibujar nada; después te muestro el diagrama. Apruebas con 4 de 5.</p>
+        <div id="ojo"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Construir</span><h3>Reordena el programa</h3><span class="estado" data-reto="construir"></span></div>
+        <p class="desc">Mueve las instrucciones con las flechas para quitar burbujas. Un cambio solo vale si cada instrucción sigue después de la que produce su dato.</p>
+        <div id="construirUI"></div>
+        <div id="construirDiag"></div>
+        <div class="grande" id="construirVivo"></div>
+        <ul class="objetivos" id="objetivos"></ul>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>Cuenta los ciclos</h3><span class="estado" data-reto="mano"></span></div>
+        <p class="desc">Datos al azar. Haz la cuenta con papel antes de pedir pistas.</p>
+        <div id="mano"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Alguien se equivocó</h3><span class="estado" data-reto="error"></span></div>
+        <p class="desc">Una de las líneas tiene un error. Tócala.</p>
+        <div id="error"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Una instrucción más</h3><span class="estado" data-reto="prop1"></span></div>
+        <div id="prop1"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Muchas instrucciones</h3><span class="estado" data-reto="prop2"></span></div>
+        <div id="prop2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>El LOAD y su uso</h3><span class="estado" data-reto="prop3"></span></div>
+        <div id="prop3"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>El remedio de cada riesgo</h3><span class="estado" data-reto="prop4"></span></div>
+        <div id="prop4"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Recordar a la fuerza es lo que fija. Arma la fórmula de memoria y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Fórmula de memoria</span><h3>Los ciclos de un pipeline sin riesgos</h3><span class="estado" data-reto="formula"></span></div>
+        <p class="desc">Hay piezas de más que no pertenecen. <span data-tex="n"></span> son las instrucciones y <span data-tex="k"></span> las fases. No mires arriba.</p>
+        <div id="formula"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el material</h2>
+      <p class="lecturas-intro">Ya construiste la idea con las manos. Ahora ve a la versión del máster y comprueba que la reconoces. La UD2 es breve en este tema: define los tres riesgos y sus remedios, y no trae números. Cada entrada dice qué vas a encontrar y en qué momento conviene leerla. Si abres la biblioteca con doble clic, el enlace abre el PDF en esa página.</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> Los programas de tres y cuatro líneas son inventados. Las reglas del diagrama (cada fase dura un ciclo, se lee en O y se escribe en W, el dato de un LOAD llega un ciclo después, un salto se resuelve en E)
+    son de esta página para que las cuentas den limpias: el material de la UD2 define los tres riesgos pero no trae diagrama de ciclos, número de fases, aceleración ni CPI. Tu progreso se guarda solo en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+/*
+  EJEMPLOS COMUNES DE LA RUTA "Arquitectura de computadores" (los reutilizan las demas paginas de la ruta):
+  - El programa de 4 lineas que suma dos numeros y guarda el resultado:
+        LOAD R1,[a]   LOAD R2,[b]   ADD R3,R1,R2   STORE [c],R3
+  - Las cinco fases de la Tabla 1 de la UD2, con una letra: F (Fetch), D (Decode), O (Operandos), E (Execute), W (Write-back).
+  - Reglas del diagrama de ciclos (de la pagina, no del material): cada fase dura un ciclo y atiende a una instruccion por ciclo;
+    se lee en O y se escribe en W (no se lee en el ciclo en que otra escribe); el dato de un LOAD llega un ciclo despues que el de una suma;
+    un salto se resuelve en E. Sin riesgos: n + k - 1 ciclos. El programa de 4 lineas tarda 12 ciclos sin reenvio, 9 con reenvio y 10
+    con reenvio y un solo puerto de memoria.
+  - Un byte de ejemplo para otras paginas: 0110 1101 (109) y 0000 1101 (13). El resto de ejemplos de la ruta (cache de 4 lineas con
+    direcciones de 8 bits, disco de 7200 rpm, cargas A a E de la UD2) los fija la pagina que los use primero.
+*/
+(function () {
+  "use strict";
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var RETOS = ["ojo", "construir", "mano", "error", "formula", "prop1", "prop2", "prop3", "prop4", "codigo1", "codigo2", "codigo3"];
+  var C = B.concepto({ id: "segmentacion-pipeline", retos: RETOS, pasos: 8 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  function f(v, d) {
+    d = d == null ? 2 : d;
+    var s = Math.abs(v).toFixed(d);
+    if (+s === 0) return (0).toFixed(d);
+    return (v < 0 ? "−" : "") + s;
+  }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+  function azar(a) { return a[Math.floor(Math.random() * a.length)]; }
+
+  /*MOTOR*/
+  /* ---------------- motor del diagrama de ciclos ---------------- */
+  var ET = ["F", "D", "O", "E", "W"];
+  var NET = ["Fetch", "Decode", "Operandos", "Execute", "Write-back"];
+  function I(t, dst, src, lat, mem) { return { t: t, dst: dst, src: src, lat: lat, mem: !!mem }; }
+  function clon(x, extra) { var o = {}, k; for (k in x) o[k] = x[k]; for (k in (extra || {})) o[k] = extra[k]; return o; }
+  function productor(prog, i, r) {
+    for (var j = i - 1; j >= 0; j--) if (!prog[j].wrong && prog[j].dst === r) return j;
+    return -1;
+  }
+  // en[i][k] = ciclo en que la instruccion i entra a la fase k. op: reenvio, puerto, sinRiesgos.
+  function planificar(prog, op) {
+    op = op || {};
+    var n = prog.length, en = [], cau = [], uso = {}, ultima = -1, ultimaReal = -1, i, k, s;
+    for (i = 0; i < n; i++) {
+      var p = prog[i], e = [0, 0, 0, 0, 0], ca = [null, null, null, null, null];
+      var a = p.wrong ? ultima : ultimaReal;
+      for (k = 0; k < 5; k++) {
+        var c = k === 0 ? (a < 0 ? 1 : en[a][1]) : e[k - 1] + 1, causa = null;
+        if (k === 0 && a >= 0 && en[a][1] > en[a][0] + 1) causa = { tipo: "libre", de: a };
+        if (k > 0 && a >= 0) {
+          var lib = k < 4 ? en[a][k + 1] : en[a][4] + 1;
+          if (lib > c) { c = lib; causa = { tipo: "libre", de: a }; }
+        }
+        if (!p.wrong && !op.sinRiesgos) {
+          for (s = 0; s < p.src.length; s++) {
+            var j = productor(prog, i, p.src[s]);
+            if (j < 0) continue;
+            if (!op.reenvio && k === 2 && en[j][4] + 1 > c) { c = en[j][4] + 1; causa = { tipo: "datos", reg: p.src[s], de: j }; }
+            if (op.reenvio && k === 3 && en[j][3] + prog[j].lat > c) { c = en[j][3] + prog[j].lat; causa = { tipo: "datos", reg: p.src[s], de: j }; }
+          }
+          if (k === 0 && p.espera != null && en[p.espera][3] + 1 > c) { c = en[p.espera][3] + 1; causa = { tipo: "salto", de: p.espera }; }
+          if (k === 0 && op.puerto && uso[c] != null) {
+            var dueno = uso[c];
+            while (uso[c] != null) c++;
+            causa = { tipo: "puerto", de: dueno };
+          }
+        }
+        e[k] = c; ca[k] = causa;
+      }
+      en.push(e); cau.push(ca);
+      if (p.mem && !p.wrong) uso[e[3]] = i;
+      ultima = i;
+      if (!p.wrong) ultimaReal = i;
+    }
+    var total = 0, nr = 0;
+    for (i = 0; i < n; i++) if (!prog[i].wrong) { nr++; total = Math.max(total, en[i][4]); }
+    return { prog: prog, en: en, cau: cau, total: total, nr: nr, ideal: nr + 4, burb: total - (nr + 4), opts: op };
+  }
+  function secuencial(prog) {
+    var en = prog.map(function (_, i) { var s = 5 * i + 1; return [s, s + 1, s + 2, s + 3, s + 4]; });
+    return { prog: prog, en: en, cau: prog.map(function () { return [null, null, null, null, null]; }), total: 5 * prog.length, nr: prog.length, ideal: prog.length + 4, burb: 5 * prog.length - prog.length - 4, opts: {}, seq: true };
+  }
+  // la instruccion i en el ciclo c: fase, si espera, si fue descartada
+  function celdaDe(plan, i, c) {
+    var fi = plan.prog[i], e = plan.en[i], k;
+    if (fi.wrong) {
+      var corte = plan.en[fi.deSalto][3];
+      if (c === corte + 1) return { x: true };
+      if (c > corte) return null;
+    }
+    for (k = 0; k < 5; k++) {
+      if (!e[k]) continue;
+      var fin = k < 4 ? (e[k + 1] > 0 ? e[k + 1] : e[k] + 1) : e[4] + 1;
+      if (c >= e[k] && c < fin) return { k: k, espera: c > e[k], desc: !!fi.wrong, mem: c === e[k] && (k === 0 || (k === 3 && fi.mem)) };
+    }
+    return null;
+  }
+  // frase que explica por que una fila espero
+  function porque(plan, c, k) {
+    if (!c) return "";
+    var otra = plan.prog[c.de] ? "«" + esc(plan.prog[c.de].t) + "»" : "";
+    if (c.tipo === "datos") {
+      if (!plan.opts.reenvio) return "necesita " + c.reg + ", que " + otra + " escribe en su fase W (ciclo " + plan.en[c.de][4] + "), así que recién puede leerlo en el ciclo " + (plan.en[c.de][4] + 1);
+      var lat = plan.prog[c.de].lat;
+      return "necesita " + c.reg + ", que " + otra + " entrega en el ciclo " + (plan.en[c.de][3] + lat) + (lat > 1 ? " (el dato de un LOAD llega de la memoria un ciclo después que el de una suma)" : "");
+    }
+    if (c.tipo === "puerto") return "la memoria tiene un solo puerto y en ese ciclo la usaba " + otra + " para leer o escribir un dato";
+    if (c.tipo === "salto") return "hasta que el salto no se resuelve (ciclo " + plan.en[c.de][3] + ") no se sabe qué instrucción buscar";
+    return k === 0 ? "la instrucción de arriba seguía en la fase F" : "la fase " + NET[k] + " seguía ocupada por la instrucción de arriba";
+  }
+  function explicarFila(plan, i) {
+    var fi = plan.prog[i], e = plan.en[i], ca = plan.cau[i], h = "<b>" + esc(fi.t) + "</b>: ", partes = [], k;
+    if (fi.wrong) return h + "se buscó por el camino equivocado. Cuando el salto se resuelve (ciclo " + plan.en[fi.deSalto][3] + ") se descarta (flush) y todo su trabajo se pierde.";
+    h += "entra a F en el ciclo " + e[0] + " y termina en el ciclo " + e[4] + ".";
+    if (e[0] > 1 && ca[0] && (ca[0].tipo === "puerto" || ca[0].tipo === "salto")) partes.push("Su búsqueda se retrasó: " + porque(plan, ca[0], 0) + ".");
+    for (k = 1; k < 5; k++) {
+      var w = e[k] - e[k - 1] - 1;
+      if (w > 0) partes.push("Esperó " + w + (w === 1 ? " ciclo" : " ciclos") + " en " + ET[k - 1] + " antes de pasar a " + ET[k] + ": " + porque(plan, ca[k], k) + ".");
+    }
+    if (!partes.length) partes.push("No esperó nada: avanzó una fase por ciclo.");
+    return h + " " + partes.join(" ");
+  }
+  function pintarCiclos(el, plan, o) {
+    o = o || {};
+    var T = o.cols || plan.total, i, c, h = '<div class="cic" style="--n:' + T + '"><div class="cic-r"><span></span>';
+    for (c = 1; c <= T; c++) h += '<span class="cic-n">' + c + '</span>';
+    h += '</div>';
+    plan.prog.forEach(function (fi, i) {
+      h += '<div class="cic-r' + (o.sel === i ? ' sel' : '') + '"><button type="button" class="cic-l' + (fi.wrong ? ' desc' : '') + '" data-i="' + i + '" title="' + esc(fi.t) + '">' + esc(fi.t) + '</button>';
+      for (c = 1; c <= T; c++) {
+        var ce = celdaDe(plan, i, c);
+        if (!ce) h += '<span class="cic-c"></span>';
+        else if (ce.x) h += '<span class="cic-c x" title="Descartada (flush)">X</span>';
+        else h += '<span class="cic-c e-' + ET[ce.k] + (ce.espera ? ' espera' : '') + (ce.desc ? ' descartada' : '') + (o.memoria && ce.mem ? ' mem' : '') +
+          (o.nuevo && o.nuevo[0] === i && o.nuevo[1] === c ? ' nuevo' : '') + '" title="' + NET[ce.k] + (ce.espera ? ' (espera)' : '') + '">' + ET[ce.k] + '</span>';
+      }
+      h += '</div>';
+    });
+    el.innerHTML = h + '</div>';
+    el.onclick = function (ev) {
+      var b = ev.target.closest ? ev.target.closest(".cic-l") : null;
+      if (b && o.alFila) o.alFila(+b.getAttribute("data-i"));
+    };
+  }
+  // programas
+  var GEN = [
+    I("ADD R1,R8,R9", "R1", ["R8", "R9"], 1), I("SUB R2,R8,R9", "R2", ["R8", "R9"], 1), I("AND R3,R8,R9", "R3", ["R8", "R9"], 1),
+    I("OR R4,R8,R9", "R4", ["R8", "R9"], 1), I("XOR R5,R8,R9", "R5", ["R8", "R9"], 1), I("ADD R6,R8,R9", "R6", ["R8", "R9"], 1),
+    I("SUB R7,R8,R9", "R7", ["R8", "R9"], 1), I("AND R10,R8,R9", "R10", ["R8", "R9"], 1)
+  ];
+  var P4 = [
+    I("LOAD R1,[a]", "R1", [], 2, true), I("LOAD R2,[b]", "R2", [], 2, true),
+    I("ADD R3,R1,R2", "R3", ["R1", "R2"], 1), I("STORE [c],R3", "", ["R3"], 1, true)
+  ];
+  // flujo con salto: pred = "ninguno" | "no" | "si" ; tomado = el salto realmente se toma
+  function flujoControl(pred, tomado) {
+    var c1 = I("ADD R1,R2,R3", "R1", ["R2", "R3"], 1), br = I("BEQ R4,R0,fin", "", ["R4", "R0"], 1);
+    var c3 = I("SUB R5,R1,R2", "R5", ["R1", "R2"], 1), c4 = I("AND R6,R1,R2", "R6", ["R1", "R2"], 1), c5 = I("OR R7,R1,R2", "R7", ["R1", "R2"], 1);
+    var f1 = I("STORE [c],R1", "", ["R1"], 1, true), f2 = I("ADD R8,R1,R1", "R8", ["R1"], 1), f3 = I("STORE [d],R8", "", ["R8"], 1, true);
+    var real = tomado ? [f1, f2, f3] : [c3, c4, c5, f1, f2, f3];
+    var mal = tomado ? [c3, c4, c5] : [f1, f2, f3];
+    var acierta = pred === (tomado ? "si" : "no");
+    var rows = [c1, br];
+    if (pred !== "ninguno" && acierta) return rows.concat(real);
+    if (pred !== "ninguno") mal.forEach(function (x) { rows.push(clon(x, { wrong: true, deSalto: 1 })); });
+    real.forEach(function (x, j) { rows.push(j === 0 ? clon(x, { espera: 1 }) : x); });
+    return rows;
+  }
+  /*FIN MOTOR*/
+
+  function nodo(tag, at, padre) {
+    var e = document.createElementNS("http://www.w3.org/2000/svg", tag);
+    for (var k in at) e.setAttribute(k, at[k]);
+    if (padre) padre.appendChild(e);
+    return e;
+  }
+  function texto(padre, at, t) { var e = nodo("text", at, padre); e.textContent = t; return e; }
+
+  /* ---------------- grafico de la aceleracion (paso 3) ---------------- */
+  function graficoAcel(svg, n) {
+    var W = 440, H = 190, L = 44, R = 14, T = 14, Bt = 34, NMAX = 64, VMAX = 5.6, k;
+    function sx(v) { return L + v / NMAX * (W - L - R); }
+    function sy(v) { return H - Bt - v / VMAX * (H - T - Bt); }
+    svg.innerHTML = "";
+    for (k = 0; k <= 5; k++) {
+      nodo("line", { x1: sx(0), x2: sx(NMAX), y1: sy(k), y2: sy(k), "class": k === 0 ? "ej" : "gr" }, svg);
+      texto(svg, { x: L - 6, y: sy(k) + 3.5, "class": "tk", "text-anchor": "end" }, k);
+    }
+    for (k = 0; k <= NMAX; k += 16) texto(svg, { x: sx(k), y: H - Bt + 14, "class": "tk", "text-anchor": "middle" }, k);
+    nodo("line", { x1: sx(0), x2: sx(0), y1: sy(0), y2: sy(VMAX), "class": "ej" }, svg);
+    texto(svg, { x: sx(NMAX), y: H - 6, "class": "tit", "text-anchor": "end" }, "n (instrucciones)");
+    texto(svg, { x: 12, y: sy(VMAX) + 4, "class": "tit", "text-anchor": "start" }, "aceleración");
+    nodo("line", { x1: sx(0), x2: sx(NMAX), y1: sy(5), y2: sy(5), "class": "tope" }, svg);
+    texto(svg, { x: sx(NMAX) - 4, y: sy(5) - 5, "class": "tope-t", "text-anchor": "end" }, "tope: 5 fases");
+    var d = "";
+    for (k = 1; k <= NMAX; k++) d += (k === 1 ? "M" : "L") + sx(k).toFixed(1) + " " + sy(5 * k / (k + 4)).toFixed(1) + " ";
+    nodo("path", { d: d, "class": "curva" }, svg);
+    var v = 5 * n / (n + 4);
+    nodo("circle", { cx: sx(n), cy: sy(v), r: 5.5, "class": "marca" }, svg);
+    texto(svg, { x: sx(n) + (n > 44 ? -9 : 9), y: sy(v) + (n > 8 ? 17 : -9), "class": "marca-t", "text-anchor": n > 44 ? "end" : "start" }, "n = " + n + ": " + f(v));
+  }
+
+  /* ---------------- estado del recorrido ---------------- */
+  var est = { paso: 0, ok: [false, false, false, false, false, false, false, false], solapa: false, n: 3, n3: 8, ver4: "real", ref5: true, ref6: true, pto6: true, pred: "ninguno", tomado: true, cfg8: 0, sel: null };
+  var CFG = [
+    { t: "Sin reenvío", o: {} },
+    { t: "Con reenvío", o: { reenvio: true } },
+    { t: "Con reenvío y un puerto", o: { reenvio: true, puerto: true } },
+    { t: "Sin ningún riesgo", o: { sinRiesgos: true } }
+  ];
+  var MODOS = [
+    { hint: "Una instrucción a la vez" },
+    { hint: "Cambia cuántas instrucciones hay" },
+    { hint: "Mueve el deslizador" },
+    { hint: "El programa de cuatro líneas" },
+    { hint: "Activa el reenvío" },
+    { hint: "Busca las M que chocan" },
+    { hint: "Prueba cada predictor" },
+    { hint: "Compara las cuatro configuraciones" }
+  ];
+  var pasos;
+
+  function seg(g, opts, val) {
+    return '<div class="seg" data-g="' + g + '" role="group">' + opts.map(function (o) {
+      return '<button type="button" data-v="' + o.v + '" aria-pressed="' + (String(o.v) === String(val)) + '"' + (o.dis ? ' disabled' : '') + '>' + o.t + '</button>';
+    }).join("") + '</div>';
+  }
+  function aviso(t) { return '<span class="hint">' + t + '</span>'; }
+
+  function controles() {
+    var i = est.paso, h = "", ok = est.ok[i];
+    if (i === 0) h = seg("solapa", [{ v: 0, t: "Una por una" }, { v: 1, t: "Solapadas", dis: !ok }], est.solapa ? 1 : 0) + (ok ? "" : aviso("Responde la predicción para activar «Solapadas»."));
+    else if (i === 1) h = '<button type="button" class="mas" data-g="n" data-v="menos" aria-label="Una instrucción menos">−</button><button type="button" class="mas" data-g="n" data-v="mas" aria-label="Una instrucción más">+</button>' + aviso('<span id="nLab"></span>');
+    else if (i === 2) h = '<label for="rngN" class="hint">n =</label><input type="range" id="rngN" min="1" max="64" step="1" value="' + est.n3 + '" aria-label="Número de instrucciones"><span class="hint" id="rngLab"></span>';
+    else if (i === 3) h = seg("ver4", [{ v: "ideal", t: "Sin riesgos" }, { v: "real", t: "Programa real", dis: !ok }], ok ? est.ver4 : "ideal") + (ok ? "" : aviso("Responde la predicción para ver el programa real."));
+    else if (i === 4) h = seg("ref5", [{ v: 0, t: "Sin reenvío" }, { v: 1, t: "Con reenvío", dis: !ok }], ok ? (est.ref5 ? 1 : 0) : 0) + (ok ? "" : aviso("Responde la predicción para activar el reenvío."));
+    else if (i === 5) h = seg("ref6", [{ v: 0, t: "Sin reenvío" }, { v: 1, t: "Con reenvío", dis: !ok }], est.ref6 ? 1 : 0) + seg("pto6", [{ v: 0, t: "Dos memorias", dis: !ok }, { v: 1, t: "Un solo puerto", dis: !ok }], ok && est.pto6 ? 1 : 0) + (ok ? "" : aviso("Responde la predicción para activar los interruptores."));
+    else if (i === 6) h = seg("pred7", [{ v: "ninguno", t: "Sin predictor", dis: !ok }, { v: "no", t: "Predice: no se toma", dis: !ok }, { v: "si", t: "Predice: se toma", dis: !ok }], est.pred) +
+      seg("real7", [{ v: 1, t: "El salto se toma", dis: !ok }, { v: 0, t: "No se toma", dis: !ok }], est.tomado ? 1 : 0) + (ok ? "" : aviso("Responde la predicción para activar los controles."));
+    else if (i === 7) h = seg("cfg8", CFG.map(function (c, j) { return { v: j, t: c.t }; }), est.cfg8);
+    $("cicCtl").innerHTML = h;
+  }
+  $("cicCtl").addEventListener("click", function (e) {
+    var b = e.target.closest ? e.target.closest("button[data-v]") : null;
+    if (!b || b.disabled) return;
+    var g = b.getAttribute("data-g") || b.parentNode.getAttribute("data-g"), v = b.getAttribute("data-v");
+    if (g === "solapa") est.solapa = v === "1";
+    else if (g === "n") est.n = Math.max(1, Math.min(8, est.n + (v === "mas" ? 1 : -1)));
+    else if (g === "ver4") est.ver4 = v;
+    else if (g === "ref5") est.ref5 = v === "1";
+    else if (g === "ref6") est.ref6 = v === "1";
+    else if (g === "pto6") est.pto6 = v === "1";
+    else if (g === "pred7") est.pred = v;
+    else if (g === "real7") est.tomado = v === "1";
+    else if (g === "cfg8") est.cfg8 = +v;
+    est.sel = null;
+    if (g !== "n") controles();
+    repintar();
+  });
+  $("cicCtl").addEventListener("input", function (e) {
+    if (e.target.id === "rngN") { est.n3 = +e.target.value; repintar(); }
+  });
+
+  function lectura(plan, conCPI) {
+    var h = "ciclos: <b>" + plan.total + "</b> · sin riesgos serían <b>" + plan.ideal + "</b>";
+    h += " · burbujas: <b" + (plan.burb > 0 ? ' class="mal"' : "") + ">" + plan.burb + "</b>";
+    if (conCPI) h += " · CPI: <b>" + f(plan.total / plan.nr) + "</b>";
+    return h;
+  }
+  function dependencias(prog) {
+    var l = [];
+    prog.forEach(function (p, i) {
+      p.src.forEach(function (r) {
+        var j = productor(prog, i, r);
+        if (j >= 0 && l.indexOf(i + ":" + r) < 0) l.push(i + ":" + r);
+      });
+    });
+    return '<ul class="deps">' + l.map(function (x) {
+      var i = +x.split(":")[0], r = x.split(":")[1], j = productor(prog, i, r);
+      return "<li>La fila " + (i + 1) + " (<code>" + esc(prog[i].t) + "</code>) lee <code>" + r + "</code>, que escribe la fila " + (j + 1) + ".</li>";
+    }).join("") + "</ul>";
+  }
+
+  var planActual = null;
+  function repintar() {
+    var i = est.paso, plan, o = { sel: est.sel, alFila: function (k) { est.sel = k; repintar(); }, memoria: false }, extra = "", ver = true, lect = "";
+    var ok = est.ok[i];
+    if (i === 0) {
+      var prog0 = GEN.slice(0, 3);
+      plan = est.solapa ? planificar(prog0) : secuencial(prog0);
+      lect = est.solapa ? "3 instrucciones solapadas: <b>" + plan.total + "</b> ciclos" : "Una por una: <b>" + plan.total + "</b> ciclos para 3 instrucciones";
+    } else if (i === 1) {
+      plan = planificar(GEN.slice(0, est.n));
+      lect = "n = <b>" + est.n + "</b> · solapadas: <b>" + plan.total + "</b> ciclos · una por una: <b>" + 5 * est.n + "</b> ciclos";
+      if ($("nLab")) $("nLab").textContent = est.n + (est.n === 1 ? " instrucción" : " instrucciones");
+      $("vivo2").innerHTML = "Primera fila: <b>5</b> ciclos, con una instrucción o con " + est.n + ".<br>Ciclos del total: <b>" + plan.total + "</b>.";
+    } else if (i === 2) {
+      ver = false;
+    } else if (i === 3) {
+      var real4 = ok && est.ver4 === "real";
+      plan = planificar(P4, real4 ? {} : { sinRiesgos: true });
+      lect = lectura(plan, false);
+      extra = dependencias(P4);
+    } else if (i === 4) {
+      plan = planificar(P4, { reenvio: ok && est.ref5 });
+      lect = lectura(plan, false);
+      extra = dependencias(P4);
+    } else if (i === 5) {
+      plan = planificar(P4, { reenvio: est.ref6, puerto: ok && est.pto6 });
+      o.memoria = true;
+      lect = lectura(plan, false);
+    } else if (i === 6) {
+      if (!ok) { plan = planificar(flujoControl("ninguno", true), { sinRiesgos: true }); lect = "Como si el salto no costara nada: <b>" + plan.total + "</b> ciclos"; }
+      else { plan = planificar(flujoControl(est.pred, est.tomado), { reenvio: true }); lect = lectura(plan, false); }
+      var h7 = "";
+      if (ok) {
+        h7 = '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>ciclos totales</th><th>salto se toma</th><th>no se toma</th></tr></thead><tbody>';
+        [["ninguno", "Sin predictor"], ["no", "Predice: no se toma"], ["si", "Predice: se toma"]].forEach(function (r) {
+          var a = planificar(flujoControl(r[0], true), { reenvio: true }).total, b = planificar(flujoControl(r[0], false), { reenvio: true }).total;
+          h7 += '<tr><td class="pl">' + r[1] + '</td><td class="' + (est.pred === r[0] && est.tomado ? "hoy" : "") + '">' + a + '</td><td class="' + (est.pred === r[0] && !est.tomado ? "hoy" : "") + '">' + b + '</td></tr>';
+        });
+        h7 += '</tbody></table></div><p class="hint" style="font-size:12px;color:var(--ink-2);margin-top:6px">Supone que el predictor ya conoce la dirección de destino. El salto se resuelve en E y descarta las 3 instrucciones que ya iban en camino.</p>';
+      }
+      extra = h7;
+    } else if (i === 7) {
+      var cf = CFG[est.cfg8];
+      plan = planificar(P4, cf.o);
+      lect = lectura(plan, ok);
+      var h8 = '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>configuración</th><th>ciclos</th><th>CPI</th><th>IPC</th></tr></thead><tbody>';
+      CFG.forEach(function (c, j) {
+        var p = planificar(P4, c.o);
+        h8 += '<tr class="' + (j === est.cfg8 ? "sel" : "") + '"><td class="pl">' + c.t + '</td><td>' + p.total + '</td>' +
+          (ok ? '<td>' + f(p.total / 4) + '</td><td>' + f(4 / p.total) + '</td>' : '<td class="oculto">?</td><td class="oculto">?</td>') + '</tr>';
+      });
+      extra = h8 + '</tbody></table></div>';
+    }
+    planActual = plan;
+    $("cicWrap").hidden = !ver;
+    $("cicGraf").hidden = ver;
+    if (ver) {
+      pintarCiclos($("cic"), plan, o);
+      $("cicLect").innerHTML = lect;
+      $("cicNota").innerHTML = est.sel != null && plan.prog[est.sel] ? explicarFila(plan, est.sel) : "Toca el nombre de una fila para ver por qué esperó.";
+    } else {
+      var n = est.n3, v = 5 * n / (n + 4);
+      graficoAcel($("cicGraf"), n);
+      $("cicLect").innerHTML = "n = <b>" + n + "</b> · ciclos: <b>" + (n + 4) + "</b> · una por una: <b>" + 5 * n + "</b> · aceleración: <b>" + f(v) + "</b>";
+      $("cicNota").textContent = "";
+      if ($("rngLab")) $("rngLab").textContent = n;
+      $("vivo3").innerHTML = "n = " + n + ", k = 5<br>ciclos = " + n + " + 5 − 1 = <b>" + (n + 4) + "</b><br>aceleración = (" + n + " · 5) / " + (n + 4) + " = " + 5 * n + " / " + (n + 4) + " = <b>" + f(v) + "</b>";
+    }
+    $("cicExtra").innerHTML = extra;
+  }
+  function entrar(i) {
+    est.paso = i;
+    est.sel = null;
+    $("escHint").textContent = MODOS[i].hint;
+    controles();
+    repintar();
+  }
+
+  /* ---------------- chequeos de cada paso ---------------- */
+  B.numerico(cuerpo("chk1"), {
+    pregunta: "La CPU puede empezar la fase F de una instrucción apenas la anterior pasa a D: cada fase atiende a una sola instrucción por ciclo, pero ya no espera a que la anterior termine. Con las 3 instrucciones del diagrama, ¿cuántos ciclos tardan en total?",
+    respuesta: 7,
+    tolerancia: 0,
+    pistas: [
+      "La primera instrucción tarda sus 5 ciclos completos. Piensa en cuándo termina la segunda, si empezó un ciclo después.",
+      "La segunda termina en el ciclo 6. ¿Y la tercera?"
+    ],
+    diagnostico: function (v) {
+      if (v === 15) return "Ese es el total una por una: 3 × 5. Aquí se solapan.";
+      if (v === 5) return "Cinco ciclos son los de una sola instrucción. Faltan las otras dos.";
+      if (v === 9) return "Te pasaste: cada instrucción nueva suma solo un ciclo, no dos.";
+      return null;
+    },
+    explicacion: "La primera termina en el ciclo 5, la segunda en el 6 y la tercera en el 7: <b>7 ciclos</b> en vez de 15. <b>Ahora toca «Solapadas»</b> y compruébalo.",
+    alResolver: function () { est.ok[0] = true; est.solapa = true; controles(); repintar(); pasos.completar(0); }
+  });
+
+  B.numerico(cuerpo("chk2"), {
+    pregunta: "Con 10 instrucciones solapadas y 5 fases, ¿cuántos ciclos tarda en total?",
+    respuesta: 14,
+    tolerancia: 0,
+    pistas: [
+      "Mira el diagrama con 1, 2, 3 instrucciones. ¿Cuántos ciclos suma cada instrucción nueva?",
+      "La primera termina en el ciclo 5. Las otras 9 terminan una por ciclo, después de ella."
+    ],
+    diagnostico: function (v) {
+      if (v === 15) return "Casi. La primera ya incluye sus 5 ciclos: las 9 restantes suman 9, no 10.";
+      if (v === 50) return "Ese es el total una por una: 10 × 5.";
+      if (v === 10) return "Diez serían si la primera tardara un ciclo. Hay que sumar lo que tarda en llenarse el pipeline.";
+      return null;
+    },
+    explicacion: "5 ciclos la primera y uno más por cada una de las otras 9: <b>14</b>. Una por una serían 50.",
+    alResolver: function () { pasos.completar(1); }
+  });
+
+  B.numerico(cuerpo("chk3"), {
+    pregunta: "Con $n = 96$ instrucciones y $k = 5$ fases, ¿cuánto vale la aceleración $\\dfrac{n\\,k}{n+k-1}$?",
+    respuesta: 4.8,
+    tolerancia: 0.011,
+    pistas: [
+      "Una por una son $96 \\cdot 5$ ciclos. Solapadas son $96 + 5 - 1$.",
+      "Son 480 ciclos entre 100 ciclos."
+    ],
+    diagnostico: function (v) {
+      if (v === 5) return "Ese es el techo al que se acerca, no el valor con 96 instrucciones: siempre queda un poco por debajo.";
+      if (v === 100) return "Esos son los ciclos solapados. La aceleración es 480 dividido entre 100.";
+      if (v === 480) return "Esos son los ciclos una por una. Hay que dividirlos entre los solapados.";
+      return null;
+    },
+    explicacion: "$480 / 100 = 4.8$. Casi 5, y todavía no llega. Si probaras con $n$ mil, daría $4.98$.",
+    alResolver: function () { est.ok[2] = true; pasos.completar(2); }
+  });
+
+  B.opcionMultiple(cuerpo("chk3b"), {
+    pregunta: "Una instrucción cualquiera, con otras muchas detrás en el pipeline, ¿cuántos ciclos tarda en pasar por sus 5 fases?",
+    opciones: ["5 ciclos, igual que sin segmentar", "1 ciclo, porque las 5 fases se hacen a la vez", "Menos de 5, y cada vez menos cuantas más instrucciones haya", "Más de 5 ciclos siempre, porque comparte la CPU"],
+    correcta: 0,
+    pistas: [null, "Cada fase trabaja con una instrucción distinta. Una misma instrucción las recorre de una en una.", "Cada fase sigue durando un ciclo. Eso no cambia con el número de instrucciones.", "Sin riesgos no espera nunca: pasa una fase por ciclo."],
+    explicacion: "La latencia no cambia: <b>5 ciclos</b>. Lo que sube es el rendimiento, cuántas instrucciones terminan por ciclo. De hecho, con riesgos, una instrucción concreta puede tardar <i>más</i> de 5 ciclos."
+  });
+
+  B.numerico(cuerpo("chk4"), {
+    pregunta: "Con las reglas del diagrama y sin reenvío, ¿cuántos ciclos tarda de verdad el programa de 4 líneas? Hoy ves 8, que sería sin ningún estorbo.",
+    respuesta: 12,
+    tolerancia: 0,
+    pistas: [
+      "El ADD no puede leer R2 hasta el ciclo siguiente a aquel en que el segundo LOAD escribe, en su fase W.",
+      "El segundo LOAD escribe R2 en el ciclo 6 (su fase W), así que el ADD recién puede leerlo en el 7. Sin esperar, su O habría sido en el ciclo 5.",
+      "ADD: O en 7, E en 8, W en 9. Después, el STORE necesita R3, que el ADD escribe en el ciclo 9: su O no puede ser antes del 10."
+    ],
+    diagnostico: function (v) {
+      if (v === 8) return "Ese es el total sin estorbos. Hay dependencias que obligan a esperar.";
+      if (v === 9) return "Ese sería con reenvío; todavía no lo tienes activado. Sin reenvío esperan más.";
+      if (v === 10) return "Falta el segundo retraso: el STORE también depende de un resultado, el de R3.";
+      return null;
+    },
+    explicacion: "El ADD espera a R2 y entra a O en el ciclo 7 (en vez del 5). El STORE espera a R3 y entra a O en el 10 (en vez del 6). Termina en el ciclo <b>12</b>: 4 burbujas. <b>Ahora toca «Programa real»</b> y mira las celdas con borde discontinuo.",
+    alResolver: function () { est.ok[3] = true; est.ver4 = "real"; controles(); repintar(); pasos.completar(3); }
+  });
+
+  B.numerico(cuerpo("chk5"), {
+    pregunta: "Activa el reenvío en tu cabeza (el interruptor todavía está cerrado): ¿cuántos ciclos tarda ahora el programa, con la regla de que el dato de un LOAD llega un ciclo más tarde que el de una suma?",
+    respuesta: 9,
+    tolerancia: 0,
+    pistas: [
+      "Sin riesgos son 8. ¿Hay alguna instrucción que todavía tenga que esperar un dato que no existe?",
+      "El ADD necesita R2, del segundo LOAD. El LOAD hace su E en el ciclo 5 y su dato llega un ciclo después de lo normal. ¿Cuándo puede hacer su E el ADD?"
+    ],
+    diagnostico: function (v) {
+      if (v === 8) return "Ese es el total sin estorbos. El dato del LOAD llega tarde, así que el ADD tiene que esperar un ciclo.";
+      if (v === 12) return "Ese es sin reenvío. Con reenvío las esperas son mucho menores.";
+      if (v === 10) return "Te pasaste un ciclo: el STORE ya recibe el resultado del ADD directo de la ALU.";
+      return null;
+    },
+    explicacion: "El ADD hace su E en el ciclo 7 en vez del 6, porque el dato del LOAD llega un ciclo tarde: <b>una burbuja</b>, 9 ciclos. El reenvío quitó 3 de las 4 burbujas, pero no esa. <b>Ahora activa «Con reenvío»</b>.",
+    alResolver: function () { est.ok[4] = true; est.ref5 = true; controles(); repintar(); pasos.completar(4); }
+  });
+
+  B.numerico(cuerpo("chk6"), {
+    pregunta: "Con reenvío y un solo puerto de memoria, ¿cuántos ciclos tarda el programa? Mira en qué columnas coinciden dos M.",
+    respuesta: 10,
+    tolerancia: 0,
+    pistas: [
+      "En el ciclo 4 coinciden dos M: el LOAD en E y la cuarta instrucción en F. Gana el dato, así que la búsqueda espera.",
+      "En el ciclo 5 también hay una M, la del segundo LOAD en E. La cuarta instrucción se busca en el ciclo 6 y el resto de sus fases se corren con ella.",
+      "STORE: F en 6, D en 7, O en 8, E en 9 y W en 10."
+    ],
+    diagnostico: function (v) {
+      if (v === 9) return "Ese es el total sin el choque. En el ciclo 4 hay dos M a la vez.";
+      if (v === 12) return "Ese es sin reenvío. Aquí el reenvío sigue activo.";
+      if (v === 11) return "Te pasaste: cuenta de nuevo desde la búsqueda de la cuarta instrucción.";
+      return null;
+    },
+    explicacion: "La cuarta instrucción tenía que buscarse en el ciclo 4, que ocupa el LOAD, y el 5, que ocupa el segundo LOAD. Se busca en el 6 y termina en el <b>10</b>: una burbuja más que sin el choque. <b>Ahora activa «Un solo puerto»</b>.",
+    alResolver: function () { est.ok[5] = true; est.pto6 = true; controles(); repintar(); pasos.completar(5); }
+  });
+
+  B.numerico(cuerpo("chk7"), {
+    pregunta: "El salto se toma y no hay predictor: la CPU espera a que el salto se resuelva en su fase E antes de buscar la siguiente instrucción. El programa (ADD, BEQ y tres instrucciones después del destino) sin estorbos tardaría 9 ciclos. ¿Cuántos tarda ahora?",
+    respuesta: 12,
+    tolerancia: 0,
+    pistas: [
+      "El BEQ hace su E en el ciclo 5. ¿En qué ciclo se puede buscar la primera instrucción del destino?",
+      "En el ciclo 6, en vez del 3: son 3 ciclos perdidos sobre los 9."
+    ],
+    diagnostico: function (v) {
+      if (v === 9) return "Ese es el total si el salto no costara nada. Aquí hay que esperar a que se resuelva.";
+      if (v === 10 || v === 11) return "Te falta algún ciclo de espera: el salto está en E en el ciclo 5, el destino se busca en el 6 y de ahí cada instrucción avanza una fase por ciclo.";
+      return null;
+    },
+    explicacion: "El BEQ está en E en el ciclo 5. El destino se busca en el 6 y no en el 3: <b>3 ciclos perdidos</b>, 12 en total. <b>Ahora prueba los predictores</b> y mira la tabla.",
+    alResolver: function () { est.ok[6] = true; est.pred = "ninguno"; est.tomado = true; controles(); repintar(); pasos.completar(6); }
+  });
+
+  B.numerico(cuerpo("chk8"), {
+    pregunta: "El programa de cuatro líneas sin reenvío tarda 12 ciclos. ¿Cuánto vale su CPI?",
+    respuesta: 3,
+    tolerancia: 0.011,
+    pistas: ["CPI es ciclos entre instrucciones.", "Son 12 ciclos entre 4 instrucciones."],
+    diagnostico: function (v) {
+      if (v === 12) return "Esos son los ciclos. Falta dividirlos entre el número de instrucciones.";
+      if (Math.abs(v - 0.33) < 0.02) return "Eso es el IPC, el inverso del CPI.";
+      if (v === 2) return "Ese es el CPI del mejor caso (8 ciclos entre 4). Aquí hay burbujas.";
+      return null;
+    },
+    explicacion: "$12 / 4 = 3$: tres ciclos por instrucción, cuando lo ideal en régimen sería 1. Su IPC es $1/3$. <b>Ahora la tabla muestra los demás.</b> Con $n$ grande y sin riesgos, el CPI tiende a 1.",
+    alResolver: function () { est.ok[7] = true; controles(); repintar(); pasos.completar(7); }
+  });
+
+  pasos = B.pasos($("recorrido"), {
+    concepto: C,
+    alEntrar: entrar,
+    alTerminar: function () { location.hash = "retos"; }
+  });
+  for (var q = 0; q < 8; q++) est.ok[q] = pasos.hecho(q);
+  if (est.ok[0]) est.solapa = true;
+  entrar(0);
+
+  /* ---------------- hipotesis inicial ---------------- */
+  (function () {
+    var ta = $("hipotesis"), t = null;
+    ta.value = B.nota("segmentacion-pipeline", "hipotesis");
+    function cita() {
+      var v = ta.value.trim(), el = $("citaHipo");
+      if (!el) return;
+      el.hidden = !v;
+      if (v) { el.textContent = ""; el.appendChild(document.createTextNode("Al principio escribiste: «" + v + "». ¿Se parece a lo que construimos? ¿Qué te faltaba?")); }
+    }
+    cita();
+    ta.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { B.nota("segmentacion-pipeline", "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; cita(); }, 500);
+    });
+  })();
+
+  /* ---------------- marcadores de estado de retos ---------------- */
+  function pintarEstados() {
+    [].forEach.call(document.querySelectorAll("[data-reto]"), function (el) {
+      var ok = C.retoOk(el.getAttribute("data-reto"));
+      el.textContent = ok ? "resuelto" : "pendiente";
+      el.classList.toggle("ok", ok);
+    });
+  }
+  C.alCambiar(pintarEstados);
+
+  /* ---------------- reto: ojo clinico ---------------- */
+  var NOMBRES = { datos: "Riesgo de datos", estructural: "Riesgo estructural", control: "Riesgo de control", ninguno: "Sin riesgo" };
+  function generarOjo(tipo) {
+    var R = B.mezclar(["R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8"]);
+    function alu(d, a, b) { return I(azar(["ADD", "SUB", "AND", "OR"]) + " " + d + "," + a + "," + b, d, [a, b], 1); }
+    var rows, why;
+    if (tipo === "datos") {
+      rows = [alu(R[0], R[1], R[2])];
+      if (Math.random() < 0.5) rows.push(alu(R[3], R[4], R[5]));
+      rows.push(alu(R[6], R[0], R[7]));
+      why = "La última lee " + R[0] + ", que la primera escribe en su fase W. Sin reenvío tiene que esperar: riesgo de datos.";
+    } else if (tipo === "ninguno") {
+      if (Math.random() < 0.5) {
+        rows = [alu(R[0], R[1], R[2]), alu(R[3], R[4], R[5]), alu(R[6], R[1], R[7])];
+        why = "Ninguna instrucción lee lo que escribe otra: no hay riesgo.";
+      } else {
+        rows = [alu(R[0], R[1], R[2]), alu(R[3], R[4], R[5]), alu(R[6], R[4], R[5]), alu(R[7], R[0], R[1])];
+        why = "La cuarta lee " + R[0] + ", pero está tan lejos de la primera que cuando llega a leerlo ya se escribió: la espera pasó sola. Tres instrucciones de distancia bastan.";
+      }
+    } else if (tipo === "estructural") {
+      rows = [I("LOAD " + R[0] + ",[" + azar(["a", "b", "x"]) + "]", R[0], [], 2, true), alu(R[3], R[4], R[5]), alu(R[6], R[4], R[5]), alu(R[7], R[4], R[5])];
+      why = "Cuando el LOAD está en E (ciclo 4) usa la memoria para leer un dato, y la cuarta instrucción quiere buscarse en F en ese mismo ciclo. Con un solo puerto no pueden las dos: riesgo estructural.";
+    } else {
+      rows = [alu(R[0], R[1], R[2]), I("BEQ " + R[3] + "," + R[4] + ",fin", "", [R[3], R[4]], 1), alu(R[5], R[6], R[7])];
+      rows[2].espera = 1;
+      why = "Hay un salto. Hasta que se resuelve (fase E, ciclo 5) la CPU no sabe qué instrucción buscar: riesgo de control.";
+    }
+    return { rows: rows, why: why, tipo: tipo };
+  }
+  (function () {
+    var cont = $("ojo");
+    cont.innerHTML = '<div class="ronda"></div><p class="ctx-ojo">CPU de 5 fases, sin reenvío, con una sola memoria y sin predictor de saltos.</p><div class="prog-pre"></div>' +
+      '<div class="ojo-opts4"><button type="button" class="opt" data-a="ninguno">Sin riesgo</button><button type="button" class="opt" data-a="datos">Riesgo de datos</button>' +
+      '<button type="button" class="opt" data-a="estructural">Riesgo estructural</button><button type="button" class="opt" data-a="control">Riesgo de control</button></div>' +
+      '<div class="fb" aria-live="polite"></div><div class="ojo-diag"></div><div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    var tipos, ronda, aciertos, respondida, actual;
+    function nueva() {
+      tipos = B.mezclar(["datos", "control", "estructural", "ninguno", azar(["datos", "ninguno"])]);
+      ronda = 0; aciertos = 0;
+      mostrar();
+    }
+    function mostrar() {
+      respondida = false;
+      actual = generarOjo(tipos[ronda]);
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 5 · aciertos " + aciertos;
+      cont.querySelector(".prog-pre").textContent = actual.rows.map(function (r) { return r.t; }).join("\n");
+      [].forEach.call(cont.querySelectorAll(".ojo-opts4 .opt"), function (b) { b.disabled = false; b.className = "opt"; });
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".ojo-diag").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+    }
+    cont.querySelector(".ojo-opts4").addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || respondida) return;
+      respondida = true;
+      var ok = b.getAttribute("data-a") === actual.tipo;
+      if (ok) aciertos++;
+      b.classList.add(ok ? "ok" : "mal");
+      if (!ok) cont.querySelector('[data-a="' + actual.tipo + '"]').classList.add("ok");
+      [].forEach.call(cont.querySelectorAll(".ojo-opts4 .opt"), function (x) { x.disabled = true; });
+      var plan = planificar(actual.rows, { puerto: true });
+      cont.querySelector(".fb").innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No.</span> ') + "Era: " + NOMBRES[actual.tipo].toLowerCase() + ". " + actual.why + " Total: " + plan.total + " ciclos, y sin riesgos serían " + plan.ideal + ".";
+      var dv = document.createElement("div");
+      cont.querySelector(".ojo-diag").innerHTML = "";
+      cont.querySelector(".ojo-diag").appendChild(dv);
+      pintarCiclos(dv, plan, { memoria: actual.tipo === "estructural" });
+      var sig = cont.querySelector(".sig");
+      sig.hidden = false;
+      if (ronda === 4) {
+        var aprobo = aciertos >= 4;
+        C.reto("ojo", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertos + " de 5" + (aprobo ? ". Aprobado." : ". Necesitas 4 para aprobar.");
+        sig.textContent = "Otra tanda";
+      } else sig.textContent = "Siguiente ronda";
+    });
+    cont.querySelector(".sig").addEventListener("click", function () {
+      if (ronda === 4) nueva(); else { ronda++; mostrar(); }
+    });
+    nueva();
+  })();
+
+  /* ---------------- reto: construir (reordenar) ---------------- */
+  (function () {
+    var BASE = [
+      I("LOAD R1,[a]", "R1", [], 2, true), I("ADD R2,R1,R1", "R2", ["R1", "R1"], 1),
+      I("LOAD R3,[b]", "R3", [], 2, true), I("ADD R4,R3,R3", "R4", ["R3", "R3"], 1),
+      I("SUB R5,R6,R7", "R5", ["R6", "R7"], 1)
+    ];
+    var DEP = [[0, 1], [2, 3]];   // [productor, consumidor]
+    var ord = [0, 1, 2, 3, 4], reenvio = true, aviso = "";
+    var OBJ = [
+      { t: "Con reenvío: terminar en 10 ciclos o menos (ahora son 11).", ok: function (p, r) { return r && p.total <= 10; } },
+      { t: "Con reenvío: 9 ciclos, sin ninguna burbuja.", ok: function (p, r) { return r && p.total === 9; } },
+      { t: "Sin reenvío: también 9 ciclos. Cambia el interruptor.", ok: function (p, r) { return !r && p.total === 9; } }
+    ];
+    var logrados = [false, false, false], avisado = false;
+    var ul = $("objetivos");
+    OBJ.forEach(function (o) { var li = document.createElement("li"); li.innerHTML = '<span class="m"></span><span>' + o.t + '</span>'; ul.appendChild(li); });
+    function valido(o) {
+      return DEP.every(function (d) { return o.indexOf(d[0]) < o.indexOf(d[1]); });
+    }
+    function ui() {
+      var h = '<div class="orden-lista">' + ord.map(function (v, p) {
+        return '<div class="orden-fila"><span class="num">' + (p + 1) + '</span><span>' + esc(BASE[v].t) + '</span>' +
+          '<button type="button" data-p="' + p + '" data-d="-1" aria-label="Subir"' + (p === 0 ? " disabled" : "") + '>↑</button>' +
+          '<button type="button" data-p="' + p + '" data-d="1" aria-label="Bajar"' + (p === ord.length - 1 ? " disabled" : "") + '>↓</button></div>';
+      }).join("") + '</div>' +
+        '<div class="btn-row"><div class="seg" data-g="ref" role="group"><button type="button" data-r="0" aria-pressed="' + !reenvio + '">Sin reenvío</button><button type="button" data-r="1" aria-pressed="' + reenvio + '">Con reenvío</button></div></div>' +
+        '<p class="hint" style="font-size:12.5px;color:var(--ink-2);min-height:1.4em">' + aviso + '</p>';
+      $("construirUI").innerHTML = h;
+    }
+    function render() {
+      var prog = ord.map(function (v) { return BASE[v]; }), plan = planificar(prog, { reenvio: reenvio });
+      pintarCiclos($("construirDiag"), plan, { cols: 13 });
+      $("construirVivo").innerHTML = "Ciclos: <b>" + plan.total + "</b> · sin riesgos serían <b>" + plan.ideal + "</b> · burbujas: <b>" + plan.burb + "</b>";
+      OBJ.forEach(function (o, i) { if (!logrados[i] && o.ok(plan, reenvio)) logrados[i] = true; ul.children[i].classList.toggle("hecho", logrados[i]); });
+      if (!avisado && logrados.every(Boolean)) { avisado = true; C.reto("construir", true); }
+    }
+    $("construirUI").addEventListener("click", function (e) {
+      var b = e.target.closest("button");
+      if (!b || b.disabled) return;
+      if (b.hasAttribute("data-r")) { reenvio = b.getAttribute("data-r") === "1"; aviso = ""; }
+      else {
+        var p = +b.getAttribute("data-p"), d = +b.getAttribute("data-d"), nuevo = ord.slice(), t = nuevo[p];
+        nuevo[p] = nuevo[p + d]; nuevo[p + d] = t;
+        if (valido(nuevo)) { ord = nuevo; aviso = ""; }
+        else aviso = "No se puede: una instrucción no puede ir antes de la que produce su dato.";
+      }
+      ui(); render();
+    });
+    ui(); render();
+  })();
+
+  /* ---------------- reto: a mano ---------------- */
+  (function () {
+    var D;
+    function generar() {
+      var k = azar([4, 5, 6]), n = 6 + Math.floor(Math.random() * 7), b = azar([0, 1, 2, 3, 4]);
+      D = { k: k, n: n, b: b, ans: n + k - 1 + b };
+    }
+    generar();
+    B.numerico($("mano"), {
+      pregunta: function () { return "Un pipeline de $k = " + D.k + "$ fases ejecuta $n = " + D.n + "$ instrucciones. Por riesgos se pierden " + D.b + (D.b === 1 ? " ciclo" : " ciclos") + " en total (burbujas). ¿Cuántos ciclos tarda?"; },
+      respuesta: function () { return D.ans; },
+      tolerancia: 0,
+      pistas: [
+        function () { return "Sin riesgos serían $n + k - 1 = " + D.n + " + " + D.k + " - 1 = " + (D.n + D.k - 1) + "$ ciclos."; },
+        function () { return "A eso súmale las burbujas: " + (D.n + D.k - 1) + " + " + D.b + "."; }
+      ],
+      diagnostico: function (v) {
+        if (v === D.n * D.k) return "Eso es una por una: $n \\cdot k$. Aquí se solapan.";
+        if (v === D.n + D.k) return "Te pasaste un ciclo: es $n + k - 1$, no $n + k$.";
+        if (D.b > 0 && v === D.n + D.k - 1) return "Eso es sin riesgos. Faltan las " + D.b + " burbujas.";
+        return null;
+      },
+      explicacion: function () { return "$" + D.n + " + " + D.k + " - 1 = " + (D.n + D.k - 1) + "$ ciclos sin riesgos, más " + D.b + " burbujas: <b>" + D.ans + "</b>."; },
+      reintentable: true,
+      textoReintentar: "Otro ejercicio",
+      antesDeReintentar: generar,
+      alResolver: function (ok) { C.reto("mano", ok); }
+    });
+  })();
+
+  /* ---------------- reto: cazar el error ---------------- */
+  B.cazarError($("error"), {
+    variantes: [
+      {
+        intro: "Una CPU de 5 fases ejecuta 10 instrucciones sin riesgos. Alguien calculó la aceleración así:",
+        lineas: ["\\text{una por una: } 10 \\cdot 5 = 50 \\text{ ciclos}", "\\text{la primera termina en el ciclo } 5",
+          "\\text{las otras 10 terminan una por ciclo: } 5 + 10 = 15 \\text{ ciclos}", "\\text{aceleración} = 50 / 15 \\approx 3.33"],
+        erronea: 2,
+        explicacion: "Son 9 las que faltan, no 10: la primera ya está contada. $5 + 9 = 14 = n + k - 1$, y la aceleración es $50/14 \\approx 3.57$."
+      },
+      {
+        intro: "ADD R1,R2,R3 seguida de SUB R4,R1,R5, sin reenvío. Alguien razonó así:",
+        lineas: ["\\text{ADD: F en 1, D en 2, O en 3, E en 4, W en 5}", "\\text{SUB: F en 2, D en 3, y O en 4 si no esperara}",
+          "\\text{SUB necesita R1 ya escrito: su O puede ser en el ciclo 5}", "\\text{espera } 5 - 4 = 1 \\text{ ciclo}", "\\text{SUB: O en 5, E en 6, W en 7: total 7 ciclos}"],
+        erronea: 2,
+        explicacion: "R1 se escribe en el ciclo 5 y no se puede leer en ese mismo ciclo: el primero posible es el 6. SUB espera 2 ciclos, hace O en 6, E en 7 y W en 8: <b>8 ciclos</b>."
+      },
+      {
+        intro: "LOAD R1,[a] seguido de ADD R2,R1,R1, con reenvío. Alguien razonó así:",
+        lineas: ["\\text{LOAD: F en 1, D en 2, O en 3, E en 4, W en 5}", "\\text{ADD: F en 2, D en 3, O en 4, y E en 5 si no esperara}",
+          "\\text{con reenvío el dato del LOAD ya está en la ALU: no espera}", "\\text{ADD: E en 5, W en 6: total 6 ciclos}"],
+        erronea: 2,
+        explicacion: "El dato de un LOAD sale de la memoria y llega un ciclo más tarde que el de una suma: no está listo para la E del ciclo 5. El ADD hace E en el 6 y W en el 7: <b>7 ciclos</b> y una burbuja."
+      }
+    ],
+    alResolver: function (ok) { C.reto("error", ok); }
+  });
+
+  /* ---------------- retos: propiedades ---------------- */
+  function prop(id, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple($(id), cfg);
+  }
+  prop("prop1", {
+    pregunta: "A un programa de $n$ instrucciones sin riesgos, en un pipeline de $k$ fases, le agregas una instrucción más. ¿Cuánto crece el total de ciclos?",
+    opciones: ["1 ciclo", "$k$ ciclos, lo que tarda una instrucción sola", "$k-1$ ciclos", "Depende de las anteriores"],
+    correcta: 0,
+    pistas: [null, "Eso pasaría una por una. Con el pipeline lleno, la nueva instrucción termina un ciclo después de la anterior.", "Eso es lo que tarda en llenarse el pipeline una sola vez, no por instrucción.", "Sin riesgos, una instrucción nueva no depende de ninguna."],
+    explicacion: "De $n + k - 1$ pasa a $(n+1) + k - 1$: <b>un ciclo más</b>. El costo de llenar el pipeline se paga una sola vez."
+  });
+  prop("prop2", {
+    pregunta: "Un programa de 1000 instrucciones sin ningún riesgo corre en un pipeline de 5 fases. ¿Cuánto vale su CPI?",
+    opciones: ["Casi 1 (1004 / 1000)", "5", "0.2", "2"],
+    correcta: 0,
+    pistas: [null, "Cinco es lo que tarda cada instrucción, pero el CPI cuenta ciclos del total entre instrucciones.", "Ese es el IPC de un procesador de 5 ciclos por instrucción, y ese no es el caso.", "Con mil instrucciones, llenar el pipeline casi no pesa."],
+    explicacion: "Son $1000 + 5 - 1 = 1004$ ciclos entre 1000 instrucciones: $1.004$. Con $n$ grande y sin riesgos, el CPI tiende a 1."
+  });
+  prop("prop3", {
+    pregunta: "Un LOAD va seguido de un ADD que usa su resultado. La CPU tiene reenvío. ¿Qué pasa?",
+    opciones: ["Queda una burbuja: el dato de la memoria llega un ciclo más tarde que el de la ALU", "No hay ninguna burbuja: el reenvío lo resuelve todo", "Las mismas 2 burbujas que sin reenvío", "El ADD calcula con el valor viejo de R1"],
+    correcta: 0,
+    pistas: [null, "El reenvío adelanta un dato que ya existe. ¿Existe el dato de un LOAD cuando el ADD lo necesita?", "Sin reenvío son 2; con él baja. Cuenta de nuevo.", "El pipeline detiene al ADD justo para que eso no pase."],
+    explicacion: "El reenvío ahorra una burbuja, no las dos: el dato aún está en camino desde la memoria. Se llama riesgo de carga-uso. Se arregla reordenando el programa, o con un ciclo de espera."
+  });
+  prop("prop4", {
+    pregunta: "Dos instrucciones piden a la vez el único puerto de la memoria. ¿Cuál es el remedio que da el material?",
+    opciones: ["Duplicar el recurso (por ejemplo separar la memoria o caché de instrucciones y la de datos) o insertar burbujas", "El reenvío desde la salida de la ALU", "La predicción de saltos", "Subir la frecuencia del reloj"],
+    correcta: 0,
+    pistas: [null, "El reenvío es para un resultado que falta, no para un recurso ocupado.", "La predicción es para saltos, un riesgo distinto.", "El choque sigue ocurriendo en cada ciclo, aunque el ciclo sea más corto."],
+    explicacion: "Cada riesgo tiene su remedio: estructural, duplicar recursos o burbujas; de datos, reenvío; de control, predicción de saltos y descartar (flush) lo buscado por error."
+  });
+
+  /* ---------------- formula de memoria ---------------- */
+  B.ordenar($("formula"), {
+    piezas: ["\\text{ciclos}", "=", "n", "+", "k", "-", "1"],
+    distractores: ["\\cdot", "k+1", "\\dfrac{n}{k}"],
+    soluciones: [[0, 1, 2, 3, 4, 5, 6], [0, 1, 4, 3, 2, 5, 6]],
+    explicacion: "La primera instrucción tarda $k$ ciclos y cada una de las otras $n-1$ suma uno: $k + (n-1) = n + k - 1$.",
+    alResolver: function (ok) { C.reto("formula", ok); }
+  });
+
+  /* ---------------- vida real: el algoritmo en codigo ---------------- */
+  (function () {
+    var CODIGO = {
+      py: [
+        ["etapas", 'ETAPAS = "FDOEW"     # F, D, Operandos, E, W: una letra por fase'],
+        [null, "# texto, registro que escribe, registros que lee, ciclos hasta poder reenviarlo"],
+        ["prog", 'prog = [("LOAD R1,[a]",  "R1", [],           2),'],
+        ["prog", '        ("LOAD R2,[b]",  "R2", [],           2),'],
+        ["prog", '        ("ADD R3,R1,R2", "R3", ["R1", "R2"], 1),'],
+        ["prog", '        ("STORE [c],R3", "",   ["R3"],       1)]'],
+        [null, ""],
+        ["cuando", "def cuando(prog, productor, entra, i, k, reenvio):"],
+        ["cuando", "    # primer ciclo en que la instruccion i puede entrar a la fase k"],
+        ["cuando", "    ciclo = 1 if k == 0 else entra[i][k - 1] + 1         # a) ya terminó la fase anterior"],
+        ["cuando", "    if i > 0:                                             # b) la fase tiene que estar libre"],
+        ["cuando", "        ciclo = max(ciclo, entra[i - 1][k + 1] if k < 4 else entra[i - 1][4] + 1)"],
+        ["cuando", "    for r in prog[i][2]:                                  # c) el dato que necesita"],
+        ["cuando", "        j = productor[r]"],
+        ["cuando", "        if not reenvio and k == 2:"],
+        ["cuando", "            ciclo = max(ciclo, entra[j][4] + 1)           #    espera a que se escriba"],
+        ["cuando", "        if reenvio and k == 3:"],
+        ["cuando", "            ciclo = max(ciclo, entra[j][3] + prog[j][3])  #    lo toma de la ALU"],
+        ["cuando", "    return ciclo"],
+        [null, ""],
+        ["defsim", "def simular(prog, reenvio):"],
+        ["prod", "    productor = {p[1]: j for j, p in enumerate(prog) if p[1]}"],
+        ["entra0", "    entra = [[0] * 5 for _ in prog]       # entra[i][k]: ciclo en que la fila i entra a la fase k"],
+        ["fori", "    for i in range(len(prog)):"],
+        ["fork", "        for k in range(5):"],
+        ["llama", "            entra[i][k] = cuando(prog, productor, entra, i, k, reenvio)"],
+        ["ret", "    return entra"],
+        [null, ""],
+        ["n", "n = len(prog)"],
+        ["forre", "for reenvio in (False, True):"],
+        ["llamasim", "    entra = simular(prog, reenvio)"],
+        ["total", "    total = entra[n - 1][4]               # ciclo en que la última instrucción llega a W"],
+        ["imprimir", '    print("%s reenvio: %d ciclos, ideal %d, CPI %.2f" % ("con" if reenvio else "sin", total, n + 5 - 1, total / n))'],
+        [null, ""],
+        ["libres", 'libres = [("ADD R%d,R8,R9" % (j + 1), "R%d" % (j + 1), [], 1) for j in range(n)]'],
+        ["verif", "print(simular(libres, False)[n - 1][4] == n + 5 - 1)      # True: n + k - 1"]
+      ],
+      r: [
+        ["etapas", 'ETAPAS <- "FDOEW"     # F, D, Operandos, E, W: una letra por fase'],
+        [null, "# texto, registro que escribe, registros que lee, ciclos hasta poder reenviarlo"],
+        ["prog", 'prog <- list(list(texto = "LOAD R1,[a]",  destino = "R1", fuentes = character(0),  lat = 2),'],
+        ["prog", '             list(texto = "LOAD R2,[b]",  destino = "R2", fuentes = character(0),  lat = 2),'],
+        ["prog", '             list(texto = "ADD R3,R1,R2", destino = "R3", fuentes = c("R1", "R2"), lat = 1),'],
+        ["prog", '             list(texto = "STORE [c],R3", destino = "",   fuentes = c("R3"),       lat = 1))'],
+        [null, ""],
+        ["cuando", "cuando <- function(prog, productor, entra, i, k, reenvio) {"],
+        ["cuando", "  # primer ciclo en que la instruccion i puede entrar a la fase k"],
+        ["cuando", "  ciclo <- if (k == 1) 1 else entra[i, k - 1] + 1        # a) ya terminó la fase anterior"],
+        ["cuando", "  if (i > 1) {                                           # b) la fase tiene que estar libre"],
+        ["cuando", "    ciclo <- max(ciclo, if (k < 5) entra[i - 1, k + 1] else entra[i - 1, 5] + 1)"],
+        ["cuando", "  }"],
+        ["cuando", "  for (r in prog[[i]]$fuentes) {                         # c) el dato que necesita"],
+        ["cuando", "    j <- productor[[r]]"],
+        ["cuando", "    if (!reenvio && k == 3) ciclo <- max(ciclo, entra[j, 5] + 1)               #  espera a que se escriba"],
+        ["cuando", "    if (reenvio && k == 4) ciclo <- max(ciclo, entra[j, 4] + prog[[j]]$lat)    #  lo toma de la ALU"],
+        ["cuando", "  }"],
+        ["cuando", "  ciclo"],
+        ["cuando", "}"],
+        [null, ""],
+        ["defsim", "simular <- function(prog, reenvio) {"],
+        ["prod", "  productor <- list()"],
+        ["prod", '  for (j in seq_along(prog)) if (prog[[j]]$destino != "") productor[[prog[[j]]$destino]] <- j'],
+        ["entra0", "  entra <- matrix(0, length(prog), 5)    # entra[i, k]: ciclo en que la fila i entra a la fase k"],
+        ["fori", "  for (i in seq_along(prog)) {"],
+        ["fork", "    for (k in 1:5) {"],
+        ["llama", "      entra[i, k] <- cuando(prog, productor, entra, i, k, reenvio)"],
+        [null, "    }"],
+        [null, "  }"],
+        ["ret", "  entra"],
+        [null, "}"],
+        [null, ""],
+        ["n", "n <- length(prog)"],
+        ["forre", "for (reenvio in c(FALSE, TRUE)) {"],
+        ["llamasim", "  entra <- simular(prog, reenvio)"],
+        ["total", "  total <- entra[n, 5]                  # ciclo en que la última instrucción llega a W"],
+        ["imprimir", '  cat(sprintf("%s reenvio: %d ciclos, ideal %d, CPI %.2f\\n", if (reenvio) "con" else "sin", total, n + 5 - 1, total / n))'],
+        [null, "}"],
+        [null, ""],
+        ["libres", 'libres <- lapply(1:n, function(j) list(texto = paste0("ADD R", j, ",R8,R9"), destino = paste0("R", j), fuentes = character(0), lat = 1))'],
+        ["verif", "print(simular(libres, FALSE)[n, 5] == n + 5 - 1)      # TRUE: n + k - 1"]
+      ]
+    };
+    var NOMP = P4.map(function (p) { return p.t; });
+    var n = P4.length;
+    var PROD = {};
+    P4.forEach(function (p, j) { if (p.dst) PROD[p.dst] = j; });
+    function cuandoJS(entra, i, k, reenvio) {
+      var a = k === 0 ? 1 : entra[i][k - 1] + 1, ciclo = a, b = null, d = null, razon = { tipo: "base" }, s;
+      if (k > 0 && i === 0) razon = { tipo: "anterior" };
+      if (i > 0) {
+        b = k < 4 ? entra[i - 1][k + 1] : entra[i - 1][4] + 1;
+        if (b > ciclo) { ciclo = b; razon = { tipo: "libre" }; }
+      }
+      for (s = 0; s < P4[i].src.length; s++) {
+        var j = PROD[P4[i].src[s]], dd = null;
+        if (!reenvio && k === 2) dd = entra[j][4] + 1;
+        if (reenvio && k === 3) dd = entra[j][3] + P4[j].lat;
+        if (dd !== null) { if (d === null || dd > d) d = dd; if (dd > ciclo) { ciclo = dd; razon = { tipo: "datos", reg: P4[i].src[s], de: j }; } }
+      }
+      if (razon.tipo === "base" && k > 0) razon = { tipo: "anterior" };
+      return { c: ciclo, a: a, b: b, d: d, razon: razon };
+    }
+    /* eventos: una foto del estado despues de ejecutar cada linea */
+    var EV = [], entra = [], fase = 0, reenv = false, resultados = {};
+    function copiaM() { return entra.map(function (r) { return r.slice(); }); }
+    function foto(id, extra) {
+      EV.push(Object.assign({ id: id, fase: fase, reenvio: reenv, entra: copiaM(), i: null, k: null, c: null, total: null, info: null }, extra || {}));
+    }
+    entra = P4.map(function () { return [0, 0, 0, 0, 0]; });
+    foto("etapas"); foto("prog"); foto("cuando"); foto("defsim"); foto("n");
+    [false, true].forEach(function (r) {
+      reenv = r; fase = r ? 2 : 1;
+      entra = P4.map(function () { return [0, 0, 0, 0, 0]; });
+      foto("forre"); foto("llamasim"); foto("prod"); foto("entra0");
+      for (var i = 0; i < n; i++) {
+        foto("fori", { i: i }); foto("fork", { i: i });
+        for (var k = 0; k < 5; k++) {
+          var x = cuandoJS(entra, i, k, r);
+          entra[i][k] = x.c;
+          foto("llama", { i: i, k: k, c: x.c, info: x });
+        }
+      }
+      foto("ret");
+      var tot = entra[n - 1][4];
+      resultados[r] = { total: tot, cpi: tot / n };
+      foto("total", { total: tot });
+      foto("imprimir", { total: tot });
+    });
+    fase = 3;
+    foto("libres");
+    foto("verif", { fin: true, total: n + 4 });
+    var NOMR = { "false": "sin", "true": "con" };
+
+    function narrar(e, ctx) {
+      var py = ctx.lang() === "py", ix = ctx.ix, i, k, x;
+      switch (e.id) {
+        case "etapas": return "Una letra por fase: <b>F</b> (Fetch), <b>D</b> (Decode), <b>O</b> (operandos), <b>E</b> (Execute) y <b>W</b> (Write-back). El número de la fase se cuenta desde " + ix(0) + ".";
+        case "prog": return "El programa de 4 líneas del paso 4. Cada línea trae: el texto, el registro que escribe, los que lee y cuántos ciclos tarda su resultado en poder reenviarse (<b>2</b> para un LOAD, <b>1</b> para el resto).";
+        case "cuando": return "Define la regla. Una instrucción entra a una fase en el primer ciclo que cumple tres cosas: <b>a)</b> ya terminó la fase anterior, <b>b)</b> la fase está libre y <b>c)</b> el dato que necesita ya está disponible. Se queda con el mayor de los tres.";
+        case "defsim": return "Define la función que recorre todas las instrucciones y todas las fases y llena la tabla.";
+        case "n": return "<b>n = " + n + "</b> instrucciones.";
+        case "forre": return "Lo hace dos veces: primero <b>" + (py ? "False" : "FALSE") + "</b> (sin reenvío) y después <b>" + (py ? "True" : "TRUE") + "</b> (con reenvío).";
+        case "llamasim": return "Llama a <b>simular</b> con el programa y el valor de <b>reenvío</b> de esta vuelta.";
+        case "prod": return "Arma la lista de quién escribe cada registro: R1 la escribe la fila " + ix(0) + ", R2 la fila " + ix(1) + " y R3 la fila " + ix(2) + ". Así, cuando una instrucción lee R2, sabe a quién esperar.";
+        case "entra0": return "Prepara la tabla <b>entra</b>: " + n + " filas por 5 fases, todo en cero. Se irá llenando.";
+        case "fori": return "Instrucción <b>i = " + ix(e.i) + "</b>: <b>" + esc(NOMP[e.i]) + "</b>.";
+        case "fork": return "Recorre sus cinco fases, de F a W.";
+        case "llama":
+          x = e.info;
+          var causa = x.razon.tipo === "datos"
+            ? " Tuvo que esperar el dato <b>" + x.razon.reg + "</b>: " + (!e.reenvio ? "la fila " + ix(x.razon.de) + " lo escribe en W (ciclo " + entra2(e, x.razon.de, 4) + ") y se puede leer en el siguiente." : "la fila " + ix(x.razon.de) + " lo entrega en el ciclo " + (entra2(e, x.razon.de, 3) + P4[x.razon.de].lat) + ".")
+            : x.razon.tipo === "libre" ? " Tuvo que esperar: la fase todavía estaba ocupada por la instrucción de arriba."
+            : x.razon.tipo === "anterior" ? " Entra justo después de terminar la fase anterior." : " Es la primera: entra en el ciclo 1.";
+          return "<b>entra[" + ix(e.i) + "][" + ix(e.k) + "]</b>: la fase <b>" + ET[e.k] + "</b> de <b>" + esc(NOMP[e.i]) + "</b> empieza en el ciclo <b>" + e.c + "</b>." + causa;
+        case "ret": return "Devuelve la tabla completa.";
+        case "total": return "La última instrucción llega a W en el ciclo <b>" + e.total + "</b>: ese es el total " + (e.reenvio ? "con" : "sin") + " reenvío.";
+        case "imprimir": return "Imprime el resumen: <b>" + e.total + "</b> ciclos, el ideal <b>" + (n + 4) + "</b> y CPI <b>" + f(e.total / n) + "</b>.";
+        case "libres": return "Un programa de comprobación con " + n + " instrucciones <b>independientes</b>: ninguna lee lo que escribe otra.";
+        case "verif": return "Sin dependencias el total tiene que ser <b>n + k − 1 = " + (n + 4) + "</b>. Da <b>" + (py ? "True" : "TRUE") + "</b>: el programa y la fórmula del paso 3 coinciden. (La llamada hace lo mismo que las anteriores y aquí se muestra de una vez.)";
+      }
+      return "";
+    }
+    function entra2(e, i, k) { return e.entra[i][k]; }
+    function visual(e, anterior, ctx) {
+      var ix = ctx.ix, i, k;
+      var cabeza = '<thead><tr><th>fila</th>' + ET.map(function (l, kk) { return '<th>' + l + ' <small>' + ix(kk) + '</small></th>'; }).join("") + '</tr></thead><tbody>';
+      var m = e ? e.entra : P4.map(function () { return [0, 0, 0, 0, 0]; });
+      var h = cabeza;
+      for (i = 0; i < n; i++) {
+        h += '<tr><td class="pl">' + ix(i) + ' · ' + esc(NOMP[i]) + '</td>';
+        for (k = 0; k < 5; k++) {
+          var cls = [];
+          if (m[i][k]) cls.push("hecho");
+          if (e && e.id === "llama" && e.i === i && e.k === k) { cls.push("cur"); if (e.info.razon.tipo === "datos") cls.push("dat"); }
+          h += '<td class="' + cls.join(" ") + '">' + (m[i][k] ? m[i][k] : "") + '</td>';
+        }
+        h += '</tr>';
+      }
+      $("vrTabla").innerHTML = h + '</tbody>';
+      var cu = "";
+      if (e && e.id === "llama") {
+        var x = e.info;
+        cu = "a) " + x.a + " &nbsp; b) " + (x.b === null ? "—" : x.b) + " &nbsp; c) " + (x.d === null ? "—" : x.d) + " &nbsp;→ máximo = <b>" + e.c + "</b>";
+      } else if (e && (e.id === "total" || e.id === "imprimir")) cu = "total = <b>" + e.total + "</b> &nbsp;·&nbsp; ideal = " + (n + 4) + " &nbsp;·&nbsp; burbujas = " + (e.total - n - 4);
+      else if (e && e.fin) cu = "n + k − 1 = " + n + " + 5 − 1 = <b>" + (n + 4) + "</b>";
+      $("vrCuenta").innerHTML = cu;
+      var plan = { prog: P4, en: m.map(function (r) { return r.slice(); }), total: 12, opts: {} };
+      pintarCiclos($("vrDiag"), plan, { cols: 12, nuevo: e && e.id === "llama" ? [e.i, e.c] : null });
+      [].forEach.call($("vrDiag").querySelectorAll(".cic-l"), function (b) { b.disabled = true; });
+    }
+    B.vidaReal($("vidareal"), {
+      codigo: CODIGO,
+      eventos: EV,
+      narrar: narrar,
+      vars: function (e, ctx) {
+        var v = [], ix = ctx.ix;
+        if (e && e.fase >= 1 && e.fase <= 2 && e.id !== "etapas") v.push('<span>reenvio = <b>' + (e.reenvio ? (ctx.lang() === "py" ? "True" : "TRUE") : (ctx.lang() === "py" ? "False" : "FALSE")) + '</b></span>');
+        if (e && e.i !== null) v.push('<span class="vj">i = <b>' + ix(e.i) + '</b></span>');
+        if (e && e.k !== null) v.push('<span class="vk">k = <b>' + ix(e.k) + '</b></span>');
+        if (e && e.c !== null) v.push('<span>ciclo = <b>' + e.c + '</b></span>');
+        if (e && e.total !== null) v.push('<span>total = <b>' + e.total + '</b></span>');
+        return v;
+      },
+      visual: visual,
+      demora: function (e) { return !e ? 600 : e.id === "llama" ? 520 : e.id === "fork" || e.id === "fori" ? 420 : e.id === "ret" ? 700 : 1000; }
+    });
+
+    var SAL_PY = "sin reenvio: 12 ciclos, ideal 8, CPI 3.00\ncon reenvio: 9 ciclos, ideal 8, CPI 2.25\nTrue";
+    var SAL_R = "sin reenvio: 12 ciclos, ideal 8, CPI 3.00\ncon reenvio: 9 ciclos, ideal 8, CPI 2.25\n[1] TRUE";
+    $("salidaPy").textContent = SAL_PY;
+    $("salidaR").textContent = SAL_R;
+
+    B.numerico(cuerpo("vrPred"), {
+      pregunta: "¿Cuántas veces se va a ejecutar la línea <code>entra[i][k] = cuando(...)</code> en <b>una</b> llamada a <code>simular</code> con las 4 instrucciones?",
+      respuesta: 20,
+      tolerancia: 0,
+      pistas: [
+        "Esa línea está dentro de dos bucles: uno recorre las instrucciones y otro las fases.",
+        "Son 4 instrucciones y 5 fases."
+      ],
+      diagnostico: function (v) {
+        if (v === 40) return "Esas son las dos llamadas juntas, sin y con reenvío. Cuenta solo una.";
+        if (v === 9 || v === 5 || v === 4) return "Recuerda que la línea está dentro de los dos bucles a la vez: se multiplican.";
+        return null;
+      },
+      explicacion: "4 instrucciones por 5 fases: <b>20</b> celdas, una por vez que se ejecuta la línea. En todo el programa son 40, porque <code>simular</code> corre dos veces. Ahora dale a reproducir y mira cómo se llena la tabla.",
+      alResolver: function (ok) { C.reto("codigo1", ok); }
+    });
+    prop("codigo2", {
+      pregunta: "En Python, alguien escribe la tabla como <code>entra = [[0] * 5] * 4</code> en vez de <code>[[0] * 5 for _ in prog]</code>. Después de llenar la fila 0, ¿qué pasa?",
+      opciones: [
+        "Las 4 filas son la misma lista: lo que escribes en una aparece en las otras tres",
+        "Funciona igual: las dos formas son equivalentes",
+        "Da un error porque falta el bucle",
+        "Solo se llena la fila 0 y las demás quedan en cero"
+      ],
+      correcta: 0,
+      pistas: [null, "Mira qué hace el <code>* 4</code>: copia la referencia, no la lista.", "Python no avisa de nada: es lo que lo hace peligroso.", "Piensa si las cuatro filas son listas distintas o la misma repetida."],
+      explicacion: "<code>[x] * 4</code> repite la <b>misma</b> lista cuatro veces. Al escribir en <code>entra[0][k]</code> cambia también <code>entra[1][k]</code>, y el resultado sale mal sin ningún error. La comprensión crea una lista nueva por cada fila. En R, <code>matrix(0, 4, 5)</code> no tiene este problema."
+    });
+    prop("codigo3", {
+      pregunta: "En Python la fase W es <code>entra[j][4]</code>. Pasas el código a R. ¿Cómo la escribes?",
+      opciones: [
+        "<code>entra[j, 5]</code>: R cuenta desde 1, así que la quinta fase es la columna 5",
+        "<code>entra[j, 4]</code>: el mismo número, el índice no cambia",
+        "<code>entra[[j]][4]</code>: es la misma sintaxis que Python",
+        "<code>entra[j, 0]</code>: R cuenta desde cero"
+      ],
+      correcta: 0,
+      pistas: [null, "En R la columna 4 es la fase E, no la W. El código no falla: da otro resultado.", "En R una matriz no se indexa con dobles corchetes de esa manera: se usa <code>[fila, columna]</code>.", "R cuenta desde 1, no desde 0."],
+      explicacion: "Python empieza en 0 y R en 1. Si dejas el 4, la espera sale por la fase E y el total da menos ciclos de los reales, <b>sin ningún error</b>. En el código de la página todos los índices de R ya están corridos: <code>k == 3</code> en lugar de <code>k == 2</code>, <code>entra[j, 5]</code> en lugar de <code>entra[j][4]</code>."
+    });
+  })();
+
+  /* ---------------- tarjetas ---------------- */
+  B.tarjetas($("tarjetas"), [
+    ["¿Qué cinco fases tiene el ciclo de la Tabla 1 y qué letra les damos?", "Fetch (F), Decode (D), Operandos (O), Execute (E) y Write-back (W)."],
+    ["¿Cuántos ciclos tardan $n$ instrucciones sin riesgos con $k$ fases?", "$n + k - 1$: la primera tarda $k$ y cada una de las otras suma un ciclo."],
+    ["¿La segmentación acorta lo que tarda una instrucción?", "No: sigue tardando $k$ ciclos (latencia). Aumenta cuántas instrucciones terminan por ciclo (rendimiento)."],
+    ["Los tres riesgos y el remedio de cada uno.", "Estructural: dos piden el mismo recurso; se duplica el recurso o hay burbujas. De datos: falta un resultado anterior; reenvío. De control: un salto; predicción y flush."],
+    ["¿Por qué el reenvío no quita la burbuja de un LOAD y su uso?", "Porque el dato aún está en la memoria: llega un ciclo más tarde que el de la ALU. Se arregla reordenando."],
+    ["¿Cuánto cuesta un salto sin predictor en este diagrama?", "3 ciclos: el salto se resuelve en E y hasta entonces no se puede buscar la instrucción correcta. Un predictor que falla cuesta lo mismo."],
+    ["¿Qué es el CPI y qué es el IPC?", "CPI = ciclos / $n$. IPC = $n$ / ciclos $= 1/\\text{CPI}$. Con muchas instrucciones y sin riesgos, el CPI tiende a 1."],
+    ["¿Qué no trae el material de la UD2 sobre el pipeline?", "Diagrama de ciclos, número de fases, aceleración ni CPI: solo la definición, la Tabla 1 y los tres riesgos con sus remedios."]
+  ]);
+
+  /* ---------------- conexiones ---------------- */
+  B.conexiones("segmentacion-pipeline");
+})();
+</script>
+</body>
+</html>

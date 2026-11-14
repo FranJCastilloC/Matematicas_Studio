@@ -1,0 +1,1653 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Memoria virtual: paginación y TLB</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.esc-head .hint { font-size: 12.5px; color: var(--ink-2); }
+.esc-head button { margin-left: auto; font-size: 12px; padding: 5px 10px; }
+.mv-sec { margin-top: 14px; }
+.mv-sec[hidden] { display: none; }
+.mv-sec h4.mini-tit { margin: 0 0 6px; }
+.dos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.aviso { font-size: 12.5px; color: var(--ink-2); margin: 8px 0 0; padding: 6px 10px; border-left: 3px solid var(--accent); background: var(--accent-soft); border-radius: 0 6px 6px 0; }
+.aviso[hidden] { display: none; }
+
+/* ---------- procesos y memoria fisica ---------- */
+.proc { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; background: var(--surface); font-family: var(--f-mono); font-size: 12px; color: var(--ink-2); }
+.proc b { display: block; font-size: 13px; color: var(--ink); margin-bottom: 4px; }
+.proc.a { border-color: var(--j); background: var(--j-soft); }
+.proc.b { border-color: var(--k); background: var(--k-soft); }
+.proc .dato { display: block; margin-top: 6px; color: var(--ink); }
+.proc .dato i { font-style: normal; font-weight: 600; }
+.marcos { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.marco { border: 1px solid var(--line); border-radius: 8px; padding: 5px 3px; text-align: center; font-family: var(--f-mono); font-size: 11.5px; background: var(--surface); min-height: 54px; color: var(--ink); display: flex; flex-direction: column; justify-content: center; gap: 1px; }
+.marco small { display: block; color: var(--ink-3); font-size: 10.5px; }
+.marco.a { background: var(--j-soft); border-color: var(--j); color: var(--j); }
+.marco.b { background: var(--k-soft); border-color: var(--k); color: var(--k); }
+.marco.comp { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.marco.libre { border-style: dashed; color: var(--ink-3); background: var(--surface); }
+.marco.foco { box-shadow: 0 0 0 2px var(--ink); }
+.marco.victima { box-shadow: 0 0 0 2px var(--neg); }
+.marco.nuevo { animation: llega .55s ease-out; }
+.marco.a small, .marco.b small, .marco.comp small { color: inherit; opacity: .8; }
+
+/* ---------- tablas pequenas ---------- */
+.mvt { width: 100%; border-collapse: collapse; font-family: var(--f-mono); font-size: 12px; font-variant-numeric: tabular-nums; }
+.mvt th { font-weight: 500; color: var(--ink-3); font-size: 11px; text-align: left; padding: 3px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.mvt td { padding: 3px 6px; border-bottom: 1px solid var(--line-soft); color: var(--ink-2); white-space: nowrap; }
+.mvt tr.cl { cursor: pointer; }
+.mvt tr.sel td { background: var(--accent-soft); color: var(--ink); }
+.mvt td.sw { color: var(--neg); }
+.mvt td.vic { color: var(--neg); font-weight: 500; }
+.mvt input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); }
+.tabla-wrap { overflow-x: auto; max-width: 100%; }
+
+/* ---------- traductor ---------- */
+.traductor input[type=range] { width: 100%; accent-color: var(--accent); }
+.bits { font-family: var(--f-mono); font-size: 14px; margin: 8px 0; letter-spacing: .03em; overflow-wrap: anywhere; }
+.bits .bpag { color: var(--j); font-weight: 600; }
+.bits .boff { color: var(--k); font-weight: 600; }
+.bits .bmar { color: var(--accent); font-weight: 600; }
+.bits small { font-size: 11px; color: var(--ink-3); letter-spacing: 0; margin-left: 4px; }
+.cuenta { font-family: var(--f-mono); font-size: 12.5px; color: var(--ink-2); line-height: 1.7; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.cuenta b { color: var(--ink); font-weight: 500; }
+.cuenta .cj { color: var(--j); }
+.cuenta .ck { color: var(--k); }
+.rapidos { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.rapidos button, .btn-row button { font-size: 12px; padding: 5px 10px; }
+
+/* ---------- TLB ---------- */
+.seq { display: flex; flex-wrap: wrap; margin: 6px 0; }
+.acc { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 6px; font: 12px var(--f-mono); border: 1px solid var(--line); margin: 2px; color: var(--ink-2); background: var(--surface); }
+.acc.hit { background: color-mix(in oklab, var(--pos) 30%, var(--surface)); border-color: var(--pos); color: var(--ink); }
+.acc.miss { background: color-mix(in oklab, var(--neg) 30%, var(--surface)); border-color: var(--neg); color: var(--ink); }
+.acc.act { outline: 2px solid var(--ink); }
+.slots { display: flex; gap: 6px; }
+.slot { flex: 1; border: 1px dashed var(--line); border-radius: 8px; padding: 6px 4px; text-align: center; font-family: var(--f-mono); font-size: 12px; min-height: 36px; color: var(--ink-3); display: grid; place-items: center; }
+.slot.lleno { border-style: solid; background: var(--surface-2); color: var(--ink); }
+.ejes-tlb { display: flex; justify-content: space-between; font-size: 11px; color: var(--ink-3); font-family: var(--f-mono); margin-top: 3px; }
+.cont { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 4px; }
+.cont span { font-family: var(--f-mono); font-size: 12px; padding: 4px 9px; border-radius: 6px; background: var(--surface-2); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.cont span b { color: var(--ink); font-weight: 500; }
+.pasos-lista { margin: 8px 0 0; padding-left: 20px; font-size: 13px; color: var(--ink-2); }
+.pasos-lista li { margin: 2px 0; }
+.pasos-lista li b { color: var(--ink); font-weight: 500; font-family: var(--f-mono); }
+.lectura { font-size: 13.5px; color: var(--ink-2); margin: 8px 0 0; }
+.lectura b { color: var(--ink); font-weight: 500; font-family: var(--f-mono); }
+.registro { margin: 8px 0 0; padding: 0; list-style: none; font-family: var(--f-mono); font-size: 12px; color: var(--ink-2); display: grid; gap: 3px; }
+.registro li b { color: var(--ink); font-weight: 500; }
+
+/* ---------- tiempo medio ---------- */
+.tbar { height: 12px; background: var(--surface-2); border-radius: 4px; overflow: hidden; margin: 6px 0; }
+.tbar i { display: block; height: 100%; background: var(--accent); border-radius: 4px; transition: width .2s; }
+.eat input[type=range] { width: 100%; accent-color: var(--accent); }
+
+/* ---------- vida real ---------- */
+.vr-acc { width: 100%; border-collapse: collapse; font-family: var(--f-mono); font-size: 12px; font-variant-numeric: tabular-nums; }
+.vr-acc th { font-weight: 500; color: var(--ink-3); font-size: 11px; text-align: right; padding: 3px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.vr-acc td { text-align: right; padding: 3px 6px; border-bottom: 1px solid var(--line-soft); color: var(--ink-2); white-space: nowrap; }
+.vr-acc td.pl, .vr-acc th:first-child { text-align: left; color: var(--ink-3); }
+.vr-acc tr.on td { background: var(--accent-soft); color: var(--ink); font-weight: 600; }
+.vr-acc td.hit { color: var(--pos); font-weight: 500; }
+.vr-acc td.miss { color: var(--neg); font-weight: 500; }
+.vr-acc td.fallo { color: var(--neg); font-weight: 600; }
+.vr-est { display: grid; gap: 10px; margin-top: 12px; }
+.vr-est .fila { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; font-family: var(--f-mono); font-size: 12px; color: var(--ink-2); }
+.vr-est .fila > b { min-width: 74px; font-weight: 500; color: var(--ink-3); font-size: 11px; }
+.vr-est .cel { padding: 3px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); }
+.vr-est .cel.sw { color: var(--neg); border-style: dashed; }
+.vr-est .cel.foco { box-shadow: 0 0 0 2px var(--ink); }
+.vr-est .cel.nueva { animation: llega .55s ease-out; }
+.vr-est .cel.vacia { color: var(--ink-3); border-style: dashed; }
+.salida { margin-top: 14px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 700px) { .salida { grid-template-columns: minmax(0, 1fr); } }
+.salida pre { margin: 0; padding: 10px 12px; background: var(--surface-2); border-radius: 8px; font-family: var(--f-mono); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); }
+.salida h4 { margin: 0 0 4px; }
+
+/* ---------- retos propios ---------- */
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.ojo-opts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
+@media (max-width: 560px) { .ojo-opts { grid-template-columns: minmax(0, 1fr); } }
+.ojo-opts .opt { text-align: center; }
+.caso { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; margin-top: 8px; }
+@media (max-width: 560px) { .caso { grid-template-columns: minmax(0, 1fr); } }
+.objetivos { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.objetivos li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.objetivos .m { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.objetivos li.hecho { color: var(--ink); }
+.objetivos li.hecho .m { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 3px var(--surface); }
+.constr select { font-family: var(--f-mono); font-size: 13px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); }
+.datos-mano { border-collapse: collapse; font-family: var(--f-mono); font-size: 14px; margin: 4px 0 12px; }
+.datos-mano th, .datos-mano td { padding: 4px 14px; border: 1px solid var(--line); text-align: center; }
+.datos-mano th { color: var(--ink-3); font-weight: 500; font-size: 12px; }
+.grande { font-family: var(--f-mono); font-size: 14px; color: var(--ink-2); margin: 6px 0 12px; font-variant-numeric: tabular-nums; }
+.grande b { font-size: 16px; color: var(--ink); font-weight: 500; }
+.tres { width: 100%; border-collapse: collapse; font-size: 13.5px; margin-top: 10px; }
+.tres th, .tres td { padding: 6px 10px; border: 1px solid var(--line); text-align: left; }
+.tres th { background: var(--surface-2); font-weight: 500; font-size: 12px; color: var(--ink-2); }
+.tres td.n { font-family: var(--f-mono); text-align: right; white-space: nowrap; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ Memoria virtual</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Infraestructura y programación · Arquitectura de computadores · UD2</p>
+    <h1>Memoria virtual: cada programa cree que la memoria es solo suya</h1>
+    <p class="lede">
+      Todos los programas que corren a la vez creen que su memoria empieza en la dirección cero y que nadie más la toca. No es verdad:
+      es una ilusión que arma el hardware con el sistema operativo, y se sostiene en <b>una tabla que traduce cada dirección</b>.
+      Vas a construirla con las manos: cortar una dirección en página y offset, traducirla, guardar las traducciones recientes en la TLB
+      y pagar el precio cuando la página no está en la memoria.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> Tu computador tiene 8 GB de memoria RAM, y aun así puedes abrir programas que en total necesitan más de 8 GB. Además, todos creen que su memoria empieza en la misma dirección. ¿Cómo imaginas que se arregla eso? Escríbelo como te salga, aunque esté mal.</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: creo que el sistema..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>Construir la traducción de direcciones desde cero</h2>
+      <p>Siete pasos. Cada uno termina con un chequeo: hasta que no lo resuelves, el siguiente queda cerrado. Equivocarte aquí no resta nada, es parte del método.
+      Ojo con una cosa: la unidad del máster describe la memoria virtual con palabras y no trae ninguna traducción resuelta ni tiempos de un fallo de página. Todos los números de esta página (el mini computador de 16 bits, los 80 ns, los 100 µs) son inventados por esta página para que las cuentas den limpias.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="Dos procesos">
+          <span class="etapa">Paso 1</span>
+          <h3>Dos programas escriben en la dirección 0x0010</h3>
+          <p>Tu computador ejecuta muchos programas a la vez. Cada uno, que llamaremos <b>proceso</b>, usa direcciones como si la memoria fuera solo suya: empieza en 0x0000 y llega hasta 0xFFFF (65 536 direcciones, 64 KB; es un ejemplo pequeño). Esas son <b>direcciones virtuales</b>. La memoria real, la <b>física</b>, es una sola y está a la derecha: 8 trozos que se reparten entre todos.</p>
+          <p>El proceso A escribe un <b>7</b> en su dirección 0x0010. El proceso B escribe un <b>9</b> en su dirección 0x0010: exactamente el mismo número de dirección.
+          La unidad del máster le da a la memoria virtual cuatro objetivos: ampliar la memoria, aislar y proteger a los procesos, simplificar la programación y compartir código
+          <cite class="cita" data-fuente="arq2" data-pag="18" data-pimp="15" data-seccion="7 Memoria virtual: 7.1 Objetivos" data-que="Qué es la memoria virtual (MMU más sistema operativo), por qué da a cada proceso un espacio propio, contiguo y mayor que la física, y los cuatro objetivos." data-cuando="Al terminar este paso"></cite>.</p>
+          <div class="check" id="chk1">
+            <p class="check-tit">Antes de seguir</p>
+            <div class="cuerpo"></div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Tabla de páginas">
+          <span class="etapa">Paso 2</span>
+          <h3>Cortar la memoria en trozos y llevar una libreta</h3>
+          <p>Traducir cada dirección una por una sería imposible. Se corta toda la memoria en trozos del mismo tamaño: en la memoria virtual se llaman <b>páginas</b>, en la física <b>marcos</b>. Lo habitual es 4 KB (4096 bytes). Cada proceso lleva una <b>tabla de páginas</b>: una libreta que anota, para cada página, en qué marco está
+          <cite class="cita" data-fuente="arq2" data-pag="18" data-pimp="15" data-seccion="7.2 Paginación" data-que="Páginas de 4 KB habituales, marcos de página del mismo tamaño y la tabla de páginas. Todo en prosa: no hay ejemplo de traducción." data-cuando="Después de tocar las filas de la tabla"></cite>.</p>
+          <p>Alterna entre A y B y toca las filas: cada fila enciende su marco a la derecha. Fíjate en dos cosas. Los marcos de A y de B están revueltos, y el programa no se entera: ve su memoria seguida. Y hay un marco que aparece en las dos libretas.</p>
+          <div class="check" id="chk2"><p class="check-tit">Antes de seguir</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Página y offset">
+          <span class="etapa">Paso 3</span>
+          <h3>La dirección se parte en dos</h3>
+          <p>Una dirección de 16 bits se corta en dos pedazos. Los <b style="color:var(--j)">4 bits de arriba</b> dicen <b>qué página</b> (hay <span data-tex="2^4=16"></span> páginas de 4 KB en 64 KB). Los <b style="color:var(--k)">12 bits de abajo</b> dicen <b>qué byte dentro de la página</b>: es el <b>offset</b>. Son 12 porque <span data-tex="2^{12}=4096"></span>, justo lo que hace falta para numerar los bytes de una página. Con <span data-tex="n"></span> líneas de dirección se alcanzan <span data-tex="2^n"></span> posiciones
+          <cite class="cita" data-fuente="arq2" data-pag="11" data-pimp="8" data-seccion="4.1 Bus de direcciones" data-que="El bus de direcciones es unidireccional y con n líneas direcciona 2^n posiciones: de ahí sale que 16 líneas lleguen a 65 536 direcciones." data-cuando="Después de mover el deslizador"></cite>.
+          Si necesitas repasar cómo se pasa de decimal a binario, está en la página <a href="bases-numericas.html">Binario y otras bases</a>.</p>
+          <p>Traducir es cambiar solo la parte de arriba: <b>la página por el marco</b>. El offset pasa igual, porque el byte sigue estando en el mismo lugar dentro del trozo.</p>
+          <div class="fbloque">
+            <div data-tex="\text{pág}=\Big\lfloor \tfrac{v}{4096}\Big\rfloor \qquad \text{offset}=v-\text{pág}\cdot 4096 \qquad \text{física}=\text{tabla}[\text{pág}]\cdot 4096+\text{offset}" data-display></div>
+            <div class="vivo" id="vivoDir"></div>
+          </div>
+          <p>Mueve el deslizador y mira cómo cambian los bits. Prueba los botones 4095 y 4096: un solo byte de diferencia y se cambia de página, con un marco distinto.</p>
+          <div class="check" id="chk3"><p class="check-tit">Antes de seguir</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="La TLB">
+          <span class="etapa">Paso 4</span>
+          <h3>La traducción también cuesta: la TLB</h3>
+          <p>Hay un problema: la tabla de páginas vive en la memoria RAM. Para leer un dato hay que leer antes la tabla (80 ns) y después el dato (otros 80 ns): <b>el doble de tiempo en cada acceso</b>. Los 80 ns caen dentro del rango de 50 a 100 ns que da la unidad para la RAM
+          <cite class="cita" data-fuente="arq2" data-pag="14" data-pimp="11" data-seccion="5.3 Parámetros: Tabla 6" data-que="La Tabla 6 con los tiempos de cada nivel: RAM 50 a 100 ns, SSD 10 a 100 µs, HDD 1 a 10 ms." data-cuando="Al empezar este paso, para ubicar los tiempos"></cite>.</p>
+          <p>La solución es la misma idea de la caché: guardar las traducciones más recientes en un cuadro pequeñísimo y muy rápido, la <b>TLB</b>. Si la página está ahí (<b>acierto de TLB</b>) la traducción es casi inmediata; si no (<b>fallo de TLB</b>) hay que leer la tabla completa en la RAM
+          <cite class="cita" data-fuente="arq2" data-pag="18" data-pimp="15" data-seccion="7.3 TLB" data-que="La TLB como caché de traducciones recientes: acierto casi inmediato, fallo que obliga a consultar la tabla completa." data-cuando="Después de ejecutar la secuencia"></cite>.
+          La TLB <b>no guarda datos</b>, solo pares página → marco. Cuando se llena, sale la traducción menos reciente, como en la caché (si quieres ver cómo se reemplaza, está en la página <b>Memoria caché</b>).</p>
+          <p>Cuentas de esta página: acierto de TLB = 80 ns (solo el dato, la consulta de la TLB cuesta tan poco que no la contamos); fallo de TLB = 160 ns (tabla y dato); sin TLB, siempre 160 ns.</p>
+          <div class="check" id="chk4"><p class="check-tit">Predice antes de ejecutar</p><div class="cuerpo"></div></div>
+          <p>Cuando lo resuelvas, ejecuta también el <b>ciclo de 4 páginas</b> con una TLB de solo 2 entradas. Vas a ver algo que cuesta creer.</p>
+        </section>
+
+        <section class="paso card" data-titulo="Fallo de página">
+          <span class="etapa">Paso 5</span>
+          <h3>Cuando la página no está en la memoria</h3>
+          <p>Hasta ahora todas las páginas estaban en la RAM. Pero el espacio virtual puede ser <b>mayor que la memoria física</b>: lo que no cabe vive en el disco, en una zona llamada <b>swap</b>. Cada fila de la tabla lleva un <b>bit de presencia</b> P: vale 1 si la página está en un marco y 0 si no.</p>
+          <p>Si el programa toca una página con P = 0 ocurre un <b>fallo de página</b>: la MMU avisa al sistema operativo, que localiza la página en el swap, elige un marco, la copia, actualiza la tabla y repite la instrucción
+          <cite class="cita" data-fuente="arq2" data-pag="19" data-pimp="16" data-seccion="7.4 Fallo de página" data-que="Los pasos del sistema operativo ante un fallo de página (localizar, elegir marco, cargar, actualizar la tabla) y que es considerablemente más lento que un fallo de caché, sin cifras." data-cuando="Antes de pulsar los botones"></cite>.
+          El material solo dice que es «considerablemente más lento»; las cifras de abajo son de esta página: un SSD tarda 100 µs en leer 4 KB (la unidad da de 10 a 100 µs para un SSD y de 5 a 10 ms para un HDD
+          <cite class="cita" data-fuente="arq3" data-pag="7" data-pimp="4" data-seccion="1.4 Disparidad de velocidades: Tabla 2" data-que="La Tabla 2 con el ciclo de CPU (0,3 ns), la DRAM (50 a 100 ns), el SSD NVMe (10 a 100 µs) y el HDD (5 a 10 ms): las escalas que separan a la memoria del disco." data-cuando="Después de ver el costo de un fallo"></cite>).</p>
+          <div class="check" id="chk5"><p class="check-tit">Predice antes de provocar el fallo</p><div class="cuerpo"></div></div>
+
+          <div class="destacado" id="destacado">
+            <p class="dest-tit">Una confusión muy común</p>
+            <h4>¿Un fallo de TLB es lo mismo que un fallo de página?</h4>
+            <p>Los nombres se parecen y los dos significan «aquí no está lo que busco». Pero no cuestan lo mismo ni pasan en el mismo lugar. Piensa antes de leer la respuesta.</p>
+            <div class="check" id="chk5b"><p class="check-tit">Elige una</p><div class="cuerpo"></div></div>
+            <div id="tresCasos" hidden>
+              <table class="tres">
+                <thead><tr><th>Qué pasó</th><th>Qué se hace</th><th>Tiempo en esta página</th></tr></thead>
+                <tbody>
+                  <tr><td>Acierto de TLB</td><td>La traducción ya estaba; se lee el dato</td><td class="n">80 ns</td></tr>
+                  <tr><td>Fallo de TLB</td><td>Se lee la tabla en RAM (P = 1) y luego el dato</td><td class="n">160 ns</td></tr>
+                  <tr><td>Fallo de página</td><td>P = 0: el sistema operativo trae la página del disco</td><td class="n">más de 100 000 ns</td></tr>
+                </tbody>
+              </table>
+              <p>Por eso un fallo de TLB es una molestia y un fallo de página es una catástrofe pequeña: la diferencia es de tres órdenes de magnitud.</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Memoria llena">
+          <span class="etapa">Paso 6</span>
+          <h3>La memoria se llena: hay que elegir una víctima</h3>
+          <p>Cuando ya no quedan marcos libres, traer una página nueva obliga a sacar otra. La unidad dice que el sistema operativo elige el marco con una variante de LRU: la página <b>menos usada recientemente</b>, igual que en la caché.</p>
+          <p>La tabla guarda más bits de control: la presencia, los <b>permisos</b> (leer, escribir, ejecutar), el bit de <b>referenciado</b> (se usó hace poco) y el de <b>modificado</b> o «sucia»
+          <cite class="cita" data-fuente="arq2" data-pag="20" data-pimp="17" data-seccion="7.7 Bits de control" data-que="Los bits de la tabla de páginas: presencia o válido, permisos de leer, escribir y ejecutar, modificado (dirty) y referenciado (accessed)." data-cuando="Después de marcar la casilla de sucia"></cite>.
+          Una página sucia cambió desde que se trajo del disco: antes de usar su marco hay que <b>escribirla de vuelta</b> en el swap. Una página limpia se descarta sin más, porque el swap ya tiene una copia igual. Marca o desmarca las casillas «sucia» de la derecha para ver el efecto.</p>
+          <p>Hay otro bit importante: el de escritura. La página 2 está <b>compartida</b> entre A y B (por ejemplo, el código de una librería): las dos tablas apuntan al mismo marco 7, que solo se puede leer y ejecutar. Intentar escribir ahí <b>no es un fallo de página</b>, porque la página sí está presente: es una violación de protección.</p>
+          <div class="check" id="chk6"><p class="check-tit">Calcula con los datos de la derecha</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Tiempo medio">
+          <span class="etapa">Paso 7</span>
+          <h3>El tiempo medio de acceso con fallos de página</h3>
+          <p>Un fallo de página es muy raro, pero tan caro que pesa en el promedio. Si <span data-tex="p"></span> es la fracción de accesos que fallan, <span data-tex="t_{ok}"></span> el tiempo de un acceso normal y <span data-tex="t_{fallo}"></span> el de uno que falla:</p>
+          <div class="fbloque">
+            <div data-tex="T=(1-p)\,t_{ok}+p\,t_{fallo}" data-display></div>
+            <div class="vivo" id="vivoEat"></div>
+          </div>
+          <p>Es la misma estructura que la fórmula de la caché, «tiempo de acierto más tasa de fallos por penalización»
+          <cite class="cita" data-fuente="arq2" data-pag="17" data-pimp="14" data-seccion="6.6 Métricas" data-que="La fórmula del tiempo medio de acceso de la caché: tiempo de acierto + tasa de fallos × penalización por fallo. Sin ejemplo numérico." data-cuando="Después de resolver el chequeo"></cite>:
+          aquí la penalización es el disco. Mueve la tasa de fallos y cambia entre SSD y HDD. Para <span data-tex="t_{fallo}"></span> usamos solo el tiempo del disco, porque lo demás es despreciable a su lado.</p>
+          <div class="check" id="chk7"><p class="check-tit">Antes de terminar</p><div class="cuerpo"></div></div>
+          <details class="profundizar">
+            <summary>¿Memoria virtual y caché son lo mismo? ¿Y la segmentación?</summary>
+            <div>
+              <p>Se parecen en la idea (guardar cerca lo que se usa) pero resuelven problemas distintos. La unidad los compara en una tabla
+              <cite class="cita" data-fuente="arq2" data-pag="19" data-pimp="16" data-seccion="7.6 Caché y memoria virtual: Tabla 7" data-que="La Tabla 7: la caché ataca la latencia con líneas de 32 a 64 bytes gestionadas por hardware; la memoria virtual ataca la capacidad y la protección con páginas de 4 KB gestionadas por la MMU y el sistema operativo." data-cuando="Después del paso 7"></cite>
+              <cite class="cita" data-fuente="arq2diapo" data-pag="27" data-seccion="Segmentación y Tabla 7" data-que="La diapositiva con la comparación entre segmentación y paginación y la misma Tabla 7." data-cuando="Para repasar en la presentación"></cite>:</p>
+              <table class="tres">
+                <thead><tr><th></th><th>Caché</th><th>Memoria virtual</th></tr></thead>
+                <tbody>
+                  <tr><td>Problema</td><td>Latencia</td><td>Capacidad y protección</td></tr>
+                  <tr><td>Unidad</td><td>Línea de 32 a 64 bytes</td><td>Página de 4 KB</td></tr>
+                  <tr><td>Quién la gestiona</td><td>Hardware</td><td>MMU y sistema operativo</td></tr>
+                </tbody>
+              </table>
+              <p>La <b>segmentación</b> corta la memoria en trozos de tamaño variable y con significado lógico (código, datos, pila); la paginación, en trozos fijos. Los trozos variables dejan huecos que no se pueden aprovechar (fragmentación externa). Existe también la segmentación paginada, que combina las dos
+              <cite class="cita" data-fuente="arq2" data-pag="19" data-pimp="16" data-seccion="7.5 Segmentación frente a paginación" data-que="Tamaño variable y lógico frente a tamaño fijo, la fragmentación externa y la segmentación paginada." data-cuando="Después del paso 7"></cite>.</p>
+              <p>Dos cosas no vienen en el material de la unidad y las explico yo. La primera: con direcciones de 32 bits hay <span data-tex="2^{20}"></span> páginas (más de un millón), así que la tabla de un proceso sería enorme; por eso los sistemas reales usan tablas de varios niveles. La segunda: si la tasa de fallos sube demasiado, el sistema pasa casi todo el tiempo moviendo páginas al disco y casi nada trabajando. Esa situación se llama <i>thrashing</i>.</p>
+            </div>
+          </details>
+          <div class="cita" id="citaHipo" hidden></div>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+          <button type="button" class="ghost" id="btnRestaurar">Reiniciar</button>
+        </div>
+        <div id="esc">
+
+          <div class="mv-sec" id="s1">
+            <div class="dos">
+              <div class="proc a"><b>Proceso A</b>su memoria: 0x0000 a 0xFFFF<span class="dato">escribe <i>7</i> en 0x0010</span></div>
+              <div class="proc b"><b>Proceso B</b>su memoria: 0x0000 a 0xFFFF<span class="dato">escribe <i>9</i> en 0x0010</span></div>
+            </div>
+            <p class="lectura" id="lectura1"></p>
+          </div>
+
+          <div class="mv-sec" id="sproc">
+            <div class="btn-row" style="margin-bottom:8px">
+              <span class="seg-lab" style="margin-left:0">Tabla de</span>
+              <div class="seg" id="procSeg" role="group" aria-label="Proceso">
+                <button type="button" data-p="A" aria-pressed="true">Proceso A</button>
+                <button type="button" data-p="B" aria-pressed="false">Proceso B</button>
+              </div>
+            </div>
+            <div class="tabla-wrap" id="tablaProc"></div>
+          </div>
+
+          <div class="mv-sec traductor" id="sdir">
+            <h4 class="mini-tit">Dirección virtual v</h4>
+            <input type="range" id="dirRange" min="0" max="16383" step="1" value="9000" aria-label="Dirección virtual">
+            <div class="rapidos" id="rapidos">
+              <button type="button" data-v="100">100</button>
+              <button type="button" data-v="4095">4095</button>
+              <button type="button" data-v="4096">4096</button>
+              <button type="button" data-v="9000">9000</button>
+              <button type="button" data-v="16383">16383</button>
+            </div>
+            <div class="bits" id="dirBits"></div>
+            <div class="cuenta" id="dirCuenta"></div>
+          </div>
+
+          <div class="mv-sec" id="stlb">
+            <div class="btn-row">
+              <span class="seg-lab" style="margin-left:0">Secuencia</span>
+              <div class="seg" id="tlbSeq" role="group" aria-label="Secuencia de accesos">
+                <button type="button" data-s="arreglo" aria-pressed="true">Recorrer un arreglo</button>
+                <button type="button" data-s="ciclo" aria-pressed="false">Ciclo de 4 páginas</button>
+              </div>
+            </div>
+            <div class="btn-row" style="margin-top:6px">
+              <span class="seg-lab" style="margin-left:0">Entradas de la TLB</span>
+              <div class="seg" id="tlbCap" role="group" aria-label="Tamaño de la TLB">
+                <button type="button" data-c="2" aria-pressed="false">2</button>
+                <button type="button" data-c="4" aria-pressed="true">4</button>
+              </div>
+            </div>
+            <h4 class="mini-tit" style="margin-top:12px">Páginas que toca el proceso A, en orden</h4>
+            <div class="seq" id="tlbSecuencia"></div>
+            <h4 class="mini-tit" style="margin-top:8px">TLB</h4>
+            <div class="slots" id="tlbSlots"></div>
+            <div class="ejes-tlb"><span>menos reciente</span><span>más reciente</span></div>
+            <div class="cont" id="tlbCont"></div>
+            <p class="lectura" id="tlbLectura"></p>
+            <div class="btn-row" style="margin-top:8px">
+              <button type="button" class="primary" id="tlbSig">Siguiente acceso</button>
+              <button type="button" id="tlbTodo">Ejecutar todo</button>
+            </div>
+            <p class="aviso" id="tlbAviso">Responde la predicción de la izquierda para activar los botones.</p>
+          </div>
+
+          <div class="mv-sec" id="sfallo">
+            <div class="btn-row" style="margin-bottom:8px">
+              <span class="seg-lab" style="margin-left:0">Disco</span>
+              <div class="seg" id="discoSeg" role="group" aria-label="Tipo de disco">
+                <button type="button" data-d="ssd" aria-pressed="true">SSD, 100 µs</button>
+                <button type="button" data-d="hdd" aria-pressed="false">HDD, 10 ms</button>
+              </div>
+            </div>
+            <div id="tablasFallo"></div>
+            <div class="btn-row" style="margin-top:10px" id="botonesFallo">
+              <button type="button" data-a="A:1">A usa su pág 1</button>
+              <button type="button" data-a="A:4">A usa su pág 4</button>
+              <button type="button" data-a="B:3">B usa su pág 3</button>
+              <button type="button" data-a="A:5">A usa su pág 5</button>
+            </div>
+            <p class="aviso" id="falloAviso">Responde la predicción de la izquierda para activar los botones.</p>
+            <ol class="pasos-lista" id="falloPasos"></ol>
+            <p class="lectura" id="falloTotal"></p>
+          </div>
+
+          <div class="mv-sec" id="srepl">
+            <div class="tabla-wrap" id="tablaRepl"></div>
+            <div class="btn-row" style="margin-top:10px" id="botonesRepl">
+              <button type="button" data-a="A:5">A usa su pág 5 (swap)</button>
+              <button type="button" data-a="B:1">B usa su pág 1</button>
+              <button type="button" data-a="A:W2">A escribe en la pág 2</button>
+            </div>
+            <p class="aviso" id="replAviso">Resuelve el cálculo de la izquierda para activar los botones.</p>
+            <ul class="registro" id="replReg"></ul>
+          </div>
+
+          <div class="mv-sec eat" id="seat">
+            <div class="btn-row" style="margin-bottom:8px">
+              <span class="seg-lab" style="margin-left:0">Disco</span>
+              <div class="seg" id="eatDisco" role="group" aria-label="Tipo de disco">
+                <button type="button" data-d="ssd" aria-pressed="true">SSD, 100 µs</button>
+                <button type="button" data-d="hdd" aria-pressed="false">HDD, 10 ms</button>
+              </div>
+            </div>
+            <h4 class="mini-tit">Tasa de fallos de página: <span id="eatP"></span></h4>
+            <input type="range" id="eatRange" min="0" max="6" step="1" value="4" aria-label="Tasa de fallos de página">
+            <div class="cuenta" id="eatCuenta"></div>
+            <div class="tbar"><i id="eatBarra" style="width:0%"></i></div>
+            <p class="lectura" id="eatLectura"></p>
+          </div>
+
+          <div class="mv-sec" id="sfis">
+            <h4 class="mini-tit">Memoria física: 8 marcos de 4 KB</h4>
+            <div id="fisGrid"></div>
+          </div>
+
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>La traducción de direcciones de verdad ocurre en la MMU, un circuito, y en el sistema operativo; ningún programa de usuario lo hace. Pero el algoritmo se puede escribir en pocas líneas y verlo correr. Aquí el proceso A del paso 4 hace ocho accesos, con una TLB de 2 entradas: elige Python o R, dale a reproducir y mira cómo cada línea mueve la TLB, la tabla y los marcos.</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir</p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="true">Python</button>
+            <button type="button" data-lang="r" aria-pressed="false">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">1 · preparar</span><span data-f="2">2 · traducir cada acceso</span><span data-f="3">3 · resultado</span>
+        </div>
+        <h3 class="mini-tit vr-tit">Los 8 accesos del proceso A</h3>
+        <div class="tabla-wrap"><table class="vr-acc" id="vrAcc"></table></div>
+        <div class="vr-cuenta" id="vrCuenta"></div>
+        <div class="vr-est" id="vrEst"></div>
+      </div>
+    </div>
+
+    <div class="salida">
+      <div><h4 class="mini-tit">Lo que imprime Python</h4><pre>[8196, 8296, 29480, 8396, 12404, 29580, 25096, 12504]
+6 2
+True</pre></div>
+      <div><h4 class="mini-tit">Lo que imprime R</h4><pre>[1]  8196  8296 29480  8396 12404 29580 25096 12504
+6 2 
+[1] TRUE</pre></div>
+    </div>
+
+    <p class="vr-nota">En esta lista de ocho accesos, el mismo programa corrió de verdad en Python y en R y dio lo mismo: seis fallos de TLB y dos fallos de página. No hay una función de librería que haga paginación: la hace el hardware. Por eso el programa se verifica con otra cuenta estándar, la última línea: dividir entre 4096 es lo mismo que correr la dirección 12 bits a la derecha (<code>dv &gt;&gt; 12</code> en Python, <code>bitwShiftR(dv, 12L)</code> en R), y el resto es lo mismo que quedarse con los 12 bits de abajo (<code>dv &amp; 4095</code>, <code>bitwAnd(dv, 4095L)</code>). El circuito de verdad no divide: corta los bits. El material describe la paginación sin ninguna cuenta de bits
+    <cite class="cita" data-fuente="arq2diapo" data-pag="26" data-seccion="Paginación, TLB y fallo de página" data-que="La diapositiva que resume paginación, TLB y fallo de página en tres bloques de texto, sin direcciones ni cifras." data-cuando="Después de reproducir el programa hasta el final"></cite>.</p>
+
+    <details class="profundizar">
+      <summary>La versión con desplazamientos de bits</summary>
+      <div>
+        <p>Las dos primeras líneas del bucle se pueden escribir como lo hace el circuito: <code>pag = dv &gt;&gt; 12</code> y <code>off = dv &amp; 4095</code> en Python; <code>pag &lt;- bitwShiftR(dv, 12L)</code> y <code>off &lt;- bitwAnd(dv, 4095L)</code> en R. Sirve porque 4096 es una potencia de 2: <span data-tex="4096=2^{12}"></span>. Con una página de 4000 bytes esto ya no funcionaría, y por eso los tamaños de página siempre son potencias de 2.</p>
+      </div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>El índice de R empieza en 1</h3><span class="estado" data-reto="codigo2"></span></div>
+        <div id="codigo2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Qué sale de la TLB</h3><span class="estado" data-reto="codigo3"></span></div>
+        <div id="codigo3"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: la biblioteca te avisa en el índice cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>¿Qué pasa con este acceso?</h3><span class="estado" data-reto="ojo"></span></div>
+        <p class="desc">Una tabla de páginas, el contenido de la TLB y una dirección. Decide sin hacer cuentas. Apruebas con 4 de 5.</p>
+        <div id="ojo"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Construir</span><h3>Arma una tabla de páginas</h3><span class="estado" data-reto="construir"></span></div>
+        <p class="desc">Elige el marco de cada página de un proceso P hasta cumplir los cuatro objetivos a la vez. Se marcan solos.</p>
+        <div class="constr" id="constr"></div>
+        <div class="grande" id="constrVivo"></div>
+        <ul class="objetivos" id="objetivos"></ul>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>Traduce con lápiz</h3><span class="estado" data-reto="mano"></span></div>
+        <p class="desc">Páginas de 4096 bytes. Toma papel y traduce la dirección antes de pedir pistas.</p>
+        <div id="manoDatos"></div>
+        <div id="mano"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Alguien se equivocó</h3><span class="estado" data-reto="error"></span></div>
+        <p class="desc">Una de las líneas tiene un error. Tócala.</p>
+        <div id="error"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Bits de offset</h3><span class="estado" data-reto="prop1"></span></div>
+        <div id="prop1"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Cuántas páginas hay</h3><span class="estado" data-reto="prop2"></span></div>
+        <div id="prop2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>La misma dirección virtual</h3><span class="estado" data-reto="prop3"></span></div>
+        <div id="prop3"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Qué guarda la TLB</h3><span class="estado" data-reto="prop4"></span></div>
+        <div id="prop4"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Cuándo hay fallo de página</h3><span class="estado" data-reto="prop5"></span></div>
+        <div id="prop5"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Diez veces más fallos</h3><span class="estado" data-reto="prop6"></span></div>
+        <div id="prop6"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Caché frente a memoria virtual</h3><span class="estado" data-reto="prop7"></span></div>
+        <div id="prop7"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Recordar a la fuerza es lo que fija. Arma la regla de traducción de memoria y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Fórmula de memoria</span><h3>Arma la traducción pieza por pieza</h3><span class="estado" data-reto="formula"></span></div>
+        <p class="desc"><span data-tex="F"></span> es la dirección física, <span data-tex="v"></span> la virtual y <span data-tex="p"></span> su número de página. Hay piezas de más que no pertenecen. No mires arriba.</p>
+        <div id="formula"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el material</h2>
+      <p class="lecturas-intro">Ya construiste la idea con las manos. Ahora ve a la versión del máster y comprueba que la reconoces. Es prosa breve, sin cuentas de bits ni traducciones resueltas: lo que viste aquí es el ejemplo que le falta. Cada entrada dice qué vas a encontrar y en qué momento conviene leerla. Si abres la biblioteca con doble clic, el enlace abre el PDF en esa página.</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> Los dos procesos A y B, sus tablas de páginas, el computador de 16 bits con 8 marcos y los tiempos (80 ns de RAM, 100 µs de SSD, 10 ms de HDD) son inventados por esta página, elegidos para que las cuentas den limpias; los tiempos caen dentro de los rangos de la Tabla 6 de la unidad. El material de SM142052 explica la memoria virtual en prosa, sin traducciones resueltas, sin tamaños de TLB y sin tiempos de un fallo de página. Tu progreso se guarda solo en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+/*
+  Ejemplo común de la ruta "Arquitectura de computadores" (para que los números se reconozcan entre páginas):
+  - Computador de 16 bits de dirección: 64 KB virtuales (16 páginas de 4096 bytes) y 8 marcos físicos de 4 KB.
+  - Proceso A, tabla de páginas: pág 0 -> marco 5, pág 1 -> 2, pág 2 -> 7 (compartida), pág 3 -> 0, págs 4 y 5 en el swap.
+  - Proceso B: pág 0 -> marco 1, pág 1 -> 4, pág 2 -> 7 (compartida), pág 3 en el swap.
+  - Marcos libres al empezar: 3 y 6. Tiempos inventados: RAM 80 ns, SSD 100 us, HDD 10 ms.
+  - Accesos de A en la vida real: 4100, 4200, 9000, 4300, 16500, 9100, 21000, 16600 (TLB de 2 entradas).
+*/
+(function () {
+  "use strict";
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var RETOS = ["ojo", "construir", "mano", "error", "formula", "prop1", "prop2", "prop3", "prop4", "prop5", "prop6", "prop7", "codigo1", "codigo2", "codigo3"];
+  var C = B.concepto({ id: "memoria-virtual", retos: RETOS, pasos: 7 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  /* ---------------- utilidades ---------------- */
+  var TAM = 4096, RAM = 80, SSD = 100000, HDD = 10000000;
+  function f(v, d) { return B.fmt(v, d); }
+  function mil(n) { return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, " "); }
+  function hex4(n) { return "0x" + n.toString(16).toUpperCase().padStart(4, "0"); }
+  function bin(n, w) { return n.toString(2).padStart(w, "0"); }
+  function grupos4(s) { return s.replace(/(\d{4})(?=\d)/g, "$1 "); }
+  function esNum(x) { return typeof x === "number"; }
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+  function nsTxt(n) { return n % 1000000 === 0 ? (n / 1000000) + " ms" : n % 1000 === 0 ? (n / 1000) + " µs" : mil(n) + " ns"; }
+
+  /* ---------------- datos del ejemplo ---------------- */
+  var TAB0 = { A: [5, 2, 7, 0, "S", "S"], B: [1, 4, 7, "S"] };
+  var FR0 = [
+    { p: "A", g: 3, uso: 2, suc: false },
+    { p: "B", g: 0, uso: 6, suc: true },
+    { p: "A", g: 1, uso: 5, suc: false },
+    null,
+    { p: "B", g: 1, uso: 1, suc: true },
+    { p: "A", g: 0, uso: 4, suc: true },
+    null,
+    { p: "AB", g: 2, uso: 7, suc: false, comp: true }
+  ];
+  function copiaFr(fr) { return fr.map(function (c) { return c ? Object.assign({}, c) : null; }); }
+  function nuevaMem(extra) {
+    var m = { fr: copiaFr(FR0), tab: { A: TAB0.A.slice(), B: TAB0.B.slice() }, reloj: 10, ultimo: null, nuevo: null, victima: null, total: 0, reg: [] };
+    if (extra) {
+      m.fr[3] = { p: "A", g: 4, uso: 8, suc: false }; m.tab.A[4] = 3;
+      m.fr[6] = { p: "B", g: 3, uso: 9, suc: false }; m.tab.B[3] = 6;
+    }
+    return m;
+  }
+
+  var est = {
+    paso: 0, proc: "A", selPag: null, dir: 9000, discoFallo: SSD, discoEat: SSD, pEat: 4,
+    chk1: false, chk4: false, chk5: false, chk5b: false, chk6: false,
+    tlb: null, m5: nuevaMem(false), m6: nuevaMem(true)
+  };
+  var SEC = {
+    0: ["s1", "sfis"], 1: ["sproc", "sfis"], 2: ["sproc", "sdir", "sfis"], 3: ["stlb"],
+    4: ["sfallo", "sfis"], 5: ["srepl", "sfis"], 6: ["seat"]
+  };
+  var TODAS = ["s1", "sproc", "sdir", "stlb", "sfallo", "srepl", "seat", "sfis"];
+  var HINTS = [
+    "Mira dónde cae cada proceso", "Toca una fila de la tabla", "Mueve el deslizador de la dirección",
+    "Ejecuta los accesos de uno en uno", "Provoca un fallo de página", "Elige quién sale", "Mueve la tasa de fallos"
+  ];
+  var pasos;
+
+  /* ---------------- piezas de dibujo ---------------- */
+  function gridMarcos(fr, o) {
+    o = o || {};
+    var h = '<div class="marcos">';
+    for (var i = 0; i < 8; i++) {
+      var c = fr[i], cls = "marco", t1 = "", t2 = "";
+      if (o.ocultar) { cls += " libre"; t1 = "?"; }
+      else if (!c) { cls += " libre"; t1 = "libre"; }
+      else {
+        cls += c.comp ? " comp" : (c.p === "A" ? " a" : " b");
+        t1 = c.comp ? "A2 y B2" : c.p + " · pág " + c.g;
+        if (o.bits) t2 = "uso " + c.uso + (c.suc ? " · sucia" : "");
+      }
+      if (o.foco && o.foco.indexOf(i) >= 0) cls += " foco";
+      if (o.victima === i) cls += " victima";
+      if (o.nuevo === i) cls += " nuevo";
+      h += '<div class="' + cls + '"><small>marco ' + i + '</small>' + t1 + (t2 ? '<small>' + t2 + '</small>' : '') + '</div>';
+    }
+    return h + '</div>';
+  }
+  function tablaMem(proc, selPag) {
+    var t = TAB0[proc], h = '<table class="mvt"><thead><tr><th>pág</th><th>desde</th><th>marco</th></tr></thead><tbody>';
+    t.forEach(function (e, g) {
+      if (!esNum(e)) return;
+      h += '<tr class="cl' + (selPag === g ? " sel" : "") + '" data-g="' + g + '"><td>' + g + '</td><td>' + hex4(g * TAM) + '</td><td>→ marco ' + e + '</td></tr>';
+    });
+    return h + '</tbody></table>';
+  }
+  function tablaPresencia(t, selPag) {
+    var h = '<table class="mvt"><thead><tr><th>pág</th><th>P</th><th>marco</th></tr></thead><tbody>';
+    t.forEach(function (e, g) {
+      h += '<tr' + (selPag === g ? ' class="sel"' : '') + '><td>' + g + '</td><td>' + (esNum(e) ? 1 : 0) + '</td><td' + (esNum(e) ? '>' + e : ' class="sw">swap') + '</td></tr>';
+    });
+    return h + '</tbody></table>';
+  }
+
+  /* ---------------- paso 1 ---------------- */
+  function pintarS1() {
+    if (est.chk1) {
+      $("lectura1").innerHTML = "La página 0 de A vive en el <b>marco 5</b> y la página 0 de B en el <b>marco 1</b>. El 7 y el 9 están en lugares físicos distintos: por eso no se pisan.";
+      $("fisGrid").innerHTML = gridMarcos(FR0, { foco: [5, 1] });
+    } else {
+      $("lectura1").textContent = "Cada proceso cree que su 0x0010 es el único del computador. ¿Dónde están en la memoria física? Resuelve el chequeo para verlo.";
+      $("fisGrid").innerHTML = gridMarcos(FR0, { ocultar: true });
+    }
+  }
+
+  /* ---------------- pasos 2 y 3: tabla y traductor ---------------- */
+  function pintarProc() {
+    [].forEach.call($("procSeg").querySelectorAll("button"), function (b) { b.setAttribute("aria-pressed", b.getAttribute("data-p") === est.proc ? "true" : "false"); });
+    var sel = est.paso === 2 ? Math.floor(est.dir / TAM) : est.selPag;
+    $("tablaProc").innerHTML = tablaMem(est.proc, sel);
+    var e = sel !== null && sel !== undefined ? TAB0[est.proc][sel] : null;
+    $("fisGrid").innerHTML = gridMarcos(FR0, { foco: esNum(e) ? [e] : [] });
+  }
+  function pintarDir() {
+    var v = est.dir, pg = Math.floor(v / TAM), off = v % TAM, e = TAB0[est.proc][pg];
+    var b16 = bin(v, 16), bp = b16.slice(0, 4), bo = b16.slice(4);
+    var h = '<span class="bpag">' + bp + '</span> <span class="boff">' + grupos4(bo) + '</span><small>virtual: 4 bits de página y 12 de offset</small>';
+    var cuenta = 'v = <b>' + v + '</b> = ' + hex4(v) + '<br>' +
+      'pág = ⌊' + v + ' / 4096⌋ = <b class="cj">' + pg + '</b><br>' +
+      'offset = ' + v + ' − ' + pg + ' · 4096 = <b class="ck">' + off + '</b><br>';
+    if (esNum(e)) {
+      var fis = e * TAM + off;
+      h += '<br><span class="bmar">' + bin(e, 3) + '</span> <span class="boff">' + grupos4(bin(off, 12)) + '</span><small>física: 3 bits de marco y los mismos 12 de offset</small>';
+      cuenta += 'marco = tabla[' + pg + '] = <b>' + e + '</b><br>física = ' + e + ' · 4096 + ' + off + ' = <b>' + fis + '</b>';
+      $("vivoDir").innerHTML = "v = " + v + " → pág " + pg + ", offset " + off + " → marco " + e + " → física = " + fis;
+    } else {
+      cuenta += 'marco = tabla[' + pg + '] = <b>sin marco</b><br>Esa página de ' + est.proc + ' no está en la memoria (la verás en el paso 5).';
+      $("vivoDir").innerHTML = "v = " + v + " → pág " + pg + ", offset " + off + " → esa página no está en un marco";
+    }
+    $("dirBits").innerHTML = h;
+    $("dirCuenta").innerHTML = cuenta;
+    $("dirRange").value = v;
+    $("tablaProc").innerHTML = tablaMem(est.proc, pg);
+    $("fisGrid").innerHTML = gridMarcos(FR0, { foco: esNum(e) ? [e] : [] });
+  }
+
+  /* ---------------- paso 4: la TLB ---------------- */
+  var TLB_SEQ = { arreglo: [0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3], ciclo: [0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3] };
+  function tlbNueva(seq, cap) { return { seq: seq, cap: cap, i: 0, ent: [], res: [], t: 0, ac: 0, fa: 0 }; }
+  function tlbPaso() {
+    var t = est.tlb, s = TLB_SEQ[t.seq];
+    if (t.i >= s.length) return false;
+    var pg = s[t.i], pos = t.ent.indexOf(pg);
+    if (pos >= 0) { t.ent.splice(pos, 1); t.res.push("hit"); t.ac++; t.t += RAM; }
+    else { if (t.ent.length === t.cap) t.ent.shift(); t.res.push("miss"); t.fa++; t.t += 2 * RAM; }
+    t.ent.push(pg);
+    t.i++;
+    return true;
+  }
+  function pintarTlb() {
+    var t = est.tlb, s = TLB_SEQ[t.seq];
+    [].forEach.call($("tlbSeq").querySelectorAll("button"), function (b) { b.setAttribute("aria-pressed", b.getAttribute("data-s") === t.seq ? "true" : "false"); });
+    [].forEach.call($("tlbCap").querySelectorAll("button"), function (b) { b.setAttribute("aria-pressed", +b.getAttribute("data-c") === t.cap ? "true" : "false"); });
+    $("tlbSecuencia").innerHTML = s.map(function (pg, k) {
+      return '<span class="acc ' + (k < t.i ? t.res[k] : k === t.i ? "act" : "") + '" title="acceso ' + (k + 1) + '">' + pg + '</span>';
+    }).join("");
+    var sl = "";
+    for (var k = 0; k < t.cap; k++) {
+      sl += t.ent[k] !== undefined ? '<div class="slot lleno">pág ' + t.ent[k] + ' → marco ' + TAB0.A[t.ent[k]] + '</div>' : '<div class="slot">vacía</div>';
+    }
+    $("tlbSlots").innerHTML = sl;
+    if (est.chk4) {
+      $("tlbCont").innerHTML = '<span>aciertos <b>' + t.ac + '</b></span><span>fallos <b>' + t.fa + '</b></span><span>tiempo <b>' + mil(t.t) + ' ns</b></span><span>sin TLB <b>' + mil(t.i * 2 * RAM) + ' ns</b></span>';
+      $("tlbLectura").innerHTML = t.i >= s.length
+        ? "Terminó: <b>" + t.ac + " aciertos y " + t.fa + " fallos</b>. " + (t.fa >= s.length ? "Cada acceso expulsó justo la página que iba a necesitar en la vuelta siguiente: con la TLB o sin ella el tiempo es el mismo: 160 ns por acceso." : "Tiempo total " + mil(t.t) + " ns frente a " + mil(s.length * 2 * RAM) + " ns sin TLB.")
+        : "Acceso " + (t.i + 1) + " de " + s.length + ": toca la página " + s[t.i] + ".";
+    } else {
+      $("tlbCont").innerHTML = "";
+      $("tlbLectura").textContent = "Primero predice cuántos fallos habrá.";
+    }
+    $("tlbSig").disabled = !est.chk4 || t.i >= s.length;
+    $("tlbTodo").disabled = !est.chk4 || t.i >= s.length;
+    $("tlbAviso").hidden = est.chk4;
+  }
+
+  /* ---------------- paso 5: fallo de página ---------------- */
+  function acc5(p, pg) {
+    var m = est.m5, e = m.tab[p][pg], d = est.discoFallo, nombre = p + " · pág " + pg, r;
+    m.nuevo = null;
+    if (esNum(e)) {
+      m.fr[e].uso = ++m.reloj;
+      r = { tipo: "ok", marco: e, coste: 2 * RAM, txt: nombre + ": está presente (P = 1) en el marco " + e + ". Leer la tabla y el dato: " + 2 * RAM + " ns." };
+    } else {
+      var libre = m.fr.indexOf(null);
+      if (libre < 0) {
+        r = { tipo: "lleno", coste: 0, txt: nombre + ": no queda ningún marco libre. ¿Qué página se expulsa? Eso es del paso siguiente." };
+      } else {
+        m.fr[libre] = { p: p, g: pg, uso: ++m.reloj, suc: false };
+        m.tab[p][pg] = libre;
+        m.nuevo = libre;
+        r = { tipo: "fallo", marco: libre, coste: 2 * RAM + d, txt: nombre + ": fallo de página. Marco " + libre + ", " + nsTxt(2 * RAM + d) + ".", pasos: [
+          "La MMU lee la tabla de <b>" + p + "</b> y ve <b>P = 0</b> en la página " + pg + ".",
+          "Fallo de página: la MMU interrumpe y le pasa el control al sistema operativo.",
+          "El sistema operativo localiza la página en el <b>swap</b>.",
+          "Elige un marco libre: el <b>" + libre + "</b>.",
+          "Copia los 4 KB del disco al marco " + libre + ": <b>" + nsTxt(d) + "</b>.",
+          "Pone <b>P = 1</b> y marco = " + libre + " en la tabla, y la instrucción se repite."
+        ] };
+      }
+    }
+    m.total += r.coste;
+    m.ultimo = r;
+  }
+  function pintarFallo() {
+    var m = est.m5, h = '<div class="dos">';
+    ["A", "B"].forEach(function (p) { h += '<div><h4 class="mini-tit">Tabla de ' + p + '</h4>' + tablaPresencia(m.tab[p], null) + '</div>'; });
+    $("tablasFallo").innerHTML = h + '</div>';
+    $("fisGrid").innerHTML = gridMarcos(m.fr, { nuevo: m.nuevo });
+    var u = m.ultimo;
+    $("falloPasos").innerHTML = u && u.pasos ? u.pasos.map(function (s) { return "<li>" + s + "</li>"; }).join("") : "";
+    $("falloTotal").innerHTML = u ? u.txt + " Total acumulado: <b>" + nsTxt(m.total) + "</b>." : "";
+    [].forEach.call($("discoSeg").querySelectorAll("button"), function (b) { b.setAttribute("aria-pressed", (b.getAttribute("data-d") === "ssd") === (est.discoFallo === SSD) ? "true" : "false"); });
+    [].forEach.call($("botonesFallo").querySelectorAll("button"), function (b) { b.disabled = !est.chk5; });
+    $("falloAviso").hidden = est.chk5;
+  }
+
+  /* ---------------- paso 6: memoria llena ---------------- */
+  function victima(m) {
+    var vi = -1;
+    m.fr.forEach(function (c, i) { if (c && (vi < 0 || c.uso < m.fr[vi].uso)) vi = i; });
+    return vi;
+  }
+  function acc6(p, pg, escribe) {
+    var m = est.m6, nombre = p + " · pág " + pg;
+    m.victima = null; m.nuevo = null;
+    if (escribe) {
+      m.reg.unshift("<b>" + nombre + " (escritura)</b>: la página está presente, pero su bit W vale 0. No hay fallo de página: es una <b>violación de protección</b>. El sistema operativo interviene (suele terminar el programa) y el disco ni se toca.");
+      return;
+    }
+    var e = m.tab[p][pg];
+    if (esNum(e)) {
+      m.fr[e].uso = ++m.reloj;
+      m.reg.unshift("<b>" + nombre + "</b>: ya está en el marco " + e + ". Acceso normal.");
+      return;
+    }
+    var vi = victima(m), v = m.fr[vi], coste = 2 * RAM + SSD + (v.suc ? SSD : 0);
+    var quien = v.comp ? "A · pág 2 y B · pág 2 (compartida)" : v.p + " · pág " + v.g;
+    if (v.comp) { m.tab.A[2] = "S"; m.tab.B[2] = "S"; } else m.tab[v.p][v.g] = "S";
+    m.fr[vi] = { p: p, g: pg, uso: ++m.reloj, suc: false };
+    m.tab[p][pg] = vi;
+    m.victima = null; m.nuevo = vi;
+    m.reg.unshift("<b>" + nombre + "</b>: fallo de página sin marcos libres. Sale <b>" + quien + "</b> (marco " + vi + ", la de menor último uso, " + v.uso + "). " +
+      (v.suc ? "Estaba sucia: primero se escribe en el swap (100 µs) y luego se lee la nueva (100 µs)." : "Estaba limpia: se descarta sin escribir nada y solo se lee la nueva (100 µs).") + " Coste <b>" + nsTxt(coste) + "</b>.");
+  }
+  function pintarRepl() {
+    var m = est.m6, vi = victima(m);
+    var h = '<table class="mvt"><thead><tr><th>marco</th><th>página</th><th>último uso</th><th>sucia</th><th>permisos</th></tr></thead><tbody>';
+    m.fr.forEach(function (c, i) {
+      if (!c) { h += '<tr><td>' + i + '</td><td colspan="4">libre</td></tr>'; return; }
+      h += '<tr><td>' + i + '</td><td>' + (c.comp ? "A2 y B2" : c.p + " · " + c.g) + '</td><td' + (i === vi && !est.chk6 ? '' : (i === vi ? ' class="vic"' : '')) + '>' + c.uso + '</td>' +
+        '<td><input type="checkbox" data-m="' + i + '"' + (c.suc ? " checked" : "") + (c.comp ? " disabled" : "") + ' aria-label="Página del marco ' + i + ' sucia"></td>' +
+        '<td>' + (c.comp ? "R-X" : "RW-") + '</td></tr>';
+    });
+    $("tablaRepl").innerHTML = h + '</tbody></table>';
+    $("fisGrid").innerHTML = gridMarcos(m.fr, { nuevo: m.nuevo, bits: true });
+    $("replReg").innerHTML = m.reg.map(function (s) { return "<li>" + s + "</li>"; }).join("");
+    [].forEach.call($("botonesRepl").querySelectorAll("button"), function (b) { b.disabled = !est.chk6; });
+    $("replAviso").hidden = est.chk6;
+  }
+
+  /* ---------------- paso 7: tiempo medio ---------------- */
+  var PS = [0, 0.000001, 0.00001, 0.0001, 0.001, 0.01, 0.1];
+  function pintarEat() {
+    var p = PS[est.pEat], tf = est.discoEat, T = (1 - p) * RAM + p * tf, k = T / RAM;
+    [].forEach.call($("eatDisco").querySelectorAll("button"), function (b) { b.setAttribute("aria-pressed", (b.getAttribute("data-d") === "ssd") === (tf === SSD) ? "true" : "false"); });
+    $("eatP").textContent = p === 0 ? "ninguna" : "1 de cada " + mil(Math.round(1 / p)) + " (p = " + String(p) + ")";
+    var uno = String(+(1 - p).toFixed(7));
+    var a = (1 - p) * RAM, b = p * tf;
+    $("eatCuenta").innerHTML = 'T = (1 − p) · ' + RAM + ' + p · ' + mil(tf) + '<br>' +
+      'T = ' + uno + ' · ' + RAM + ' + ' + String(p) + ' · ' + mil(tf) + '<br>' +
+      'T = ' + f(a, 2) + ' + ' + f(b, 2) + ' = <b>' + (T >= 100000 ? mil(T) : f(T, 2)) + ' ns</b>';
+    $("vivoEat").innerHTML = "p = " + String(p) + " → T = " + (T >= 100000 ? mil(T) : f(T, 2)) + " ns";
+    $("eatBarra").style.width = Math.max(1, Math.min(100, 100 * Math.log10(T) / 7)).toFixed(1) + "%";
+    var pmax = 8 / (tf - RAM);
+    $("eatLectura").innerHTML = "El acceso medio tarda <b>" + (k < 10 ? f(k, 2) : mil(k)) + " veces</b> lo que tardaría sin ningún fallo (" + RAM + " ns). " +
+      "Para perder solo un 10 % (T ≤ 88 ns) hace falta menos de <b>1 fallo de página cada " + mil(Math.round(1 / pmax)) + " accesos</b>.";
+  }
+
+  /* ---------------- el recorrido ---------------- */
+  function pintarTodo() {
+    var i = est.paso;
+    TODAS.forEach(function (id) { $(id).hidden = SEC[i].indexOf(id) < 0; });
+    $("escHint").textContent = HINTS[i];
+    if (i === 0) pintarS1();
+    else if (i === 1) { pintarProc(); }
+    else if (i === 2) { pintarProc(); pintarDir(); }
+    else if (i === 3) pintarTlb();
+    else if (i === 4) pintarFallo();
+    else if (i === 5) pintarRepl();
+    else pintarEat();
+  }
+  function entrar(i) {
+    est.paso = i;
+    if (i === 1) { est.proc = est.proc || "A"; est.selPag = null; }
+    if (i === 2) { est.dir = est.dir > 16383 ? 9000 : est.dir; }
+    if (i === 3 && !est.tlb) est.tlb = tlbNueva("arreglo", 4);
+    pintarTodo();
+  }
+  function reiniciar() {
+    var i = est.paso;
+    if (i === 3) est.tlb = tlbNueva(est.tlb.seq, est.tlb.cap);
+    if (i === 4) est.m5 = nuevaMem(false);
+    if (i === 5) est.m6 = nuevaMem(true);
+    if (i === 2) est.dir = 9000;
+    pintarTodo();
+  }
+  $("btnRestaurar").addEventListener("click", reiniciar);
+
+  $("procSeg").addEventListener("click", function (e) {
+    var b = e.target.closest("button");
+    if (!b) return;
+    est.proc = b.getAttribute("data-p");
+    est.selPag = null;
+    pintarTodo();
+  });
+  $("tablaProc").addEventListener("click", function (e) {
+    var tr = e.target.closest("tr.cl");
+    if (!tr) return;
+    var g = +tr.getAttribute("data-g");
+    if (est.paso === 2) est.dir = g * TAM + (est.dir % TAM);
+    else est.selPag = g;
+    pintarTodo();
+  });
+  $("dirRange").addEventListener("input", function () { est.dir = +this.value; pintarDir(); });
+  $("rapidos").addEventListener("click", function (e) {
+    var b = e.target.closest("button");
+    if (!b) return;
+    est.dir = +b.getAttribute("data-v");
+    pintarDir();
+  });
+  $("tlbSeq").addEventListener("click", function (e) {
+    var b = e.target.closest("button");
+    if (b) { est.tlb = tlbNueva(b.getAttribute("data-s"), est.tlb.cap); pintarTlb(); }
+  });
+  $("tlbCap").addEventListener("click", function (e) {
+    var b = e.target.closest("button");
+    if (b) { est.tlb = tlbNueva(est.tlb.seq, +b.getAttribute("data-c")); pintarTlb(); }
+  });
+  $("tlbSig").addEventListener("click", function () { tlbPaso(); pintarTlb(); });
+  $("tlbTodo").addEventListener("click", function () { while (tlbPaso()) { /* sigue */ } pintarTlb(); });
+  $("discoSeg").addEventListener("click", function (e) {
+    var b = e.target.closest("button");
+    if (b) { est.discoFallo = b.getAttribute("data-d") === "ssd" ? SSD : HDD; pintarFallo(); }
+  });
+  $("botonesFallo").addEventListener("click", function (e) {
+    var b = e.target.closest("button");
+    if (!b || !est.chk5) return;
+    var a = b.getAttribute("data-a").split(":");
+    acc5(a[0], +a[1]);
+    pintarFallo();
+  });
+  $("tablaRepl").addEventListener("change", function (e) {
+    var c = e.target.closest("input[type=checkbox]");
+    if (!c) return;
+    est.m6.fr[+c.getAttribute("data-m")].suc = c.checked;
+    pintarRepl();
+    if (chk6) chk6.refrescar();
+  });
+  $("botonesRepl").addEventListener("click", function (e) {
+    var b = e.target.closest("button");
+    if (!b || !est.chk6) return;
+    var a = b.getAttribute("data-a").split(":");
+    if (a[1].charAt(0) === "W") acc6(a[0], +a[1].slice(1), true); else acc6(a[0], +a[1], false);
+    pintarRepl();
+  });
+  $("eatDisco").addEventListener("click", function (e) {
+    var b = e.target.closest("button");
+    if (b) { est.discoEat = b.getAttribute("data-d") === "ssd" ? SSD : HDD; pintarEat(); }
+  });
+  $("eatRange").addEventListener("input", function () { est.pEat = +this.value; pintarEat(); });
+
+  /* ---------------- chequeos de cada paso ---------------- */
+  var chk6;
+  B.opcionMultiple(cuerpo("chk1"), {
+    pregunta: "Después de las dos escrituras, el proceso A lee su dirección 0x0010. ¿Qué obtiene?",
+    opciones: [
+      "7, el valor que él mismo escribió",
+      "9, porque B escribió después y borró el de A",
+      "Un error: dos procesos no pueden usar la misma dirección",
+      "Depende de cuál de los dos corrió primero"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "Si un programa pudiera borrar los datos de otro, un error en uno tumbaría a todos. ¿Es así como funciona un computador?",
+      "Las direcciones virtuales son privadas de cada proceso: usar el mismo número no es ningún problema.",
+      "El orden no importa: el 0x0010 de A y el de B no son el mismo lugar."],
+    explicacion: "Cada proceso tiene su propio espacio de direcciones: el 0x0010 de A y el 0x0010 de B son lugares físicos distintos. Alguien tiene que traducir cada dirección virtual a una física, y ese es el trabajo de la MMU con ayuda del sistema operativo. Mira a la derecha dónde cayó cada uno.",
+    alResolver: function () { est.chk1 = true; pintarS1(); pasos.completar(0); }
+  });
+
+  B.opcionMultiple(cuerpo("chk2"), {
+    pregunta: "Las dos tablas tienen una fila que apunta al mismo marco: la página 2 de A y la página 2 de B van al marco 7. ¿Qué significa?",
+    opciones: [
+      "Un error: dos páginas no pueden apuntar al mismo marco",
+      "Las dos comparten la misma copia física, por ejemplo el código de una librería, y solo se guarda una vez",
+      "B copió la página de A y ahora son independientes",
+      "Cada una ve su propia copia, solo que con el mismo número de marco"
+    ],
+    correcta: 1,
+    pistas: ["Esto es justamente uno de los objetivos de la memoria virtual: compartir código.", null,
+      "Si fueran copias, ocuparían dos marcos distintos.", "Un marco es un lugar físico: si dos tablas lo apuntan, es el mismo lugar."],
+    explicacion: "Un marco es un trozo físico. Si dos tablas apuntan a él, los dos procesos ven <b>el mismo</b> contenido, y solo ocupa un marco. Es lo que permite, por ejemplo, que 20 programas usen la misma librería sin tener 20 copias en memoria.",
+    alResolver: function () { pasos.completar(1); }
+  });
+
+  B.numerico(cuerpo("chk3"), {
+    pregunta: "El proceso B tiene su pág 0 en el marco 1, su pág 1 en el marco 4 y su pág 2 en el marco 7. Páginas de 4096 bytes. ¿A qué dirección <b>física</b> corresponde la dirección virtual 5000 de B?",
+    respuesta: 4 * TAM + (5000 - TAM),
+    tolerancia: 0,
+    pistas: [
+      "Primero corta 5000: ¿cuántas veces cabe 4096 en 5000, y cuánto sobra?",
+      "Página 1, offset 5000 − 4096 = 904. Ahora mira en qué marco está la página 1 de B.",
+      "Marco 4: la dirección física es 4 · 4096 más el offset."
+    ],
+    diagnostico: function (v) {
+      if (v === 5000) return "Esa es la misma dirección virtual: no tradujiste nada. Cambia la página por el marco.";
+      if (v === 4 * TAM) return "Falta sumar el offset (904): el byte exacto dentro del marco.";
+      if (v === 4 + 904) return "Falta multiplicar el marco por 4096: cada marco ocupa 4096 bytes.";
+      return null;
+    },
+    explicacion: "pág = ⌊5000 / 4096⌋ = 1 y offset = 904. La tabla dice marco 4: 4 · 4096 + 904 = 16384 + 904 = <b>17288</b>.",
+    alResolver: function () { pasos.completar(2); }
+  });
+
+  B.numerico(cuerpo("chk4"), {
+    pregunta: "Mira la secuencia de 16 accesos de la derecha (4 por cada página, de la 0 a la 3) y una TLB de 4 entradas que empieza vacía. ¿Cuántos <b>fallos de TLB</b> va a haber en total?",
+    respuesta: 4,
+    tolerancia: 0,
+    pistas: [
+      "La TLB empieza vacía: ¿qué pasa la primera vez que se toca una página?",
+      "Después de esa primera vez, ¿sigue estando la traducción de la página cuando vuelves a tocarla, con 4 entradas y solo 4 páginas?"
+    ],
+    diagnostico: function (v) {
+      if (v === 16) return "Eso sería si la TLB nunca acertara. Pero tras la primera vez que se toca una página, su traducción ya queda guardada.";
+      if (v === 12) return "Esos son los aciertos. Te piden los fallos.";
+      if (v === 0) return "La TLB empieza vacía: el primer acceso a cada página tiene que fallar.";
+      return null;
+    },
+    explicacion: "Una TLB vacía falla una vez por página distinta: <b>4 fallos</b>, y los otros 12 accesos son aciertos. Es la localidad espacial en acción: cada página se toca varias veces seguidas. <b>Ahora ejecuta la secuencia</b> y compruébalo.",
+    alResolver: function () { est.chk4 = true; pintarTlb(); pasos.completar(3); }
+  });
+
+  B.opcionMultiple(cuerpo("chk5"), {
+    pregunta: "Un acceso normal con acierto de TLB tarda 80 ns. Un acceso con fallo de página, trayendo la página de un SSD (100 µs), tardará aproximadamente...",
+    opciones: ["2 veces más", "10 veces más", "Más de 1000 veces más", "Un millón de veces más"],
+    correcta: 2,
+    pistas: ["Eso es lo que cuesta un fallo de TLB (160 ns frente a 80). El disco es mucho más lento que la RAM.",
+      "Compara los órdenes de magnitud: 80 ns frente a 100 µs. ¿Cuántas veces cabe uno en el otro?", null,
+      "Calcula 100 000 / 80. No llega ni a la mitad de un millón."],
+    explicacion: "100 160 ns entre 80 ns da unas <b>1250 veces</b>. Con un HDD (10 ms) serían más de 125 000 veces. <b>Ahora pulsa los botones</b> y mira el tiempo de cada acceso.",
+    alResolver: function () { est.chk5 = true; pintarFallo(); cerrarPaso5(); }
+  });
+  B.opcionMultiple(cuerpo("chk5b"), {
+    pregunta: "La TLB no encuentra la traducción de una página. ¿Hay seguro un fallo de página?",
+    opciones: [
+      "Sí: si la TLB no la tiene, la página no está en la memoria",
+      "No: se lee la tabla en la RAM, y solo hay fallo de página si el bit de presencia vale 0",
+      "No: el fallo de TLB es el que va al disco, el de página se resuelve en la RAM",
+      "Son lo mismo con otro nombre, según el sistema operativo"
+    ],
+    correcta: 1,
+    pistas: ["La TLB es un cuadro muy pequeño con solo las traducciones recientes: que falte ahí no dice nada sobre si la página está en la RAM.", null,
+      "Al revés: el disco solo se toca cuando la página no está en la memoria.", "Son dos eventos distintos, en dos sitios distintos, con costes distintos."],
+    explicacion: "Un fallo de TLB casi siempre se arregla leyendo la tabla en la RAM (160 ns en total). Solo si la tabla dice P = 0 hay un fallo de página, y ahí entra el disco.",
+    alResolver: function () { est.chk5b = true; $("tresCasos").hidden = false; cerrarPaso5(); }
+  });
+  function cerrarPaso5() { if (est.chk5 && est.chk5b) pasos.completar(4); }
+
+  chk6 = B.numerico(cuerpo("chk6"), {
+    pregunta: "La memoria está llena y A necesita su página 5, que está en el swap. El sistema operativo expulsa la página con el <b>menor último uso</b> (la que no se toca desde hace más tiempo). Un SSD tarda 100 µs en leer o escribir 4 KB. Con los datos de la tabla de la derecha, ¿cuántos <b>µs</b> cuesta traer la página 5 (cuenta solo el disco)?",
+    respuesta: function () { var v = est.m6.fr[victima(est.m6)]; return v.suc ? 200 : 100; },
+    tolerancia: 0,
+    pistas: [
+      "Busca en la columna «último uso» el número más chico: ese es el marco de la víctima.",
+      "Mira si la casilla «sucia» de esa fila está marcada. Si lo está, hay que escribir esa página en el swap antes de usar su marco."
+    ],
+    diagnostico: function (v) {
+      var s = est.m6.fr[victima(est.m6)].suc;
+      if (s && v === 100) return "Falta algo: la víctima está sucia, así que además de leer la nueva hay que escribir la vieja en el swap.";
+      if (!s && v === 200) return "La víctima está limpia: no hace falta escribirla, el swap ya tiene una copia igual.";
+      return null;
+    },
+    explicacion: function () {
+      var vi = victima(est.m6), v = est.m6.fr[vi];
+      return "La víctima es el marco " + vi + " (último uso " + v.uso + "), que está " + (v.suc ? "sucia: 100 µs para escribirla y 100 µs para leer la nueva, <b>200 µs</b>." : "limpia: solo 100 µs para leer la nueva, <b>100 µs</b>.") + " <b>Ahora pulsa el botón</b> y comprueba. Si desmarcas o marcas la casilla de esa fila, el resultado cambia.";
+    },
+    alResolver: function () { est.chk6 = true; pintarRepl(); pasos.completar(5); }
+  });
+
+  B.numerico(cuerpo("chk7"), {
+    pregunta: "Con $t_{ok} = 80$ ns y $t_{fallo} = 100\\,000$ ns, una tasa de fallos de página $p = 0.001$ (1 de cada mil accesos). ¿Cuánto vale el tiempo medio $T$ en ns?",
+    respuesta: 179.92,
+    tolerancia: 0.02,
+    pistas: ["Es $0.999 \\cdot 80 + 0.001 \\cdot 100\\,000$.", "Las dos partes: $0.999 \\cdot 80 = 79.92$ y $0.001 \\cdot 100\\,000 = 100$."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 80) < 0.02) return "Esos 80 ns son el tiempo sin fallos. El 1 de cada mil que falla suma una parte grande.";
+      if (Math.abs(v - 100) < 0.02) return "Esa es solo la parte de los fallos. Falta sumar los accesos que no fallan.";
+      if (Math.abs(v - 180) < 0.02) return "Casi: es 179.92. Cuida el 0.999 de la primera parte.";
+      return null;
+    },
+    explicacion: "$T = 79.92 + 100 = 179.92$ ns. Un fallo cada mil accesos ya <b>más que duplica</b> el tiempo medio: la parte del disco (100 ns) es mayor que la de los accesos normales (79.92 ns). Mueve el deslizador para ver cuánto empeora.",
+    alResolver: function () { pasos.completar(6); }
+  });
+
+  pasos = B.pasos($("recorrido"), {
+    concepto: C,
+    alEntrar: entrar,
+    alTerminar: function () { location.hash = "retos"; }
+  });
+  est.chk1 = pasos.hecho(0);
+  est.chk4 = pasos.hecho(3);
+  est.chk5 = pasos.hecho(4);
+  est.chk5b = pasos.hecho(4);
+  est.chk6 = pasos.hecho(5);
+  if (est.chk5b) $("tresCasos").hidden = false;
+  entrar(0);
+
+  /* ---------------- hipotesis inicial ---------------- */
+  (function () {
+    var ta = $("hipotesis"), t = null;
+    ta.value = B.nota("memoria-virtual", "hipotesis");
+    function cita() {
+      var v = ta.value.trim(), el = $("citaHipo");
+      el.hidden = !v;
+      if (v) { el.textContent = ""; el.appendChild(document.createTextNode("Al principio escribiste: «" + v + "». ¿Se parece a lo que construimos con la tabla de páginas? ¿Qué te faltaba?")); }
+    }
+    cita();
+    ta.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { B.nota("memoria-virtual", "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; cita(); }, 500);
+    });
+  })();
+
+  /* ---------------- marcadores de estado de retos ---------------- */
+  function pintarEstados() {
+    [].forEach.call(document.querySelectorAll("[data-reto]"), function (el) {
+      var ok = C.retoOk(el.getAttribute("data-reto"));
+      el.textContent = ok ? "resuelto" : "pendiente";
+      el.classList.toggle("ok", ok);
+    });
+  }
+  C.alCambiar(pintarEstados);
+
+  /* ---------------- reto: ojo clinico ---------------- */
+  function ojoCaso(tipo) {
+    for (;;) {
+      var pres = [], i, n = 0;
+      for (i = 0; i < 6; i++) { var x = Math.random() < 0.65; pres.push(x); if (x) n++; }
+      if (n < 4 || n > 5) continue;
+      var presentes = [], swap = [];
+      pres.forEach(function (x, g) { (x ? presentes : swap).push(g); });
+      var tlb = B.mezclar(presentes).slice(0, 2), pag;
+      if (tipo === "tlb") pag = tlb[Math.floor(Math.random() * 2)];
+      else if (tipo === "tabla") {
+        var resto = presentes.filter(function (g) { return tlb.indexOf(g) < 0; });
+        pag = resto[Math.floor(Math.random() * resto.length)];
+      } else pag = swap[Math.floor(Math.random() * swap.length)];
+      var marcos = B.mezclar([0, 1, 2, 3, 4, 5, 6, 7]);
+      var tab = pres.map(function (p, g) { return p ? marcos[g] : null; });
+      return { tab: tab, tlb: tlb, pag: pag, dv: pag * TAM + 100 + Math.floor(Math.random() * 39) * 100, tipo: tipo };
+    }
+  }
+  (function () {
+    var cont = $("ojo");
+    cont.innerHTML = '<div class="ronda"></div><div class="caso"><div class="tabla-wrap" id="ojoTabla"></div><div id="ojoDatos"></div></div>' +
+      '<div class="ojo-opts"><button type="button" class="opt" data-a="tlb">Acierto de TLB</button><button type="button" class="opt" data-a="tabla">Fallo de TLB, lo resuelve la tabla</button><button type="button" class="opt" data-a="fallo">Fallo de página</button></div>' +
+      '<div class="fb" aria-live="polite"></div><div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    var tipos, ronda, aciertos, respondida, caso;
+    function nueva() {
+      var extra = ["tlb", "tabla", "fallo"][Math.floor(Math.random() * 3)];
+      tipos = B.mezclar(["tlb", "tabla", "fallo", extra, extra === "fallo" ? "tabla" : "fallo"]);
+      ronda = 0; aciertos = 0;
+      mostrar();
+    }
+    function mostrar() {
+      respondida = false;
+      caso = ojoCaso(tipos[ronda]);
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 5 · aciertos " + aciertos;
+      var h = '<table class="mvt"><thead><tr><th>pág</th><th>P</th><th>marco</th></tr></thead><tbody>';
+      caso.tab.forEach(function (e, g) { h += '<tr><td>' + g + '</td><td>' + (e === null ? 0 : 1) + '</td><td' + (e === null ? ' class="sw">swap' : '>' + e) + '</td></tr>'; });
+      $("ojoTabla").innerHTML = h + '</tbody></table>';
+      $("ojoDatos").innerHTML = '<p class="lectura">TLB ahora: <b>página ' + caso.tlb[0] + '</b> y <b>página ' + caso.tlb[1] + '</b>.</p>' +
+        '<p class="lectura">El programa accede a la dirección virtual <b>' + caso.dv + '</b> (páginas de 4096 bytes).</p>';
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (b) { b.disabled = false; b.className = "opt"; });
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+    }
+    cont.querySelector(".ojo-opts").addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || respondida) return;
+      respondida = true;
+      var ok = b.getAttribute("data-a") === caso.tipo;
+      if (ok) aciertos++;
+      b.classList.add(ok ? "ok" : "mal");
+      if (!ok) cont.querySelector('[data-a="' + caso.tipo + '"]').classList.add("ok");
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (x) { x.disabled = true; });
+      var off = caso.dv % TAM, porque = "La dirección cae en la página " + caso.pag + " (offset " + off + "). " +
+        (caso.tipo === "tlb" ? "Esa página está en la TLB: acierto, la traducción es inmediata."
+          : caso.tipo === "tabla" ? "No está en la TLB, pero la tabla dice P = 1 (marco " + caso.tab[caso.pag] + "): se lee la tabla en la RAM y listo."
+          : "No está en la TLB y la tabla dice P = 0: la página está en el swap. Fallo de página.");
+      cont.querySelector(".fb").innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No.</span> ') + porque;
+      var sig = cont.querySelector(".sig");
+      sig.hidden = false;
+      if (ronda === 4) {
+        var aprobo = aciertos >= 4;
+        C.reto("ojo", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertos + " de 5" + (aprobo ? ". Aprobado." : ". Necesitas 4 para aprobar.");
+        sig.textContent = "Otra tanda";
+      } else sig.textContent = "Siguiente ronda";
+    });
+    cont.querySelector(".sig").addEventListener("click", function () { if (ronda === 4) nueva(); else { ronda++; mostrar(); } });
+    nueva();
+  })();
+
+  /* ---------------- reto: construir ---------------- */
+  (function () {
+    var OBJ = [
+      { t: "La dirección virtual 4500 de P se traduce a la física 24980.", ok: function (t) { return t[1] * TAM + (4500 - TAM) === 24980; } },
+      { t: "La dirección virtual 0 de P se traduce a la física 8192.", ok: function (t) { return t[0] * TAM === 8192; } },
+      { t: "La página 3 de P comparte marco con la página 2 de Q, que está en el marco 5.", ok: function (t) { return t[3] === 5; } },
+      { t: "Ninguna página de P usa el mismo marco que otra página de P.", ok: function (t) { return new Set(t).size === 4; } }
+    ];
+    var tab = [0, 1, 2, 3], hecho = false, ul = $("objetivos");
+    OBJ.forEach(function (o) { var li = document.createElement("li"); li.innerHTML = '<span class="m"></span><span>' + o.t + '</span>'; ul.appendChild(li); });
+    var h = '<table class="mvt"><thead><tr><th>pág de P</th><th>desde</th><th>marco</th></tr></thead><tbody>';
+    for (var g = 0; g < 4; g++) {
+      h += '<tr><td>' + g + '</td><td>' + hex4(g * TAM) + '</td><td><select data-g="' + g + '" aria-label="Marco de la página ' + g + '">';
+      for (var m = 0; m < 8; m++) h += '<option value="' + m + '"' + (m === g ? " selected" : "") + '>marco ' + m + '</option>';
+      h += '</select></td></tr>';
+    }
+    $("constr").innerHTML = h + '</tbody></table>';
+    function actualizar() {
+      $("constrVivo").innerHTML = "virtual 0 → física <b>" + (tab[0] * TAM) + "</b> · virtual 4500 → física <b>" + (tab[1] * TAM + 404) + "</b>";
+      var todos = true;
+      OBJ.forEach(function (o, i) { var ok = o.ok(tab); if (!ok) todos = false; ul.children[i].classList.toggle("hecho", ok); });
+      if (todos && !hecho) { hecho = true; C.reto("construir", true); }
+    }
+    $("constr").addEventListener("change", function (e) {
+      var s = e.target.closest("select");
+      if (!s) return;
+      tab[+s.getAttribute("data-g")] = +s.value;
+      actualizar();
+    });
+    actualizar();
+  })();
+
+  /* ---------------- reto: a mano ---------------- */
+  (function () {
+    var D;
+    function generar() {
+      var marcos = B.mezclar([0, 1, 2, 3, 4, 5, 6, 7]).slice(0, 6), pag = Math.floor(Math.random() * 6);
+      var off = 100 + Math.floor(Math.random() * 39) * 100 + Math.floor(Math.random() * 10) * 8;
+      D = { tab: marcos, pag: pag, off: off, v: pag * TAM + off, marco: marcos[pag] };
+      var h = '<table class="datos-mano"><tr><th>pág</th>';
+      marcos.forEach(function (_, g) { h += '<th>' + g + '</th>'; });
+      h += '</tr><tr><th>marco</th>' + marcos.map(function (m) { return '<td>' + m + '</td>'; }).join("") + '</tr></table>';
+      $("manoDatos").innerHTML = h;
+    }
+    var cfg = {
+      pregunta: function () { return "Con esa tabla, ¿a qué dirección <b>física</b> corresponde la dirección virtual <b>" + D.v + "</b>?"; },
+      respuesta: function () { return D.marco * TAM + D.off; },
+      tolerancia: 0,
+      pistas: [
+        function () { return "Divide " + D.v + " entre 4096: la parte entera es la página y lo que sobra es el offset."; },
+        function () { return "Página " + D.pag + ", offset " + D.off + ". La tabla dice que la página " + D.pag + " está en el marco " + D.marco + "."; },
+        function () { return D.marco + " · 4096 = " + (D.marco * TAM) + ". Suma el offset."; }
+      ],
+      diagnostico: function (v) {
+        if (v === D.v) return "Esa es la dirección virtual: falta traducirla.";
+        if (v === D.marco * TAM) return "Falta sumar el offset " + D.off + ".";
+        if (v === D.marco + D.off) return "Falta multiplicar el marco por 4096.";
+        if (v === D.tab[D.pag] * TAM + D.pag) return "Sumaste la página en vez del offset.";
+        return null;
+      },
+      explicacion: function () { return "pág = " + D.pag + ", offset = " + D.off + ", marco = " + D.marco + ". Física = " + D.marco + " · 4096 + " + D.off + " = " + (D.marco * TAM) + " + " + D.off + " = <b>" + (D.marco * TAM + D.off) + "</b>."; },
+      reintentable: true,
+      textoReintentar: "Otro ejercicio",
+      antesDeReintentar: generar,
+      alResolver: function (ok) { C.reto("mano", ok); }
+    };
+    generar();
+    B.numerico($("mano"), cfg);
+  })();
+
+  /* ---------------- reto: cazar el error ---------------- */
+  B.cazarError($("error"), {
+    variantes: [
+      {
+        intro: "Páginas de 4096 bytes. Tabla: página 0 → marco 3, página 1 → marco 6, página 2 → marco 1. Alguien tradujo la dirección virtual 10000:",
+        lineas: ["\\text{pág} = \\lfloor 10000 / 4096 \\rfloor = 2", "\\text{offset} = 10000 - 2\\cdot 4096 = 1808", "\\text{marco} = \\text{tabla}[2] = 1", "\\text{física} = 1\\cdot 4096 + 2 = 4098"],
+        erronea: 3,
+        explicacion: "Sumó el número de página (2) en vez del offset (1808). El offset pasa sin cambios: la física es $1\\cdot 4096 + 1808 = 5904$."
+      },
+      {
+        intro: "Páginas de 4096 bytes. Tabla: página 0 → marco 5, página 1 → marco 4. Alguien tradujo la dirección virtual 5000:",
+        lineas: ["\\text{pág} = \\lfloor 5000 / 4096 \\rfloor = 1", "\\text{offset} = 5000 - 1\\cdot 4096 = 904", "\\text{marco} = \\text{tabla}[1] = 4", "\\text{física} = 1\\cdot 4096 + 904 = 5000"],
+        erronea: 3,
+        explicacion: "Multiplicó la página (1) por 4096 en vez del marco (4). Así la «física» sale igual a la virtual, sin traducir nada. Lo correcto es $4\\cdot 4096 + 904 = 17288$."
+      },
+      {
+        intro: "Con $t_{ok} = 80$ ns, $t_{fallo} = 100\\,000$ ns y una tasa de fallos de página $p = 0.001$, alguien calculó el tiempo medio de acceso:",
+        lineas: ["T = (1-p)\\,t_{ok} + p\\,t_{fallo}", "T = 0.999\\cdot 80 + 0.001\\cdot 100000", "T = 79.92 + 10", "T = 89.92\\ \\text{ns}"],
+        erronea: 2,
+        explicacion: "$0.001\\cdot 100000 = 100$, no 10. El total es $79.92 + 100 = 179.92$ ns: aunque solo falle 1 de cada mil, los fallos más que duplican el tiempo medio."
+      }
+    ],
+    alResolver: function (ok) { C.reto("error", ok); }
+  });
+
+  /* ---------------- retos: propiedades ---------------- */
+  function prop(id, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple($(id), cfg);
+  }
+  prop("prop1", {
+    pregunta: "Con páginas de 4 KB (4096 bytes), ¿cuántos bits de la dirección forman el offset?",
+    opciones: ["12 bits", "4 bits", "10 bits", "16 bits"],
+    correcta: 0,
+    pistas: [null, "4 bits solo numeran 16 posiciones. ¿Cuántas posiciones hay dentro de una página de 4096 bytes?",
+      "$2^{10}$ es 1024, un solo kilobyte. Una página tiene 4.", "$2^{16}$ es 65 536: mucho más que una página."],
+    explicacion: "$2^{12} = 4096$: hacen falta 12 bits para numerar cada byte de la página. Los bits que sobran en la dirección eligen la página."
+  });
+  prop("prop2", {
+    pregunta: "Con direcciones virtuales de 32 bits y páginas de 4 KB, ¿cuántas páginas tiene el espacio virtual de un proceso?",
+    opciones: ["$2^{20}$, más de un millón", "$2^{12}$", "$2^{32}$", "$2^{16}$"],
+    correcta: 0,
+    pistas: [null, "$2^{12}$ es el tamaño de una página en bytes, no la cantidad de páginas.",
+      "$2^{32}$ es la cantidad de bytes del espacio virtual, no de páginas.", "Resta: 32 bits en total y 12 son de offset. ¿Cuántos quedan para numerar la página?"],
+    explicacion: "32 − 12 = 20 bits para el número de página: $2^{20} = 1\\,048\\,576$ páginas. Por eso la tabla de un proceso puede tener más de un millón de filas."
+  });
+  prop("prop3", {
+    pregunta: "Dos procesos usan la misma dirección virtual 0x0040. ¿Qué es cierto?",
+    opciones: [
+      "Pueden estar en marcos distintos, o en el mismo si comparten esa página",
+      "Siempre apuntan al mismo marco físico",
+      "El sistema lo prohíbe: cada dirección virtual es única en todo el computador",
+      "Uno de los dos tendrá un fallo de página"
+    ],
+    correcta: 0,
+    pistas: [null, "Entonces los dos procesos se pisarían todo el tiempo. Recuerda el 7 y el 9 del paso 1.",
+      "Es al revés: reutilizar los mismos números es justamente lo cómodo de las direcciones virtuales.",
+      "Un fallo de página depende del bit de presencia, no de que dos procesos usen el mismo número."],
+    explicacion: "Cada proceso tiene su tabla. Lo normal es que el 0x0040 de cada uno caiga en marcos distintos; si dos tablas apuntan al mismo marco (código compartido), ven lo mismo."
+  });
+  prop("prop4", {
+    pregunta: "¿Qué guarda la TLB?",
+    opciones: [
+      "Copias de traducciones recientes: pares página → marco",
+      "Copias de los datos de las páginas más usadas",
+      "La tabla de páginas completa de todos los procesos",
+      "Las páginas que están en el swap"
+    ],
+    correcta: 0,
+    pistas: [null, "Eso lo hace la caché de datos. La TLB solo guarda la traducción.",
+      "Sería enorme: justamente es un cuadro muy pequeño.", "El swap está en el disco; la TLB está dentro del procesador."],
+    explicacion: "La TLB es una caché de traducciones, no de datos. Por eso es tan pequeña y tan rápida: 4, 64 o unas pocas cientos de entradas."
+  });
+  prop("prop5", {
+    pregunta: "Un fallo de página ocurre cuando...",
+    opciones: [
+      "El bit de presencia vale 0: la página no está en ningún marco",
+      "La TLB no contiene la traducción",
+      "La caché no contiene el dato",
+      "El offset es mayor que el tamaño de la página"
+    ],
+    correcta: 0,
+    pistas: [null, "Eso es un fallo de TLB, y se arregla leyendo la tabla en la RAM.",
+      "Eso es un fallo de caché, y se arregla leyendo la RAM. Es un nivel distinto.", "Un offset siempre es menor que 4096, porque son solo 12 bits."],
+    explicacion: "Solo cuando la tabla dice P = 0 la página no está en la memoria y el sistema operativo tiene que traerla del disco."
+  });
+  prop("prop6", {
+    pregunta: "Con $t_{ok} = 80$ ns y $t_{fallo} = 100\\,000$ ns, la tasa de fallos de página sube de 1 en 1000 a 1 en 100 (diez veces más fallos). El tiempo medio de acceso...",
+    opciones: [
+      "Se multiplica por unas 6 veces: de 179.92 a 1079.2 ns",
+      "Se multiplica por 10",
+      "Casi no cambia: pasa de 180 a 190 ns",
+      "Se divide entre 10"
+    ],
+    correcta: 0,
+    pistas: [null, "El tiempo medio tiene una parte fija de unos 80 ns que no crece con los fallos. Haz la cuenta completa.",
+      "Calcula $0.01 \\cdot 100\\,000$: solo esa parte ya vale 1000 ns.", "Más fallos nunca pueden bajar el tiempo medio."],
+    explicacion: "$0.99\\cdot 80 + 0.01\\cdot 100\\,000 = 79.2 + 1000 = 1079.2$ ns, unas 6 veces los 179.92 ns de antes. Diez veces más fallos no son diez veces más tiempo porque aún pesa la parte de los 80 ns."
+  });
+  prop("prop7", {
+    pregunta: "Según la comparación de la unidad, ¿qué unidad de datos mueve cada una?",
+    opciones: [
+      "Caché: líneas de 32 a 64 bytes; memoria virtual: páginas de 4 KB",
+      "Caché: páginas de 4 KB; memoria virtual: líneas de 64 bytes",
+      "Las dos mueven líneas de 64 bytes",
+      "Caché: bytes sueltos; memoria virtual: archivos enteros"
+    ],
+    correcta: 0,
+    pistas: [null, "Al revés: la caché trabaja con trozos más pequeños y cercanos al procesador.",
+      "La memoria virtual necesita trozos grandes, porque traerlos del disco tiene un coste fijo muy alto.", "Ninguna de las dos mueve bytes sueltos ni archivos."],
+    explicacion: "La caché ataca la latencia con líneas chicas y la gestiona el hardware. La memoria virtual ataca la capacidad y la protección con páginas de 4 KB, y la gestionan la MMU y el sistema operativo."
+  });
+
+  /* ---------------- formula de memoria ---------------- */
+  B.ordenar($("formula"), {
+    piezas: ["F", "=", "\\text{tabla}[p]", "\\cdot\\, 4096", "+", "(v \\bmod 4096)"],
+    distractores: ["\\text{tabla}[v]", "(v \\div 4096)", "-", "\\cdot\\, 4000"],
+    soluciones: [[0, 1, 2, 3, 4, 5], [0, 1, 5, 4, 2, 3]],
+    explicacion: "El marco que dice la tabla para la página $p$, por el tamaño de página, más el offset de la dirección virtual: el offset no cambia.",
+    alResolver: function (ok) { C.reto("formula", ok); }
+  });
+
+  /* ---------------- vida real: el algoritmo en codigo ---------------- */
+  (function () {
+    var CODIGO = {"py": [["tam", "TAM = 4096"], ["accesos", "accesos = [4100, 4200, 9000, 4300, 16500, 9100, 21000, 16600]"], ["tabla", "tabla = [5, 2, 7, 0, None, None]      # marco de cada página (None = está en el swap)"], ["libres", "libres = [6, 3]                       # marcos vacíos"], ["cap", "CAP = 2                               # entradas de la TLB"], ["tlbpag", "tlb_pag = []                          # la menos reciente va primero"], ["tlbmarco", "tlb_marco = []"], ["ftlb", "fallos_tlb = 0"], ["fpag", "fallos_pag = 0"], ["fis0", "fisicas = []"], ["for", "for dv in accesos:                    # una dirección virtual tras otra"], ["pag", "    pag = dv // TAM"], ["off", "    off = dv % TAM"], ["sitlb", "    if pag in tlb_pag:                # acierto de TLB"], ["pos", "        pos = tlb_pag.index(pag)"], ["marcotlb", "        marco = tlb_marco[pos]"], ["saca1", "        tlb_pag.pop(pos)"], ["saca2", "        tlb_marco.pop(pos)"], [null, "    else:                             # fallo de TLB: se lee la tabla"], ["falloTlb", "        fallos_tlb += 1"], ["marco", "        marco = tabla[pag]"], ["sifallo", "        if marco is None:             # fallo de página"], ["fallopag", "            fallos_pag += 1"], ["libre", "            marco = libres.pop()"], ["actualiza", "            tabla[pag] = marco"], ["sillena", "        if len(tlb_pag) == CAP:       # TLB llena: sale la menos reciente"], ["expulsa1", "            tlb_pag.pop(0)"], ["expulsa2", "            tlb_marco.pop(0)"], ["meter1", "    tlb_pag.append(pag)"], ["meter2", "    tlb_marco.append(marco)"], ["fisica", "    fisicas.append(marco * TAM + off)"], ["imprimir1", "print(fisicas)"], ["imprimir2", "print(fallos_tlb, fallos_pag)"], ["verificar", "print(all((dv >> 12) == dv // TAM and (dv & 4095) == dv % TAM for dv in accesos))   # True"]], "r": [["tam", "TAM <- 4096"], ["accesos", "accesos <- c(4100, 4200, 9000, 4300, 16500, 9100, 21000, 16600)"], ["tabla", "tabla <- c(5, 2, 7, 0, NA, NA)        # marco de cada página (NA = está en el swap)"], ["libres", "libres <- c(6, 3)                     # marcos vacíos"], ["cap", "CAP <- 2                              # entradas de la TLB"], ["tlbpag", "tlb_pag <- c()                        # la menos reciente va primero"], ["tlbmarco", "tlb_marco <- c()"], ["ftlb", "fallos_tlb <- 0"], ["fpag", "fallos_pag <- 0"], ["fis0", "fisicas <- c()"], ["for", "for (dv in accesos) {                 # una dirección virtual tras otra"], ["pag", "  pag <- dv %/% TAM"], ["off", "  off <- dv %% TAM"], ["sitlb", "  if (pag %in% tlb_pag) {             # acierto de TLB"], ["pos", "    pos <- match(pag, tlb_pag)"], ["marcotlb", "    marco <- tlb_marco[pos]"], ["saca1", "    tlb_pag <- tlb_pag[-pos]"], ["saca2", "    tlb_marco <- tlb_marco[-pos]"], [null, "  } else {                            # fallo de TLB: se lee la tabla"], ["falloTlb", "    fallos_tlb <- fallos_tlb + 1"], ["marco", "    marco <- tabla[pag + 1]"], ["sifallo", "    if (is.na(marco)) {               # fallo de página"], ["fallopag", "      fallos_pag <- fallos_pag + 1"], ["libre", "      marco <- libres[length(libres)]"], ["libre", "      libres <- libres[-length(libres)]"], ["actualiza", "      tabla[pag + 1] <- marco"], [null, "    }"], ["sillena", "    if (length(tlb_pag) == CAP) {     # TLB llena: sale la menos reciente"], ["expulsa1", "      tlb_pag <- tlb_pag[-1]"], ["expulsa2", "      tlb_marco <- tlb_marco[-1]"], [null, "    }"], [null, "  }"], ["meter1", "  tlb_pag <- c(tlb_pag, pag)"], ["meter2", "  tlb_marco <- c(tlb_marco, marco)"], ["fisica", "  fisicas <- c(fisicas, marco * TAM + off)"], [null, "}"], ["imprimir1", "print(fisicas)"], ["imprimir2", "cat(fallos_tlb, fallos_pag, \"\\n\")"], ["verificar", "print(all(bitwShiftR(accesos, 12L) == accesos %/% TAM & bitwAnd(accesos, 4095L) == accesos %% TAM))   # TRUE"]]};
+    var ACC = [4100, 4200, 9000, 4300, 16500, 9100, 21000, 16600], CAP = 2;
+    var EV = [];
+    (function () {
+      var tabla = [5, 2, 7, 0, null, null], libres = [6, 3], tp = [], tm = [], ft = 0, fp = 0, fis = [], fase = 1, cur = {};
+      function foto(id, extra) {
+        EV.push(Object.assign({ id: id, fase: fase, tabla: tabla.slice(), libres: libres.slice(), tp: tp.slice(), tm: tm.slice(), ft: ft, fp: fp, fis: fis.slice(),
+          i: null, dv: null, pag: null, off: null, marco: null, tipo: null, pos: null, llena: null, hit: null }, cur, extra || {}));
+      }
+      ["tam", "accesos", "tabla", "libres", "cap", "tlbpag", "tlbmarco", "ftlb", "fpag", "fis0"].forEach(function (id) { foto(id); });
+      fase = 2;
+      for (var i = 0; i < ACC.length; i++) {
+        var dv = ACC[i], pag = Math.floor(dv / TAM), off = dv % TAM, marco;
+        cur = { i: i, dv: dv };
+        foto("for");
+        cur.pag = pag; foto("pag");
+        cur.off = off; foto("off");
+        var pos = tp.indexOf(pag);
+        cur.hit = pos >= 0;
+        foto("sitlb");
+        if (pos >= 0) {
+          cur.pos = pos; foto("pos");
+          marco = tm[pos]; cur.marco = marco; cur.tipo = "hit"; foto("marcotlb");
+          tp.splice(pos, 1); foto("saca1");
+          tm.splice(pos, 1); foto("saca2");
+        } else {
+          ft++; cur.tipo = "miss"; foto("falloTlb");
+          marco = tabla[pag]; cur.marco = marco; foto("marco");
+          if (marco === null) {
+            foto("sifallo", { vacio: true });
+            fp++; cur.tipo = "fallo"; foto("fallopag");
+            marco = libres.pop(); cur.marco = marco; foto("libre");
+            tabla[pag] = marco; foto("actualiza", { nuevaPag: pag });
+          } else foto("sifallo", { vacio: false });
+          var llena = tp.length === CAP;
+          foto("sillena", { llena: llena });
+          if (llena) { tp.shift(); foto("expulsa1"); tm.shift(); foto("expulsa2"); }
+        }
+        tp.push(pag); foto("meter1");
+        tm.push(marco); foto("meter2");
+        fis.push(marco * TAM + off); foto("fisica");
+      }
+      cur = {}; fase = 3;
+      foto("imprimir1", { fin: true }); foto("imprimir2", { fin: true }); foto("verificar", { fin: true });
+    })();
+
+    var ETIQ = { hit: "acierto TLB", miss: "fallo TLB", fallo: "fallo de página" };
+    function narrar(e, ctx) {
+      var py = ctx.lang() === "py", ix = ctx.ix;
+      switch (e.id) {
+        case "tam": return "El tamaño de página: <b>4096</b> bytes.";
+        case "accesos": return "Las ocho direcciones virtuales que pide el proceso A, una tras otra.";
+        case "tabla": return "La tabla de páginas de A: marco de cada página. Las páginas 4 y 5 están en el swap (" + (py ? "<b>None</b>" : "<b>NA</b>") + ").";
+        case "libres": return "Los marcos físicos que están vacíos: el 6 y el 3. " + (py ? "<b>pop()</b> sacará el último, el 3." : "Se tomará el último, el 3.");
+        case "cap": return "La TLB cabe <b>2</b> traducciones.";
+        case "tlbpag": return "La TLB empieza vacía. Esta lista guarda las páginas; la menos reciente va primero.";
+        case "tlbmarco": return "Y esta guarda el marco de cada una, en el mismo orden.";
+        case "ftlb": return "Contador de fallos de TLB, en cero.";
+        case "fpag": return "Contador de fallos de página, en cero.";
+        case "fis0": return "Aquí se irán guardando las direcciones físicas.";
+        case "for": return "Acceso " + (e.i + 1) + " de 8: la dirección virtual <b>" + e.dv + "</b>.";
+        case "pag": return "Página: " + e.dv + " entre 4096, parte entera = <b>" + e.pag + "</b>.";
+        case "off": return "Offset: lo que sobra, " + e.dv + " − " + e.pag + " · 4096 = <b>" + e.off + "</b>.";
+        case "sitlb": return e.hit ? "La página " + e.pag + " <b>sí está en la TLB</b>: acierto." : "La página " + e.pag + " <b>no está en la TLB</b>: toca leer la tabla.";
+        case "pos": return "Busca en qué posición de la TLB está: la <b>" + ix(e.pos) + "</b>.";
+        case "marcotlb": return "El marco sale de la TLB, sin leer la tabla: <b>" + e.marco + "</b>.";
+        case "saca1": return "La saca de su sitio para volver a ponerla al final: pasa a ser la más reciente.";
+        case "saca2": return "Lo mismo con su marco, para que las dos listas sigan alineadas.";
+        case "falloTlb": return "Fallo de TLB número <b>" + e.ft + "</b>.";
+        case "marco": return "Lee la tabla de páginas en la posición " + ix(e.pag) + ": " + (e.marco === null ? "<b>" + (py ? "None" : "NA") + "</b>, la página está en el swap." : "marco <b>" + e.marco + "</b>.");
+        case "sifallo": return e.vacio ? "La tabla no tiene marco: <b>fallo de página</b>." : "La tabla sí tiene marco: la página está en la memoria.";
+        case "fallopag": return "Fallo de página número <b>" + e.fp + "</b>. Aquí el sistema operativo iría al disco.";
+        case "libre": return "Toma un marco libre: el <b>" + e.marco + "</b>. Quedan " + (e.libres.length ? "<b>" + e.libres.join(", ") + "</b>" : "ninguno") + ".";
+        case "actualiza": return "Anota en la tabla: la página " + e.pag + " ahora está en el marco " + e.marco + ".";
+        case "sillena": return e.llena ? "La TLB está <b>llena</b> (2 de 2): hay que sacar una." : "La TLB todavía tiene sitio.";
+        case "expulsa1": return "Sale la página menos reciente, la primera de la lista.";
+        case "expulsa2": return "Y su marco.";
+        case "meter1": return "La página " + e.pag + " entra a la TLB, como la más reciente.";
+        case "meter2": return "Y su marco " + e.marco + ", en el mismo orden.";
+        case "fisica": return "Dirección física: " + e.marco + " · 4096 + " + e.off + " = <b>" + e.fis[e.fis.length - 1] + "</b>. Resultado: " + ETIQ[e.tipo] + ".";
+        case "imprimir1": return "Imprime las ocho direcciones físicas.";
+        case "imprimir2": return "Imprime los contadores: <b>" + e.ft + "</b> fallos de TLB y <b>" + e.fp + "</b> fallos de página.";
+        case "verificar": return py ? "Comprueba que cortar con <b>dv &gt;&gt; 12</b> y <b>dv &amp; 4095</b> da lo mismo que dividir: <b>True</b>."
+          : "Comprueba que cortar con <b>bitwShiftR</b> y <b>bitwAnd</b> da lo mismo que dividir: <b>TRUE</b>.";
+      }
+      return "";
+    }
+    function visual(e, anterior, ctx) {
+      var ix = ctx.ix, fin = e && e.fase === 3;
+      var h = '<thead><tr><th>acceso</th><th>virtual</th><th>pág</th><th>offset</th><th>resultado</th><th>física</th></tr></thead><tbody>';
+      for (var i = 0; i < ACC.length; i++) {
+        var fila = EV.filter(function (x) { return x.i === i && x.id === "fisica"; })[0];
+        var hecha = !!e && (e.fase === 3 || (e.i !== null && i < e.i) || (e.i === i && e.id === "fisica"));
+        var act = !!e && e.fase === 2 && e.i === i;
+        var pag = hecha || (act && e.pag !== null) ? Math.floor(ACC[i] / TAM) : null;
+        var off = hecha || (act && e.off !== null) ? ACC[i] % TAM : null;
+        var tipo = hecha ? fila.tipo : act && e.id !== "for" && e.id !== "pag" && e.id !== "off" ? (e.hit ? "hit" : e.tipo === "fallo" ? "fallo" : "miss") : null;
+        h += '<tr' + (act ? ' class="on"' : '') + '><td class="pl">' + ix(i) + '</td><td>' + ACC[i] + '</td><td>' + (pag !== null ? pag : "") + '</td><td>' + (off !== null ? off : "") + '</td>' +
+          '<td class="' + (tipo || "") + '">' + (tipo ? ETIQ[tipo] : "") + '</td><td>' + (hecha ? fila.fis[i] : "") + '</td></tr>';
+      }
+      $("vrAcc").innerHTML = h + '</tbody>';
+      $("vrCuenta").innerHTML = e && e.id === "fisica" ? e.marco + " · 4096 + " + e.off + " = <b>" + e.fis[e.fis.length - 1] + "</b>"
+        : e && e.fin ? "Fallos de TLB: <b>" + e.ft + "</b> · fallos de página: <b>" + e.fp + "</b>" : "";
+      var est2 = e || { tabla: [5, 2, 7, 0, null, null], libres: [6, 3], tp: [], tm: [], pag: null, nuevaPag: null };
+      var s = '<div class="fila"><b>tabla de A</b>';
+      est2.tabla.forEach(function (m, g) {
+        s += '<span class="cel' + (m === null ? " sw" : "") + (e && e.pag === g && e.fase === 2 ? " foco" : "") + (e && e.nuevaPag === g ? " nueva" : "") + '">' + ix(g) + ': ' + (m === null ? (ctx.lang() === "py" ? "None" : "NA") : m) + '</span>';
+      });
+      s += '</div><div class="fila"><b>TLB</b>';
+      for (var k = 0; k < CAP; k++) s += est2.tp[k] !== undefined ? '<span class="cel">pág ' + est2.tp[k] + ' → ' + est2.tm[k] + '</span>' : '<span class="cel vacia">vacía</span>';
+      s += '</div><div class="fila"><b>libres</b>';
+      s += est2.libres.length ? est2.libres.map(function (m) { return '<span class="cel">' + m + '</span>'; }).join("") : '<span class="cel vacia">ninguno</span>';
+      $("vrEst").innerHTML = s + '</div>';
+    }
+    B.vidaReal($("vidareal"), {
+      codigo: CODIGO,
+      eventos: EV,
+      narrar: narrar,
+      vars: function (e, ctx) {
+        var v = [];
+        if (e && e.dv !== null) v.push('<span class="vj">dv = <b>' + e.dv + '</b></span>');
+        if (e && e.pag !== null) v.push('<span class="vj">pag = <b>' + e.pag + '</b></span>');
+        if (e && e.off !== null) v.push('<span class="vk">off = <b>' + e.off + '</b></span>');
+        if (e && e.marco !== null && e.marco !== undefined) v.push('<span>marco = <b>' + e.marco + '</b></span>');
+        v.push('<span>fallos_tlb = <b>' + (e ? e.ft : 0) + '</b></span>');
+        v.push('<span>fallos_pag = <b>' + (e ? e.fp : 0) + '</b></span>');
+        return v;
+      },
+      visual: visual,
+      demora: function (e) { return !e ? 600 : (e.id === "for" || e.id === "pag" || e.id === "off") ? 420 : e.id === "fisica" ? 1000 : e.id === "sifallo" || e.id === "sitlb" ? 800 : e.fase === 1 ? 500 : 650; }
+    });
+
+    B.numerico(cuerpo("vrPred"), {
+      pregunta: "Las páginas 4 y 5 de A están en el swap, y el programa toca la página 4 dos veces (accesos 16500 y 16600) y la 5 una vez (21000). ¿Cuántos <b>fallos de página</b> cuenta el programa al terminar?",
+      respuesta: 2,
+      tolerancia: 0,
+      pistas: [
+        "Un fallo de página ocurre cuando la tabla dice que la página no tiene marco. ¿Qué pasa con la tabla después del primer fallo?",
+        "Después de cargar la página 4 en un marco, la tabla ya lo anota. La segunda vez que se toca, ¿sigue en el swap?"
+      ],
+      diagnostico: function (v) {
+        if (v === 3) return "Cuentas los tres accesos a páginas del swap, pero la segunda vez que se toca la página 4 ya tiene marco en la tabla: no vuelve a fallar la página (aunque la TLB sí pueda fallar).";
+        if (v === 6) return "Esos son los fallos de TLB. Aquí te piden los de página, que son los que van al disco.";
+        return null;
+      },
+      explicacion: "<b>2</b> fallos de página: la primera vez que se toca la página 4 y la primera vez que se toca la 5. Los otros accesos a la página 4 fallan en la TLB (con 2 entradas se llena enseguida), pero no en la página. Ahora dale a reproducir y mira los contadores.",
+      alResolver: function (ok) { C.reto("codigo1", ok); }
+    });
+    prop("codigo2", {
+      pregunta: "En R escribes <code>marco &lt;- tabla[pag]</code> en vez de <code>tabla[pag + 1]</code>, con <code>tabla &lt;- c(5, 2, 7, 0, NA, NA)</code>. Para el primer acceso (4100, página 1), ¿qué pasa?",
+      opciones: [
+        "Usa el marco 5, el de la página 0: sale la física 20484 en lugar de 8196, sin ningún error",
+        "R avisa con un error porque el índice 1 no existe",
+        "Usa el marco 2 igual, porque R corrige el índice solo",
+        "Devuelve NA y el programa se detiene"
+      ],
+      correcta: 0,
+      pistas: [null, "En R el primer elemento es el 1, así que <code>tabla[1]</code> sí existe: es la página 0.",
+        "R no corrige nada: usa el índice tal cual lo escribes.", "<code>tabla[1]</code> vale 5, no NA, así que no hay nada que detenga el programa."],
+      explicacion: "R cuenta desde 1: <code>tabla[1]</code> es la página 0, así que todo queda corrido una posición. Sale 5 · 4096 + 4 = 20484, sin error ni aviso. Es la trampa más peligrosa de pasar código de Python a R: la página 0 vive en <code>tabla[1]</code>, la 1 en <code>tabla[2]</code>."
+    });
+    prop("codigo3", {
+      pregunta: "Al expulsar de la TLB escribes <code>tlb_pag.pop()</code> en lugar de <code>tlb_pag.pop(0)</code> (en R, <code>tlb_pag[-length(tlb_pag)]</code> en lugar de <code>tlb_pag[-1]</code>). ¿Qué cambia?",
+      opciones: [
+        "Sale la entrada más reciente, no la menos reciente: no hay error, pero la TLB expulsa justo lo que acabas de usar",
+        "Da un error porque pop necesita un argumento",
+        "No cambia nada: pop() y pop(0) sacan lo mismo",
+        "Se vacía toda la TLB"
+      ],
+      correcta: 0,
+      pistas: [null, "<code>pop()</code> sin argumento es válido: saca el último elemento.",
+        "<code>pop(0)</code> saca el primero y <code>pop()</code> saca el último: son elementos distintos.", "Solo se saca un elemento por llamada."],
+      explicacion: "La lista guarda la menos reciente primero y la más reciente al final. <code>pop(0)</code> saca la primera (la menos usada, lo correcto en LRU) y <code>pop()</code> la última (la que más se usó hace un momento). El programa sigue corriendo y da resultados parecidos, pero la TLB se vuelve inútil con la localidad temporal. Es un error silencioso, igual que en la caché."
+    });
+  })();
+
+  /* ---------------- tarjetas ---------------- */
+  B.tarjetas($("tarjetas"), [
+    ["¿Qué es una dirección virtual?", "La que usa el programa: cada proceso ve su propio espacio, que empieza en 0. La MMU y el sistema operativo la traducen a una dirección física."],
+    ["¿Qué son una página y un marco?", "Página: trozo de la memoria virtual. Marco: trozo de la memoria física del mismo tamaño (habitualmente 4 KB). La tabla de páginas dice qué página está en qué marco."],
+    ["¿Cómo se traduce una dirección?", "$F=\\text{tabla}[p]\\cdot 4096+(v\\bmod 4096)$: el marco reemplaza a la página y el offset pasa igual."],
+    ["¿Por qué 12 bits de offset?", "Porque $2^{12}=4096$ bytes por página. Los bits de arriba eligen la página."],
+    ["¿Qué guarda la TLB?", "Traducciones recientes (página → marco), no datos. Acierto: casi inmediato. Fallo: hay que leer la tabla en la RAM."],
+    ["¿Fallo de TLB es lo mismo que fallo de página?", "No. Fallo de TLB: se lee la tabla en la RAM (decenas de ns). Fallo de página: el bit de presencia vale 0 y hay que traer la página del disco (decenas de µs a ms)."],
+    ["¿Para qué sirven los bits de la tabla de páginas?", "Presencia (¿está en un marco?), permisos de leer, escribir y ejecutar, modificado (¿hay que escribirla de vuelta al expulsarla?) y referenciado (¿se usó hace poco?)."],
+    ["¿Por qué un fallo de página raro pesa tanto en el tiempo medio?", "Porque $T=(1-p)\\,t_{ok}+p\\,t_{fallo}$ y $t_{fallo}$ es miles de veces mayor que $t_{ok}$: un fallo cada mil accesos ya más que duplica el promedio."]
+  ]);
+
+  /* ---------------- conexiones ---------------- */
+  B.conexiones("memoria-virtual");
+})();
+</script>
+</body>
+</html>

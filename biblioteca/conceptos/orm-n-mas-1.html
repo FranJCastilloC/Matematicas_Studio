@@ -1,0 +1,1806 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ORM, DAO y el problema N+1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+/* ---------- tablas del escenario ---------- */
+.tabla-wrap { overflow-x: auto; margin-top: 10px; }
+.tabla { width: 100%; border-collapse: collapse; font-family: var(--f-mono); font-size: 12px; font-variant-numeric: tabular-nums; }
+.tabla th { font-weight: 500; color: var(--ink-3); font-size: 11px; text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.tabla td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--line-soft); color: var(--ink); white-space: nowrap; }
+.tabla td.pend { color: var(--ink-3); font-style: italic; }
+.tabla td.nuevo { background: color-mix(in oklab, var(--ok) 20%, var(--surface)); }
+.tabla tr.cur td { box-shadow: inset 0 0 0 2px var(--accent); }
+.tabla tr.fuera td { opacity: .3; }
+.tabla tr.dentro td { background: var(--accent-soft); }
+.tabla td.vacio { text-align: center; color: var(--ink-3); font-style: italic; white-space: normal; }
+.tabla td.dup { color: var(--accent); font-weight: 600; }
+
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.esc-head .hint, .n-ctl .hint { font-size: 12.5px; color: var(--ink-2); }
+.n-ctl { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin-bottom: 8px; }
+.n-ctl:empty { display: none; }
+.n-ctl button:disabled { opacity: .45; cursor: not-allowed; }
+.n-ctl button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.n-rng { display: flex; align-items: center; gap: 6px; font-family: var(--f-mono); font-size: 12px; color: var(--ink-2); }
+.n-rng input { width: 90px; }
+.n-rng b { color: var(--ink); min-width: 1.6em; display: inline-block; }
+
+/* ---------- registro de consultas ---------- */
+.n-log { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 4px; font-family: var(--f-mono); font-size: 11.5px; }
+.n-log li { display: grid; grid-template-columns: 2.4em minmax(0, 1fr) auto; gap: 6px; align-items: center; padding: 3px 6px; border-radius: 6px; background: var(--surface-2); color: var(--ink-2); }
+.n-log li.nueva { box-shadow: inset 0 0 0 2px var(--accent); }
+.n-log .qn { color: var(--ink-3); }
+.n-log .qs { overflow-wrap: anywhere; color: var(--ink); }
+.n-log .qms { color: var(--accent); white-space: nowrap; }
+.n-vacio { color: var(--ink-3); font-style: italic; font-size: 12.5px; margin-top: 8px; }
+.n-kv { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 3px 12px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); font-family: var(--f-mono); font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.n-kv dt { color: var(--ink-3); }
+.n-kv dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
+.n-kv dd.q { color: var(--accent); font-weight: 600; }
+.n-nota { margin-top: 8px; font-size: 13px; color: var(--ink-2); min-height: 2.6em; overflow-wrap: anywhere; }
+.n-nota b { color: var(--ink); font-weight: 500; }
+.n-nota .mal { color: var(--bad); }
+.n-nota .bien { color: var(--ok); }
+.n-code { margin-top: 8px; }
+.n-code .etq { font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); margin: 6px 0 2px; }
+
+/* ---------- el panel ORM y el DAO ---------- */
+.orm-in { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: flex-end; }
+.orm-in label { font-family: var(--f-mono); font-size: 10.5px; color: var(--ink-3); display: block; margin-bottom: 2px; }
+.orm-in select, .orm-in input { font-family: var(--f-mono); font-size: 12.5px; padding: 5px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); max-width: 130px; }
+.orm-in input { width: 120px; }
+.dao-pat { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.dao-pat button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.dao-flujo { display: grid; gap: 4px; }
+.dao-flecha { text-align: center; color: var(--ink-3); font-family: var(--f-mono); font-size: 12px; }
+
+/* ---------- retos propios ---------- */
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.ctx-ojo { font-size: 13px; color: var(--ink-2); margin: 6px 0; }
+.prog-pre { font-family: var(--f-mono); font-size: 13px; background: var(--surface-2); border-radius: 8px; padding: 10px 14px; margin: 8px 0; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ojo-opts3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 6px; margin-top: 10px; }
+.ojo-opts3 .opt { text-align: center; font-family: var(--f-mono); }
+.objetivos { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.objetivos li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.objetivos .m { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.objetivos li.hecho { color: var(--ink); }
+.objetivos li.hecho .m { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 3px var(--surface); }
+.grande { font-family: var(--f-mono); font-size: 14px; color: var(--ink-2); margin: 6px 0 12px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.grande b { font-size: 18px; color: var(--ink); font-weight: 500; }
+.salida { font-family: var(--f-mono); font-size: 12.5px; background: var(--surface-2); border-radius: 8px; padding: 8px 12px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); margin: 8px 0; }
+.vr-tabla th, .vr-tabla td { text-align: left; white-space: nowrap; }
+.vr-qs { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 3px; font-family: var(--f-mono); font-size: 11.5px; }
+.vr-qs li { padding: 3px 6px; border-radius: 6px; background: var(--surface-2); color: var(--ink); overflow-wrap: anywhere; }
+.vr-qs li.nueva { box-shadow: inset 0 0 0 2px var(--accent); }
+.vr-qs li.rep { color: var(--accent); }
+@media (max-width: 480px) {
+  .tabla { font-size: 11px; }
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ ORM, DAO y el problema N+1</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Infraestructura y programación · Diseño de bases de datos · Base de datos (SM142051) · UD5</p>
+    <h1>ORM, DAO y el problema N+1</h1>
+    <p class="lede">
+      Un programa casi nunca habla con la base de datos escribiendo SQL a mano en cada pantalla: usa una <b>capa de acceso</b> que convierte tablas en clases y consultas en métodos.
+      Esa comodidad esconde un riesgo. Un código que se ve limpio y da el resultado correcto puede lanzar <b>una consulta por cada fila</b> y ahogar a la base sin que lo notes.
+      Vas a cargar una pantalla de pedidos de una tienda en línea, a contar cuántas consultas lanza y a ver cómo se arregla.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> Una pantalla muestra la lista de pedidos de una tienda y, en cada fila, el nombre del cliente que lo hizo. Los pedidos y los clientes están en dos tablas distintas. ¿Cuántas veces crees que el programa tiene que preguntarle a la base para armar esa pantalla? Escríbelo como te salga, aunque esté mal.</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: una vez para los pedidos y otra para los clientes, o quizá..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>De una pantalla a una consulta por fila</h2>
+      <p>Siete pasos. Cada uno termina con un chequeo: hasta que no lo resuelves, el siguiente queda cerrado. Equivocarte aquí no resta nada, es parte del método.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="Una consulta por fila">
+          <span class="etapa">Paso 1</span>
+          <h3>La pantalla de pedidos con el nombre de cada cliente</h3>
+          <p>Una tienda en línea tiene una pantalla que lista sus pedidos y, junto a cada uno, el nombre del cliente. El programa lo arma así: primero le pide a la base <b>la lista de pedidos</b>; después, para escribir cada fila, le pregunta <b>quién es el cliente de ese pedido</b>. Cada pregunta que viaja a la base se llama <b>consulta</b>, y cada viaje de ida y vuelta tiene un costo.</p>
+          <p>La tienda es la del ejercicio de la UD2: 5 clientes y 6 pedidos (el pedido 5001 es de Marta, el 5002 de Javier, el 5003 otra vez de Marta, y así). A la derecha está la pantalla, todavía vacía. Haz tu predicción y se abrirá el botón para cargarla, una consulta a la vez.
+            <cite class="cita" data-fuente="bd4" data-pag="16" data-pimp="13" data-seccion="5.3 El problema N+1 (Figura 8)" data-que="Este mismo ejemplo, los pedidos con el nombre de su cliente, con la cuenta de consultas y la solución con JOIN. Léelo después de resolver el chequeo, porque da la respuesta." data-cuando="Después del chequeo de este paso"></cite>
+            <cite class="cita" data-fuente="bd4diapo" data-pag="35" data-seccion="Rendimiento de consultas: el problema N+1" data-que="El antipatrón y la solución en una sola diapositiva, sin más explicación que el texto de la unidad." data-cuando="Después del chequeo de este paso"></cite></p>
+          <details class="profundizar">
+            <summary>¿Por qué no pedir los clientes antes y ya?</summary>
+            <div>
+              <p>Se puede, y es justo la solución de los pasos 5 y 6. Lo que hace el programa de este paso es lo más natural cuando escribes: «para cada pedido, dame su cliente». El problema no es un error, es que ese estilo no se ve caro en el código y sí en la base.</p>
+            </div>
+          </details>
+          <div class="check" id="chk1"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Tabla = clase (ORM)">
+          <span class="etapa">Paso 2</span>
+          <h3>Un ORM convierte tablas en clases y consultas en métodos</h3>
+          <p>Un <b>ORM</b> (mapeo objeto-relacional) te deja trabajar con los datos como si fueran objetos del lenguaje y <b>oculta gran parte del SQL</b>. Cada tabla se representa con una clase y cada fila con una instancia de esa clase
+            <cite class="cita" data-fuente="bd5" data-pag="4" data-pimp="2" data-seccion="2. El mapeo objeto-relacional (ORM), Tabla 2" data-que="La definición de ORM (tabla igual a clase, fila igual a instancia) y la tabla de ventajas, inconvenientes y ejemplos (SQLAlchemy, Django ORM, Hibernate, Entity Framework, Sequelize, Prisma)." data-cuando="Al terminar este paso"></cite>
+            <cite class="cita" data-fuente="bd5diapo" data-pag="6" data-seccion="El mapeo objetivo relacional (ORM)" data-que="La misma definición y la tabla de ventajas e inconvenientes, en una diapositiva. El título dice «objetivo» por «objeto» (errata)." data-cuando="Después de este paso"></cite>.</p>
+          <p>A la derecha está el ejemplo del material, hecho a mano: una línea con objetos y el SQL que le corresponde. Cambia el campo, el operador o el valor y mira cómo cambian las dos. El material solo muestra este par de líneas: el SQL real que genera un ORM más grande no aparece en la unidad.
+            <cite class="cita" data-fuente="bd5" data-pag="5" data-pimp="3" data-seccion="Figura 1. Productos con precio superior a 100" data-que="SELECT * FROM productos WHERE precio &gt; 100 frente a session.query(Producto).filter(Producto.precio &gt; 100).all(), y el criterio para elegir entre ORM y SQL directo." data-cuando="Al terminar este paso"></cite></p>
+          <details class="profundizar">
+            <summary>¿El ORM «sabe» SQL o solo lo escribe por ti?</summary>
+            <div>
+              <p>Solo lo escribe: debajo de todo ORM sigue habiendo consultas SQL que viajan a la base. Lo que cambia es que tú ya no las ves. Esa es la ventaja (menos SQL manual, código más legible) y también el inconveniente: menos control sobre el SQL generado. Por eso el material dice que, con consultas complejas o mucho volumen, a veces conviene SQL directo o una mezcla. Al final de la página, en la parte de vida real, escribes un ORM diminuto a mano para ver que no hay magia.</p>
+            </div>
+          </details>
+          <div class="check" id="chk2"><p class="check-tit">Calcula con los datos en vivo</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="El DAO">
+          <span class="etapa">Paso 3</span>
+          <h3>El DAO: todo el SQL de una tabla vive en un solo lugar</h3>
+          <p>Con o sin ORM, el código de acceso a datos suele ordenarse con un <b>patrón</b>. El más simple es el <b>DAO</b> (Data Access Object): una clase por entidad con todas las operaciones sobre ella (<code>obtener</code>, <code>guardar</code>, <code>eliminar</code>). Hay dos parientes: el <b>Repository</b>, parecido pero pensado en colecciones de objetos del dominio, y el <b>Active Record</b>, donde el propio objeto sabe guardarse
+            <cite class="cita" data-fuente="bd5" data-pag="6" data-pimp="4" data-seccion="4. Patrones de diseño de acceso a datos (Tabla 3)" data-que="DAO (ClienteDAO con obtenerPorId, guardar, eliminar), Repository (ProductoRepository.buscarPorCategoria) y Active Record (producto.guardar()), con una frase de por qué ayudan a probar y mantener." data-cuando="Al terminar este paso"></cite>
+.</p>
+          <p>Elige un patrón a la derecha. La aplicación solo escribe una <b>llamada</b>; el SQL, con un marcador <code>?</code> para el valor, vive dentro del DAO. Fíjate en que el contador de «líneas de SQL en la aplicación» no sube nunca. Esa separación es la primera de las buenas prácticas de la unidad
+            <cite class="cita" data-fuente="bd5" data-pag="6" data-pimp="4" data-seccion="5. Buenas prácticas de acceso a datos" data-que="Cinco viñetas: separar la capa de datos, parametrizar siempre, mínimo privilegio, registrar errores sin exponer secretos y migraciones." data-cuando="Después de este paso"></cite>.
+            Los valores viajan aparte del texto (parametrizados): ese es el tema de la página de inyección SQL.</p>
+          <details class="profundizar">
+            <summary>El DAO también puede esconder el problema</summary>
+            <div>
+              <p>Un DAO ordena el código, pero no decide cuántas veces lo llamas. Si <code>obtener</code> está bien escrito y tú lo llamas dentro de un bucle, cada vuelta lanza una consulta. Ese es el paso siguiente.</p>
+            </div>
+          </details>
+          <div class="check" id="chk3"><p class="check-tit">Elige y explica</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="El problema N+1">
+          <span class="etapa">Paso 4</span>
+          <h3>Pedir el cliente dentro del bucle: N + 1 consultas</h3>
+          <p>Vuelve a la pantalla del paso 1, ahora con las palabras exactas. Para mostrar <b>N pedidos</b> con el nombre del cliente, el programa lanza <b>1</b> consulta para la lista y <b>1 más por cada pedido</b> para su cliente: <b>N + 1</b> consultas, cuando una sola con JOIN habría bastado. El material lo llama el problema N+1 y dice que es típico de las aplicaciones con ORM
+            <cite class="cita" data-fuente="bd4" data-pag="16" data-pimp="13" data-seccion="5.3 El problema N+1" data-que="La definición y la Figura 8: SELECT * FROM pedidos y luego SELECT * FROM clientes WHERE id_cliente = ? por cada fila." data-cuando="Al terminar este paso"></cite>.</p>
+          <div class="fbloque">
+            <div data-tex="C_{\text{bucle}} = 1 + N \qquad T = (1 + N)\,t" data-display></div>
+            <div class="vivo" id="vivo4"></div>
+          </div>
+          <p>Aquí $C$ es el número de consultas, $N$ los pedidos en pantalla y $t$ lo que tarda cada consulta (cada viaje a la base). Mueve $N$ y $t$ en la escena. Con 6 pedidos casi no se nota; con 40 o con 4.000, sí. El tiempo es <b>simulado</b>: la escena supone que todas las consultas cuestan lo mismo, y la unidad no trae ninguna medición.</p>
+          <p>Una advertencia sobre el material: el <b>resumen</b> de la UD5 dice que la unidad trata «el problema N+1» (y también la gestión de credenciales, las migraciones y el mapeo de tipos), pero la UD5 no tiene ningún apartado sobre eso
+            <cite class="cita" data-fuente="bd5" data-pag="13" data-pimp="11" data-seccion="Conclusiones y Resumen" data-que="El resumen que promete N+1, credenciales, migraciones y mapeo de tipos. Solo las migraciones (una viñeta, PDF 6) y el logging de errores aparecen de verdad; N+1 está en la UD4." data-cuando="Después de este paso"></cite>.
+            El N+1 está en la UD4, en el apartado de rendimiento de consultas. Por eso la página lo explica desde ahí.</p>
+          <details class="profundizar">
+            <summary>¿Y si cada consulta abre su propia conexión?</summary>
+            <div>
+              <p>Sería todavía peor. El material dice que abrir una conexión es costoso y que las aplicaciones serias usan un <b>pool</b>: un conjunto de conexiones ya abiertas que se reutilizan
+                <cite class="cita" data-fuente="bd5" data-pag="7" data-pimp="5" data-seccion="6. Gestión de conexiones y transacciones (Tabla 4)" data-que="Por qué abrir una conexión es caro y qué es un pool. La Figura 2 de esa página tiene código con errores (conexión con tilde, log sin definir): léela como idea, no la copies." data-cuando="Cuando quieras ver el pool"></cite>.
+                El pool abarata el viaje, pero no quita las N consultas: cada una sigue siendo una ida y vuelta.</p>
+            </div>
+          </details>
+          <div class="check" id="chk4"><p class="check-tit">Calcula con los datos en vivo</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Una consulta con JOIN">
+          <span class="etapa">Paso 5</span>
+          <h3>La salida: una sola consulta con JOIN</h3>
+          <p>La solución del material es pedirle a la base que haga la unión: <b>una consulta</b> que trae cada pedido con el nombre de su cliente. Un <code>JOIN</code> empareja cada fila de <code>pedidos</code> con la fila de <code>clientes</code> cuyo <code>id_cliente</code> coincide
+            <cite class="cita" data-fuente="bd4" data-pag="16" data-pimp="13" data-seccion="5.3 El problema N+1 (Figura 8, solución)" data-que="SELECT p.id_pedido, p.fecha_pedido, c.nombre FROM pedidos p JOIN clientes c ON p.id_cliente = c.id_cliente, la consulta que sustituye al bucle." data-cuando="Al terminar este paso"></cite>.
+            Cómo funciona por dentro un JOIN está en la página «Producto cartesiano y JOIN».</p>
+          <div class="fbloque">
+            <div data-tex="C_{\text{JOIN}} = 1 \qquad T = 1 \cdot t" data-display></div>
+            <div class="vivo" id="vivo5"></div>
+          </div>
+          <p>Cambia la escena entre <b>uno por uno</b> y <b>JOIN</b>. La pantalla se ve igual: los mismos nombres en las mismas filas. Lo único que cambia es cuántas veces viajaste a la base. La consulta de la escena añade <code>ORDER BY</code> para que el orden sea siempre el mismo: sin él, el orden de las filas no está garantizado.</p>
+          <div class="check" id="chk5"><p class="check-tit">Elige y explica</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Otras salidas y una trampa">
+          <span class="etapa">Paso 6</span>
+          <h3>Otras dos salidas, y una trampa del JOIN</h3>
+          <p>El JOIN no es la única forma de bajar de N + 1. Hay dos más, que <b>el material no trae</b> y que son comunes:</p>
+          <p><b>En lote.</b> Pides los pedidos y, en una segunda consulta, todos los clientes que hacen falta de golpe con <code>WHERE id_cliente IN (...)</code>: son <b>2</b> consultas, sin importar cuántos pedidos haya. <b>Con memoria.</b> Sigues pidiendo un cliente por vuelta, pero si ya lo pediste antes lo reutilizas: son <b>1 + d</b> consultas, con $d$ los clientes distintos.</p>
+          <div class="fbloque">
+            <div data-tex="C_{\text{IN}} = 2 \qquad C_{\text{memoria}} = 1 + d" data-display></div>
+            <div class="vivo" id="vivo6"></div>
+          </div>
+          <p>Prueba los cuatro modos en la escena. Fíjate en la columna <code>id_cliente</code>: en los 6 pedidos solo hay 4 clientes distintos (Marta y Javier se repiten), y por eso la memoria ahorra consultas.</p>
+          <div class="check" id="chk6"><p class="check-tit">Calcula con los datos en vivo</p><div class="cuerpo"></div></div>
+
+          <div class="destacado" id="destacado">
+            <p class="dest-tit">Una confusión muy común</p>
+            <h4>Si el JOIN trae todo en una consulta, ¿por qué no unir todo con todo?</h4>
+            <p>Cuando se aprende el JOIN, la tentación es unir también las líneas de cada pedido (<code>lineas_pedido</code>) «ya que estamos». Los 6 pedidos tienen 9 líneas en total. Esto tampoco está en el material de la unidad.</p>
+            <div class="check" id="chk6b"><p class="check-tit">Predice</p><div class="cuerpo"></div></div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="En un ORM real">
+          <span class="etapa">Paso 7</span>
+          <h3>En un ORM real: carga perezosa y carga ansiosa</h3>
+          <p>Los ORM esconden el N+1 con una comodidad: al leer <code>p.cliente.nombre</code>, el objeto <b>pide el cliente en ese momento</b> si todavía no lo trajo. Se llama <b>carga perezosa</b> y es lo habitual por defecto. La solución es pedirle al ORM una <b>carga ansiosa</b> de esa relación, para que la traiga de una vez, con un JOIN o con un lote <code>IN</code>. Los nombres cambian según el ORM (en SQLAlchemy son <code>joinedload</code> y <code>selectinload</code>; en Django, <code>select_related</code> y <code>prefetch_related</code>), pero la idea es la misma.</p>
+          <p>Esto tampoco viene en el material: la unidad dice que el N+1 es típico de los ORM, pero no muestra ningún ORM concreto ni cómo evitarlo. En la escena, el código de abajo es <b>ilustrativo y no está ejecutado</b>; lo que sí se simula es la cuenta de consultas con los mismos datos.</p>
+          <p>Si al principio escribiste una hipótesis, vuelve a leerla ahora.
+            <cite class="cita" data-fuente="bd5" data-pag="5" data-pimp="3" data-seccion="Figura 1 y criterio de elección" data-que="El párrafo bajo la Figura 1: ORM si importa la velocidad de desarrollo con consultas sencillas, SQL directo o híbrido con consultas complejas, mucho volumen u optimización específica." data-cuando="Al terminar este paso"></cite></p>
+          <div class="cita" id="citaHipo" hidden></div>
+          <details class="profundizar">
+            <summary>Entonces, ¿ORM o SQL directo?</summary>
+            <div>
+              <p>No hay una respuesta única, dice el material. Un ORM te ahorra escribir y mantener SQL, y tiene un costo: puedes lanzar sin darte cuenta un N+1. Quien lo usa bien mira cuántas consultas lanza cada pantalla, como hace la escena, y en los casos delicados escribe el SQL a mano.</p>
+            </div>
+          </details>
+          <div class="check" id="chk7"><p class="check-tit">Elige y explica</p><div class="cuerpo"></div></div>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+        </div>
+        <div class="n-ctl" id="nCtl"></div>
+
+        <!-- paso 2: el panel ORM -->
+        <div id="zOrm" hidden>
+          <div class="orm-in">
+            <div><label for="ormCampo">campo</label><select id="ormCampo"><option value="precio">precio</option><option value="stock">stock</option><option value="categoria">categoria</option></select></div>
+            <div><label for="ormOp">operador</label><select id="ormOp"><option value="&gt;">&gt;</option><option value="&lt;">&lt;</option><option value="=">=</option></select></div>
+            <div><label for="ormVal">valor</label><input id="ormVal" type="text" value="100" autocomplete="off"></div>
+          </div>
+          <div class="n-code">
+            <p class="etq">con objetos (el ORM)</p>
+            <pre class="prog-pre" id="ormObj"></pre>
+            <p class="etq">el SQL que le corresponde</p>
+            <pre class="prog-pre" id="ormSql"></pre>
+          </div>
+          <div class="tabla-wrap"><table class="tabla" id="ormTabla"></table></div>
+        </div>
+
+        <!-- paso 3: el DAO -->
+        <div id="zDao" hidden>
+          <div class="dao-pat" id="daoPat" role="group" aria-label="Patrón"></div>
+          <div class="dao-flujo">
+            <div><p class="etq mini-tit">la aplicación escribe</p><pre class="prog-pre" id="daoLlamada"></pre></div>
+            <div class="dao-flecha">se llama al método</div>
+            <div><p class="etq mini-tit">el DAO ejecuta</p><pre class="prog-pre" id="daoSql"></pre></div>
+            <div class="dao-flecha">la base responde</div>
+            <div><p class="etq mini-tit">y devuelve</p><pre class="prog-pre" id="daoRes"></pre></div>
+          </div>
+          <dl class="n-kv" id="daoKv"></dl>
+        </div>
+
+        <!-- pasos 1, 4, 5, 6 y 7: la lista de pedidos -->
+        <div id="zLista">
+          <div class="tabla-wrap"><table class="tabla" id="nTabla"></table></div>
+          <div class="n-code" id="nCodigo" hidden>
+            <p class="etq">ilustrativo, no ejecutado</p>
+            <pre class="prog-pre" id="nCodigoTxt"></pre>
+          </div>
+          <ol class="n-log" id="nLog"></ol>
+          <dl class="n-kv" id="nKv"></dl>
+        </div>
+        <div class="n-nota" id="nNota" aria-live="polite"></div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>La misma pantalla de pedidos, con un DAO escrito a mano (sin ningún ORM instalado) y un <b>contador de consultas</b>. En Python, <code>sqlite3</code> tiene <code>set_trace_callback</code>, que avisa de cada consulta que le llega al motor: el contador es la lista de lo que avisó. En R esta máquina no tiene SQLite, así que las tablas son <code>data.frame</code> y cada función del DAO suma una llamada al contador y anota el mismo texto SQL. Primero se cuenta el bucle, después el JOIN.</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir</p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="true">Python</button>
+            <button type="button" data-lang="r" aria-pressed="false">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">1 · la base y el contador</span><span data-f="2">2 · el DAO</span><span data-f="3">3 · el bucle</span><span data-f="4">4 · el JOIN</span><span data-f="5">5 · comparar</span>
+        </div>
+        <h3 class="mini-tit vr-tit">la pantalla de pedidos</h3>
+        <div class="tabla-wrap"><table class="tabla vr-tabla" id="vrTabla"></table></div>
+        <h3 class="mini-tit vr-tit" id="vrQsTit">lo que el contador ha visto</h3>
+        <ol class="vr-qs" id="vrQs"></ol>
+        <div class="vr-cuenta" id="vrCuenta"></div>
+        <h3 class="mini-tit vr-tit">lo que el programa lleva impreso</h3>
+        <div class="salida" id="vrLog"></div>
+      </div>
+    </div>
+
+    <h3 class="mini-tit" style="margin:20px 0 6px">Lo que imprime cada lenguaje</h3>
+    <div class="vr-grid">
+      <div class="card"><p class="mini-tit">Python</p><div class="salida" id="salidaPy"></div></div>
+      <div class="card"><p class="mini-tit">R</p><div class="salida" id="salidaR"></div></div>
+    </div>
+
+    <p class="vr-nota">En Python, el DAO ejecuta <code>con.execute(sql, (id_cliente,))</code> con el valor aparte, y <code>set_trace_callback</code> entrega cada consulta ya con el valor puesto: por eso se ve <code>id_cliente = 1</code> y no <code>id_cliente = ?</code>. En R el DAO anota el mismo texto con <code>sprintf</code>. Los dos programas imprimen lo mismo, línea por línea, salvo la última (<code>True</code> en Python y <code>[1] TRUE</code> en R). Python usa SQLite 3.45.3 de verdad; en R no hay base: se cuenta y se anota. La unidad no trae ningún código de R (ni este N+1 en código): lo que ves es de esta página. Del ejercicio de la UD5 sí viene la idea de un solo lugar para conectar, con <code>PRAGMA foreign_keys = ON</code> porque SQLite trae las claves foráneas apagadas
+      <cite class="cita" data-fuente="bd5ej" data-pag="4" data-pimp="3" data-seccion="Solución 1. Conexión a la base de datos" data-que="conectar_bd con un gestor de contexto: abre, activa las claves foráneas y cierra siempre. El código funciona; la numeración de tareas y soluciones de este ejercicio está desfasada (la tarea 4 no tiene solución)." data-cuando="Después de la trampa del JOIN"></cite>
+      y de su solución de la inserción atómica, que tiene una errata: el <code>except</code> está mal sangrado y, copiado tal cual, da <code>IndentationError</code>
+      <cite class="cita" data-fuente="bd5ej" data-pag="5" data-pimp="4" data-seccion="Solución 3. Inserción atómica de artículo y embedding" data-que="BEGIN, dos INSERT parametrizados y rollback. Ojo: el except está con un espacio menos que el try, y la explicación atribuye el fallo a la clave foránea cuando el que falla es la clave primaria duplicada." data-cuando="Cuando quieras ver una transacción con rollback"></cite>.</p>
+
+    <details class="profundizar">
+      <summary>Las dos salidas del paso 6, con el mismo programa</summary>
+      <div>
+        <p>Añadidas al final del programa de arriba, siguen el mismo patrón: reinician el contador y comparan el resultado con el del bucle. En Python:</p>
+        <pre class="prog-pre">consultas.clear()                                      # variante A: 2 consultas con IN
+filas = pedidos.listar()
+ids = sorted({id_cliente for _, id_cliente in filas})
+marcas = ", ".join(["?"] * len(ids))
+sql = "SELECT id_cliente, nombre FROM clientes WHERE id_cliente IN (" + marcas + ")"
+nombres = dict(con.execute(sql, ids).fetchall())
+res3 = [(id_pedido, nombres[id_cliente]) for id_pedido, id_cliente in filas]
+print("in: consultas =", len(consultas), res3 == res1)
+
+consultas.clear()                                      # variante B: recordar los clientes ya pedidos
+vistos = {}
+res4 = []
+for id_pedido, id_cliente in pedidos.listar():
+    if id_cliente not in vistos:
+        vistos[id_cliente] = clientes.obtener(id_cliente)
+    res4.append((id_pedido, vistos[id_cliente]))
+print("memoria: consultas =", len(consultas), res4 == res1)</pre>
+        <p>Imprime:</p>
+        <pre class="salida">in: consultas = 2 True
+memoria: consultas = 5 True</pre>
+        <p>En R (aquí no hay base, así que el IN se anota como texto y el lote se hace con <code>match</code>):</p>
+        <pre class="prog-pre">consultas &lt;- character(0)                              # variante A: 2 consultas con IN
+filas &lt;- pedido_listar()
+ids &lt;- sort(unique(filas$id_cliente))
+registrar(sprintf("SELECT id_cliente, nombre FROM clientes WHERE id_cliente IN (%s)", paste(ids, collapse = ", ")))
+nombres &lt;- clientes$nombre[match(filas$id_cliente, clientes$id_cliente)]
+res3 &lt;- paste(filas$id_pedido, nombres)
+cat(sprintf("in: consultas = %d %s\n", length(consultas), identical(res3, res1)))
+
+consultas &lt;- character(0)                              # variante B: recordar los clientes ya pedidos
+vistos &lt;- list()
+res4 &lt;- character(0)
+filas &lt;- pedido_listar()
+for (i in seq_len(nrow(filas))) {
+  clave &lt;- as.character(filas$id_cliente[i])
+  if (is.null(vistos[[clave]])) vistos[[clave]] &lt;- cliente_obtener(filas$id_cliente[i])
+  res4 &lt;- c(res4, paste(filas$id_pedido[i], vistos[[clave]]))
+}
+cat(sprintf("memoria: consultas = %d %s\n", length(consultas), identical(res4, res1)))</pre>
+        <p>Imprime:</p>
+        <pre class="salida">in: consultas = 2 TRUE
+memoria: consultas = 5 TRUE</pre>
+        <p>En el IN, los marcadores <code>?</code> se arman con un <code>join</code> de signos de interrogación: lo que se concatena es solo el <b>número de marcadores</b>, nunca los valores, que viajan aparte. Con la memoria, las consultas por cliente repetido desaparecen: 1 + 4 clientes distintos = 5.</p>
+      </div>
+    </details>
+
+    <details class="profundizar">
+      <summary>Un mini ORM a mano: ver que no hay magia</summary>
+      <div>
+        <p>Un ORM, en pequeño, es una clase que arma el SQL por ti. Este reproduce la línea de la Figura 1 del material (<code>filter(precio &gt; 100)</code>). El nombre del campo y el operador no se pueden mandar como parámetro, así que se comprueban contra una <b>lista blanca</b>: es la técnica de la Tabla 5 del material para nombres de columna dinámicos. En Python:</p>
+        <pre class="prog-pre">import sqlite3
+
+class Consulta:                                        # un mini ORM: arma el SQL con filter
+    CAMPOS = {"id_producto", "nombre", "categoria", "precio", "stock"}
+    OPERADORES = {"&gt;", "&lt;", "&gt;=", "&lt;=", "="}
+    def __init__(self, tabla):
+        self.tabla, self.condiciones, self.valores = tabla, [], []
+    def filter(self, campo, op, valor):
+        if campo not in self.CAMPOS or op not in self.OPERADORES:
+            raise ValueError("campo u operador no permitido")    # lista blanca
+        self.condiciones.append(campo + " " + op + " ?")
+        self.valores.append(valor)
+        return self
+    def sql(self):
+        return "SELECT * FROM " + self.tabla + " WHERE " + " AND ".join(self.condiciones)
+    def todos(self, con):
+        return con.execute(self.sql(), self.valores).fetchall()
+
+con = sqlite3.connect(":memory:")
+con.execute("CREATE TABLE productos (id_producto INTEGER PRIMARY KEY, nombre TEXT, categoria TEXT, precio REAL, stock INTEGER)")
+con.executemany("INSERT INTO productos VALUES (?, ?, ?, ?, ?)", [(101, "Teclado mecánico", "Periféricos", 79.90, 120), (102, "Monitor 27\" 4K", "Monitores", 349.00, 45), (103, "Ratón inalámbrico", "Periféricos", 29.90, 200), (104, "Disco SSD 1TB", "Almacenamiento", 89.50, 80), (105, "Webcam HD", "Periféricos", 39.90, 60), (106, "Router Wi-Fi 6", "Redes", 129.00, 30)])
+q = Consulta("productos").filter("precio", "&gt;", 100)
+print(q.sql(), "con", q.valores[0])
+print(" | ".join(fila[1] for fila in q.todos(con)))
+q2 = Consulta("productos").filter("categoria", "=", "Periféricos")
+print(q2.sql(), "con", q2.valores[0])
+print(" | ".join(fila[1] for fila in q2.todos(con)))</pre>
+        <p>Imprime:</p>
+        <pre class="salida">SELECT * FROM productos WHERE precio &gt; ? con 100
+Monitor 27" 4K | Router Wi-Fi 6
+SELECT * FROM productos WHERE categoria = ? con Periféricos
+Teclado mecánico | Ratón inalámbrico | Webcam HD</pre>
+        <p>En R no hay SQLite, así que la función arma el mismo texto y aplica el filtro sobre el <code>data.frame</code>:</p>
+        <pre class="prog-pre">productos &lt;- data.frame(id_producto = 101:106, nombre = c("Teclado mecánico", "Monitor 27\" 4K", "Ratón inalámbrico", "Disco SSD 1TB", "Webcam HD", "Router Wi-Fi 6"),
+                        categoria = c("Periféricos", "Monitores", "Periféricos", "Almacenamiento", "Periféricos", "Redes"),
+                        precio = c(79.90, 349.00, 29.90, 89.50, 39.90, 129.00), stock = c(120, 45, 200, 80, 60, 30))
+campos &lt;- c("id_producto", "nombre", "categoria", "precio", "stock")
+operadores &lt;- c("&gt;", "&lt;", "&gt;=", "&lt;=", "=")
+filtro &lt;- function(tabla, campo, op, valor) {          # un mini ORM: arma el SQL y lo aplica
+  if (!(campo %in% campos) || !(op %in% operadores)) stop("campo u operador no permitido")
+  sql &lt;- paste0("SELECT * FROM ", tabla, " WHERE ", campo, " ", op, " ?")
+  cmp &lt;- if (op == "=") `==` else match.fun(op)
+  list(sql = sql, valor = valor, filas = productos[cmp(productos[[campo]], valor), ])
+}
+q &lt;- filtro("productos", "precio", "&gt;", 100)
+cat(paste(q$sql, "con", q$valor), "\n", sep = "")
+cat(paste(q$filas$nombre, collapse = " | "), "\n", sep = "")
+q2 &lt;- filtro("productos", "categoria", "=", "Periféricos")
+cat(paste(q2$sql, "con", q2$valor), "\n", sep = "")
+cat(paste(q2$filas$nombre, collapse = " | "), "\n", sep = "")</pre>
+        <p>Imprime lo mismo:</p>
+        <pre class="salida">SELECT * FROM productos WHERE precio &gt; ? con 100
+Monitor 27" 4K | Router Wi-Fi 6
+SELECT * FROM productos WHERE categoria = ? con Periféricos
+Teclado mecánico | Ratón inalámbrico | Webcam HD</pre>
+        <p>R sí tiene un ORM propio de verdad: <code>dbplyr</code>. Con una tabla simulada y sin conexión, <code>sql_render()</code> muestra el SQL que generaría un <code>filter() %&gt;% select()</code>:</p>
+        <pre class="prog-pre">library(dplyr)
+library(dbplyr)
+productos &lt;- lazy_frame(id_producto = 1, nombre = "x", precio = 1, .name = "productos", con = simulate_postgres())
+consulta &lt;- productos %&gt;% filter(precio &gt; 100) %&gt;% select(nombre, precio)
+cat(as.character(sql_render(consulta)), "\n", sep = "")</pre>
+        <p>Imprime (con comillas dobles, porque simula PostgreSQL):</p>
+        <pre class="salida">SELECT "nombre", "precio"
+FROM "productos"
+WHERE ("precio" &gt; 100.0)</pre>
+      </div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>El contador que cuenta de más</h3><span class="estado" data-reto="codigo2"></span></div>
+        <div id="codigo2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>El JOIN que pierde un pedido</h3><span class="estado" data-reto="codigo3"></span></div>
+        <div id="codigo3"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: la biblioteca te avisa en el índice cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>¿Cuántas consultas lanza?</h3><span class="estado" data-reto="ojo"></span></div>
+        <p class="desc">Cinco trozos de código sobre la pantalla de pedidos. Decide sin ejecutar cuántas consultas le llegan a la base. Apruebas con 4 de 5.</p>
+        <div id="ojo"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Construir</span><h3>Deja la pantalla ligera</h3><span class="estado" data-reto="construir"></span></div>
+        <p class="desc">Cambia la estrategia, los pedidos y la latencia hasta cumplir los cuatro objetivos. Se dan por logrados una vez que los alcanzas.</p>
+        <div class="n-ctl" id="conCtl"></div>
+        <div class="grande" id="construirVivo"></div>
+        <ul class="objetivos" id="objetivos"></ul>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>Consultas y milisegundos</h3><span class="estado" data-reto="mano"></span></div>
+        <p class="desc">Datos al azar. Haz la cuenta con papel antes de pedir pistas.</p>
+        <div id="mano"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Alguien se equivocó</h3><span class="estado" data-reto="error"></span></div>
+        <p class="desc">Una de las líneas tiene un error. Tócala.</p>
+        <div id="error"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Qué hace un ORM</h3><span class="estado" data-reto="prop1"></span></div>
+        <div id="prop1"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>DAO, Repository o Active Record</h3><span class="estado" data-reto="prop2"></span></div>
+        <div id="prop2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Cuándo conviene SQL directo</h3><span class="estado" data-reto="prop3"></span></div>
+        <div id="prop3"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Recordar a la fuerza es lo que fija. Arma la consulta que sustituye al bucle y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Fórmula de memoria</span><h3>La consulta que sustituye al bucle</h3><span class="estado" data-reto="formula"></span></div>
+        <p class="desc">La Figura 8 de la UD4 en versión de la tienda: los pedidos con el nombre de su cliente en una sola consulta. Hay piezas de más que no pertenecen. No mires arriba.</p>
+        <div id="formula"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el material</h2>
+      <p class="lecturas-intro">Ya construiste la idea con las manos. Ahora ve a la versión del máster y comprueba que la reconoces. El ORM, los patrones y la parametrización están en la UD5; el problema N+1 y su solución, en la UD4. Lo que el material <b>no</b> trae: el N+1 dentro de la UD5 (el resumen lo promete y no está), la carga perezosa y la ansiosa, el lote con IN, la memoria, medidas de tiempo, un ORM concreto con su SQL generado, y ningún código de R. Cada entrada dice qué vas a encontrar y en qué momento conviene leerla. Si abres la biblioteca con doble clic, el enlace abre el PDF en esa página.</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> Los clientes, pedidos, productos y líneas son los de la tienda en línea del ejercicio de la UD2. Los milisegundos de la escena (y el «5 ms» por consulta) son <b>inventados</b>: simulan una latencia y no son una medición. Los pedidos de los retos y el pedido 5099 de la trampa son inventados aquí.
+    La carga perezosa y ansiosa, el lote con IN, la memoria, el mini ORM y los contadores no vienen en el material de la unidad: son de esta página. Tu progreso se guarda solo en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+/*
+  Datos de la ruta "Bases de datos" que usa esta pagina (los mismos de tabla-tupla-dominio.html, la tienda en linea de bd2ej PDF 3):
+    clientes (1 Marta Ruiz, Madrid), (2 Javier Gomez, Barcelona), (3 Laura Sanchez, Valencia), (4 Diego Torres, Madrid), (5 Ana Molina, Sevilla)
+    pedidos  (5001, 1), (5002, 2), (5003, 1), (5004, 3), (5005, 4), (5006, 2)  con fecha y estado
+    productos 101 a 106 y lineas_pedido (9 filas).
+  Aqui el DAO usa solo clientes(id_cliente, nombre) y pedidos(id_pedido, id_cliente).
+*/
+(function () {
+  "use strict";
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var RETOS = ["ojo", "construir", "mano", "error", "formula", "prop1", "prop2", "prop3", "codigo1", "codigo2", "codigo3"];
+  var C = B.concepto({ id: "orm-n-mas-1", retos: RETOS, pasos: 7 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+  function azar(a) { return a[Math.floor(Math.random() * a.length)]; }
+  function azarN(a, b) { return a + Math.floor(Math.random() * (b - a + 1)); }
+
+  /* ---------------- los datos: la tienda en linea ---------------- */
+  var CLIENTES = [[1, "Marta Ruiz", "Madrid"], [2, "Javier Gómez", "Barcelona"], [3, "Laura Sánchez", "Valencia"], [4, "Diego Torres", "Madrid"], [5, "Ana Molina", "Sevilla"]];
+  var PEDIDOS = [[5001, 1, "Entregado"], [5002, 2, "Entregado"], [5003, 1, "Enviado"], [5004, 3, "Pendiente"], [5005, 4, "Entregado"], [5006, 2, "Cancelado"]];
+  var PRODUCTOS = [
+    { id: 101, nombre: "Teclado mecánico", categoria: "Periféricos", precio: 79.90, stock: 120 },
+    { id: 102, nombre: "Monitor 27\" 4K", categoria: "Monitores", precio: 349.00, stock: 45 },
+    { id: 103, nombre: "Ratón inalámbrico", categoria: "Periféricos", precio: 29.90, stock: 200 },
+    { id: 104, nombre: "Disco SSD 1TB", categoria: "Almacenamiento", precio: 89.50, stock: 80 },
+    { id: 105, nombre: "Webcam HD", categoria: "Periféricos", precio: 39.90, stock: 60 },
+    { id: 106, nombre: "Router Wi-Fi 6", categoria: "Redes", precio: 129.00, stock: 30 }
+  ];
+  var LINEAS = [[5001, 101, 1], [5001, 103, 2], [5002, 102, 1], [5003, 104, 1], [5003, 105, 1], [5004, 106, 1], [5005, 101, 1], [5005, 102, 1], [5006, 103, 3]];
+  function nombreDe(id) { var i; for (i = 0; i < CLIENTES.length; i++) if (CLIENTES[i][0] === id) return CLIENTES[i][1]; return null; }
+
+  var SQL_LISTAR = "SELECT id_pedido, id_cliente FROM pedidos ORDER BY id_pedido";
+  var SQL_JOIN = "SELECT p.id_pedido, c.nombre FROM pedidos p JOIN clientes c ON c.id_cliente = p.id_cliente ORDER BY p.id_pedido";
+  function sqlCli(id) { return "SELECT nombre FROM clientes WHERE id_cliente = " + id; }
+  function lim(n) { return n < 6 ? " LIMIT " + n : ""; }
+  function distintos(n) {
+    var out = [], i;
+    for (i = 0; i < n; i++) if (out.indexOf(PEDIDOS[i][1]) < 0) out.push(PEDIDOS[i][1]);
+    return out;
+  }
+  // las consultas que lanza cada estrategia para mostrar los primeros n pedidos
+  function consultasDe(modo, n) {
+    var q, i, ids;
+    if (modo === "join") return [SQL_JOIN.replace(" ORDER BY p.id_pedido", " ORDER BY p.id_pedido" + lim(n))];
+    q = [SQL_LISTAR + lim(n)];
+    if (modo === "bucle") for (i = 0; i < n; i++) q.push(sqlCli(PEDIDOS[i][1]));
+    else if (modo === "cache") distintos(n).forEach(function (id) { q.push(sqlCli(id)); });
+    else if (modo === "in") {
+      ids = distintos(n).slice().sort(function (a, b) { return a - b; });
+      q.push("SELECT id_cliente, nombre FROM clientes WHERE id_cliente IN (" + ids.join(", ") + ")");
+    }
+    return q;
+  }
+  function cuenta(modo, n) { return consultasDe(modo, n).length; }
+  var NOMBRE_MODO = { bucle: "uno por uno", "in": "en lote (IN)", cache: "con memoria", join: "JOIN" };
+
+  /* ---------------- el estado ---------------- */
+  var est = { paso: 0, ok: [false, false, false, false, false, false, false], n: 6, lat: 5, modo: "bucle", f1: -1, lineas: false, okDest: false, dao: { pat: 0, ejec: 0 } };
+  var pasos;
+
+  var HINTS = [
+    "Predice y carga la pantalla",
+    "Cambia el filtro",
+    "Elige un patrón",
+    "Mueve N y la latencia",
+    "Compara el bucle con el JOIN",
+    "Prueba las cuatro estrategias",
+    "Perezosa o ansiosa"
+  ];
+
+  /* ---------------- controles del escenario ---------------- */
+  function btnModo(m, lab) { return '<button type="button" data-modo="' + m + '" aria-pressed="' + (est.modo === m ? "true" : "false") + '">' + lab + '</button>'; }
+  function rango(id, lab, min, max, val, unidad) {
+    return '<label class="n-rng">' + lab + ' <input type="range" id="' + id + '" min="' + min + '" max="' + max + '" step="1" value="' + val + '"><b id="' + id + 'v">' + val + '</b>' + (unidad || "") + '</label>';
+  }
+  function controles() {
+    var i = est.paso, h = "", dis;
+    if (i === 0) {
+      dis = est.ok[0] ? "" : " disabled";
+      if (est.f1 < 0) h = '<button type="button" class="primary" data-a="cargar"' + dis + '>Cargar la pantalla</button>';
+      else h = '<button type="button" data-a="sig"' + (est.f1 >= 6 ? " disabled" : "") + '>Pedir el siguiente cliente</button><button type="button" data-a="todos"' + (est.f1 >= 6 ? " disabled" : "") + '>Pedir todos</button><button type="button" class="ghost" data-a="reset">Vaciar</button>';
+      if (!est.ok[0]) h += '<span class="hint">Responde la predicción para cargar.</span>';
+    } else if (i >= 3) {
+      h = rango("rngN", "pedidos N", 1, 6, est.n, "") + rango("rngT", "latencia t", 1, 20, est.lat, " ms");
+      if (i === 4) h += btnModo("bucle", "Uno por uno") + btnModo("join", "JOIN");
+      else if (i === 5) h += btnModo("bucle", "Uno por uno") + btnModo("in", "En lote (IN)") + btnModo("cache", "Con memoria") + btnModo("join", "JOIN");
+      else if (i === 6) h += btnModo("bucle", "Carga perezosa") + btnModo("join", "Ansiosa con JOIN") + btnModo("in", "Ansiosa en lote");
+      if (i === 5 && est.okDest) h += '<label class="n-rng"><input type="checkbox" id="chkLineas"' + (est.lineas ? " checked" : "") + '> unir también las líneas</label>';
+    }
+    $("nCtl").innerHTML = h;
+  }
+  $("nCtl").addEventListener("click", function (e) {
+    var b = e.target.closest("button");
+    if (!b || b.disabled) return;
+    var a = b.getAttribute("data-a"), m = b.getAttribute("data-modo");
+    if (a === "cargar") est.f1 = 0;
+    else if (a === "sig") est.f1 = Math.min(6, est.f1 + 1);
+    else if (a === "todos") est.f1 = 6;
+    else if (a === "reset") est.f1 = -1;
+    else if (m) { est.modo = m; est.lineas = est.lineas && m === "join"; }
+    else return;
+    controles();
+    pintar();
+  });
+  $("nCtl").addEventListener("input", function (e) {
+    var t = e.target;
+    if (t.id === "rngN") { est.n = +t.value; $("rngNv").textContent = t.value; pintar(); }
+    else if (t.id === "rngT") { est.lat = +t.value; $("rngTv").textContent = t.value; pintar(); }
+  });
+  $("nCtl").addEventListener("change", function (e) {
+    if (e.target.id === "chkLineas") { est.lineas = e.target.checked; if (est.lineas) est.modo = "join"; controles(); pintar(); }
+  });
+
+  /* ---------------- pintar la lista de pedidos ---------------- */
+  function kv(pares) {
+    return pares.map(function (p) { return '<dt>' + p[0] + '</dt><dd' + (p[2] ? ' class="q"' : "") + '>' + p[1] + '</dd>'; }).join("");
+  }
+  function pintarLista() {
+    var i = est.paso, n = i === 0 ? 6 : est.n, modo = i === 0 ? "bucle" : est.modo, qs, mostrar, h, r, nota = "", filas;
+    var conMs = i >= 3;
+    if (i === 0) {
+      qs = est.f1 < 0 ? [] : [SQL_LISTAR].concat(PEDIDOS.slice(0, est.f1).map(function (p) { return sqlCli(p[1]); }));
+      mostrar = est.f1 < 0 ? -1 : est.f1;
+    } else {
+      qs = consultasDe(modo, n);
+      mostrar = n;
+    }
+    // tabla
+    if (i === 5 && est.lineas) {
+      filas = LINEAS.filter(function (l) { return l[0] <= PEDIDOS[n - 1][0]; });
+      h = '<thead><tr><th>id_pedido</th><th>cliente</th><th>id_producto</th><th>cantidad</th></tr></thead><tbody>';
+      filas.forEach(function (l, k) {
+        var ped = PEDIDOS.filter(function (p) { return p[0] === l[0]; })[0];
+        var rep = k > 0 && filas[k - 1][0] === l[0];
+        h += '<tr><td' + (rep ? ' class="dup"' : "") + '>' + l[0] + '</td><td' + (rep ? ' class="dup"' : "") + '>' + esc(nombreDe(ped[1])) + '</td><td>' + l[1] + '</td><td>' + l[2] + '</td></tr>';
+      });
+      $("nTabla").innerHTML = h + '</tbody>';
+    } else if (mostrar < 0) {
+      $("nTabla").innerHTML = '<tbody><tr><td class="vacio">La pantalla está vacía. Cuando hayas hecho tu predicción, pulsa «Cargar la pantalla».</td></tr></tbody>';
+    } else {
+      h = '<thead><tr><th>id_pedido</th><th>id_cliente</th><th>cliente</th></tr></thead><tbody>';
+      for (r = 0; r < n; r++) {
+        h += '<tr class="' + (i === 0 && r === mostrar - 1 ? "cur" : "") + '"><td>' + PEDIDOS[r][0] + '</td><td>' + PEDIDOS[r][1] + '</td>' +
+          (r < mostrar || (modo !== "bucle" && i > 0) ? '<td' + (i === 0 && r === mostrar - 1 ? ' class="nuevo"' : "") + '>' + esc(nombreDe(PEDIDOS[r][1])) + '</td>' : '<td class="pend">todavía no se pidió</td>') + '</tr>';
+      }
+      $("nTabla").innerHTML = h + '</tbody>';
+    }
+    // registro de consultas
+    if (!qs.length) $("nLog").innerHTML = '<li class="n-vacio" style="display:block">Todavía no se ha lanzado ninguna consulta.</li>';
+    else $("nLog").innerHTML = qs.map(function (q, k) {
+      return '<li class="' + (i === 0 && k === qs.length - 1 ? "nueva" : "") + '"><span class="qn">q' + (k + 1) + '</span><span class="qs">' + esc(q) + '</span>' + (conMs ? '<span class="qms">' + est.lat + ' ms</span>' : "") + '</li>';
+    }).join("");
+    // contadores
+    if (i === 0) {
+      $("nKv").innerHTML = est.f1 < 0 ? "" : kv([["consultas lanzadas", String(qs.length), true], ["clientes pedidos", est.f1 + " de 6"]]);
+      nota = est.f1 < 0 ? "" : est.f1 >= 6 ? "Se pidió el cliente de cada uno de los 6 pedidos. Cuenta cuántas consultas son en total: ya puedes comprobar tu predicción." : "La lista de pedidos fue 1 consulta; cada cliente que pides suma otra.";
+    } else {
+      var total = qs.length, ms = total * est.lat;
+      var filasN = i === 5 && est.lineas ? filas.length : n;
+      var pares = [["consultas", String(total), true], ["tiempo simulado", ms + " ms", true]];
+      if (modo === "bucle") pares.push(["cuenta", "1 + " + n + " = " + total + " consultas · (1 + " + n + ") × " + est.lat + " = " + ms + " ms"]);
+      else if (modo === "join") pares.push(["cuenta", "1 consulta · 1 × " + est.lat + " = " + ms + " ms"]);
+      else if (modo === "in") pares.push(["cuenta", "2 consultas · 2 × " + est.lat + " = " + ms + " ms"]);
+      else pares.push(["cuenta", "1 + " + distintos(n).length + " clientes distintos = " + total + " consultas"]);
+      pares.push(["filas que vuelven", String(filasN)]);
+      if (i === 5) pares.push(["las cuatro estrategias", "bucle " + cuenta("bucle", n) + " · IN " + cuenta("in", n) + " · memoria " + cuenta("cache", n) + " · JOIN " + cuenta("join", n)]);
+      $("nKv").innerHTML = kv(pares);
+      if (i === 3) nota = "Con " + n + " pedidos, el bucle lanza " + total + " consultas. Si cada una tarda " + est.lat + " ms, la pantalla espera " + ms + " ms.";
+      else if (i === 4) nota = modo === "join" ? "Los mismos nombres, en 1 consulta: " + ms + " ms en vez de " + (cuenta("bucle", n) * est.lat) + " ms." : "Cambia a JOIN y compara el tiempo.";
+      else if (i === 5) nota = est.lineas ? "Con las líneas, cada pedido sale tantas veces como líneas tiene (los números en color repiten el pedido): " + filas.length + " filas para " + n + " pedidos. Sigue siendo 1 consulta, pero trae filas de más." : "Cada estrategia trae los mismos nombres; cambian las consultas y el tiempo.";
+      else if (i === 6) nota = modo === "bucle" ? "Carga perezosa: cada <b>p.cliente</b> lanza su consulta al leerlo." : modo === "join" ? "Carga ansiosa con JOIN: el ORM une las dos tablas desde el principio." : "Carga ansiosa en lote: el ORM pide los pedidos y después los clientes con un IN.";
+    }
+    $("nNota").innerHTML = nota;
+    // vivos de las formulas
+    if ($("vivo4")) $("vivo4").innerHTML = "N = " + est.n + " · C = 1 + " + est.n + " = " + (1 + est.n) + " · T = " + (1 + est.n) + " × " + est.lat + " = " + ((1 + est.n) * est.lat) + " ms";
+    if ($("vivo5")) $("vivo5").innerHTML = "N = " + est.n + " · C = 1 · T = 1 × " + est.lat + " = " + est.lat + " ms (el bucle serían " + ((1 + est.n) * est.lat) + " ms)";
+    if ($("vivo6")) $("vivo6").innerHTML = "N = " + est.n + " · d = " + distintos(est.n).length + " · C(IN) = 2 · C(memoria) = 1 + " + distintos(est.n).length + " = " + (1 + distintos(est.n).length) + " · C(bucle) = " + (1 + est.n);
+    // codigo ilustrativo del paso 7
+    var cod = $("nCodigo");
+    if (i === 6) {
+      cod.hidden = false;
+      var base = "for p in pedidos:\n    print(p.id_pedido, p.cliente.nombre)";
+      $("nCodigoTxt").textContent = modo === "bucle" ? "pedidos = session.query(Pedido).all()\n" + base + "      # cada p.cliente lanza su consulta"
+        : modo === "join" ? "pedidos = (session.query(Pedido)\n           .options(joinedload(Pedido.cliente)).all())\n" + base
+        : "pedidos = (session.query(Pedido)\n           .options(selectinload(Pedido.cliente)).all())\n" + base;
+    } else cod.hidden = true;
+  }
+
+  /* ---------------- paso 2: el panel ORM ---------------- */
+  function ormPintar() {
+    var campo = $("ormCampo").value, texto = campo === "categoria", op = $("ormOp").value, v = $("ormVal").value.trim(), val, ok = true, filas, h, c = campo;
+    if (texto) { $("ormOp").value = "="; $("ormOp").disabled = true; op = "="; } else $("ormOp").disabled = false;
+    if (texto) val = v; else { val = Number(v.replace(",", ".")); ok = v !== "" && isFinite(val); }
+    var opPy = op === "=" ? "==" : op;
+    var lit = texto ? "'" + v + "'" : String(val);
+    var litPy = texto ? '"' + v + '"' : String(val);
+    if (!ok) {
+      $("ormObj").textContent = "(escribe un número en «valor»)";
+      $("ormSql").textContent = "";
+      $("ormTabla").innerHTML = "";
+      est.orm = null;
+      return;
+    }
+    $("ormObj").textContent = "productos = session.query(Producto).filter(Producto." + c + " " + opPy + " " + litPy + ").all()";
+    $("ormSql").textContent = "SELECT * FROM productos WHERE " + c + " " + op + " " + lit + ";";
+    filas = PRODUCTOS.map(function (p) {
+      var x = p[c], dentro = op === ">" ? x > val : op === "<" ? x < val : x === val;
+      return { p: p, dentro: dentro };
+    });
+    h = '<thead><tr><th>id</th><th>nombre</th><th>categoria</th><th>precio</th><th>stock</th></tr></thead><tbody>';
+    filas.forEach(function (f) {
+      h += '<tr class="' + (f.dentro ? "dentro" : "fuera") + '"><td>' + f.p.id + '</td><td>' + esc(f.p.nombre) + '</td><td>' + esc(f.p.categoria) + '</td><td>' + B.fmt(f.p.precio, 2) + '</td><td>' + f.p.stock + '</td></tr>';
+    });
+    $("ormTabla").innerHTML = h + '</tbody>';
+    est.orm = { n: filas.filter(function (f) { return f.dentro; }).length };
+    $("nNota").innerHTML = "Filas que cumplen: <b>" + est.orm.n + "</b> de 6.";
+  }
+  ["ormCampo", "ormOp"].forEach(function (id) {
+    $(id).addEventListener("change", function () {
+      if (id === "ormCampo") $("ormVal").value = $("ormCampo").value === "categoria" ? "Periféricos" : $("ormCampo").value === "stock" ? "50" : "100";
+      ormPintar();
+    });
+  });
+  $("ormVal").addEventListener("input", ormPintar);
+
+  /* ---------------- paso 3: el DAO ---------------- */
+  var PATRONES = [
+    { nombre: "DAO", llamada: "cliente_dao.obtener_por_id(2)", sql: "SELECT nombre FROM clientes WHERE id_cliente = ?", par: "(2,)", res: "'Javier Gómez'", nota: "Una clase por entidad con sus operaciones: obtener, guardar, eliminar." },
+    { nombre: "Repository", llamada: "pedido_repo.buscar_por_estado(\"Entregado\")", sql: "SELECT id_pedido FROM pedidos WHERE estado = ?", par: "('Entregado',)", res: "[5001, 5002, 5005]", nota: "Parecido al DAO, pero habla en colecciones de objetos del dominio: «los pedidos entregados»." },
+    { nombre: "Active Record", llamada: "pedido = Pedido.buscar(5004)\npedido.estado = \"Enviado\"\npedido.guardar()", sql: "UPDATE pedidos SET estado = ? WHERE id_pedido = ?", par: "('Enviado', 5004)", res: "(el objeto se guardó a sí mismo)", nota: "El propio objeto sabe guardarse y recuperarse (habitual en Django ORM y Rails). Ilustrativo, no ejecutado." }
+  ];
+  function daoPintar() {
+    var b = $("daoPat"), p = PATRONES[est.dao.pat];
+    b.innerHTML = PATRONES.map(function (x, k) { return '<button type="button" data-k="' + k + '" aria-pressed="' + (k === est.dao.pat ? "true" : "false") + '">' + x.nombre + '</button>'; }).join("");
+    $("daoLlamada").textContent = p.llamada;
+    $("daoSql").textContent = p.sql + "\nvalores aparte: " + p.par;
+    $("daoRes").textContent = p.res;
+    $("daoKv").innerHTML = kv([["líneas de SQL en la aplicación", "0", true], ["consultas lanzadas", String(est.dao.ejec)]]);
+    $("nNota").innerHTML = esc(p.nota);
+  }
+  $("daoPat").addEventListener("click", function (e) {
+    var b = e.target.closest("button");
+    if (!b) return;
+    est.dao.pat = +b.getAttribute("data-k");
+    est.dao.ejec++;
+    daoPintar();
+  });
+
+  /* ---------------- pintar todo ---------------- */
+  function pintar() {
+    var i = est.paso;
+    $("zOrm").hidden = i !== 1;
+    $("zDao").hidden = i !== 2;
+    $("zLista").hidden = i === 1 || i === 2;
+    $("escHint").textContent = HINTS[i];
+    if (i === 1) ormPintar();
+    else if (i === 2) daoPintar();
+    else pintarLista();
+    [].forEach.call($("nCtl").querySelectorAll("[data-modo]"), function (b) { b.setAttribute("aria-pressed", b.getAttribute("data-modo") === est.modo ? "true" : "false"); });
+  }
+  function entrar(i) {
+    est.paso = i;
+    if (i >= 3) est.modo = "bucle";
+    est.lineas = false;
+    controles();
+    pintar();
+  }
+
+  /* ---------------- chequeos de cada paso ---------------- */
+  B.opcionMultiple(cuerpo("chk1"), {
+    pregunta: "La pantalla muestra los 6 pedidos de la tienda y, en cada fila, el nombre del cliente. El programa pide primero la lista de pedidos y, para cada fila, el cliente de ese pedido. ¿Cuántas consultas le llegan a la base en total?",
+    opciones: [
+      "1: la base devuelve todo junto",
+      "2: una para los pedidos y otra para los clientes",
+      "7: una para la lista y una más por cada uno de los 6 pedidos",
+      "12: dos por cada pedido"
+    ],
+    correcta: 2,
+    mezclar: true,
+    pistas: [
+      "Eso sería con un JOIN, pero este programa no lo usa: pide el cliente fila por fila.",
+      "Eso sería si trajera todos los clientes de una vez. Aquí pide el cliente de cada pedido por separado.",
+      null,
+      "Cada pedido necesita un cliente, pero no dos consultas: una para la lista y una por pedido."
+    ],
+    explicacion: "<b>7</b>: 1 para la lista de pedidos y 1 más por cada uno de los 6 pedidos. Es el patrón que el material llama N+1 (aquí N = 6). <b>Ahora el botón de la escena está abierto</b>: carga la pantalla y pide los clientes uno por uno para ver cómo sube el contador.",
+    alResolver: function () { est.ok[0] = true; controles(); pintar(); pasos.completar(0); }
+  });
+
+  B.numerico(cuerpo("chk2"), {
+    pregunta: "En la escena, la tabla <code>productos</code> tiene 6 filas con precios 79.90, 349.00, 29.90, 89.50, 39.90 y 129.00. Con el filtro <code>precio &gt; 50</code>, ¿cuántos productos devuelve la consulta?",
+    respuesta: 4,
+    tolerancia: 0,
+    pistas: [
+      "Cuenta los precios que pasan de 50. Puedes cambiar el valor en la escena y mirar qué filas se encienden.",
+      "No pasan de 50 el ratón (29.90) y la webcam (39.90)."
+    ],
+    diagnostico: function (v) {
+      if (v === 6) return "6 son todos los productos. Dos de ellos cuestan menos de 50.";
+      if (v === 2) return "2 son los que cuestan más de 100 (el filtro del material). Aquí el filtro es más bajo.";
+      if (v === 3) return "Casi. Revisa cada precio: 79.90, 349.00, 89.50 y 129.00 pasan de 50.";
+      return null;
+    },
+    explicacion: "Cuatro: el teclado (79.90), el monitor (349.00), el disco (89.50) y el router (129.00). El ORM y el SQL piden <b>lo mismo</b>; solo cambia cómo lo escribes. <b>Ahora prueba otros campos y operadores</b> en la escena.",
+    alResolver: function () { pasos.completar(1); }
+  });
+
+  B.opcionMultiple(cuerpo("chk3"), {
+    pregunta: "El SQL de la tabla <code>clientes</code> está escrito en 12 pantallas distintas de la aplicación. Un día cambia el nombre de una columna. Si en cambio todo ese SQL viviera dentro de un <code>ClienteDAO</code>, ¿qué ganarías?",
+    opciones: [
+      "Solo habría que cambiar el SQL dentro del DAO; las pantallas siguen llamando a los mismos métodos",
+      "Nada: habría que revisar las 12 pantallas igual",
+      "Las consultas se ejecutarían más rápido",
+      "Dejaría de hacer falta la base de datos"
+    ],
+    correcta: 0,
+    mezclar: true,
+    pistas: [
+      null,
+      "Justo eso es lo que el DAO evita: las pantallas dependen del método, no del texto SQL.",
+      "El DAO ordena el código, pero cada consulta cuesta lo mismo. Si el DAO se llama dentro de un bucle, incluso se nota el costo.",
+      "El DAO solo organiza el acceso a la base: la base sigue haciendo falta."
+    ],
+    explicacion: "El DAO <b>junta en un lugar</b> todo el SQL de una entidad. Es la primera buena práctica de la unidad: separar la capa de acceso a datos, sin dispersar sentencias SQL por toda la aplicación. También facilita las pruebas, porque puedes sustituir el DAO real por uno simulado.",
+    alResolver: function () { pasos.completar(2); }
+  });
+
+  B.numerico(cuerpo("chk4"), {
+    pregunta: "Una pantalla muestra <b>40 pedidos</b> con el nombre de su cliente, con el bucle del paso 4. Cada consulta tarda <b>5 ms</b>. ¿Cuántos milisegundos espera la pantalla solo en consultas?",
+    respuesta: 205,
+    tolerancia: 0,
+    pistas: [
+      "Primero cuenta las consultas: la lista y una por pedido. Después multiplica por lo que tarda cada una.",
+      "Son 1 + 40 = 41 consultas."
+    ],
+    diagnostico: function (v) {
+      if (v === 200) return "200 es 40 × 5: se te olvidó la consulta de la lista de pedidos. Son 41 consultas, no 40.";
+      if (v === 41) return "41 son las consultas, no los milisegundos. Falta multiplicar por 5 ms.";
+      if (v === 45) return "45 es 40 + 5. El tiempo es consultas por latencia, se multiplican.";
+      if (v === 35) return "35 es el resultado con los 6 pedidos de la escena. Aquí son 40.";
+      return null;
+    },
+    explicacion: "$C = 1 + 40 = 41$ consultas y $T = 41 \\times 5 = 205$ ms. Con un JOIN serían $1 \\times 5 = 5$ ms: 41 veces menos. <b>Ahora el siguiente paso</b> te da la salida.",
+    alResolver: function () { pasos.completar(3); }
+  });
+
+  B.opcionMultiple(cuerpo("chk5"), {
+    pregunta: "La tienda crece de 6 a 6.000 pedidos y la pantalla usa la versión con JOIN. ¿Cuántas consultas lanza?",
+    opciones: [
+      "1: sigue siendo una sola, aunque ahora traiga 6.000 filas",
+      "6.001, igual que el bucle",
+      "2: una para pedidos y otra para clientes",
+      "6.000: una por cada pedido"
+    ],
+    correcta: 0,
+    mezclar: true,
+    pistas: [
+      null,
+      "Eso es lo que cuesta el bucle. El JOIN lo hace la base, en una sola consulta.",
+      "Eso sería la variante en lote. El JOIN une las dos tablas dentro de la misma consulta.",
+      "No hay una consulta por pedido: la base empareja las filas por dentro."
+    ],
+    explicacion: "<b>1</b>. El número de consultas del JOIN no depende de cuántos pedidos haya. Lo que crece es el número de filas que viajan de vuelta, y eso también cuesta, pero de otra forma: ya no son miles de viajes, es un viaje más grande. <b>Ahora prueba</b> en la escena el JOIN con distintos valores de N.",
+    alResolver: function () { pasos.completar(4); }
+  });
+
+  B.numerico(cuerpo("chk6"), {
+    pregunta: "Con la estrategia de <b>memoria</b> (pides un cliente solo la primera vez que aparece), los 6 pedidos de la escena tienen los clientes 1, 2, 1, 3, 4 y 2. ¿Cuántas consultas lanza en total, contando la de la lista?",
+    respuesta: 5,
+    tolerancia: 0,
+    pistas: [
+      "Cuenta cuántos clientes distintos hay entre 1, 2, 1, 3, 4 y 2.",
+      "Los distintos son 1, 2, 3 y 4. Falta sumar la consulta de la lista."
+    ],
+    diagnostico: function (v) {
+      if (v === 7) return "7 es el bucle sin memoria. Con memoria, los clientes repetidos no se vuelven a pedir.";
+      if (v === 4) return "4 son los clientes distintos: falta la consulta de la lista de pedidos.";
+      if (v === 6) return "6 sería pedir cada pedido sin lista, o sin descontar los repetidos. Cuenta los clientes distintos.";
+      return null;
+    },
+    explicacion: "$C = 1 + d = 1 + 4 = 5$: la lista y un cliente por cada uno de los 4 distintos (Marta y Javier se repiten y no se vuelven a pedir). <b>Ahora la escena muestra las cuatro estrategias a la vez</b>: mueve N y compáralas.",
+    alResolver: function () { est.ok[5] = true; pasos.completar(5); }
+  });
+
+  B.opcionMultiple(cuerpo("chk6b"), {
+    pregunta: "Unes <code>pedidos</code> con <code>lineas_pedido</code> en una sola consulta con JOIN, además de los clientes. Los 6 pedidos tienen 9 líneas en total. ¿Cuántas filas devuelve?",
+    opciones: [
+      "6: una por pedido",
+      "9: una por cada línea, así que los pedidos con varias líneas se repiten",
+      "15: seis más nueve",
+      "54: seis por nueve"
+    ],
+    correcta: 1,
+    mezclar: true,
+    pistas: [
+      "Eso sería si cada pedido tuviera una sola línea. Pero el pedido 5001 tiene dos.",
+      null,
+      "No se suman: el JOIN empareja cada línea con su pedido, no pone todas las filas una detrás de otra.",
+      "54 sería un producto cartesiano sin condición de unión. Con la condición, cada línea solo se empareja con su pedido."
+    ],
+    explicacion: "<b>9</b>: una fila por línea. Los pedidos con dos líneas (5001, 5003 y 5005) aparecen dos veces. Sigue siendo <b>1</b> consulta, pero el resultado trae filas repetidas del pedido y del cliente. Un JOIN con una relación 1 a muchos multiplica filas. <b>Ahora está abierta la casilla</b> «unir también las líneas» en la escena.",
+    alResolver: function () { est.okDest = true; if (est.paso === 5) { controles(); pintar(); } }
+  });
+
+  B.opcionMultiple(cuerpo("chk7"), {
+    pregunta: "En un ORM, una pantalla recorre los pedidos y lee <code>p.cliente.nombre</code> dentro del <code>for</code>. Va lenta y el registro muestra cientos de consultas casi iguales. ¿Qué cambias primero?",
+    opciones: [
+      "Pides la carga ansiosa de la relación cliente, para que se traiga con un JOIN o con un lote",
+      "Quitas el DAO y escribes todo el SQL en las pantallas",
+      "Sustituyes el ORM por una hoja de cálculo",
+      "Bajas la latencia de la red hasta que no se note"
+    ],
+    correcta: 0,
+    mezclar: true,
+    pistas: [
+      null,
+      "El DAO no es la causa: lo que lanza una consulta por fila es la carga perezosa dentro del bucle.",
+      "Una hoja de cálculo no resuelve el acceso a la base: solo cambia de problema.",
+      "La latencia ayuda, pero el problema es la cantidad de viajes: mejor reducir las consultas que acelerar cada una."
+    ],
+    explicacion: "La causa es la <b>carga perezosa</b> dentro de un bucle. La solución habitual es pedir la <b>carga ansiosa</b> de esa relación (en SQLAlchemy, <code>joinedload</code> o <code>selectinload</code>; en Django, <code>select_related</code> o <code>prefetch_related</code>). Eso no viene en el material: es el complemento que hace útil lo que sí trae. <b>Ya puedes ir a la vida real.</b>",
+    alResolver: function () { pasos.completar(6); }
+  });
+
+  pasos = B.pasos($("recorrido"), {
+    concepto: C,
+    alEntrar: entrar,
+    alTerminar: function () { location.hash = "vidareal"; }
+  });
+  (function () { var q; for (q = 0; q < 7; q++) est.ok[q] = pasos.hecho(q); })();
+  entrar(0);
+
+  /* ---------------- hipotesis inicial ---------------- */
+  (function () {
+    var ta = $("hipotesis"), t = null;
+    ta.value = B.nota("orm-n-mas-1", "hipotesis");
+    function cita() {
+      var v = ta.value.trim(), el = $("citaHipo");
+      if (!el) return;
+      el.hidden = !v;
+      if (v) { el.textContent = ""; el.appendChild(document.createTextNode("Al principio escribiste: «" + v + "». ¿Se parece a lo que construimos? ¿Qué te faltaba?")); }
+    }
+    cita();
+    ta.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { B.nota("orm-n-mas-1", "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; cita(); }, 500);
+    });
+  })();
+
+  /* ---------------- marcadores de estado de retos ---------------- */
+  function pintarEstados() {
+    [].forEach.call(document.querySelectorAll("[data-reto]"), function (el) {
+      var ok = C.retoOk(el.getAttribute("data-reto"));
+      el.textContent = ok ? "resuelto" : "pendiente";
+      el.classList.toggle("ok", ok);
+    });
+  }
+  C.alCambiar(pintarEstados);
+  pintarEstados();
+
+  /* ---------------- reto: ojo clinico ---------------- */
+  var PATS = {
+    bucle: function (n) { return { cod: "pedidos = pedido_dao.listar(limite=" + n + ")\nfor p in pedidos:\n    cliente = cliente_dao.obtener(p.id_cliente)\n    print(p.id_pedido, cliente.nombre)", k: 1 + n, why: "1 consulta para la lista y 1 por cada uno de los " + n + " pedidos: 1 + " + n + " = " + (1 + n) + "." }; },
+    join: function (n) { return { cod: "filas = pedido_dao.listar_con_cliente(limite=" + n + ")\nfor f in filas:\n    print(f.id_pedido, f.nombre)", k: 1, why: "Una sola consulta con JOIN trae pedidos y nombres juntos: 1, sin importar que sean " + n + "." }; },
+    lote: function (n) { return { cod: "pedidos = pedido_dao.listar(limite=" + n + ")\nids = {p.id_cliente for p in pedidos}\nnombres = cliente_dao.obtener_varios(ids)   # un WHERE ... IN\nfor p in pedidos:\n    print(p.id_pedido, nombres[p.id_cliente])", k: 2, why: "Una consulta para la lista y una con IN para todos los clientes: 2, sin importar que sean " + n + " pedidos." }; },
+    memoria: function (n) {
+      var d = distintos(n).length;
+      return { cod: "vistos = {}\nfor p in pedido_dao.listar(limite=" + n + "):\n    if p.id_cliente not in vistos:\n        vistos[p.id_cliente] = cliente_dao.obtener(p.id_cliente)\n    print(p.id_pedido, vistos[p.id_cliente].nombre)", k: 1 + d, why: "1 para la lista y 1 por cada cliente distinto. Los primeros " + n + " pedidos son de " + d + " clientes distintos: 1 + " + d + " = " + (1 + d) + "." };
+    },
+    formato: function (n) { return { cod: "for p in pedido_dao.listar(limite=" + n + "):\n    print(p.id_pedido, p.estado)", k: 1, why: "Solo se pide la lista, y el estado ya viene en la fila: no hace falta ninguna consulta más. Total: 1." }; },
+    lineas: function (n) { return { cod: "pedidos = pedido_dao.listar(limite=" + n + ")\nfor p in pedidos:\n    lineas = linea_dao.listar_por_pedido(p.id_pedido)\n    print(p.id_pedido, len(lineas))", k: 1 + n, why: "También es un N+1, ahora con las líneas: 1 para la lista y 1 por cada uno de los " + n + " pedidos = " + (1 + n) + "." }; }
+  };
+  (function () {
+    var cont = $("ojo");
+    cont.innerHTML = '<div class="ronda"></div><p class="ctx-ojo">La tienda tiene los pedidos 5001 a 5006 (clientes 1, 2, 1, 3, 4, 2). El código muestra los primeros N pedidos. ¿Cuántas consultas le llegan a la base?</p>' +
+      '<div class="prog-pre"></div><div class="ojo-opts3"></div><div class="fb" aria-live="polite"></div><div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    var tipos, ronda, aciertos, respondida, actual;
+    function nueva() {
+      tipos = B.mezclar(Object.keys(PATS)).slice(0, 5);
+      ronda = 0; aciertos = 0;
+      mostrar();
+    }
+    function mostrar() {
+      var n = azarN(3, 6), p = PATS[tipos[ronda]](n), cand = [1, 2, n, n + 1, n + 2, 2 * n + 1].filter(function (x, i, a) { return a.indexOf(x) === i && x !== p.k; }), op;
+      op = B.mezclar(cand).slice(0, 3).concat([p.k]).sort(function (a, b) { return a - b; });
+      respondida = false;
+      actual = { k: p.k, why: p.why };
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 5 · aciertos " + aciertos;
+      cont.querySelector(".prog-pre").textContent = p.cod;
+      cont.querySelector(".ojo-opts3").innerHTML = op.map(function (x) { return '<button type="button" class="opt" data-a="' + x + '">' + x + '</button>'; }).join("");
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+    }
+    cont.querySelector(".ojo-opts3").addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || respondida) return;
+      respondida = true;
+      var ok = +b.getAttribute("data-a") === actual.k;
+      if (ok) aciertos++;
+      b.classList.add(ok ? "ok" : "mal");
+      if (!ok) cont.querySelector('[data-a="' + actual.k + '"]').classList.add("ok");
+      [].forEach.call(cont.querySelectorAll(".ojo-opts3 .opt"), function (x) { x.disabled = true; });
+      cont.querySelector(".fb").innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No.</span> ') + esc(actual.why);
+      var sig = cont.querySelector(".sig");
+      sig.hidden = false;
+      if (ronda === 4) {
+        var aprobo = aciertos >= 4;
+        C.reto("ojo", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertos + " de 5" + (aprobo ? ". Aprobado." : ". Necesitas 4 para aprobar.");
+        sig.textContent = "Otra tanda";
+      } else sig.textContent = "Siguiente ronda";
+    });
+    cont.querySelector(".sig").addEventListener("click", function () {
+      if (ronda === 4) nueva(); else { ronda++; mostrar(); }
+    });
+    nueva();
+  })();
+
+  /* ---------------- reto: construir ---------------- */
+  (function () {
+    var cm = { modo: "bucle", n: 3, t: 5 }, avisado = false, ul = $("objetivos");
+    var OBJ = [
+      { t: "Con 6 pedidos y la estrategia uno por uno, que lance 7 consultas.", f: function (c, m) { return m === "bucle" && c.n === 6; } },
+      { t: "Con la estrategia de memoria y 6 pedidos, que lance 5 consultas.", f: function (c, m) { return m === "cache" && c.n === 6; } },
+      { t: "Con la estrategia en lote (IN), que lance solo 2 consultas con 6 pedidos.", f: function (c, m) { return m === "in" && c.n === 6; } },
+      { t: "Con 6 pedidos y latencia de 10 ms o más, que el tiempo total sea de 10 ms o menos.", f: function (c, m, ms) { return c.n === 6 && c.t >= 10 && ms <= 10; } }
+    ];
+    var logrados = [false, false, false, false];
+    OBJ.forEach(function (o) { var li = document.createElement("li"); li.innerHTML = '<span class="m"></span><span>' + o.t + '</span>'; ul.appendChild(li); });
+    function ctl() {
+      $("conCtl").innerHTML = '<label class="n-rng">estrategia <select id="cMo"><option value="bucle">uno por uno</option><option value="in">en lote (IN)</option><option value="cache">con memoria</option><option value="join">JOIN</option></select></label>' +
+        rango("cN", "pedidos N", 1, 6, cm.n, "") + rango("cT", "latencia t", 1, 20, cm.t, " ms");
+      $("cMo").value = cm.modo;
+    }
+    function render() {
+      var k = cuenta(cm.modo, cm.n), ms = k * cm.t;
+      $("construirVivo").innerHTML = "estrategia <b>" + NOMBRE_MODO[cm.modo] + "</b> · consultas <b>" + k + "</b> · tiempo <b>" + ms + " ms</b>";
+      OBJ.forEach(function (o, i) { if (!logrados[i] && o.f(cm, cm.modo, ms, k)) logrados[i] = true; ul.children[i].classList.toggle("hecho", logrados[i]); });
+      if (!avisado && logrados.every(Boolean)) { avisado = true; C.reto("construir", true); }
+    }
+    $("conCtl").addEventListener("input", function (e) {
+      if (e.target.id === "cN") { cm.n = +e.target.value; $("cNv").textContent = cm.n; }
+      else if (e.target.id === "cT") { cm.t = +e.target.value; $("cTv").textContent = cm.t; }
+      render();
+    });
+    $("conCtl").addEventListener("change", function (e) { if (e.target.id === "cMo") { cm.modo = e.target.value; render(); } });
+    ctl();
+    render();
+  })();
+
+  /* ---------------- reto: a mano ---------------- */
+  (function () {
+    var D;
+    function generar() {
+      var tipo = azar(["tiempo", "ahorro", "inverso", "memoria"]), n, t, T, ids, d, i;
+      if (tipo === "tiempo") { n = azarN(5, 60); t = azarN(2, 12); D = { tipo: tipo, n: n, t: t, ans: (1 + n) * t }; }
+      else if (tipo === "ahorro") { n = azarN(8, 90); D = { tipo: tipo, n: n, ans: n }; }
+      else if (tipo === "inverso") { T = azarN(12, 80); D = { tipo: tipo, T: T, ans: T - 1 }; }
+      else { n = azarN(12, 30); d = azarN(3, 7); D = { tipo: tipo, n: n, d: d, ans: n - d }; }
+    }
+    generar();
+    B.numerico($("mano"), {
+      pregunta: function () {
+        if (D.tipo === "tiempo") return "Una pantalla muestra " + D.n + " pedidos con el bucle uno por uno. Cada consulta tarda " + D.t + " ms. ¿Cuántos milisegundos espera la pantalla en consultas?";
+        if (D.tipo === "ahorro") return "Una pantalla muestra " + D.n + " pedidos con su cliente. ¿Cuántas consultas se ahorra al pasar del bucle uno por uno al JOIN?";
+        if (D.tipo === "inverso") return "El registro de una pantalla muestra " + D.T + " consultas, una para la lista de pedidos y el resto una por pedido (bucle uno por uno). ¿Cuántos pedidos mostraba?";
+        return "Una pantalla muestra " + D.n + " pedidos que son de solo " + D.d + " clientes distintos. Con la estrategia de memoria, ¿cuántas consultas se ahorra frente al bucle uno por uno?";
+      },
+      respuesta: function () { return D.ans; },
+      tolerancia: 0,
+      pistas: [
+        function () {
+          if (D.tipo === "tiempo") return "Primero las consultas: la lista y una por pedido. Después multiplica por los milisegundos de cada una.";
+          if (D.tipo === "ahorro") return "Bucle: 1 + N consultas. JOIN: 1 consulta. Resta.";
+          if (D.tipo === "inverso") return "Total = 1 + N. Despeja N.";
+          return "Bucle: 1 + N. Memoria: 1 + d. Resta las dos.";
+        },
+        function () {
+          if (D.tipo === "tiempo") return "$(1 + " + D.n + ") \\times " + D.t + "$.";
+          if (D.tipo === "ahorro") return "$(1 + " + D.n + ") - 1$.";
+          if (D.tipo === "inverso") return "$N = " + D.T + " - 1$.";
+          return "$(1 + " + D.n + ") - (1 + " + D.d + ")$.";
+        }
+      ],
+      diagnostico: function (v) {
+        if (D.tipo === "tiempo" && v === D.n * D.t) return "Eso es " + D.n + " × " + D.t + ": se te olvidó la consulta de la lista. Son " + (D.n + 1) + " consultas.";
+        if (D.tipo === "tiempo" && v === D.n + 1) return "Esas son las consultas, no los milisegundos. Falta multiplicar por " + D.t + ".";
+        if (D.tipo === "ahorro" && v === D.n + 1) return "Esas son las consultas del bucle. Al JOIN le queda 1, así que se ahorran una menos.";
+        if (D.tipo === "inverso" && v === D.T) return "Ese es el total de consultas. Una de ellas es la de la lista, no un pedido.";
+        if (D.tipo === "memoria" && v === D.n - D.d + 1) return "Casi. Las dos estrategias hacen la consulta de la lista; la diferencia es solo en las consultas de clientes.";
+        return null;
+      },
+      explicacion: function () {
+        if (D.tipo === "tiempo") return "$C = 1 + " + D.n + " = " + (D.n + 1) + "$ consultas y $T = " + (D.n + 1) + " \\times " + D.t + " = " + D.ans + "$ ms.";
+        if (D.tipo === "ahorro") return "Bucle $" + (D.n + 1) + "$ consultas, JOIN $1$: se ahorran $" + D.ans + "$.";
+        if (D.tipo === "inverso") return "$1 + N = " + D.T + "$, así que $N = " + D.ans + "$ pedidos.";
+        return "Bucle $" + (D.n + 1) + "$, memoria $" + (1 + D.d) + "$: se ahorran $" + D.ans + "$.";
+      },
+      reintentable: true,
+      textoReintentar: "Otro ejercicio",
+      antesDeReintentar: generar,
+      alResolver: function (ok) { C.reto("mano", ok); }
+    });
+  })();
+
+  /* ---------------- reto: cazar el error ---------------- */
+  B.cazarError($("error"), {
+    variantes: [
+      {
+        intro: "Una pantalla muestra 8 pedidos con el bucle uno por uno y cada consulta tarda 4 ms. Alguien razonó así:",
+        lineas: ["N = 8 \\text{ pedidos}",
+          "C = 1 + N = 9 \\text{ consultas}",
+          "T = N \\cdot t = 8 \\cdot 4 = 32 \\text{ ms}",
+          "\\text{con JOIN: } T = 1 \\cdot 4 = 4 \\text{ ms, así que se ahorran } 28 \\text{ ms}"],
+        erronea: 2,
+        explicacion: "El tiempo es el de <b>todas</b> las consultas, 9 y no 8: $T = 9 \\cdot 4 = 36$ ms. Se le olvidó la consulta de la lista, y de ahí sale también un ahorro de $36 - 4 = 32$ ms, no 28."
+      },
+      {
+        intro: "Los pedidos 5001 a 5006 son de los clientes 1, 2, 1, 3, 4 y 2. Alguien cuenta las consultas con la estrategia de memoria:",
+        lineas: ["\\text{clientes de los pedidos: } 1, 2, 1, 3, 4, 2",
+          "\\text{clientes distintos: } \\{1, 2, 3, 4\\}, \\text{ es decir } d = 4",
+          "C_{\\text{memoria}} = d = 4 \\text{ consultas}",
+          "\\text{ahorro frente al bucle: } 7 - 4 = 3 \\text{ consultas}"],
+        erronea: 2,
+        explicacion: "Falta la consulta de la lista de pedidos: $C_{\\text{memoria}} = 1 + d = 5$. El ahorro frente al bucle (7 consultas) es entonces $7 - 5 = 2$, no 3."
+      },
+      {
+        intro: "La tienda une <code>pedidos</code> con <code>lineas_pedido</code> en un solo JOIN. Los 6 pedidos tienen 9 líneas en total. Alguien razona así:",
+        lineas: ["\\text{pedidos} = 6, \\ \\text{líneas} = 9",
+          "\\text{el JOIN une cada línea con su pedido, una fila por línea}",
+          "\\text{filas devueltas} = 6 \\text{ (una por pedido)}",
+          "\\text{consultas} = 1"],
+        erronea: 2,
+        explicacion: "Si el JOIN devuelve una fila por línea, devuelve <b>9</b> filas, no 6: los pedidos con varias líneas se repiten. Las consultas sí son 1."
+      }
+    ],
+    alResolver: function (ok) { C.reto("error", ok); }
+  });
+
+  /* ---------------- retos: propiedades ---------------- */
+  function prop(id, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple($(id), cfg);
+  }
+  prop("prop1", {
+    pregunta: "Según el material, ¿qué representa cada cosa en un ORM?",
+    opciones: [
+      "Cada tabla es una clase y cada fila es una instancia de esa clase",
+      "Cada tabla es una instancia y cada fila es una clase",
+      "Cada columna es una clase y cada tabla es un atributo",
+      "Cada base de datos es una fila de una tabla"
+    ],
+    correcta: 0,
+    pistas: [null, "Al revés: la clase es el molde y las instancias son los ejemplares concretos, como las filas.", "La columna es un campo de la clase (un atributo del objeto), no una clase.", "La base es el conjunto de todas las tablas."],
+    explicacion: "<b>Tabla = clase</b> y <b>fila = instancia</b>. Es la definición de ORM del material: trabajar con los datos como objetos y ocultar gran parte del SQL."
+  });
+  prop("prop2", {
+    pregunta: "Una aplicación tiene objetos Producto que saben guardarse solos: <code>producto.guardar()</code> escribe en la base sin pasar por otra clase. ¿Qué patrón es?",
+    opciones: [
+      "Active Record",
+      "DAO",
+      "Repository",
+      "Pool de conexiones"
+    ],
+    correcta: 0,
+    pistas: [null, "El DAO es una clase aparte que encapsula el acceso a una entidad: aquí es el propio objeto el que se guarda.", "El Repository habla en colecciones, como «buscarPorCategoria»: no es el propio objeto el que se guarda.", "El pool no es un patrón de acceso a datos de una entidad: es un conjunto de conexiones reutilizables."],
+    explicacion: "<b>Active Record</b>: el propio objeto de dominio conoce cómo guardarse y recuperarse. Es el estilo del Django ORM y de Rails. Con el DAO, en cambio, el acceso vive en una clase aparte (<code>ClienteDAO</code>)."
+  });
+  prop("prop3", {
+    pregunta: "Según el criterio del material, ¿en cuál de estos casos conviene más el SQL directo (o híbrido) que un ORM?",
+    opciones: [
+      "Un informe con consultas complejas y mucho volumen de datos que necesita optimización muy específica",
+      "Un prototipo con consultas sencillas donde importa la velocidad de desarrollo",
+      "Una pantalla que solo lista cinco filas de una tabla",
+      "Cuando quieres escribir menos código SQL a mano"
+    ],
+    correcta: 0,
+    pistas: [null, "Ese es el caso donde el ORM suele ser más productivo, según el material.", "Con consultas tan sencillas el ORM basta.", "Ese es justo el motivo para usar un ORM, no para evitarlo."],
+    explicacion: "El material dice que no hay una respuesta única: el ORM es lo más productivo con consultas sencillas y mucha prisa por desarrollar; el SQL directo o híbrido puede ser mejor con <b>consultas complejas, alto volumen o necesidades de optimización muy específicas</b>."
+  });
+
+  /* ---------------- formula de memoria ---------------- */
+  B.ordenar($("formula"), {
+    piezas: ["\\text{SELECT p.id\\_pedido, c.nombre}", "\\text{FROM pedidos p}", "\\text{JOIN clientes c}", "\\text{ON p.id\\_cliente = c.id\\_cliente}"],
+    distractores: ["\\text{WHERE p.id\\_cliente = ?}", "\\text{GROUP BY c.nombre}", "\\text{FROM clientes c}"],
+    soluciones: [[0, 1, 2, 3]],
+    explicacion: "Una consulta, sin bucle: <code>SELECT p.id_pedido, c.nombre FROM pedidos p JOIN clientes c ON p.id_cliente = c.id_cliente</code>. El material añade <code>p.fecha_pedido</code> en la lista de columnas. El <code>WHERE ... = ?</code> era la consulta que se repetía dentro del bucle.",
+    alResolver: function (ok) { C.reto("formula", ok); }
+  });
+
+  /* ---------------- vida real: el algoritmo en codigo ---------------- */
+  (function () {
+    var CODIGO = {
+ "py": [
+  [
+   "imp",
+   "import sqlite3"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "con",
+   "con = sqlite3.connect(\":memory:\")                      # una base en memoria"
+  ],
+  [
+   "tablas",
+   "con.execute(\"CREATE TABLE clientes (id_cliente INTEGER PRIMARY KEY, nombre TEXT)\")"
+  ],
+  [
+   "tablas",
+   "con.execute(\"CREATE TABLE pedidos (id_pedido INTEGER PRIMARY KEY, id_cliente INTEGER)\")"
+  ],
+  [
+   "tablas",
+   "con.executemany(\"INSERT INTO clientes VALUES (?, ?)\", [(1, \"Marta Ruiz\"), (2, \"Javier Gómez\"), (3, \"Laura Sánchez\"), (4, \"Diego Torres\"), (5, \"Ana Molina\")])"
+  ],
+  [
+   "tablas",
+   "con.executemany(\"INSERT INTO pedidos VALUES (?, ?)\", [(5001, 1), (5002, 2), (5003, 1), (5004, 3), (5005, 4), (5006, 2)])"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "traza",
+   "consultas = []"
+  ],
+  [
+   "traza",
+   "con.set_trace_callback(consultas.append)               # el motor avisa de cada consulta"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "defc",
+   "class ClienteDAO:                                      # todo el SQL de clientes vive aquí"
+  ],
+  [
+   "defc",
+   "    def __init__(self, con):"
+  ],
+  [
+   "mk",
+   "        self.con = con"
+  ],
+  [
+   "defc",
+   "    def obtener(self, id_cliente):"
+  ],
+  [
+   "m_obt",
+   "        sql = \"SELECT nombre FROM clientes WHERE id_cliente = ?\""
+  ],
+  [
+   "m_obt",
+   "        return self.con.execute(sql, (id_cliente,)).fetchone()[0]"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "defp",
+   "class PedidoDAO:                                       # todo el SQL de pedidos vive aquí"
+  ],
+  [
+   "defp",
+   "    def __init__(self, con):"
+  ],
+  [
+   "mk",
+   "        self.con = con"
+  ],
+  [
+   "defp",
+   "    def listar(self):"
+  ],
+  [
+   "m_lis",
+   "        sql = \"SELECT id_pedido, id_cliente FROM pedidos ORDER BY id_pedido\""
+  ],
+  [
+   "m_lis",
+   "        return self.con.execute(sql).fetchall()"
+  ],
+  [
+   "defp",
+   "    def listar_con_cliente(self):"
+  ],
+  [
+   "m_join",
+   "        sql = (\"SELECT p.id_pedido, c.nombre FROM pedidos p \""
+  ],
+  [
+   "m_join",
+   "               \"JOIN clientes c ON c.id_cliente = p.id_cliente \""
+  ],
+  [
+   "m_join",
+   "               \"ORDER BY p.id_pedido\")"
+  ],
+  [
+   "m_join",
+   "        return self.con.execute(sql).fetchall()"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "mk",
+   "clientes = ClienteDAO(con)"
+  ],
+  [
+   "mk",
+   "pedidos = PedidoDAO(con)"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "ini1",
+   "res1 = []"
+  ],
+  [
+   "llamar_l",
+   "filas = pedidos.listar()                               # 1 consulta"
+  ],
+  [
+   "for1",
+   "for id_pedido, id_cliente in filas:                    # una vuelta por pedido"
+  ],
+  [
+   "llamar_c",
+   "    nombre = clientes.obtener(id_cliente)              # y 1 consulta más en cada vuelta"
+  ],
+  [
+   "acu1",
+   "    res1.append((id_pedido, nombre))"
+  ],
+  [
+   "p1",
+   "print(\"bucle: consultas =\", len(consultas))"
+  ],
+  [
+   "plog1",
+   "print(\"\\n\".join(consultas))"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "limpia",
+   "consultas.clear()"
+  ],
+  [
+   "llamar_j",
+   "res2 = pedidos.listar_con_cliente()                    # todo en 1 consulta"
+  ],
+  [
+   "p2",
+   "print(\"join: consultas =\", len(consultas))"
+  ],
+  [
+   "plog2",
+   "print(\"\\n\".join(consultas))"
+  ],
+  [
+   "cmp",
+   "print(res1 == res2)"
+  ]
+ ],
+ "r": [
+  [
+   "imp",
+   "# R no trae SQLite en esta máquina: no hay import, las tablas son data.frame"
+  ],
+  [
+   "con",
+   "# tampoco hay conexión: todo vive en la memoria de R"
+  ],
+  [
+   "tablas",
+   "clientes <- data.frame(id_cliente = 1:5, nombre = c(\"Marta Ruiz\", \"Javier Gómez\", \"Laura Sánchez\", \"Diego Torres\", \"Ana Molina\"))"
+  ],
+  [
+   "tablas",
+   "pedidos <- data.frame(id_pedido = 5001:5006, id_cliente = c(1, 2, 1, 3, 4, 2))"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "traza",
+   "consultas <- character(0)"
+  ],
+  [
+   "traza",
+   "registrar <- function(sql) consultas <<- c(consultas, sql)   # cuenta cada llamada"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "defc",
+   "cliente_obtener <- function(id_cliente) {              # el DAO de clientes"
+  ],
+  [
+   "m_obt",
+   "  registrar(sprintf(\"SELECT nombre FROM clientes WHERE id_cliente = %d\", id_cliente))"
+  ],
+  [
+   "m_obt",
+   "  clientes$nombre[clientes$id_cliente == id_cliente]"
+  ],
+  [
+   "defc",
+   "}"
+  ],
+  [
+   "defp",
+   "pedido_listar <- function() {                          # el DAO de pedidos"
+  ],
+  [
+   "m_lis",
+   "  registrar(\"SELECT id_pedido, id_cliente FROM pedidos ORDER BY id_pedido\")"
+  ],
+  [
+   "m_lis",
+   "  pedidos[order(pedidos$id_pedido), ]"
+  ],
+  [
+   "defp",
+   "}"
+  ],
+  [
+   "defp",
+   "pedido_listar_con_cliente <- function() {"
+  ],
+  [
+   "m_join",
+   "  registrar(\"SELECT p.id_pedido, c.nombre FROM pedidos p JOIN clientes c ON c.id_cliente = p.id_cliente ORDER BY p.id_pedido\")"
+  ],
+  [
+   "m_join",
+   "  m <- merge(pedidos, clientes, by = \"id_cliente\")"
+  ],
+  [
+   "m_join",
+   "  m <- m[order(m$id_pedido), ]"
+  ],
+  [
+   "m_join",
+   "  paste(m$id_pedido, m$nombre)"
+  ],
+  [
+   "defp",
+   "}"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "mk",
+   "# en R las funciones sueltas hacen de DAO: no hay clases que crear"
+  ],
+  [
+   "ini1",
+   "res1 <- character(0)"
+  ],
+  [
+   "llamar_l",
+   "filas <- pedido_listar()                               # 1 consulta"
+  ],
+  [
+   "for1",
+   "for (i in seq_len(nrow(filas))) {                      # una vuelta por pedido"
+  ],
+  [
+   "llamar_c",
+   "  nombre <- cliente_obtener(filas$id_cliente[i])       # y 1 consulta más en cada vuelta"
+  ],
+  [
+   "acu1",
+   "  res1 <- c(res1, paste(filas$id_pedido[i], nombre))"
+  ],
+  [
+   null,
+   "}"
+  ],
+  [
+   "p1",
+   "cat(sprintf(\"bucle: consultas = %d\\n\", length(consultas)))"
+  ],
+  [
+   "plog1",
+   "cat(paste0(consultas, \"\\n\"), sep = \"\")"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "limpia",
+   "consultas <- character(0)"
+  ],
+  [
+   "llamar_j",
+   "res2 <- pedido_listar_con_cliente()                    # todo en 1 consulta"
+  ],
+  [
+   "p2",
+   "cat(sprintf(\"join: consultas = %d\\n\", length(consultas)))"
+  ],
+  [
+   "plog2",
+   "cat(paste0(consultas, \"\\n\"), sep = \"\")"
+  ],
+  [
+   "cmp",
+   "print(identical(res1, res2))"
+  ]
+ ]
+};
+    var SAL_PY = "bucle: consultas = 7\nSELECT id_pedido, id_cliente FROM pedidos ORDER BY id_pedido\nSELECT nombre FROM clientes WHERE id_cliente = 1\nSELECT nombre FROM clientes WHERE id_cliente = 2\nSELECT nombre FROM clientes WHERE id_cliente = 1\nSELECT nombre FROM clientes WHERE id_cliente = 3\nSELECT nombre FROM clientes WHERE id_cliente = 4\nSELECT nombre FROM clientes WHERE id_cliente = 2\njoin: consultas = 1\nSELECT p.id_pedido, c.nombre FROM pedidos p JOIN clientes c ON c.id_cliente = p.id_cliente ORDER BY p.id_pedido\nTrue";
+    var SAL_R = "bucle: consultas = 7\nSELECT id_pedido, id_cliente FROM pedidos ORDER BY id_pedido\nSELECT nombre FROM clientes WHERE id_cliente = 1\nSELECT nombre FROM clientes WHERE id_cliente = 2\nSELECT nombre FROM clientes WHERE id_cliente = 1\nSELECT nombre FROM clientes WHERE id_cliente = 3\nSELECT nombre FROM clientes WHERE id_cliente = 4\nSELECT nombre FROM clientes WHERE id_cliente = 2\njoin: consultas = 1\nSELECT p.id_pedido, c.nombre FROM pedidos p JOIN clientes c ON c.id_cliente = p.id_cliente ORDER BY p.id_pedido\n[1] TRUE";
+    var QB = consultasDe("bucle", 6), QJ = consultasDe("join", 6);
+    var DUP = [];   // consultas repetidas del bucle (indices de QB)
+    QB.forEach(function (q, k) { if (QB.indexOf(q) !== k) DUP.push(k); });
+    // eventos: una foto del estado despues de ejecutar cada linea
+    var EV = [], st = { fase: 1, lista: null, nq: 0, k: 0, i: null, out: [] };
+    function foto(id, extra) {
+      EV.push(Object.assign({ id: id, fase: st.fase, lista: st.lista, nq: st.nq, k: st.k, i: null, out: st.out.slice(), fin: false }, extra || {}));
+    }
+    var i;
+    foto("imp"); foto("con"); foto("tablas"); foto("traza");
+    st.fase = 2; foto("defc"); foto("defp"); foto("mk");
+    st.fase = 3; st.lista = "b";
+    foto("ini1");
+    foto("llamar_l");
+    st.nq = 1; foto("m_lis");
+    for (i = 0; i < 6; i++) {
+      foto("for1", { i: i });
+      foto("llamar_c", { i: i });
+      st.nq++; foto("m_obt", { i: i });
+      st.k = i + 1; foto("acu1", { i: i });
+    }
+    st.out.push("bucle: consultas = 7"); foto("p1");
+    QB.forEach(function (q) { st.out.push(q); }); foto("plog1");
+    st.fase = 4; st.lista = "j"; st.nq = 0; st.k = 0;
+    foto("limpia");
+    foto("llamar_j");
+    st.nq = 1; st.k = 6; foto("m_join");
+    st.out.push("join: consultas = 1"); foto("p2");
+    st.out.push(QJ[0]); foto("plog2");
+    st.fase = 5; st.out.push("@cmp"); foto("cmp");
+    EV[EV.length - 1].fin = true;
+
+    function narrar(e, ctx) {
+      var py = ctx.lang() === "py", ix = ctx.ix;
+      switch (e.id) {
+        case "imp": return py ? "Importa <code>sqlite3</code>, el módulo de la librería estándar que trae un motor de base de datos completo." : "R no trae SQLite en esta máquina. Esta línea es un comentario: las tablas serán <code>data.frame</code>.";
+        case "con": return py ? "Abre una base de datos <b>en memoria</b>: vive mientras corre el programa." : "Otro comentario: no hay conexión, todo vive en la memoria de R.";
+        case "tablas": return py ? "Crea las tablas <b>clientes</b> y <b>pedidos</b> y les carga los datos de la tienda: 5 clientes y 6 pedidos." : "Crea los dos <code>data.frame</code> con los mismos 5 clientes y 6 pedidos.";
+        case "traza": return py ? "Crea la lista <code>consultas</code> y le pasa a <code>set_trace_callback</code> su método <code>append</code>: desde ahora, cada consulta que reciba el motor se anota ahí. Se instala <b>después</b> de cargar los datos, para que el contador no cuente los CREATE ni los INSERT." : "Crea el vector <code>consultas</code> y la función <code>registrar</code>, que anota un texto SQL. Cada función del DAO la llamará: es el contador de R.";
+        case "defc": return py ? "Define la clase <code>ClienteDAO</code>: todo el SQL de clientes vive aquí. Todavía no ejecuta nada." : "Define <code>cliente_obtener</code>, el DAO de clientes. Todavía no ejecuta nada.";
+        case "defp": return py ? "Define la clase <code>PedidoDAO</code>, con <code>listar</code> y <code>listar_con_cliente</code>. Tampoco ejecuta nada todavía." : "Define <code>pedido_listar</code> y <code>pedido_listar_con_cliente</code>. Tampoco ejecutan nada todavía.";
+        case "mk": return py ? "Crea los dos DAO, que guardan la conexión. Son los objetos que usa el resto del programa." : "En R no hace falta crear objetos: las funciones sueltas hacen de DAO.";
+        case "ini1": return "Prepara la lista <code>res1</code> donde se juntará el resultado del bucle.";
+        case "llamar_l": return "Pide la lista de pedidos al DAO. Esto lanzará la consulta número 1.";
+        case "m_lis": return "<code>listar</code> manda <code>" + esc(QB[0]) + "</code>. El contador pasa a <b>1</b>.";
+        case "for1": return "Pedido <b>" + (e.i + 1) + "</b> de 6: el " + PEDIDOS[e.i][0] + ", del cliente " + PEDIDOS[e.i][1] + ". Índice " + ix(e.i) + " en " + (py ? "Python" : "R") + ".";
+        case "llamar_c": return "Para escribir el nombre, llama al DAO de clientes con <code>id_cliente = " + PEDIDOS[e.i][1] + "</code>. Una vuelta, una consulta.";
+        case "m_obt": return "<code>obtener</code> manda <code>" + esc(QB[e.i + 1]) + "</code>." + (DUP.indexOf(e.i + 1) >= 0 ? " <b>Es igual a una anterior</b>: el programa vuelve a preguntar por un cliente que ya conocía." : "") + " El contador pasa a <b>" + e.nq + "</b>.";
+        case "acu1": return "Guarda la pareja (pedido, nombre) en <code>res1</code>. Van <b>" + e.k + "</b> de 6.";
+        case "p1": return "Imprime <b>bucle: consultas = 7</b>: la de la lista más una por cada uno de los 6 pedidos.";
+        case "plog1": return "Imprime las 7 consultas, una por línea. Mira cuáles se repiten: la del cliente 1 y la del 2 aparecen dos veces.";
+        case "limpia": return py ? "Vacía la lista de consultas para contar la segunda versión desde cero." : "Reinicia el vector <code>consultas</code> para contar la segunda versión desde cero.";
+        case "llamar_j": return "Pide al DAO los pedidos ya con el nombre del cliente, en una sola llamada.";
+        case "m_join": return "<code>listar_con_cliente</code> manda <code>" + esc(QJ[0]) + "</code>. Una sola consulta trae los 6 pedidos con su nombre. El contador queda en <b>1</b>.";
+        case "p2": return "Imprime <b>join: consultas = 1</b>.";
+        case "plog2": return "Imprime la única consulta: el JOIN.";
+        case "cmp": return py ? "Compara las dos listas de resultados con <code>==</code>: da <b>True</b>. Las dos versiones dan <b>exactamente lo mismo</b>; lo único que cambió es cuántas veces viajó el programa a la base." : "<code>identical</code> compara los dos vectores de resultados: da <b>TRUE</b>. Las dos versiones dan <b>exactamente lo mismo</b>; lo único que cambió es cuántas veces se llamó al DAO.";
+      }
+      return "";
+    }
+    function visual(e, anterior, ctx) {
+      var h = "", r, qs, py = ctx.lang() === "py";
+      h = '<thead><tr><th>id_pedido</th><th>id_cliente</th><th>cliente</th></tr></thead><tbody>';
+      for (r = 0; r < 6; r++) {
+        var lleno = e && e.k > r;
+        h += '<tr class="' + (e && e.i === r && e.fase === 3 ? "cur" : "") + '"><td>' + PEDIDOS[r][0] + '</td><td>' + PEDIDOS[r][1] + '</td>' +
+          (lleno ? '<td' + (e.id === "m_join" || (e.id === "acu1" && e.i === r) ? ' class="nuevo"' : "") + '>' + esc(nombreDe(PEDIDOS[r][1])) + '</td>' : '<td class="pend">todavía no se pidió</td>') + '</tr>';
+      }
+      $("vrTabla").innerHTML = h + '</tbody>';
+      qs = e && e.lista === "b" ? QB.slice(0, e.nq) : e && e.lista === "j" ? QJ.slice(0, e.nq) : [];
+      $("vrQs").innerHTML = qs.length ? qs.map(function (q, k) {
+        var rep = e.lista === "b" && DUP.indexOf(k) >= 0;
+        return '<li class="' + (k === qs.length - 1 && (e.id === "m_lis" || e.id === "m_obt" || e.id === "m_join") ? "nueva" : "") + (rep ? " rep" : "") + '">' + (k + 1) + ". " + esc(q) + (rep ? "  (repetida)" : "") + '</li>';
+      }).join("") : '<li>(todavía no se ha lanzado ninguna consulta)</li>';
+      $("vrCuenta").innerHTML = e && e.lista ? "consultas contadas = <b>" + e.nq + "</b>" : "";
+      $("vrLog").textContent = e && e.out.length ? e.out.map(function (s) { return s === "@cmp" ? (py ? "True" : "[1] TRUE") : s; }).join("\n") : "(aún no se imprimió nada)";
+    }
+    B.vidaReal($("vidareal"), {
+      codigo: CODIGO,
+      eventos: EV,
+      narrar: narrar,
+      vars: function (e, ctx) {
+        var v = [], ix = ctx.ix;
+        if (e && e.id === "for1") v.push('<span class="vj">i = <b>' + ix(e.i) + '</b></span>');
+        else if (e && (e.id === "llamar_c" || e.id === "m_obt" || e.id === "acu1") && e.i !== null) v.push('<span class="vj">i = <b>' + ix(e.i) + '</b></span><span>id_cliente = <b>' + PEDIDOS[e.i][1] + '</b></span>');
+        if (e && e.lista) v.push('<span class="vk">consultas = <b>' + e.nq + '</b></span>');
+        if (e && e.k) v.push('<span>filas con nombre = <b>' + e.k + '</b></span>');
+        return v;
+      },
+      visual: visual,
+      demora: function (e) { return !e ? 600 : e.id === "for1" || e.id === "llamar_c" || e.id === "acu1" ? 380 : e.id === "m_obt" ? 560 : 800; }
+    });
+
+    $("salidaPy").textContent = SAL_PY;
+    $("salidaR").textContent = SAL_R;
+
+    B.numerico(cuerpo("vrPred"), {
+      pregunta: "El bucle lanza 1 consulta para la lista y 1 por cada pedido. Los 6 pedidos son de los clientes 1, 2, 1, 3, 4 y 2. De las 6 consultas por cliente, ¿cuántas van a ser <b>repetidas</b> (iguales a otra que ya se lanzó)?",
+      respuesta: 2,
+      tolerancia: 0,
+      pistas: [
+        "Mira la lista de clientes: ¿qué ids aparecen más de una vez?",
+        "El 1 aparece dos veces y el 2 también: la segunda vez de cada uno es repetida."
+      ],
+      diagnostico: function (v) {
+        if (v === 4) return "4 son los clientes distintos, no las consultas repetidas. De 6 consultas por cliente, 4 son distintas y el resto son repetidas.";
+        if (v === 6) return "6 son las consultas por cliente en total. Algunas preguntan por un cliente distinto; las repetidas son las que preguntan otra vez por uno ya conocido.";
+        if (v === 3) return "Casi. Los ids repetidos son el 1 (pedidos 5001 y 5003) y el 2 (5002 y 5006): son dos clientes, cada uno con una consulta de más.";
+        return null;
+      },
+      explicacion: "Dos: la segunda consulta del cliente 1 y la segunda del cliente 2. Son las que la estrategia de memoria se ahorra. Ahora dale a reproducir y fíjate en las líneas marcadas como repetidas.",
+      alResolver: function (ok) { C.reto("codigo1", ok); }
+    });
+    prop("codigo2", {
+      pregunta: "Instalas <code>con.set_trace_callback(consultas.append)</code> <b>justo después</b> de <code>sqlite3.connect</code>, antes de crear las tablas y cargar los datos (2 CREATE, 5 + 6 INSERT). Después corres el bucle de 6 pedidos. ¿Cuánto vale <code>len(consultas)</code>?",
+      opciones: ["21: el contador también cuenta lo que hiciste para preparar los datos", "7: solo cuenta las consultas del bucle", "14: solo lo que hiciste para preparar los datos", "6: una por pedido"],
+      correcta: 0,
+      pistas: [null, "El callback avisa de todo lo que recibe el motor, no solo de los SELECT.", "Esas 14 son solo la preparación; el bucle suma 7 más.", "No es una por pedido: hay también la de la lista y todo lo anterior."],
+      explicacion: "Da <b>21</b>: 14 de la preparación (los 2 CREATE, un <code>BEGIN</code> que SQLite abre solo antes del primer INSERT, y 11 INSERT, uno por fila) y 7 del bucle. Comprobado en Python 3.13 con SQLite 3.45.3. Por eso el programa de arriba instala el callback después de cargar los datos. Para contar solo una parte, vacía la lista (<code>consultas.clear()</code>) o instala el callback justo antes."
+    });
+    prop("codigo3", {
+      pregunta: "En una base de SQLite nueva (sin <code>PRAGMA foreign_keys = ON</code>) alguien inserta un pedido 5099 del cliente 99, que no existe. Después corres el JOIN de la página y el mismo con <code>LEFT JOIN</code>. ¿Cuántas filas devuelve cada uno?",
+      opciones: ["JOIN: 6 filas; LEFT JOIN: 7 filas", "JOIN: 7 filas; LEFT JOIN: 7 filas", "El INSERT falla: no existe el cliente 99", "JOIN: 7 filas; LEFT JOIN: 6 filas"],
+      correcta: 0,
+      pistas: [null, "El JOIN solo devuelve pedidos que encuentran su cliente: el 5099 no encuentra ninguno.", "En SQLite las claves foráneas están deshabilitadas por defecto: el INSERT no falla.", "Está al revés: el que conserva los pedidos sin pareja es el LEFT JOIN."],
+      explicacion: "Con el pedido huérfano, el <code>JOIN</code> devuelve <b>6</b> (pierde el 5099 en silencio) y el <code>LEFT JOIN</code> devuelve <b>7</b> (con el nombre vacío, <code>NULL</code>). El INSERT entra porque SQLite no vigila las claves foráneas si no se lo pides: el ejercicio de la UD5 lo dice en su solución 1. En R, <code>merge</code> se comporta igual: 6 por defecto y 7 con <code>all.x = TRUE</code>. Pasarse al JOIN para evitar el N+1 puede cambiar el resultado si hay datos huérfanos."
+    });
+  })();
+
+  /* ---------------- tarjetas ---------------- */
+  B.tarjetas($("tarjetas"), [
+    ["¿Qué es un ORM?", "Una técnica (y una biblioteca) para trabajar con una base relacional como objetos: cada tabla es una clase y cada fila es una instancia. Oculta gran parte del SQL."],
+    ["¿Qué ventaja y qué inconveniente tiene un ORM?", "Código más legible y portable, con menos SQL manual. A cambio, menos control sobre el SQL generado y posible pérdida de rendimiento en consultas complejas."],
+    ["¿Qué es un DAO?", "Una clase que encapsula todas las operaciones de acceso a una entidad (obtener, guardar, eliminar). El SQL de esa entidad vive solo ahí."],
+    ["¿En qué se diferencian Repository y Active Record del DAO?", "El Repository habla en colecciones de objetos del dominio. En el Active Record, el propio objeto sabe guardarse y recuperarse."],
+    ["¿Qué es el problema N+1 y cuántas consultas lanza?", "Para mostrar N pedidos con su cliente, 1 consulta para la lista y 1 más por cada pedido: N + 1 en total, cuando un JOIN bastaba."],
+    ["¿Cómo se arregla el N+1?", "Con un JOIN (1 consulta). También, aunque el material no lo trae, con un lote IN (2 consultas) o con memoria (1 + clientes distintos)."],
+    ["¿Qué cambia con un JOIN a un lado de muchos?", "Que el resultado repite las filas del lado «uno»: unir pedidos con sus líneas da una fila por línea. Sigue siendo 1 consulta."],
+    ["¿Qué es la carga perezosa en un ORM?", "Traer una relación solo cuando se lee. Dentro de un bucle lanza una consulta por fila: es la fuente típica de N+1. Se arregla con carga ansiosa."]
+  ]);
+
+  /* ---------------- conexiones ---------------- */
+  B.conexiones("orm-n-mas-1");
+})();
+</script>
+</body>
+</html>

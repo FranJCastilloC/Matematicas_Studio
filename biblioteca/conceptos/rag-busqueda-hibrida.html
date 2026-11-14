@@ -1,0 +1,1657 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RAG: fragmentos, tabla vectorial y búsqueda híbrida</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.esc-head .hint { font-size: 12.5px; color: var(--ink-2); }
+.esc-head button { margin-left: auto; font-size: 12px; padding: 5px 10px; }
+
+/* ---------- controles del escenario ---------- */
+.rango-fila { display: grid; grid-template-columns: 124px minmax(0, 1fr) 40px; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-2); margin: 4px 0; }
+.rango-fila input { width: 100%; }
+.rango-fila b { font-family: var(--f-mono); color: var(--ink); text-align: right; font-weight: 500; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 8px; }
+.chips button { font-size: 12px; padding: 5px 10px; text-align: left; }
+.chips button.on { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); }
+.tit-t { font: 500 12px var(--f-mono); color: var(--ink-2); margin: 10px 0 4px; }
+.lectura { font-size: 13.5px; color: var(--ink-2); min-height: 3em; margin: 6px 0 0; }
+.lectura b { color: var(--ink); font-weight: 500; font-family: var(--f-mono); }
+.contador { margin: 10px 0 4px; font-family: var(--f-mono); font-size: 13.5px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.contador b { font-size: 17px; color: var(--ink); font-weight: 500; }
+.grande { font-family: var(--f-mono); font-size: 14px; color: var(--ink-2); margin: 6px 0 12px; font-variant-numeric: tabular-nums; }
+.grande b { font-size: 18px; color: var(--ink); font-weight: 500; }
+
+/* ---------- oraciones y mapa de fragmentos ---------- */
+.oras { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 2px; }
+.oras li { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 6px; font-size: 12.5px; color: var(--ink-2); align-items: baseline; padding: 2px 4px; border-radius: 4px; }
+.oras li .n { font: 11px var(--f-mono); color: var(--ink-3); text-align: right; }
+.oras li .pal { font: 11px var(--f-mono); color: var(--ink-3); white-space: nowrap; }
+.oras li.resp { background: var(--accent-soft); color: var(--ink); }
+.oras li.cod .t { font-family: var(--f-mono); }
+.ventana { margin-top: 10px; }
+.ventana .vb { position: relative; height: 14px; background: var(--surface-2); border-radius: 4px; overflow: hidden; }
+.ventana .vb i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); opacity: .75; }
+.ventana .vl { display: flex; justify-content: space-between; font: 11.5px var(--f-mono); color: var(--ink-2); margin-top: 4px; }
+.mapa-wrap { overflow-x: auto; margin-top: 6px; }
+.mapa { border-collapse: separate; border-spacing: 2px; font-family: var(--f-mono); font-size: 11px; font-variant-numeric: tabular-nums; }
+.mapa th { color: var(--ink-3); font-weight: 500; font-size: 10px; text-align: center; padding: 0 1px; white-space: nowrap; }
+.mapa th.resp { color: var(--accent); font-weight: 600; }
+.mapa th.izq { text-align: left; }
+.mapa td { padding: 0; }
+.mapa td.etq { text-align: left; padding: 0 8px 0 2px; color: var(--ink-2); white-space: nowrap; }
+.mapa td.cel { width: 18px; min-width: 18px; height: 18px; border-radius: 3px; background: var(--cell-zero); }
+.mapa td.cel.on { background: color-mix(in oklab, var(--j) 58%, var(--cell-zero)); }
+.mapa td.cel.on.resp { box-shadow: inset 0 0 0 2px var(--accent); }
+.mapa td.num { text-align: right; padding: 0 4px; color: var(--ink-2); white-space: nowrap; }
+.mapa tr.fila { cursor: pointer; }
+.mapa tr.fila:hover td.etq { color: var(--ink); }
+.mapa tr.sel td.etq { color: var(--ink); font-weight: 600; box-shadow: inset 3px 0 0 var(--accent); }
+.mapa tr.top td.etq { color: var(--accent); font-weight: 600; }
+.mapa .bz { display: inline-block; vertical-align: middle; height: 9px; border-radius: 3px; background: var(--j); opacity: .8; }
+.mapa tr.top .bz { background: var(--accent); opacity: 1; }
+.mapa td.barra { text-align: left; white-space: nowrap; padding-left: 4px; min-width: 120px; }
+
+/* ---------- vectores ---------- */
+.vtab { border-collapse: collapse; font-family: var(--f-mono); font-size: 12px; font-variant-numeric: tabular-nums; margin: 4px 0; }
+.vtab th { font-weight: 500; color: var(--ink-3); font-size: 10.5px; padding: 3px 8px; text-align: center; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.vtab td { padding: 3px 8px; text-align: center; color: var(--ink-2); border-bottom: 1px solid var(--line-soft); }
+.vtab td.pl { text-align: left; color: var(--ink-3); }
+.vtab tr.prom td { color: var(--ink); font-weight: 600; border-top: 1px solid var(--line); border-bottom: 0; }
+.vtab td.oculto { color: var(--accent); font-weight: 600; }
+
+/* ---------- tabla de fragmentos (SQL) ---------- */
+.tb-wrap { overflow-x: auto; margin-top: 6px; }
+.tb { border-collapse: collapse; font-family: var(--f-mono); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.tb th { font-weight: 500; color: var(--ink-3); font-size: 10.5px; text-align: left; padding: 3px 9px 3px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.tb td { padding: 3px 9px 3px 0; border-bottom: 1px solid var(--line-soft); color: var(--ink-2); white-space: nowrap; }
+.tb td.pk { color: var(--k); }
+.tb td.fk { color: var(--j); }
+.tb tr.tap { cursor: pointer; }
+.tb tr.sel td { background: var(--accent-soft); color: var(--ink); }
+.cb { font-family: var(--f-mono); font-size: 12.5px; line-height: 1.55; background: var(--surface-2); border-radius: 8px; padding: 10px 12px; overflow-x: auto; white-space: pre; margin: 8px 0; color: var(--ink); }
+.cb.noej { border-left: 3px solid var(--neg); border-radius: 0 8px 8px 0; }
+.etiqueta-ne { font: 11px var(--f-mono); color: var(--neg); border: 1px solid var(--neg); border-radius: 4px; padding: 0 5px; margin-left: 6px; }
+.salida-real { font-family: var(--f-mono); font-size: 12.5px; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--surface-2); border-radius: 8px; padding: 8px 12px; margin: 6px 0; color: var(--ink-2); }
+.json-ln { font: 12px var(--f-mono); white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink-2); background: var(--surface-2); border-radius: 6px; padding: 6px 9px; margin: 4px 0; }
+
+/* ---------- tres columnas de busqueda ---------- */
+.col3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
+@media (max-width: 560px) { .col3 { grid-template-columns: minmax(0, 1fr); } }
+.col3 > div { border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; min-width: 0; }
+.col3 h4 { margin: 0 0 4px; font: 500 11.5px var(--f-mono); color: var(--ink-2); }
+.col3 .it { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; gap: 4px; font: 11.5px var(--f-mono); padding: 2px 3px; border-radius: 4px; color: var(--ink-2); align-items: center; }
+.col3 .it.ok { background: color-mix(in oklab, var(--ok) 18%, transparent); color: var(--ink); }
+.col3 .it.par { background: color-mix(in oklab, var(--accent) 14%, transparent); color: var(--ink); }
+.col3 .it.fuera { opacity: .45; }
+.col3 .it.cut { border-bottom: 1px dashed var(--ink-3); }
+.col3 .etq-r { font-size: 10px; color: var(--ink-3); }
+.col3 .vacio { font-size: 12px; color: var(--ink-3); padding: 4px 2px; }
+.ver-linea { font-size: 12.5px; color: var(--ink-2); margin: 6px 0 0; }
+.ver-linea b { font-weight: 500; }
+.ver-linea .si { color: var(--ok); }
+.ver-linea .no { color: var(--bad); }
+
+/* ---------- contexto y prompt ---------- */
+.ctxbox { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin: 6px 0; background: var(--surface); font-size: 12.5px; color: var(--ink-2); }
+.ctxbox .fr { font: 11px var(--f-mono); color: var(--accent); margin: 6px 0 2px; }
+.ctxbox .fr:first-child { margin-top: 0; }
+.ctxbox p { margin: 0 0 4px; }
+.ctxbox mark { background: color-mix(in oklab, var(--ok) 28%, transparent); color: var(--ink); border-radius: 3px; padding: 0 2px; }
+.flujo { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin: 6px 0 8px; font: 11.5px var(--f-mono); }
+.flujo span { border: 1px solid var(--line); border-radius: 6px; padding: 4px 7px; color: var(--ink-2); }
+.flujo span.fl { border: 0; padding: 0; color: var(--ink-3); }
+.flujo span.hoy { border-color: var(--accent); color: var(--ink); background: var(--accent-soft); }
+.resp-sim { border-left: 3px solid var(--accent); background: var(--accent-soft); padding: 7px 10px; border-radius: 0 8px 8px 0; font-size: 13px; color: var(--ink); margin: 6px 0; }
+.resp-sim.mal { border-left-color: var(--bad); background: var(--bad-soft); }
+
+/* ---------- retos propios ---------- */
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.ojo-opts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
+@media (max-width: 520px) { .ojo-opts { grid-template-columns: minmax(0, 1fr); } }
+.ojo-opts .opt { text-align: center; }
+.ojo-q { font-size: 15px; }
+.ojo-q code { font-size: 14px; }
+.objetivos { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.objetivos li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.objetivos .m { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.objetivos li.hecho { color: var(--ink); }
+.objetivos li.hecho .m { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 3px var(--surface); }
+.datos-mano { border-collapse: collapse; font-family: var(--f-mono); font-size: 14px; margin: 4px 0 12px; }
+.datos-mano th, .datos-mano td { padding: 4px 12px; border: 1px solid var(--line); text-align: center; }
+.datos-mano th { color: var(--ink-3); font-weight: 500; font-size: 12px; }
+
+/* ---------- vida real ---------- */
+.vr-tabla td.pl { text-align: left; white-space: nowrap; }
+.vr-tabla tr.vact td { box-shadow: inset 0 0 0 0 transparent; background: var(--accent-soft); color: var(--ink); }
+.vr-tabla tr.top td { font-weight: 600; color: var(--ink); }
+.vr-tabla td.hoy { color: var(--accent); font-weight: 600; }
+.vr-cuenta { white-space: pre-wrap; overflow-wrap: anywhere; }
+.vr-narra, .vr-pre { max-width: 100%; }
+.vr-tabla { font-size: 12px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ RAG: fragmentos, tabla vectorial y búsqueda híbrida</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Infraestructura y programación · Transacciones, seguridad y datos para IA · Base de datos (SM142051) UD4 a UD6</p>
+    <h1>RAG: fragmentos, tabla vectorial y búsqueda híbrida</h1>
+    <p class="lede">
+      Un modelo de lenguaje no puede leer todo tu documento, y tampoco lo conoce. La solución se llama RAG: <b>partes el texto en fragmentos</b>, guardas cada uno como un vector en una tabla y, cuando llega una pregunta, <b>recuperas los fragmentos más cercanos</b> y se los das al modelo. Aquí construyes esa parte de recuperación con las manos y ves por qué, con un código de producto, la búsqueda por significado se equivoca y la mezcla con la búsqueda por palabras acierta.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> Tienes el reglamento de una tienda en línea, de muchas páginas, y un asistente que solo puede leer un párrafo corto a la vez. Alguien pregunta: "¿cuántos días tengo para devolver un producto?". ¿Cómo harías para que el asistente reciba justo el trozo que necesita? Escríbelo como te salga, aunque esté mal.</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: primero partiría el reglamento en..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>De un documento largo a los fragmentos que importan</h2>
+      <p>Siete pasos. Cada uno termina con un chequeo: hasta que no lo resuelves, el siguiente queda cerrado. Equivocarte aquí no resta nada, es parte del método. No hay ningún modelo de lenguaje en esta página: solo la recuperación, que es donde se decide si el modelo acierta.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="El problema">
+          <span class="etapa">Paso 1</span>
+          <h3>El modelo no puede leerlo todo</h3>
+          <p>Este es el reglamento de la tienda del ejemplo: 12 oraciones, 123 palabras, inventadas para que las cuentas den limpias. Un modelo de lenguaje solo lee una cantidad limitada de texto cada vez (su <b>ventana de contexto</b>). Aquí usamos una ventana de juguete de <b>40 palabras</b>. Mira el escenario: lo que cabe es una parte pequeña.</p>
+          <p>Un sistema RAG, sigla de generación aumentada por recuperación, resuelve esto en dos fases. Primero <b>recupera</b> del almacén los trozos que se parecen a la pregunta. Después se los pasa al modelo como <b>contexto</b> junto con la pregunta. La unidad lo dice sin rodeos: si la recuperación falla, ningún modelo acierta <cite class="cita" data-fuente="bd4" data-pag="19" data-pimp="16" data-seccion="7.1 Arquitectura RAG" data-que="Las dos fases (recuperar fragmentos del almacén vectorial y pasarlos como contexto al prompt) y la caja que avisa que, si la recuperación falla, ningún modelo de lenguaje acierta." data-cuando="Al terminar este paso"></cite>
+          <cite class="cita" data-fuente="bd4diapo" data-pag="45" data-seccion="RAG: flujo" data-que="El mismo flujo en una diapositiva: pregunta, búsqueda vectorial, fragmentos y modelo." data-cuando="Para ver el dibujo del flujo"></cite>.</p>
+          <p>Lo que vas a construir es la parte del medio: cómo se parte el documento, cómo se guarda y cómo se busca.</p>
+          <div class="check" id="chk1">
+            <p class="check-tit">Predice antes de seguir</p>
+            <div class="cuerpo"></div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Fragmentos">
+          <span class="etapa">Paso 2</span>
+          <h3>Partir el documento en fragmentos</h3>
+          <p>Primero hay que partir el documento. A cada trozo se le llama <b>fragmento</b> (en inglés, <i>chunk</i>), y el proceso se llama <i>chunking</i>. El documento entero no sirve: su vector sería una mezcla de todo y no cabe en la ventana. Los fragmentos tienen que ser coherentes y, a menudo, se les deja un <b>solape</b>: repetir al final de uno las oraciones con que empieza el siguiente <cite class="cita" data-fuente="bd4diapo" data-pag="46" data-seccion="Chunking" data-que="El chunking dibujado con cuatro bloques de un documento, un embedding por fragmento." data-cuando="Después de mover los controles"></cite>.</p>
+          <p>Aquí el fragmento se mide en <b>oraciones</b> (en la práctica se mide en tokens, párrafos o secciones; el material no da tamaños concretos). Mueve el tamaño y el solape. Cada fila del mapa es un fragmento y cada columna una oración: las celdas azules son las oraciones que lleva. Las columnas con el borde morado son las dos oraciones que responden a la pregunta del ejemplo (el plazo y la condición).</p>
+          <p>Fíjate en lo que pasa con esas dos columnas cuando el solape es 0 y cuando es 1.</p>
+          <div class="check" id="chk2">
+            <p class="check-tit">Predice antes de seguir</p>
+            <div class="cuerpo"></div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Un vector por fragmento">
+          <span class="etapa">Paso 3</span>
+          <h3>Cada fragmento se vuelve un vector</h3>
+          <p>Para saber qué fragmento se parece a una pregunta hay que convertir el texto en números. Eso es un <b>embedding</b>: un vector que coloca el significado en un espacio, de modo que lo parecido queda cerca. Un modelo de verdad lo genera con una red neuronal y usa cientos o miles de dimensiones; el material pone 1.536 como ejemplo <cite class="cita" data-fuente="bd4" data-pag="16" data-pimp="13" data-seccion="6.1 Embedding" data-que="Qué es un embedding (vector denso generado por una red neuronal, de cientos a miles de dimensiones, 1.536 como ejemplo) y la idea de que lo similar queda cerca." data-cuando="Al empezar este paso"></cite>.</p>
+          <p>Aquí no hay modelo. Cada oración trae un vector de <b>4 números escrito a mano</b>, que miden cuánto habla de devolución, de envío, de pago y de garantía. Y el vector de un fragmento es el <b>promedio</b> de los vectores de sus <span data-tex="m"></span> oraciones:</p>
+          <div class="fbloque">
+            <div data-tex="\vec{e} \;=\; \frac{1}{m}\sum_{j=1}^{m} \vec{v}_j" data-display></div>
+            <div class="vivo" id="vivoEmb"></div>
+          </div>
+          <p>Un modelo real no promedia, lee el fragmento entero y lo comprime. Promediar es una simplificación para que veas lo importante: <b>cuantas más oraciones mezclas, más se parece el vector a "un poco de todo"</b>. Eso se llama dilución. Toca una fila del mapa para elegir un fragmento. La idea de vector y de coseno está en las páginas «Vectores: suma y escalado» y «Producto punto y similitud coseno»; la general de embeddings llega en la página «Embeddings y búsqueda por vecinos» de esta misma ruta.</p>
+          <div class="check" id="chk3">
+            <p class="check-tit">Calcula con los datos en vivo</p>
+            <div class="cuerpo"></div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="La tabla vectorial">
+          <span class="etapa">Paso 4</span>
+          <h3>Guardarlos: una fila por fragmento</h3>
+          <p>Cada fragmento se guarda con tres cosas: su <b>texto</b>, su <b>embedding</b> y sus <b>metadatos</b> (de dónde viene, qué oraciones cubre, quién puede verlo) <cite class="cita" data-fuente="bd4" data-pag="19" data-pimp="16" data-seccion="7.3 Tabla vectorial, Figura 10" data-que="Las tres cosas que se guardan por fragmento y el CREATE TABLE fragmentos_documento con la columna VECTOR(1536), el JSONB de metadatos y el índice HNSW." data-cuando="Después de mirar la tabla del escenario"></cite>. En PostgreSQL con la extensión pgvector es así:</p>
+          <pre class="cb noej">CREATE TABLE fragmentos_documento (
+  id_fragmento SERIAL PRIMARY KEY,
+  id_documento INT NOT NULL REFERENCES documentos(id_documento),
+  contenido    TEXT NOT NULL,
+  embedding    VECTOR(1536) NOT NULL,
+  metadatos    JSONB,
+  creado_en    TIMESTAMP DEFAULT now()
+);</pre>
+          <p><span class="etiqueta-ne">no ejecutado</span> Es la Figura 10 del material; esta máquina no tiene PostgreSQL. Tiene una errata: <b>la tabla <code>documentos</code> nunca se define</b> en la unidad, y la columna apunta a ella. Además la dimensión (1536) tiene que ser la del modelo que uses: la Figura 9 usa 384. Aquí, con SQLite, se guarda el vector como texto JSON y funciona igual de bien para pocos fragmentos. Toca una fila de la tabla para ver su contenido.</p>
+          <div class="check" id="chk4"><p class="check-tit">Predice antes de seguir</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Buscar">
+          <span class="etapa">Paso 5</span>
+          <h3>Buscar: el coseno y los k más cercanos</h3>
+          <p>La pregunta también se vuelve un vector. Se compara con el de cada fragmento usando la <b>similitud coseno</b>, que mide el ángulo entre los dos vectores e ignora su largo <cite class="cita" data-fuente="bd4" data-pag="17" data-pimp="14" data-seccion="6.2 Coseno y euclídea y 6.3 KNN" data-que="El coseno (ángulo, de −1 a 1, el más usado en texto) frente a la distancia euclídea, y los k vecinos más próximos: el exacto compara con todos y cuesta una vez por vector." data-cuando="Después de elegir un fragmento en el mapa"></cite>:</p>
+          <div class="fbloque">
+            <div data-tex="\cos\theta \;=\; \frac{\vec{q}\cdot\vec{e}}{\lVert\vec{q}\rVert\,\lVert\vec{e}\rVert}" data-display></div>
+            <div class="vivo" id="vivoCos"></div>
+          </div>
+          <p>Después se toman los <b>k</b> fragmentos con mayor coseno y se arma el contexto con ellos, siempre que quepan en la ventana de 40 palabras. Comparar con todos los fragmentos se llama búsqueda exacta (KNN) y alcanza para pocos miles; con millones se usan índices aproximados. Mueve el tamaño, el solape y k, y cambia entre las dos preguntas. Mira qué pasa con el fragmento que lleva las dos oraciones de la respuesta.</p>
+          <div class="check" id="chk5"><p class="check-tit">Predice antes de ver el veredicto</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Híbrida">
+          <span class="etapa">Paso 6</span>
+          <h3>Cuando el significado no basta: palabras y mezcla</h3>
+          <p>La búsqueda vectorial entiende significados, pero falla con lo que no tiene significado: códigos de producto, nombres propios, siglas. La unidad lo dice: se complementa con una búsqueda por <b>palabras clave</b> (texto completo o BM25) y se mezclan los dos rankings, lo que se conoce como búsqueda <b>híbrida</b> <cite class="cita" data-fuente="bd4" data-pag="20" data-pimp="17" data-seccion="7.4 Búsqueda híbrida" data-que="Por qué la vectorial falla con códigos, nombres propios y acrónimos y cómo la híbrida suma una búsqueda por palabra clave y re-ranking." data-cuando="Antes de tocar las columnas"></cite>
+          <cite class="cita" data-fuente="bd4diapo" data-pag="48" data-seccion="Búsqueda híbrida" data-que="El esquema de vectorial más BM25 que pasan a un re-ranking." data-cuando="Para ver el dibujo"></cite>.</p>
+          <p>Prueba con la pregunta "AB-1234". Es el código de un repuesto que aparece en la oración 7. Para el modelo de embeddings es una cadena rara: su vector cae donde sea (aquí es un vector inventado, cerca de envíos y pagos). Antes de ver las columnas, apuesta.</p>
+          <div class="check" id="chk6"><p class="check-tit">Predice antes de seguir</p><div class="cuerpo"></div></div>
+          <p>La puntuación de palabras es BM25: cuenta cuántas veces aparece cada palabra de la pregunta en el fragmento, da más peso a las palabras raras y compensa los fragmentos largos. El material solo nombra BM25; la fórmula se explica aparte en el recuadro de abajo. Como BM25 no tiene tope y el coseno sí, se divide entre el mayor para ponerlo entre 0 y 1, y se mezcla con un peso <span data-tex="\alpha"></span>:</p>
+          <div class="fbloque">
+            <div data-tex="h_i \;=\; \alpha\,v_i \;+\; (1-\alpha)\,l_i \qquad l_i=\frac{\text{bm25}_i}{\max_j \text{bm25}_j}" data-display></div>
+            <div class="vivo" id="vivoHib"></div>
+          </div>
+          <details class="profundizar">
+            <summary>¿Cómo calcula BM25 su puntuación?</summary>
+            <div>
+              <p>Para cada palabra <span data-tex="t"></span> de la pregunta, el fragmento <span data-tex="d"></span> suma:</p>
+              <div data-tex="\text{idf}(t)\cdot\frac{f\,(k_1+1)}{f + k_1\left(1-b+b\,\dfrac{|d|}{\text{avgdl}}\right)}" data-display></div>
+              <p>donde <span data-tex="f"></span> es cuántas veces aparece <span data-tex="t"></span> en <span data-tex="d"></span>, <span data-tex="|d|"></span> su largo en palabras, avgdl el largo promedio de los fragmentos, <span data-tex="k_1=1.2"></span> y <span data-tex="b=0.75"></span> (los valores por defecto de SQLite). El idf es <span data-tex="\ln\frac{N-n+0{,}5}{n+0{,}5}"></span> con <span data-tex="N"></span> fragmentos y <span data-tex="n"></span> los que contienen la palabra: una palabra rara pesa más. Si una palabra aparece en más de la mitad de los fragmentos, el idf sale negativo y SQLite lo fija en un valor casi cero.</p>
+              <p>Esto no está en el material de la unidad. Tampoco está cómo se combinan los rankings en la práctica (hay otra forma, la fusión por rangos recíprocos, que no se usa aquí). La mezcla ponderada de arriba es la más simple.</p>
+            </div>
+          </details>
+          <div class="check" id="chk6b"><p class="check-tit">Calcula con los datos en vivo</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Contexto y mantenimiento">
+          <span class="etapa">Paso 7</span>
+          <h3>Del fragmento a la respuesta, y qué se mantiene</h3>
+          <p>Con los fragmentos elegidos se arma el <b>contexto</b>: un bloque de texto con cada fragmento y su fuente, que viaja al modelo junto con la pregunta. Es lo que hace el ejercicio de la UD5 con una base SQLite: recupera, construye el contexto y arma una respuesta simulada que cita sus fuentes <cite class="cita" data-fuente="bd5ej" data-pag="5" data-pimp="4" data-seccion="Solución 4 y 5: búsqueda y contexto" data-que="La búsqueda por similitud sobre articulos JOIN embeddings (bucle, ordenar, quedarse con k) y la función que arma el contexto con bloques ### título." data-cuando="Después de mirar el escenario"></cite>
+          <cite class="cita" data-fuente="bd5" data-pag="12" data-pimp="10" data-seccion="RAG, Tabla 10" data-que="Las dos fases del RAG: ingesta (offline) y consulta (online), sus ventajas (menos alucinaciones, sin reentrenar) y el aviso de que conectarse a la base vectorial sigue pidiendo driver, pool y consultas parametrizadas." data-cuando="Al terminar el recorrido"></cite>. Mira el escenario: es todo el recorrido con tus ajustes.</p>
+          <p>Y hay mantenimiento. Si el documento cambia, hay que regenerar los embeddings de esos fragmentos y reindexar. Si cambia el <b>modelo</b> de embeddings, hay que reprocesar toda la colección: los espacios de dos modelos no son comparables <cite class="cita" data-fuente="bd4" data-pag="20" data-pimp="17" data-seccion="7.5 Mantenimiento" data-que="Qué hacer cuando cambia un documento (regenerar y reindexar) y cuando cambia el modelo (reprocesar todo, porque los vectores de dos modelos no se pueden comparar)." data-cuando="Después del chequeo"></cite>.</p>
+          <p>En PostgreSQL con pgvector la búsqueda del paso 5 se escribe así, con <code>&lt;=&gt;</code> como operador de distancia coseno:</p>
+          <pre class="cb noej">SELECT id_fragmento, contenido
+FROM fragmentos_documento
+ORDER BY embedding &lt;=&gt; '[0.012, -0.041, ...]'
+LIMIT 5;</pre>
+          <p><span class="etiqueta-ne">no ejecutado</span> Depende de pgvector. El vector entre comillas es un marcador, no un vector real. Una distancia coseno pequeña es una similitud grande (distancia = 1 − similitud): esa relación no está en el material, se explica aparte.</p>
+          <div class="check" id="chk7"><p class="check-tit">Antes de terminar</p><div class="cuerpo"></div></div>
+
+          <div class="destacado" id="destacado">
+            <p class="dest-tit">Una confusión muy común</p>
+            <h4>Si el modelo es enorme, ¿no se arregla solo una recuperación mala?</h4>
+            <p>Parece que sí: "un modelo mejor entiende más". Pero el modelo solo ve <b>lo que le pasas</b>. Si el fragmento con la respuesta no llegó al contexto, no hay nada que entender. Un modelo más grande no inventa un dato que nunca vio bien, o dice que no lo sabe, o lo inventa con más seguridad, que es peor.</p>
+            <div class="check" id="chk7b"><p class="check-tit">Predice antes de tocar el botón</p><div class="cuerpo"></div></div>
+            <div class="btn-row" style="margin-top:14px">
+              <button type="button" class="primary" id="btnGrande" disabled>Pasar al modelo enorme</button>
+              <span class="zhint" id="grandeHint">Responde la predicción para activar el botón.</span>
+            </div>
+          </div>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+          <button type="button" class="ghost" id="btnRestaurar">Reiniciar</button>
+        </div>
+        <div id="ctl"></div>
+        <div id="esc"></div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>El recorrido completo, escrito como lo haría un programa y con los mismos datos: se parte el reglamento con tamaño 3 y solape 1, se guarda en una tabla, y se busca "AB-1234" con coseno, con BM25 y con la mezcla. Elige Python o R, dale a reproducir y mira cómo se llena la tabla fragmento por fragmento.</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir</p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="true">Python</button>
+            <button type="button" data-lang="r" aria-pressed="false">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">1 · trocear</span><span data-f="2">2 · guardar</span><span data-f="3">3 · buscar</span><span data-f="4">4 · contexto</span>
+        </div>
+        <h3 class="mini-tit vr-tit">Los fragmentos, con su puntuación para "AB-1234"</h3>
+        <div class="tabla-wrap"><table class="tabla vr-tabla" id="vrTabla"></table></div>
+        <div class="vr-cuenta" id="vrCuenta"></div>
+        <h3 class="mini-tit vr-tit">Contexto que recibiría el modelo (k = 2)</h3>
+        <div class="ctxbox" id="vrCtx"></div>
+      </div>
+    </div>
+
+    <p class="vr-nota">En la práctica nadie escribe el coseno ni el BM25 a mano: una base vectorial o una extensión como pgvector compara los vectores, y un índice de texto como FTS5 en SQLite (o <code>tsvector</code> en PostgreSQL) hace lo de las palabras. Escribirlo una vez sirve para ver que es una cuenta por fragmento y para no caer en las trampas de abajo. El ejercicio de la UD5 hace lo mismo con SQLite, un JSON de 5 números por artículo y un bucle de coseno <cite class="cita" data-fuente="bd5ej" data-pag="2" data-pimp="1" data-seccion="Código 1 y Código 2" data-que="El esquema articulos y embeddings (el vector como JSON de 5 componentes) y los seis artículos de ejemplo con sus vectores." data-cuando="Antes de reproducir el programa"></cite>. Ojo con ese ejercicio: la tarea 4 pide <code>similitud_coseno</code>, la solución nunca la escribe (la función de la solución 4 la llama sin que exista), y el enunciado no trae ningún vector de consulta <cite class="cita" data-fuente="bd5ej" data-pag="3" data-pimp="2" data-seccion="Tareas 1 a 10" data-que="Las diez tareas; la 4 es la similitud coseno y no tiene solución, y la numeración de las soluciones se desfasa desde ahí." data-cuando="Después de reproducir el programa"></cite>. Por eso la página inventa uno. La comparación final del programa verifica el coseno contra NumPy (Python) o contra la forma de matriz (R), y el BM25 contra el de FTS5 (Python, con <code>bm25()</code>) o contra los valores que dio FTS5 (R, que no tiene RSQLite en esta máquina).</p>
+
+    <details class="profundizar">
+      <summary>Lo que imprime cada lenguaje, tal cual</summary>
+      <div>
+        <p>Python 3 con <code>sqlite3</code> (SQLite 3.45) y NumPy:</p>
+        <div class="salida-real" id="salidaPy"></div>
+        <p>R 4.6 con <code>stringi</code>, sin <code>RSQLite</code>:</p>
+        <div class="salida-real" id="salidaR"></div>
+        <p>Los números coinciden. Los fragmentos 3 y 4 son los únicos que contienen "AB-1234": el 4 tiene también otras dos oraciones sin relación, y el 3 queda segundo. La búsqueda vectorial sola habría puesto primero al fragmento 1, que habla de envíos y pagos.</p>
+      </div>
+    </details>
+
+    <details class="profundizar">
+      <summary>La versión vectorizada del coseno</summary>
+      <div>
+        <p>Los bucles del coseno se pueden escribir como una sola operación con matrices: en Python <code>M @ q / (np.linalg.norm(M, axis=1) * np.linalg.norm(q))</code>, en R <code>drop(M %*% q) / (sqrt(rowSums(M^2)) * sqrt(sum(q^2)))</code>. Es justo la comprobación del final del programa. Con pgvector el operador <code>&lt;=&gt;</code> hace esto dentro de la base de datos y, con un índice HNSW o IVF, sin comparar con todos. SQLite no tiene ese tipo de índice: el proyecto final pide uno <cite class="cita" data-fuente="bdpf" data-pag="2" data-pimp="1" data-seccion="Enunciado" data-que="Los seis mínimos del proyecto; entre ellos la búsqueda semántica con un índice ANN (HNSW o IVF) sobre PostgreSQL con pgvector o equivalente, mientras el ejercicio de la UD5 usa SQLite." data-cuando="Cuando planees tu proyecto"></cite>, así que con SQLite solo cabe la búsqueda exacta que hace este programa.</p>
+      </div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>El guion de "AB-1234" en FTS5</h3><span class="estado" data-reto="codigo2"></span></div>
+        <div id="codigo2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>El signo de bm25()</h3><span class="estado" data-reto="codigo3"></span></div>
+        <div id="codigo3"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: la biblioteca te avisa en el índice cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>¿Qué búsqueda gana?</h3><span class="estado" data-reto="ojo"></span></div>
+        <p class="desc">Una pregunta y lo que dice el documento. Decide sin calcular qué búsqueda encuentra el fragmento. Apruebas con 4 de 5.</p>
+        <div id="ojo"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Construir</span><h3>Parte el reglamento</h3><span class="estado" data-reto="construir"></span></div>
+        <p class="desc">Mueve el tamaño y el solape hasta cumplir cada objetivo. Las oraciones 4 y 5 son la respuesta de la pregunta del plazo, y la 6 y la 7 hablan de la garantía y del repuesto AB-1234. Se marcan solos.</p>
+        <div class="rango-fila"><span>Tamaño (oraciones)</span><input type="range" id="cT" min="1" max="6" value="3"><b id="cTv">3</b></div>
+        <div class="rango-fila"><span>Solape (oraciones)</span><input type="range" id="cO" min="0" max="5" value="1"><b id="cOv">1</b></div>
+        <div id="construirMapa"></div>
+        <div class="grande" id="construirVivo"></div>
+        <ul class="objetivos" id="objetivos"></ul>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>El coseno con lápiz</h3><span class="estado" data-reto="mano"></span></div>
+        <p class="desc">Un vector de pregunta y el vector de un fragmento, de 3 dimensiones. Toma papel antes de pedir pistas.</p>
+        <div id="manoDatos"></div>
+        <div id="mano"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>Cuántos fragmentos salen</h3><span class="estado" data-reto="mano2"></span></div>
+        <p class="desc">Un documento, un tamaño y un solape al azar. Cuenta los fragmentos con lápiz.</p>
+        <div id="mano2Datos"></div>
+        <div id="mano2"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Alguien se equivocó</h3><span class="estado" data-reto="error"></span></div>
+        <p class="desc">Una de las líneas tiene un error. Tócala.</p>
+        <div id="error"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Para qué sirve el solape</h3><span class="estado" data-reto="prop1"></span></div>
+        <div id="prop1"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Metadatos y permisos</h3><span class="estado" data-reto="prop2"></span></div>
+        <div id="prop2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Cambia el modelo de embeddings</h3><span class="estado" data-reto="prop3"></span></div>
+        <div id="prop3"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Un índice ANN en SQLite</h3><span class="estado" data-reto="prop4"></span></div>
+        <div id="prop4"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Recordar a la fuerza es lo que fija. Arma la puntuación híbrida y la consulta de palabras pieza por pieza, y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Fórmula de memoria</span><h3>Arma la puntuación híbrida</h3><span class="estado" data-reto="formula"></span></div>
+        <p class="desc">Hay piezas de más que no pertenecen. No mires arriba.</p>
+        <div id="formula"></div>
+      </article>
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Consulta de memoria</span><h3>Arma la búsqueda por palabras en SQLite</h3><span class="estado" data-reto="consulta"></span></div>
+        <p class="desc">Quieres el fragmento que contiene el código AB-1234, con la puntuación positiva y el mejor primero. Hay piezas de más.</p>
+        <div id="consulta"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el material</h2>
+      <p class="lecturas-intro">Ya construiste la idea con las manos. Ahora ve a la versión del máster y comprueba que la reconoces. Cada entrada dice qué vas a encontrar y en qué momento conviene leerla. Si abres la biblioteca con doble clic, el enlace abre el PDF en esa página. Ojo con lo que el material no trae: no hay tamaños de fragmento concretos, ni el vector de consulta del ejercicio, ni la fórmula de BM25, ni cómo se combinan los rankings, ni los operadores de pgvector más allá de <code>&lt;=&gt;</code>, ni los parámetros de HNSW o IVF. Esas partes se explican aquí aparte. La unidad tampoco trae código en R: el de esta página es nuestro.</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> El reglamento de la tienda, sus 12 oraciones, los vectores de 4 números (devolución, envío, pago, garantía) y los vectores de las preguntas están inventados para que las cuentas den limpias: un modelo de embeddings real los genera con una red neuronal y no se parecen a estos. La ventana de 40 palabras también es de juguete. Lo que sí es real: el coseno, el BM25 de FTS5 en SQLite 3.45 y la mezcla ponderada, que se corrieron en Python y en R. Tu progreso se guarda solo en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+/*
+  EJEMPLOS COMUNES DE LA RUTA "Transacciones, seguridad y datos para IA" (los reutilizan las demas paginas de la ruta):
+  El reglamento de la tienda en linea (inventado), 12 oraciones y 123 palabras, con un vector de 4 numeros por oracion
+  (devolucion, envio, pago, garantia). El embedding de un fragmento es el promedio de los de sus oraciones.
+    1 Los pedidos salen del almacen de Madrid en 24 horas.            [0.0, 0.9, 0.1, 0.0]
+    2 El envio estandar tarda entre 2 y 4 dias laborables.            [0.0, 0.9, 0.0, 0.1]
+    3 Puedes pagar con tarjeta, transferencia o contra reembolso.     [0.1, 0.1, 0.9, 0.0]
+    4 Tienes 30 dias para devolver un producto desde que lo recibes.  [0.9, 0.2, 0.0, 0.1]
+    5 Debe estar sin usar y con su embalaje original.                 [0.8, 0.0, 0.0, 0.3]
+    6 La garantia legal cubre los fallos de fabricacion durante dos anos. [0.1, 0.0, 0.0, 0.9]
+    7 El repuesto AB-1234 se vende aparte y no tiene garantia.        [0.2, 0.2, 0.2, 0.4]
+    8 El reembolso llega por el mismo medio de pago en 5 dias.        [0.5, 0.0, 0.7, 0.0]
+    9 Nuestro equipo atiende de lunes a viernes, de 9 a 18 horas.     [0.2, 0.1, 0.1, 0.2]
+   10 Los envios a Canarias y Baleares pueden tardar un dia mas.      [0.0, 0.9, 0.0, 0.0]
+   11 Los pagos con tarjeta se confirman al instante.                 [0.0, 0.1, 0.9, 0.0]
+   12 Si recibes un producto danado, avisanos en las primeras 48 horas. [0.5, 0.2, 0.0, 0.5]
+  Preguntas: "Cuantos dias tengo para devolver un producto?" [0.9, 0.1, 0.0, 0.1] (respuesta: oraciones 4 y 5),
+  "AB-1234" [0.0, 0.7, 0.5, 0.0] (respuesta: oracion 7), "puedo regresar mi compra?" [0.85, 0.1, 0.1, 0.1] (oraciones 4 y 5).
+  Numeros que conviene reconocer: tamano 3 y solape 1 dan 6 fragmentos (1-3, 3-5, 5-7, 7-9, 9-11, 11-12); ventana de 40 palabras.
+  Para AB-1234 con 3 y 1: coseno 0.989, 0.370, 0.142, 0.549, 0.976, 0.648; BM25 de FTS5 0, 0, 1.138, 1.078, 0, 0;
+  hibrida (alfa 0.5) 0.494, 0.185, 0.571, 0.748, 0.488, 0.324.
+  Python: sqlite3 en memoria con FTS5 (SQLite 3.45) y NumPy. R: sin RSQLite; el BM25 se escribe a mano.
+  La pagina "Embeddings y busqueda por vecinos" no existia al escribir esta; estos vectores son propios de esta pagina.
+*/
+(function () {
+  "use strict";
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var RETOS = ["ojo", "construir", "mano", "mano2", "error", "prop1", "prop2", "prop3", "prop4", "formula", "consulta", "codigo1", "codigo2", "codigo3"];
+  var C = B.concepto({ id: "rag-busqueda-hibrida", retos: RETOS, pasos: 7 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  /* ---------------- utilidades ---------------- */
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function rnd(a, b) { return a + Math.floor(Math.random() * (b - a + 1)); }
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+  function f3(v) { return B.fmt(v, 3); }
+  function f2(v) { return B.fmt(v, 2); }
+
+  /* ---------------- los datos: el reglamento de la tienda ---------------- */
+  var ORA = [
+    "Los pedidos salen del almacén de Madrid en 24 horas.",
+    "El envío estándar tarda entre 2 y 4 días laborables.",
+    "Puedes pagar con tarjeta, transferencia o contra reembolso.",
+    "Tienes 30 días para devolver un producto desde que lo recibes.",
+    "Debe estar sin usar y con su embalaje original.",
+    "La garantía legal cubre los fallos de fabricación durante dos años.",
+    "El repuesto AB-1234 se vende aparte y no tiene garantía.",
+    "El reembolso llega por el mismo medio de pago en 5 días.",
+    "Nuestro equipo atiende de lunes a viernes, de 9 a 18 horas.",
+    "Los envíos a Canarias y Baleares pueden tardar un día más.",
+    "Los pagos con tarjeta se confirman al instante.",
+    "Si recibes un producto dañado, avísanos en las primeras 48 horas."
+  ];
+  var VEC = [
+    [0.0, 0.9, 0.1, 0.0], [0.0, 0.9, 0.0, 0.1], [0.1, 0.1, 0.9, 0.0],
+    [0.9, 0.2, 0.0, 0.1], [0.8, 0.0, 0.0, 0.3], [0.1, 0.0, 0.0, 0.9],
+    [0.2, 0.2, 0.2, 0.4], [0.5, 0.0, 0.7, 0.0], [0.2, 0.1, 0.1, 0.2],
+    [0.0, 0.9, 0.0, 0.0], [0.0, 0.1, 0.9, 0.0], [0.5, 0.2, 0.0, 0.5]
+  ];
+  var DIM = ["devolución", "envío", "pago", "garantía"];
+  var VENTANA = 40;
+  var NP = ORA.map(function (s) { return s.split(/\s+/).length; });
+  var TOTAL_PAL = NP.reduce(function (a, b) { return a + b; }, 0);
+  var N = ORA.length;
+  var PREGS = [
+    { txt: "¿Cuántos días tengo para devolver un producto?", corto: "Plazo de devolución", vec: [0.9, 0.1, 0.0, 0.1], resp: [3, 4] },
+    { txt: "AB-1234", corto: "Código AB-1234", vec: [0.0, 0.7, 0.5, 0.0], resp: [6] },
+    { txt: "¿puedo regresar mi compra?", corto: "Regresar la compra", vec: [0.85, 0.1, 0.1, 0.1], resp: [3, 4] }
+  ];
+
+  /* ---- nucleo de calculo: el mismo algoritmo que el programa de la parte 2 ---- */
+  function trocear(tam, sol) {
+    var out = [], paso = tam - sol, ini, fin;
+    for (ini = 0; ini < N; ini += paso) {
+      fin = Math.min(ini + tam, N);
+      out.push({ ini: ini, fin: fin });
+      if (fin === N) break;
+    }
+    return out;
+  }
+  function embDe(c) {
+    var e = [0, 0, 0, 0], i, d, m = c.fin - c.ini;
+    for (d = 0; d < 4; d++) { for (i = c.ini; i < c.fin; i++) e[d] += VEC[i][d]; e[d] /= m; }
+    return e;
+  }
+  function textoDe(c) { return ORA.slice(c.ini, c.fin).join(" "); }
+  function palabrasDe(c) { var s = 0, i; for (i = c.ini; i < c.fin; i++) s += NP[i]; return s; }
+  function cosV(a, b) {
+    var p = 0, na = 0, nb = 0, i;
+    for (i = 0; i < a.length; i++) { p += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; }
+    return p / (Math.sqrt(na) * Math.sqrt(nb));
+  }
+  function tokens(t) {
+    var s = t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    return s.match(/[a-z0-9]+/g) || [];
+  }
+  function bm25(d, qt, docs) {
+    var n_ = docs.length, avg = 0, s = 0, i, k, t, n, idf, tf;
+    for (i = 0; i < docs.length; i++) avg += docs[i].length;
+    avg /= n_;
+    var us = [];
+    qt.forEach(function (x) { if (us.indexOf(x) < 0) us.push(x); });
+    us.sort();
+    for (k = 0; k < us.length; k++) {
+      t = us[k]; n = 0;
+      for (i = 0; i < docs.length; i++) if (docs[i].indexOf(t) >= 0) n++;
+      if (n === 0) continue;
+      idf = Math.max(Math.log((n_ - n + 0.5) / (n + 0.5)), 1e-6);
+      tf = 0;
+      for (i = 0; i < d.length; i++) if (d[i] === t) tf++;
+      s += idf * tf * 2.2 / (tf + 1.2 * (0.25 + 0.75 * d.length / avg));
+    }
+    return s;
+  }
+  var cacheD = {};
+  function datos(tam, sol, qi) {
+    var key = tam + "-" + sol + "-" + qi;
+    if (cacheD[key]) return cacheD[key];
+    var frs = trocear(tam, sol), q = PREGS[qi];
+    var docs = frs.map(function (c) { return tokens(textoDe(c)); });
+    var qt = tokens(q.txt);
+    var vec = frs.map(function (c) { return cosV(q.vec, embDe(c)); });
+    var lex = docs.map(function (d) { return bm25(d, qt, docs); });
+    var mx = Math.max.apply(null, lex) || 1;
+    var lexn = lex.map(function (x) { return x / mx; });
+    return (cacheD[key] = { frs: frs, docs: docs, qt: qt, vec: vec, lex: lex, mx: mx, lexn: lexn });
+  }
+  function hibrida(D, alfa) { return D.vec.map(function (v, i) { return alfa * v + (1 - alfa) * D.lexn[i]; }); }
+  // ranking estable de mayor a menor; en palabras solo entran los que coinciden
+  function ranking(p, soloPos) {
+    var ix = p.map(function (_, i) { return i; });
+    if (soloPos) ix = ix.filter(function (i) { return p[i] > 0.001; });
+    ix.sort(function (a, b) { return p[b] - p[a] || a - b; });
+    return ix;
+  }
+  // arma el contexto con los k primeros que caben en la ventana
+  function armar(D, orden, k, qi) {
+    var usados = [], saltados = [], pal = 0, cub = {}, i, c, w, j;
+    orden.slice(0, k).forEach(function (n) {
+      c = D.frs[n]; w = palabrasDe(c);
+      if (pal + w <= VENTANA) { usados.push(n); pal += w; for (j = c.ini; j < c.fin; j++) cub[j] = true; }
+      else saltados.push(n);
+    });
+    var falta = PREGS[qi].resp.filter(function (r) { return !cub[r]; });
+    var tiles = 0;
+    PREGS[qi].resp.forEach(function (r) { if (cub[r]) tiles += NP[r]; });
+    return { usados: usados, saltados: saltados, palabras: pal, cub: cub, falta: falta, ok: falta.length === 0 && orden.length > 0, utiles: tiles };
+  }
+  function motivo(D, orden, k, qi, A) {
+    if (!orden.length) return "no hubo ninguna coincidencia de palabras: no recupera nada.";
+    if (A.ok) return PREGS[qi].resp.length === 1 ? "la oración con la respuesta llegó al contexto." : "las oraciones con la respuesta llegaron al contexto.";
+    if (A.saltados.length && A.usados.length === 0) return "el fragmento mejor puntuado trae " + palabrasDe(D.frs[A.saltados[0]]) + " palabras y no cabe en la ventana de " + VENTANA + ".";
+    var f = A.falta.map(function (r) { return r + 1; });
+    return "falta la oración " + f.join(" y la ") + " en el contexto" + (A.saltados.length ? " (un fragmento no cupo en la ventana)." : ".");
+  }
+  function numFrag(n, t, s) { return t >= n ? 1 : 1 + Math.ceil((n - t) / (t - s)); }
+
+  /* ---------------- estado del recorrido ---------------- */
+  var est = { paso: 0, T: 3, O: 1, K: 2, A: 0.5, qi: 0, sel: 0, met: "hib", chk3: false, chk5: false, chk6: false, chk6b: false, grande: false };
+  var pasos, num3;
+
+  var MODOS = [
+    { vista: "doc", ctl: [], hint: "Lo que cabe en la ventana es una parte pequeña" },
+    { vista: "frag", ctl: ["T", "O"], hint: "Mueve el tamaño y el solape" },
+    { vista: "emb", ctl: ["T", "O"], hint: "Toca un fragmento para elegirlo" },
+    { vista: "tabla", ctl: ["T", "O"], hint: "Toca una fila de la tabla" },
+    { vista: "buscar", ctl: ["T", "O", "K", "Q"], hint: "Cambia el tamaño, el solape, k y la pregunta" },
+    { vista: "hibrida", ctl: ["A", "K", "Q"], hint: "Responde la predicción para activar las columnas" },
+    { vista: "pipeline", ctl: ["T", "O", "K", "A", "Q"], hint: "Todo el recorrido con tus ajustes" }
+  ];
+
+  var elCtl = $("ctl"), elEsc = $("esc");
+
+  /* ---- controles: se construyen una vez por paso para no perder el foco al arrastrar ---- */
+  var RANGOS = {
+    T: { lab: "Tamaño (oraciones)", min: 1, max: 6, step: 1, fmt: function (v) { return String(v); } },
+    O: { lab: "Solape (oraciones)", min: 0, max: 5, step: 1, fmt: function (v) { return String(v); } },
+    K: { lab: "k (fragmentos)", min: 1, max: 3, step: 1, fmt: function (v) { return String(v); } },
+    A: { lab: "Peso α de los vectores", min: 0, max: 1, step: 0.05, fmt: function (v) { return f2(v); } }
+  };
+  function construirCtl(lista) {
+    var h = "";
+    lista.forEach(function (c) {
+      if (c === "Q") {
+        h += '<div class="chips" id="chipsQ">' + PREGS.map(function (q, i) {
+          if (est.paso === 4 && i === 1) return "";
+          return '<button type="button" data-q="' + i + '" class="' + (est.qi === i ? "on" : "") + '">' + esc(q.corto) + '</button>';
+        }).join("") + '</div>';
+      } else {
+        var r = RANGOS[c];
+        h += '<div class="rango-fila"><span>' + r.lab + '</span><input type="range" id="r' + c + '" min="' + r.min + '" max="' + r.max + '" step="' + r.step + '" value="' + est[c] + '"><b id="v' + c + '">' + r.fmt(est[c]) + '</b></div>';
+      }
+    });
+    elCtl.innerHTML = h;
+  }
+  function sincronizarCtl() {
+    ["T", "O", "K", "A"].forEach(function (c) {
+      var inp = $("r" + c);
+      if (!inp) return;
+      if (c === "O") inp.max = est.T - 1;
+      inp.value = est[c];
+      $("v" + c).textContent = RANGOS[c].fmt(est[c]);
+    });
+    var chips = $("chipsQ");
+    if (chips) [].forEach.call(chips.children, function (b) { b.classList.toggle("on", +b.getAttribute("data-q") === est.qi); });
+  }
+  elCtl.addEventListener("input", function (e) {
+    var t = e.target, id = t.id;
+    if (!id || id.charAt(0) !== "r") return;
+    var c = id.charAt(1), v = +t.value;
+    est[c] = v;
+    if (c === "T" && est.O > est.T - 1) est.O = est.T - 1;
+    est.sel = 0;
+    sincronizarCtl();
+    render();
+  });
+  elCtl.addEventListener("click", function (e) {
+    var b = e.target.closest("[data-q]");
+    if (!b) return;
+    est.qi = +b.getAttribute("data-q");
+    est.sel = 0;
+    sincronizarCtl();
+    render();
+  });
+
+  /* ---- piezas visuales del escenario ---- */
+  function mapa(D, opciones) {
+    var o = opciones || {}, resp = PREGS[o.qi != null ? o.qi : est.qi].resp, i;
+    var h = '<div class="mapa-wrap"><table class="mapa"><thead><tr><th class="izq">frag.</th>';
+    for (i = 0; i < N; i++) h += '<th class="' + (o.marcar !== false && resp.indexOf(i) >= 0 ? "resp" : "") + '">' + (i + 1) + '</th>';
+    h += (o.cabeza || '<th>pal.</th>') + '</tr></thead><tbody>';
+    D.frs.forEach(function (c, k) {
+      var cls = "fila" + (est.sel === k && o.seleccion ? " sel" : "") + (o.top && o.top.indexOf(k) >= 0 ? " top" : "");
+      h += '<tr class="' + cls + '" data-k="' + k + '"><td class="etq">C' + (k + 1) + '</td>';
+      for (i = 0; i < N; i++) {
+        var on = i >= c.ini && i < c.fin;
+        h += '<td class="cel' + (on ? " on" : "") + (on && o.marcar !== false && resp.indexOf(i) >= 0 ? " resp" : "") + '"></td>';
+      }
+      h += (o.extra ? o.extra(c, k) : '<td class="num">' + palabrasDe(c) + '</td>') + '</tr>';
+    });
+    return h + '</tbody></table></div>';
+  }
+  function heat(v) { return 'style="background: color-mix(in oklab, var(--accent) ' + Math.round(v * 60) + '%, transparent)"'; }
+  function jsonVec(e) { return "[" + e.map(function (x) { return f3(x).replace("−", "-"); }).join(", ") + "]"; }
+  function selClamp(D) { if (est.sel >= D.frs.length) est.sel = 0; }
+
+  /* ---- vistas ---- */
+  function vistaDoc() {
+    var h = '<p class="tit-t">politica_tienda: ' + N + ' oraciones, ' + TOTAL_PAL + ' palabras</p><ol class="oras">';
+    ORA.forEach(function (s, i) {
+      h += '<li><span class="n">' + (i + 1) + '</span><span class="t">' + esc(s) + '</span><span class="pal">' + NP[i] + ' pal.</span></li>';
+    });
+    h += '</ol><div class="ventana"><div class="vb"><i style="width:' + (VENTANA / TOTAL_PAL * 100) + '%"></i></div>' +
+      '<div class="vl"><span>cabe: ' + VENTANA + ' palabras</span><span>queda fuera: ' + (TOTAL_PAL - VENTANA) + '</span></div></div>';
+    h += '<p class="lectura">La ventana de juguete del modelo admite <b>' + VENTANA + '</b> palabras. El reglamento tiene <b>' + TOTAL_PAL + '</b>. Pregunta de ejemplo: «' + esc(PREGS[0].txt) + '»</p>';
+    elEsc.innerHTML = h;
+  }
+
+  function vistaFrag() {
+    var D = datos(est.T, est.O, 0);
+    var resp = PREGS[0].resp;
+    var h = '<p class="tit-t">Las oraciones. En morado, las que responden «' + esc(PREGS[0].corto.toLowerCase()) + '»</p><ol class="oras">';
+    ORA.forEach(function (s, i) {
+      h += '<li class="' + (resp.indexOf(i) >= 0 ? "resp" : "") + '"><span class="n">' + (i + 1) + '</span><span class="t">' + esc(s) + '</span><span class="pal">' + NP[i] + ' pal.</span></li>';
+    });
+    h += '</ol><p class="tit-t">Los fragmentos (una fila cada uno)</p>' + mapa(D, { qi: 0 });
+    var juntas = D.frs.some(function (c) { return c.ini <= resp[0] && c.fin > resp[1]; });
+    h += '<p class="contador"><b>' + D.frs.length + '</b> fragmentos · tamaño ' + est.T + ' · solape ' + est.O + '</p>';
+    h += '<p class="lectura">' + (juntas ? "Hay un fragmento que lleva <b>las dos</b> oraciones de la respuesta (4 y 5)." : "Ningún fragmento lleva juntas las oraciones 4 y 5: la respuesta quedó cortada entre dos.") + '</p>';
+    elEsc.innerHTML = h;
+  }
+
+  function vistaEmb() {
+    var D = datos(est.T, est.O, 0);
+    selClamp(D);
+    var c = D.frs[est.sel], m = c.fin - c.ini, e = embDe(c), i, d;
+    var h = '<p class="tit-t">Toca un fragmento para elegirlo</p>' + mapa(D, { qi: 0, seleccion: true });
+    h += '<p class="tit-t">Fragmento C' + (est.sel + 1) + ': oraciones ' + (c.ini + 1) + ' a ' + c.fin + ' (m = ' + m + ')</p>';
+    h += '<table class="vtab"><thead><tr><th></th>' + DIM.map(function (x) { return '<th>' + x + '</th>'; }).join("") + '</tr></thead><tbody>';
+    for (i = c.ini; i < c.fin; i++) {
+      h += '<tr><td class="pl">oración ' + (i + 1) + '</td>' + VEC[i].map(function (x) { return '<td ' + heat(x) + '>' + f2(x) + '</td>'; }).join("") + '</tr>';
+    }
+    h += '<tr class="prom"><td class="pl">promedio</td>' + e.map(function (x) {
+      return est.chk3 ? '<td ' + heat(x) + '>' + f3(x) + '</td>' : '<td class="oculto">?</td>';
+    }).join("") + '</tr></tbody></table>';
+    var dilu = Math.max.apply(null, e) / e.reduce(function (a, b) { return a + b; }, 0);
+    h += '<p class="lectura">' + (est.chk3 ? "La componente más grande pesa el <b>" + Math.round(dilu * 100) + " %</b> del vector. Mientras más oraciones mezclas, más parejo queda: eso es la dilución." : "Calcula el promedio de la componente que te pide el chequeo. Aquí aparecerá cuando lo resuelvas.") + '</p>';
+    elEsc.innerHTML = h;
+    $("vivoEmb").innerHTML = est.chk3 ? "e = " + jsonVec(e) + "  (m = " + m + ")" : "e = ?   (elige un fragmento y calcula una componente)";
+  }
+
+  function vistaTabla() {
+    var D = datos(est.T, est.O, 0);
+    selClamp(D);
+    var h = '<p class="tit-t">Tabla fragmentos (SQLite, en memoria). El vector está redondeado a 3 decimales para leerlo</p><div class="tb-wrap"><table class="tb"><thead><tr><th>id_fragmento</th><th>id_documento</th><th>contenido</th><th>embedding</th><th>metadatos</th></tr></thead><tbody>';
+    D.frs.forEach(function (c, k) {
+      var txt = textoDe(c);
+      h += '<tr class="tap' + (est.sel === k ? " sel" : "") + '" data-k="' + k + '"><td class="pk">' + (k + 1) + '</td><td class="fk">1</td><td>' + esc(txt.slice(0, 26)) + '...</td><td>' + jsonVec(embDe(c)) + '</td><td>{"desde": ' + (c.ini + 1) + ', "hasta": ' + c.fin + '}</td></tr>';
+    });
+    h += '</tbody></table></div>';
+    var c2 = D.frs[est.sel];
+    h += '<p class="tit-t">Fila ' + (est.sel + 1) + ' completa</p><div class="json-ln">contenido: ' + esc(textoDe(c2)) + '</div>' +
+      '<div class="json-ln">embedding: ' + jsonVec(embDe(c2)) + '</div>' +
+      '<div class="json-ln">metadatos: {"origen": "politica_tienda", "desde": ' + (c2.ini + 1) + ', "hasta": ' + c2.fin + '}</div>';
+    h += '<p class="contador"><b>' + D.frs.length + '</b> filas · cada embedding guarda <b>4</b> números (un modelo real guardaría 1536)</p>';
+    elEsc.innerHTML = h;
+  }
+
+  function veredictoHtml(D, orden, k, qi, titulo, etiquetas) {
+    var A = armar(D, orden, k, qi);
+    var mot = motivo(D, orden, k, qi, A);
+    return { A: A, html: '<p class="ver-linea"><b>' + titulo + ':</b> <span class="' + (A.ok ? "si" : "no") + '">' + (A.ok ? "la respuesta llega" : "la respuesta no llega") + '</span> · contexto de ' + A.palabras + ' de ' + VENTANA + ' palabras (útiles: ' + A.utiles + '). ' + mot + '</p>' };
+  }
+
+  function vistaBuscar() {
+    var D = datos(est.T, est.O, est.qi), q = PREGS[est.qi];
+    selClamp(D);
+    var orden = ranking(D.vec, false), top = orden.slice(0, est.K);
+    var mx = Math.max.apply(null, D.vec);
+    var h = '<p class="tit-t">Pregunta: «' + esc(q.txt) + '» · vector ' + jsonVec(q.vec) + '</p>';
+    h += mapa(D, {
+      seleccion: true, top: top, cabeza: '<th class="izq">coseno</th>',
+      extra: function (c, k) { return '<td class="barra"><span class="bz" style="width:' + Math.round(D.vec[k] * 70) + 'px"></span> ' + f3(D.vec[k]) + '</td>'; }
+    });
+    var c = D.frs[est.sel], e = embDe(c);
+    h += '<p class="contador">k = <b>' + est.K + '</b> · en morado, los fragmentos elegidos</p>';
+    if (est.chk5) {
+      var V = veredictoHtml(D, orden, est.K, est.qi, "Con la búsqueda vectorial");
+      h += V.html;
+      if (V.A.usados.length) {
+        h += '<div class="ctxbox">' + V.A.usados.map(function (n) {
+          var fc = D.frs[n], s = "", i;
+          for (i = fc.ini; i < fc.fin; i++) s += (q.resp.indexOf(i) >= 0 ? "<mark>" + esc(ORA[i]) + "</mark> " : esc(ORA[i]) + " ");
+          return '<div class="fr">C' + (n + 1) + ' · ' + palabrasDe(fc) + ' palabras</div><p>' + s + '</p>';
+        }).join("") + '</div>';
+      }
+    } else {
+      h += '<p class="lectura">El veredicto (si la respuesta llega al modelo) aparece cuando respondas la predicción.</p>';
+    }
+    elEsc.innerHTML = h;
+    var p = 0, na = 0, nb = 0, i;
+    for (i = 0; i < 4; i++) { p += q.vec[i] * e[i]; na += q.vec[i] * q.vec[i]; nb += e[i] * e[i]; }
+    $("vivoCos").innerHTML = "C" + (est.sel + 1) + ": q·e = " + f3(p) + " · |q| = " + f3(Math.sqrt(na)) + " · |e| = " + f3(Math.sqrt(nb)) + " → cos = <b>" + f3(p / (Math.sqrt(na) * Math.sqrt(nb))) + "</b>";
+  }
+
+  function columna(D, p, orden, k, qi, soloPos) {
+    var A = armar(D, orden, k, qi), resp = PREGS[qi].resp;
+    if (!orden.length) return { A: A, html: '<div class="vacio">Sin coincidencias de palabras: no recupera ningún fragmento.</div>' };
+    var h = "";
+    orden.slice(0, 6).forEach(function (n, r) {
+      var c = D.frs[n], cuenta = resp.filter(function (x) { return x >= c.ini && x < c.fin; }).length;
+      var cls = "it" + (cuenta === resp.length ? " ok" : cuenta > 0 ? " par" : "") + (r >= k ? " fuera" : "") + (r === k - 1 ? " cut" : "");
+      h += '<div class="' + cls + '"><span>C' + (n + 1) + '</span><span class="etq-r">' + (cuenta === resp.length ? "tiene la respuesta" : cuenta > 0 ? "parcial" : "") + '</span><span>' + f3(p[n]) + '</span></div>';
+    });
+    return { A: A, html: h };
+  }
+
+  function vistaHibrida() {
+    var D = datos(est.T, est.O, est.qi), q = PREGS[est.qi];
+    var hib = hibrida(D, est.A);
+    var oV = ranking(D.vec, false), oL = ranking(D.lex, true), oH = ranking(hib, false);
+    var h = '<p class="tit-t">Pregunta: «' + esc(q.txt) + '» · fragmentos de ' + est.T + ' oraciones, solape ' + est.O + '</p>';
+    if (!est.chk6) {
+      h += '<div class="ctxbox">Pregunta: <b>' + esc(q.txt) + '</b><br>Su vector es ' + jsonVec(q.vec) + ': el modelo de embeddings no conoce el código y lo colocó cerca de «envío» y «pago».</div>';
+      h += '<p class="lectura">Las columnas con los resultados de cada búsqueda aparecen cuando respondas la predicción.</p>';
+      elEsc.innerHTML = h;
+      $("vivoHib").textContent = "h = α·v + (1 − α)·l   (se activa tras la predicción)";
+      return;
+    }
+    var cl = columna(D, D.lex, oL, est.K, est.qi, true), cv2 = columna(D, D.vec, oV, est.K, est.qi), ch = columna(D, hib, oH, est.K, est.qi);
+    h += '<div class="col3"><div><h4>Vectorial</h4>' + cv2.html + '</div><div><h4>Palabras (BM25)</h4>' + cl.html + '</div><div><h4>Híbrida (α = ' + f2(est.A) + ')</h4>' + ch.html + '</div></div>';
+    h += '<p class="contador">k = <b>' + est.K + '</b> · la línea punteada marca hasta dónde llega k</p>';
+    h += veredictoHtml(D, oV, est.K, est.qi, "Vectorial").html + veredictoHtml(D, oL, est.K, est.qi, "Palabras").html + veredictoHtml(D, oH, est.K, est.qi, "Híbrida").html;
+    elEsc.innerHTML = h;
+    var n0 = oH[0], v0 = D.vec[n0], l0 = D.lexn[n0];
+    $("vivoHib").innerHTML = "C" + (n0 + 1) + " (el primero de la mezcla): h = " + f2(est.A) + "·" + f3(v0) + " + " + f2(1 - est.A) + "·" + f3(l0) + " = <b>" + f3(hib[n0]) + "</b>";
+  }
+
+  function respuestaSim(D, A, qi) {
+    var q = PREGS[qi], partes = [];
+    q.resp.forEach(function (r) { if (A.cub[r]) partes.push(ORA[r]); });
+    if (!partes.length) return { ok: false, t: "No encuentro esa información en los fragmentos que recibí." };
+    if (A.ok) return { ok: true, t: partes.join(" ") + " (fuentes: " + A.usados.map(function (n) { return "oraciones " + (D.frs[n].ini + 1) + "-" + D.frs[n].fin; }).join(", ") + ")" };
+    return { ok: false, t: partes.join(" ") + " (respuesta incompleta: falta " + A.falta.map(function (r) { return "la oración " + (r + 1); }).join(" y ") + ")" };
+  }
+
+  function vistaPipeline() {
+    var D = datos(est.T, est.O, est.qi), q = PREGS[est.qi];
+    var hib = hibrida(D, est.A);
+    var orden = est.met === "vec" ? ranking(D.vec, false) : est.met === "lex" ? ranking(D.lex, true) : ranking(hib, false);
+    var A = armar(D, orden, est.K, est.qi), rs = respuestaSim(D, A, est.qi);
+    var nombre = est.met === "vec" ? "vectorial" : est.met === "lex" ? "palabras" : "híbrida";
+    var h = '<div class="chips" id="chipsMet">' + [["vec", "Vectorial"], ["lex", "Palabras"], ["hib", "Híbrida"]].map(function (m) {
+      return '<button type="button" data-met="' + m[0] + '" class="' + (est.met === m[0] ? "on" : "") + '">' + m[1] + '</button>';
+    }).join("") + '</div>';
+    h += '<div class="flujo"><span>pregunta</span><span class="fl">→</span><span>vector</span><span class="fl">→</span><span class="hoy">buscar (' + nombre + ')</span><span class="fl">→</span><span>top-' + est.K + '</span><span class="fl">→</span><span>contexto</span><span class="fl">→</span><span>modelo</span></div>';
+    h += '<p class="tit-t">1. Pregunta: «' + esc(q.txt) + '»</p>';
+    h += '<p class="tit-t">2. Contexto (' + A.palabras + ' de ' + VENTANA + ' palabras)</p><div class="ctxbox">';
+    if (A.usados.length) {
+      h += A.usados.map(function (n) {
+        var fc = D.frs[n], s = "", i;
+        for (i = fc.ini; i < fc.fin; i++) s += (q.resp.indexOf(i) >= 0 ? "<mark>" + esc(ORA[i]) + "</mark> " : esc(ORA[i]) + " ");
+        return '<div class="fr">### Fragmento ' + (n + 1) + ' (oraciones ' + (fc.ini + 1) + '-' + fc.fin + ')</div><p>' + s + '</p>';
+      }).join("");
+    } else h += '<p>(vacío)</p>';
+    h += '</div>';
+    if (A.saltados.length) h += '<p class="lectura">No cupo en la ventana: ' + A.saltados.map(function (n) { return "C" + (n + 1) + " (" + palabrasDe(D.frs[n]) + " palabras)"; }).join(", ") + '.</p>';
+    h += '<p class="tit-t">3. Respuesta simulada del modelo</p><div class="resp-sim' + (rs.ok ? "" : " mal") + '">' + esc(rs.t) + '</div>';
+    if (est.grande) {
+      h += '<p class="tit-t">Con un modelo enorme y el mismo contexto</p><div class="resp-sim mal">' + (A.ok ? "La misma respuesta: ya tenía todo lo que necesitaba, no hacía falta un modelo mayor." : esc(rs.ok ? rs.t : "Sigue sin ver la oración que falta. O dice que no lo sabe, o lo inventa con más seguridad. Ningún tamaño de modelo recupera lo que no le llegó.")) + '</div>';
+    }
+    h += '<p class="lectura">' + (A.ok ? "La recuperación funcionó: el modelo solo tiene que redactar." : "La recuperación falló: " + motivo(D, orden, est.K, est.qi, A) + " Cambia el método, k o el tamaño de los fragmentos.") + '</p>';
+    elEsc.innerHTML = h;
+  }
+
+  function render() {
+    var m = MODOS[est.paso];
+    if (est.paso === 5) m.hint = est.chk6 ? "Cambia la pregunta, α y k" : "Responde la predicción para activar las columnas";
+    if (est.paso === 2) m.hint = est.chk3 ? "Elige otro fragmento y compáralo" : "Toca un fragmento y calcula una componente";
+    $("escHint").textContent = m.hint;
+    if (num3 && est.paso === 2) num3.refrescar();
+    if (m.vista === "doc") vistaDoc();
+    else if (m.vista === "frag") vistaFrag();
+    else if (m.vista === "emb") vistaEmb();
+    else if (m.vista === "tabla") vistaTabla();
+    else if (m.vista === "buscar") vistaBuscar();
+    else if (m.vista === "hibrida") vistaHibrida();
+    else vistaPipeline();
+  }
+
+  function entrar(i) {
+    est.paso = i;
+    est.sel = 0;
+    if (i === 5 && est.qi === 0 && !est.chk6) est.qi = 1;
+    if (i === 4 && est.qi === 1) est.qi = 0;
+    construirCtl(MODOS[i].ctl);
+    sincronizarCtl();
+    render();
+  }
+
+  elEsc.addEventListener("click", function (e) {
+    var t = e.target, el;
+    if ((el = t.closest("[data-met]"))) { est.met = el.getAttribute("data-met"); render(); return; }
+    if ((el = t.closest("tr[data-k]"))) { est.sel = +el.getAttribute("data-k"); render(); return; }
+  });
+  $("btnRestaurar").addEventListener("click", function () {
+    est.T = 3; est.O = 1; est.K = 2; est.A = 0.5; est.sel = 0; est.met = "hib";
+    est.qi = est.paso === 5 && !est.chk6 ? 1 : 0;
+    sincronizarCtl();
+    render();
+  });
+
+  /* ---------------- chequeos de cada paso ---------------- */
+  B.opcionMultiple(cuerpo("chk1"), {
+    pregunta: "El reglamento tiene " + TOTAL_PAL + " palabras y la ventana del modelo admite " + VENTANA + ". Preguntan «¿cuántos días tengo para devolver un producto?». ¿Qué le das al modelo?",
+    opciones: [
+      "Solo los trozos del documento que se parecen a la pregunta",
+      "El documento completo, y que el modelo se las arregle",
+      "Nada: el modelo ya conoce el reglamento de la tienda",
+      "Las primeras " + VENTANA + " palabras del documento"
+    ],
+    correcta: 0,
+    mezclar: true,
+    pistas: [null,
+      "No cabe: tiene " + TOTAL_PAL + " palabras y la ventana " + VENTANA + ". Y aunque cupiera, mucho texto sobrante empeora la respuesta.",
+      "El modelo no conoce un documento privado de la tienda; esa es justo la razón de usar un RAG.",
+      "Las primeras palabras hablan de envíos. La respuesta está más adelante, en la oración 4: cortar por el principio no garantiza nada."],
+    explicacion: "Hay que <b>recuperar</b> solo lo que se parece a la pregunta y pasárselo como contexto. Eso es un RAG. Todo el trabajo difícil está en recuperar bien.",
+    alResolver: function () { pasos.completar(0); }
+  });
+
+  B.numerico(cuerpo("chk2"), {
+    pregunta: "El reglamento tiene 12 oraciones. Cortas fragmentos de <b>2 oraciones con solape de 1</b>: cada fragmento repite la última oración del anterior. El primero es (1, 2), el segundo (2, 3) y así hasta llegar al final. ¿Cuántos fragmentos salen?",
+    respuesta: 11,
+    tolerancia: 0,
+    pistas: ["El fragmento avanza una oración cada vez (2 menos 1 de solape).", "Empiezan en la oración 1, 2, 3 ... y el último termina en la oración 12, así que empieza en la 11."],
+    diagnostico: function (v) {
+      if (v === 6) return "6 serían sin solape (2 oraciones cada uno, sin repetir). Con solape de 1 avanzas solo una oración por fragmento.";
+      if (v === 12) return "12 es el número de oraciones. Cada fragmento lleva dos, así que el último empieza en la oración 11.";
+      return null;
+    },
+    explicacion: "<b>11</b>: empiezan en 1, 2, ..., 11. Con solape 0 serían 6. El solape hace más fragmentos y repite texto, a cambio de que ninguna frase quede cortada en el borde. Pruébalo en el escenario.",
+    alResolver: function () { pasos.completar(1); }
+  });
+
+  num3 = B.numerico(cuerpo("chk3"), {
+    pregunta: function () {
+      var D = datos(est.T, est.O, 0), c = D.frs[Math.min(est.sel, D.frs.length - 1)];
+      return "Elige un fragmento en el escenario. El seleccionado es C" + (Math.min(est.sel, D.frs.length - 1) + 1) + " (oraciones " + (c.ini + 1) + " a " + c.fin + "). Con los vectores de sus oraciones, ¿cuánto vale la componente <b>devolución</b> (la primera) de su embedding? Escribe el promedio con 2 decimales.";
+    },
+    respuesta: function () {
+      var D = datos(est.T, est.O, 0), c = D.frs[Math.min(est.sel, D.frs.length - 1)];
+      return embDe(c)[0];
+    },
+    tolerancia: 0.011,
+    pistas: ["Suma la componente de devolución de cada oración del fragmento (la primera columna de la tabla del escenario).", "Divide esa suma entre cuántas oraciones tiene el fragmento."],
+    diagnostico: function (v) {
+      var D = datos(est.T, est.O, 0), c = D.frs[Math.min(est.sel, D.frs.length - 1)], s = 0, i;
+      for (i = c.ini; i < c.fin; i++) s += VEC[i][0];
+      if (Math.abs(v - s) < 0.011 && c.fin - c.ini > 1) return "Esa es la suma, " + f2(s) + ". Falta dividir entre las " + (c.fin - c.ini) + " oraciones: es un promedio.";
+      return null;
+    },
+    explicacion: "Es el promedio de esa columna. Mira cómo, al mezclar oraciones de temas distintos, la componente baja: el fragmento se parece menos a «devolución» que la oración sola. <b>Eso es la dilución.</b> Ahora el escenario muestra el promedio completo.",
+    alResolver: function () { est.chk3 = true; render(); pasos.completar(2); }
+  });
+
+  B.opcionMultiple(cuerpo("chk4"), {
+    pregunta: "Copias la Figura 10 tal cual en SQLite y activas <code>PRAGMA foreign_keys = ON</code>. La tabla <code>documentos</code> nunca se creó. Haces un INSERT en <code>fragmentos_documento</code>. ¿Qué pasa?",
+    opciones: [
+      "Error: no such table: main.documentos",
+      "Funciona: SQLite no comprueba que la tabla exista",
+      "Error: FOREIGN KEY constraint failed",
+      "Funciona, pero la fila queda sin su vector"
+    ],
+    correcta: 0,
+    mezclar: true,
+    pistas: [null,
+      "Con las claves ajenas activadas, SQLite sí revisa. Lo comprobé: no deja pasar el INSERT.",
+      "Ese es el error cuando la tabla <code>documentos</code> existe pero no tiene la fila a la que apuntas. Aquí ni siquiera existe la tabla.",
+      "El vector es una columna NOT NULL más; el problema es la referencia, no el vector."],
+    explicacion: "La referencia apunta a una tabla que no existe, y con las claves ajenas activas SQLite da <i>no such table: main.documentos</i> (se comprobó en SQLite 3.45). Con el PRAGMA apagado, que es el valor por defecto, el INSERT pasaría sin avisar. Por eso el programa de la parte 2 crea <code>documentos</code> antes que <code>fragmentos</code>.",
+    alResolver: function () { pasos.completar(3); }
+  });
+
+  B.opcionMultiple(cuerpo("chk5"), {
+    pregunta: "Imagina fragmentos de <b>una sola oración</b> y k = 1, con la pregunta del plazo de devolución. El mejor fragmento es la oración 4 («Tienes 30 días para devolver...»). La condición, «sin usar y con su embalaje original», está en la oración 5. ¿Llega la respuesta completa al modelo?",
+    opciones: [
+      "No: llega el plazo, pero la condición quedó en otro fragmento",
+      "Sí: la oración 4 ya responde la pregunta",
+      "Sí: el modelo adivina la condición",
+      "No llega nada, porque 1 oración es muy poco"
+    ],
+    correcta: 0,
+    mezclar: true,
+    pistas: [null,
+      "Responde los días, pero la pregunta de fondo es qué hace falta para devolver. La condición está en la oración 5, fuera de ese fragmento.",
+      "El modelo solo ve lo que le pasas. Si la condición no está en el contexto, no puede adivinarla.",
+      "Sí llega algo: el fragmento de la oración 4, que es justo el mejor. Lo que falta es la oración 5."],
+    explicacion: "Con fragmentos tan pequeños la respuesta se corta entre dos. Se arregla con un fragmento más grande, con solape, o con k = 2. Comprueba cada opción en el escenario: ahora aparece el veredicto.",
+    alResolver: function () { est.chk5 = true; render(); pasos.completar(4); }
+  });
+
+  B.opcionMultiple(cuerpo("chk6"), {
+    pregunta: "Buscas «AB-1234», el código de un repuesto. El modelo de embeddings no lo conoce y su vector cae cerca de envíos y pagos. ¿Qué búsqueda pone primero un fragmento que contiene ese código?",
+    opciones: [
+      "La de palabras clave (BM25)",
+      "La vectorial, porque entiende el significado",
+      "Las dos por igual",
+      "Ninguna de las dos"
+    ],
+    correcta: 0,
+    mezclar: true,
+    pistas: [null,
+      "El significado de un código no existe: es una cadena arbitraria. Su vector no cae donde está el repuesto.",
+      "Solo una de las dos mira las letras exactas. La otra mira posiciones en un espacio de significados.",
+      "La búsqueda por palabras sí encuentra letras idénticas, y el código está escrito tal cual en el texto."],
+    explicacion: "BM25 compara palabras exactas: «ab» y «1234» están en el fragmento y casi en ningún otro, así que lo pone primero. La vectorial no tiene en qué apoyarse. <b>Ahora se activan las tres columnas.</b> Cambia a «Regresar la compra» y mira el caso contrario.",
+    alResolver: function () { est.chk6 = true; render(); }
+  });
+
+  B.numerico(cuerpo("chk6b"), {
+    pregunta: "Un fragmento tiene puntuación vectorial $v = 0.80$ y puntuación de palabras normalizada $l = 0.40$. Con $\\alpha = 0.7$, ¿cuánto vale su puntuación híbrida $h = \\alpha v + (1-\\alpha) l$?",
+    respuesta: 0.68,
+    tolerancia: 0.006,
+    pistas: ["Multiplica 0.7 por 0.80, y 0.3 por 0.40.", "0.56 + 0.12."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 0.6) < 0.006) return "0.60 es el promedio simple de 0.80 y 0.40. Con α = 0.7 los vectores pesan más que las palabras.";
+      if (Math.abs(v - 1.2) < 0.006) return "1.20 es la suma sin pesos. Cada puntuación se multiplica por su peso: α para los vectores, 1 − α para las palabras.";
+      return null;
+    },
+    explicacion: "$0.7 \\cdot 0.80 + 0.3 \\cdot 0.40 = 0.56 + 0.12 = \\mathbf{0.68}$. Con α = 1 es la búsqueda vectorial sola y con α = 0, la de palabras sola. Muévelo en el escenario.",
+    alResolver: function () { pasos.completar(5); }
+  });
+
+  B.opcionMultiple(cuerpo("chk7"), {
+    pregunta: "Cambias el modelo de embeddings por otro distinto (otras dimensiones). Los fragmentos ya guardados siguen en la tabla con los vectores del modelo viejo. ¿Qué haces?",
+    opciones: [
+      "Reprocesar toda la colección: regenerar todos los embeddings con el modelo nuevo",
+      "Nada: los vectores viejos y los nuevos se pueden comparar",
+      "Regenerar solo los embeddings de las preguntas",
+      "Solo reindexar, sin tocar los vectores"
+    ],
+    correcta: 0,
+    mezclar: true,
+    pistas: [null,
+      "Los espacios de dos modelos no son comparables: la misma posición significa cosas distintas.",
+      "Entonces la pregunta quedaría en el espacio nuevo y los fragmentos en el viejo: la comparación no tiene sentido.",
+      "Reindexar reorganiza los mismos vectores. Si los vectores son de otro modelo, el índice sigue siendo inútil."],
+    explicacion: "Hay que <b>reprocesar toda la colección</b>. Los vectores de dos modelos no se pueden comparar, y la dimensión de la columna (<code>VECTOR(1536)</code>) también tiene que coincidir con el modelo.",
+    alResolver: function () { pasos.completar(6); }
+  });
+
+  B.opcionMultiple(cuerpo("chk7b"), {
+    pregunta: "Tu RAG recupera mal: la oración 5 no llega al contexto. Cambias el modelo de lenguaje por uno diez veces más grande, sin tocar la recuperación. ¿Qué pasa con la respuesta?",
+    opciones: [
+      "Sigue sin tener la condición: lo que no le llega, no lo puede usar",
+      "Mejora, porque un modelo mayor entiende más",
+      "Se arregla sola: el modelo grande busca en el documento",
+      "Mejora porque ahora cabe todo el reglamento"
+    ],
+    correcta: 0,
+    mezclar: true,
+    pistas: [null,
+      "Entender más no sirve si el dato nunca llegó. El modelo solo ve el contexto que le pasas.",
+      "El modelo no tiene acceso al documento: solo a lo que recibe. La búsqueda es otra parte del sistema.",
+      "La ventana no cambió por usar un modelo más grande en este ejemplo, y no se arregla la selección."],
+    explicacion: "La unidad lo dice así: si la recuperación falla, ningún modelo acierta. El modelo grande o dice que no lo sabe, o lo inventa con más seguridad. <b>Toca el botón</b> para verlo en el escenario.",
+    alResolver: function () {
+      $("btnGrande").disabled = false;
+      $("grandeHint").textContent = "";
+    }
+  });
+  $("btnGrande").addEventListener("click", function () {
+    est.grande = true;
+    this.disabled = true;
+    this.textContent = "Probado con el modelo enorme";
+    est.paso = 6;
+    est.qi = 0; est.T = 1; est.O = 0; est.K = 1; est.met = "vec";
+    construirCtl(MODOS[6].ctl);
+    sincronizarCtl();
+    render();
+  });
+
+  pasos = B.pasos($("recorrido"), {
+    concepto: C,
+    alEntrar: entrar,
+    alTerminar: function () { location.hash = "retos"; }
+  });
+  est.chk3 = pasos.hecho(2);
+  est.chk5 = pasos.hecho(4);
+  est.chk6 = pasos.hecho(5);
+  est.chk6b = pasos.hecho(5);
+  if (pasos.hecho(6)) { $("btnGrande").disabled = false; $("grandeHint").textContent = ""; }
+  entrar(0);
+
+  /* ---------------- hipotesis inicial ---------------- */
+  (function () {
+    var ta = $("hipotesis"), t = null;
+    ta.value = B.nota("rag-busqueda-hibrida", "hipotesis");
+    function cita() {
+      var v = ta.value.trim(), el = $("citaHipo");
+      if (!el) return;
+      el.hidden = !v;
+      if (v) { el.textContent = ""; el.appendChild(document.createTextNode("Al principio escribiste: «" + v + "». ¿Se parece a lo que construimos? ¿Qué te faltaba?")); }
+    }
+    cita();
+    ta.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { B.nota("rag-busqueda-hibrida", "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; cita(); }, 500);
+    });
+  })();
+
+  /* ================= PARTE 3: RETOS ================= */
+
+  /* ---- ojo clinico: que busqueda gana ---- */
+  var POOL = [
+    { q: "AB-1234", d: "El repuesto AB-1234 se vende aparte.", r: 1, e: "Un código no tiene significado: solo las palabras exactas lo encuentran." },
+    { q: "¿puedo regresar mi compra?", d: "Tienes 30 días para devolver un producto.", r: 0, e: "«Regresar» y «devolver» no comparten letras, pero significan lo mismo: eso lo ve la vectorial." },
+    { q: "ISBN 978-84-376-0494-7", d: "Catálogo: Cien años de soledad, ISBN 978-84-376-0494-7.", r: 1, e: "Un número de ISBN es una cadena exacta. La búsqueda por palabras lo encuentra y los vectores no." },
+    { q: "cuánto cuesta mandarlo a otra ciudad", d: "Las tarifas de transporte dependen de la provincia de destino.", r: 0, e: "No coinciden palabras («mandarlo» frente a «transporte»), pero el sentido es el mismo." },
+    { q: "garantía legal de dos años", d: "La garantía legal cubre los fallos de fabricación durante dos años.", r: 2, e: "Las palabras coinciden y el significado también: las dos aciertan." },
+    { q: "SKU-9981", d: "Pieza de repuesto SKU-9981, en stock.", r: 1, e: "Un código de inventario: palabras exactas." },
+    { q: "¿qué pasa si me llega roto?", d: "Si recibes un producto dañado, avísanos en las primeras 48 horas.", r: 0, e: "«Roto» y «dañado» son sinónimos. La búsqueda por palabras no los une." },
+    { q: "reembolso con tarjeta", d: "El reembolso llega por el mismo medio de pago: la tarjeta.", r: 2, e: "Comparten «reembolso» y «tarjeta», y además van de lo mismo." },
+    { q: "Reglamento (UE) 2016/679", d: "El tratamiento cumple el Reglamento (UE) 2016/679.", r: 1, e: "Una cita legal con números: conviene la búsqueda exacta." },
+    { q: "quiero que me devuelvan el dinero", d: "El reembolso se hace en 5 días.", r: 0, e: "«Devuelvan el dinero» y «reembolso» significan lo mismo con otras palabras." }
+  ];
+  (function () {
+    var cont = $("ojo");
+    cont.innerHTML = '<div class="ronda"></div><p class="q ojo-q"></p><p class="ojo-doc"></p>' +
+      '<div class="ojo-opts"><button type="button" class="opt" data-a="0">La vectorial</button><button type="button" class="opt" data-a="1">Las palabras (BM25)</button><button type="button" class="opt" data-a="2">Las dos aciertan</button></div>' +
+      '<div class="fb" aria-live="polite"></div><div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    var rondas, ronda, aciertos, respondida, R;
+    function nueva() { rondas = B.mezclar(POOL.slice()).slice(0, 5); ronda = 0; aciertos = 0; mostrar(); }
+    function mostrar() {
+      respondida = false;
+      R = rondas[ronda];
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 5 · aciertos " + aciertos;
+      cont.querySelector(".ojo-q").innerHTML = "Pregunta: <code>" + esc(R.q) + "</code>";
+      cont.querySelector(".ojo-doc").innerHTML = "El documento dice: «" + esc(R.d) + "»";
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (b) { b.disabled = false; b.classList.remove("ok", "mal"); });
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+    }
+    cont.querySelector(".ojo-opts").addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || respondida) return;
+      respondida = true;
+      var ok = +b.getAttribute("data-a") === R.r;
+      if (ok) aciertos++;
+      b.classList.add(ok ? "ok" : "mal");
+      if (!ok) cont.querySelector('[data-a="' + R.r + '"]').classList.add("ok");
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (x) { x.disabled = true; });
+      cont.querySelector(".fb").innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No.</span> ') + R.e;
+      var sig = cont.querySelector(".sig");
+      sig.hidden = false;
+      if (ronda === 4) {
+        var aprobo = aciertos >= 4;
+        C.reto("ojo", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertos + " de 5" + (aprobo ? ". Aprobado." : ". Necesitas 4 para aprobar.");
+        sig.textContent = "Otra tanda";
+      } else sig.textContent = "Siguiente ronda";
+    });
+    cont.querySelector(".sig").addEventListener("click", function () { if (ronda === 4) nueva(); else { ronda++; mostrar(); } });
+    nueva();
+  })();
+
+  /* ---- construir: partir el reglamento ---- */
+  (function () {
+    var logrados = [false, false, false], avisado = false, cT = 3, cO = 1;
+    function junto(frs, a, b) { return frs.some(function (c) { return c.ini <= a && c.fin > b; }); }
+    var OBJ = [
+      { t: "Las oraciones 4 y 5 quedan juntas en un fragmento de <b>como mucho 2 oraciones</b>.", ok: function (frs, t, o) { return t <= 2 && junto(frs, 3, 4); } },
+      { t: "Las oraciones 4 y 5 quedan juntas <b>sin ningún solape</b> (solape 0).", ok: function (frs, t, o) { return o === 0 && junto(frs, 3, 4); } },
+      { t: "Quedan juntas las 4 y 5, <b>y también</b> las 6 y 7, cada par en algún fragmento.", ok: function (frs) { return junto(frs, 3, 4) && junto(frs, 5, 6); } }
+    ];
+    var ul = $("objetivos");
+    OBJ.forEach(function (o) { var li = document.createElement("li"); li.innerHTML = '<span class="m"></span><span>' + o.t + '</span>'; ul.appendChild(li); });
+    function pintar() {
+      var frs = trocear(cT, cO);
+      var h = '<div class="mapa-wrap"><table class="mapa"><thead><tr><th class="izq">frag.</th>';
+      var i;
+      for (i = 0; i < N; i++) h += '<th class="' + ([3, 4].indexOf(i) >= 0 ? "resp" : "") + '">' + (i + 1) + '</th>';
+      h += '<th>pal.</th></tr></thead><tbody>';
+      frs.forEach(function (c, k) {
+        h += '<tr><td class="etq">C' + (k + 1) + '</td>';
+        for (i = 0; i < N; i++) {
+          var on = i >= c.ini && i < c.fin;
+          h += '<td class="cel' + (on ? " on" : "") + (on && [3, 4].indexOf(i) >= 0 ? " resp" : "") + '"></td>';
+        }
+        h += '<td class="num">' + palabrasDe(c) + '</td></tr>';
+      });
+      h += '</tbody></table></div>';
+      $("construirMapa").innerHTML = h;
+      $("construirVivo").innerHTML = "tamaño <b>" + cT + "</b> · solape <b>" + cO + "</b> · <b>" + frs.length + "</b> fragmentos";
+      OBJ.forEach(function (o, k) { if (!logrados[k] && o.ok(frs, cT, cO)) logrados[k] = true; ul.children[k].classList.toggle("hecho", logrados[k]); });
+      if (!avisado && logrados.every(Boolean)) { avisado = true; C.reto("construir", true); }
+    }
+    $("cT").addEventListener("input", function () {
+      cT = +this.value; if (cO > cT - 1) cO = cT - 1;
+      $("cO").max = cT - 1; $("cO").value = cO; $("cTv").textContent = cT; $("cOv").textContent = cO; pintar();
+    });
+    $("cO").addEventListener("input", function () { cO = Math.min(+this.value, cT - 1); this.value = cO; $("cOv").textContent = cO; pintar(); });
+    pintar();
+  })();
+
+  /* ---- a mano: el coseno ---- */
+  (function () {
+    var D;
+    var POOLV = [[3, 4, 0], [0, 3, 4], [4, 0, 3], [4, 3, 0], [0, 4, 3], [3, 0, 4], [5, 0, 0], [0, 5, 0], [0, 0, 5], [2, 2, 1], [1, 2, 2], [2, 1, 2], [2, 3, 6], [6, 3, 2], [1, 4, 8], [4, 4, 7]];
+    function norma(v) { return Math.sqrt(v.reduce(function (a, b) { return a + b * b; }, 0)); }
+    function generar() {
+      for (;;) {
+        var a = POOLV[rnd(0, POOLV.length - 1)], b = POOLV[rnd(0, POOLV.length - 1)];
+        var p = a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+        if (a === b || p === 0) continue;
+        D = { q: a, e: b, p: p, na: norma(a), nb: norma(b), cos: p / (norma(a) * norma(b)) };
+        break;
+      }
+      $("manoDatos").innerHTML = '<table class="datos-mano"><tr><th>q (pregunta)</th><td>' + D.q.join("</td><td>") + '</td></tr><tr><th>e (fragmento)</th><td>' + D.e.join("</td><td>") + '</td></tr></table>';
+    }
+    var cfg = {
+      pregunta: "¿Cuánto vale la similitud coseno entre q y e? Redondea a 2 decimales. Recuerda: $\\cos\\theta = \\dfrac{q\\cdot e}{\\lVert q\\rVert\\,\\lVert e\\rVert}$.",
+      respuesta: function () { return D.cos; },
+      tolerancia: 0.011,
+      pistas: [
+        function () { return "Primero el producto punto: multiplica componente por componente y suma. Aquí $q\\cdot e = " + D.p + "$."; },
+        function () { return "Las normas son las raíces de la suma de cuadrados: $\\lVert q\\rVert = " + f2(D.na) + "$ y $\\lVert e\\rVert = " + f2(D.nb) + "$."; },
+        function () { return "Divide: $" + D.p + " / (" + f2(D.na) + " \\cdot " + f2(D.nb) + ")$."; }
+      ],
+      diagnostico: function (v) {
+        if (Math.abs(v - D.p) < 0.011) return "Ese es el producto punto. Falta dividir entre el producto de las dos normas.";
+        return null;
+      },
+      explicacion: function () { return "$q\\cdot e = " + D.p + "$, $\\lVert q\\rVert = " + f2(D.na) + "$, $\\lVert e\\rVert = " + f2(D.nb) + "$. Coseno: $" + D.p + "/" + f2(D.na * D.nb) + " = \\mathbf{" + f2(D.cos) + "}$."; },
+      reintentable: true,
+      textoReintentar: "Otro ejercicio",
+      antesDeReintentar: generar,
+      alResolver: function (ok) { C.reto("mano", ok); }
+    };
+    generar();
+    B.numerico($("mano"), cfg);
+  })();
+
+  /* ---- a mano: cuantos fragmentos ---- */
+  (function () {
+    var D;
+    function generar() {
+      var n, t, s;
+      for (;;) {
+        n = rnd(10, 20); t = rnd(3, 6); s = rnd(0, t - 1);
+        if (t < n && numFrag(n, t, s) >= 3) break;
+      }
+      D = { n: n, t: t, s: s, paso: t - s, r: numFrag(n, t, s) };
+      $("mano2Datos").innerHTML = '<table class="datos-mano"><tr><th>oraciones del documento</th><td>' + n + '</td></tr><tr><th>tamaño</th><td>' + t + '</td></tr><tr><th>solape</th><td>' + s + '</td></tr></table>';
+    }
+    var cfg = {
+      pregunta: "El primer fragmento empieza en la oración 1, el siguiente avanza <i>tamaño − solape</i> oraciones, y se corta cuando un fragmento llega a la última. ¿Cuántos fragmentos salen?",
+      respuesta: function () { return D.r; },
+      tolerancia: 0,
+      pistas: [
+        function () { return "El paso entre fragmentos es tamaño − solape = " + D.t + " − " + D.s + " = " + D.paso + "."; },
+        function () { var a = [], i; for (i = 1; i <= D.n; i += D.paso) { a.push(i); if (i + D.t - 1 >= D.n) break; } return "Los inicios son 1, " + (1 + D.paso) + ", " + (1 + 2 * D.paso) + ", ... Para cuando un fragmento que empieza en $i$ llega a la oración $i + " + D.t + " - 1$ y esa es " + D.n + " o más, ya terminaste."; },
+        function () { var a = [], i; for (i = 1; i <= D.n; i += D.paso) { a.push(i); if (i + D.t - 1 >= D.n) break; } return "Inicios: " + a.join(", ") + "."; }
+      ],
+      diagnostico: function (v) {
+        if (v === Math.ceil(D.n / D.t)) return "Eso sería sin solape. Con solape " + D.s + " avanzas solo " + D.paso + " oraciones por fragmento.";
+        return null;
+      },
+      explicacion: function () { var a = [], i; for (i = 1; i <= D.n; i += D.paso) { a.push(i); if (i + D.t - 1 >= D.n) break; } return "Inicios: " + a.join(", ") + " → <b>" + a.length + "</b> fragmentos. La fórmula: $1 + \\lceil (n - t)/(t - s) \\rceil = 1 + \\lceil " + (D.n - D.t) + "/" + D.paso + " \\rceil = " + D.r + "$."; },
+      reintentable: true,
+      textoReintentar: "Otro ejercicio",
+      antesDeReintentar: generar,
+      alResolver: function (ok) { C.reto("mano2", ok); }
+    };
+    generar();
+    B.numerico($("mano2"), cfg);
+  })();
+
+  /* ---- cazar el error ---- */
+  B.cazarError($("error"), {
+    variantes: [
+      {
+        intro: "Un documento de 10 oraciones se parte en fragmentos de tamaño 4 con solape 1. Alguien cuenta los fragmentos:",
+        lineas: ["\\text{El paso entre fragmentos es } 4 - 1 = 3", "\\text{Los fragmentos empiezan en las oraciones 1, 4 y 7}",
+          "\\text{El que empieza en la 7 llega hasta la 10, que es la última}", "\\text{Todavía falta uno que empiece en la 10: son 4 fragmentos}",
+          "\\text{Con solape 0 serían 3 fragmentos (1-4, 5-8, 9-10)}"],
+        erronea: 3,
+        explicacion: "El fragmento que empieza en la 7 ya llega a la oración 10, la última: ahí se corta. No hace falta otro. Son <b>3</b> fragmentos."
+      },
+      {
+        intro: "Alguien razona sobre la búsqueda por palabras de FTS5 en SQLite:",
+        lineas: ["\\text{La función bm25(fts) devuelve un número por cada fragmento que coincide}", "\\text{En FTS5 el número más relevante es el más negativo}",
+          "\\text{Entonces ORDER BY bm25(fts) deja primero al más relevante}", "\\text{Para sumarlo a la vectorial uso -bm25(fts), que es positivo}",
+          "\\text{ORDER BY bm25(fts) DESC deja primero al más relevante}"],
+        erronea: 4,
+        explicacion: "Con <code>DESC</code> el primero sería el <b>menos</b> relevante (el menos negativo). El orden ascendente de <code>bm25()</code> ya pone primero al mejor. Se comprobó en SQLite 3.45."
+      },
+      {
+        intro: "Alguien mezcla la búsqueda vectorial y la de palabras sumando las dos puntuaciones:",
+        lineas: ["\\text{La vectorial da el coseno, entre 0 y 1}", "\\text{BM25 también queda entre 0 y 1, así que puedo sumarlos sin más}",
+          "\\text{Mejor los pondero: } h = \\alpha v + (1-\\alpha) l", "\\text{Con } \\alpha = 0.5 \\text{ los dos pesan lo mismo}",
+          "\\text{Si ningún fragmento coincide en palabras, } l = 0 \\text{ y manda la vectorial}"],
+        erronea: 1,
+        explicacion: "BM25 <b>no tiene tope</b>: en los datos de esta página vale 1.138 y 7.3 según la pregunta. Si lo sumas tal cual, domina al coseno. Por eso se divide entre el mayor para llevarlo a [0, 1]."
+      }
+    ],
+    alResolver: function (ok) { C.reto("error", ok); }
+  });
+
+  /* ---- propiedades ---- */
+  function prop(id, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple($(id), cfg);
+  }
+  prop("prop1", {
+    pregunta: "Subes el solape de 0 a 2 manteniendo el tamaño de los fragmentos. ¿Qué cambia?",
+    opciones: [
+      "Salen más fragmentos y algunas oraciones se repiten en varios: más almacenamiento y más texto repetido en el contexto",
+      "Salen menos fragmentos porque se aprovechan mejor",
+      "Nada: el solape solo es una etiqueta de los metadatos",
+      "Los embeddings se vuelven más precisos sin ningún coste"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "Con solape avanzas menos oraciones por fragmento, así que hacen falta más para cubrir el documento.",
+      "El solape cambia qué texto lleva cada fragmento, no solo una etiqueta.",
+      "Ayuda a que una idea no quede cortada en el borde, pero repetir texto cuesta almacenamiento y ventana de contexto."],
+    explicacion: "El solape evita que una idea quede cortada entre dos fragmentos, a cambio de más filas y más texto repetido. Con 12 oraciones y tamaño 3, solape 0 da 4 fragmentos y solape 2 da 10."
+  });
+  prop("prop2", {
+    pregunta: "Un fragmento viene de un documento interno y solo ciertos empleados pueden verlo (está en sus metadatos). ¿Dónde se aplica el permiso?",
+    opciones: [
+      "Al buscar: filtrando por metadatos antes de pasarle fragmentos al modelo",
+      "Después: le pides al modelo que no mencione lo interno",
+      "No hace falta: la similitud descarta lo que el usuario no debe ver",
+      "En el embedding: los vectores internos se guardan con signo negativo"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "El modelo ya vio el texto en su contexto. Pedirle que lo calle no es un control de acceso.",
+      "La similitud solo mide parecido con la pregunta. No sabe de permisos.",
+      "El vector no guarda permisos. Para eso existe la columna de metadatos."],
+    explicacion: "Los metadatos (origen, fecha, sección, permisos) existen justo para esto (Figura 10 del material). Se filtra en la consulta, antes de que el texto salga de la base de datos."
+  });
+  prop("prop3", {
+    pregunta: "Quieres pasar de un modelo de embeddings de 384 dimensiones a otro de 1536. La tabla ya tiene miles de fragmentos. ¿Qué es cierto?",
+    opciones: [
+      "Hay que regenerar los embeddings de todos los fragmentos y cambiar la dimensión de la columna",
+      "Basta con cambiar la dimensión de la columna: los vectores viejos se rellenan con ceros",
+      "Se pueden mezclar: los fragmentos viejos con el modelo viejo y los nuevos con el nuevo",
+      "Solo hay que reindexar, la dimensión no importa"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "Rellenar con ceros da vectores de la dimensión correcta pero sin ningún significado en el espacio del modelo nuevo.",
+      "Una pregunta se convierte con un solo modelo. Si los fragmentos están en dos espacios, la mitad no se puede comparar.",
+      "La dimensión de la columna tiene que ser la del modelo: es parte del tipo <code>VECTOR(n)</code>."],
+    explicacion: "Los espacios vectoriales de dos modelos no son comparables y la dimensión de la columna es la del modelo. Se reprocesa todo."
+  });
+  prop("prop4", {
+    pregunta: "El proyecto final pide un índice ANN (HNSW o IVF), pero tu base es SQLite como en el ejercicio de la UD5. ¿Qué haces?",
+    opciones: [
+      "Buscar comparando con todos los vectores (búsqueda exacta, un bucle) y justificar que con millones haría falta pgvector u otra base vectorial",
+      "Crear el índice con CREATE INDEX ... USING hnsw, que SQLite también soporta",
+      "Guardar los vectores y no buscar: el índice no es necesario",
+      "Usar un índice B-Tree sobre la columna del vector"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "Esa sintaxis es de pgvector en PostgreSQL. SQLite no tiene un tipo de índice HNSW.",
+      "Sin buscar no hay RAG: la recuperación es lo que decide si el modelo acierta.",
+      "Un B-Tree ordena valores sueltos: no sirve para encontrar el vector más cercano en varias dimensiones."],
+    explicacion: "SQLite no ofrece índices ANN. La búsqueda exacta, comparar con todos, es correcta y alcanza para pocos miles de fragmentos. Con millones habría que usar pgvector u otra base vectorial. Es una errata de planteamiento del proyecto: pide ANN y el ejercicio trabaja en SQLite."
+  });
+
+  /* ---------------- memoria ---------------- */
+  B.ordenar($("formula"), {
+    piezas: ["h_i", "=", "\\alpha\\, v_i", "+", "(1-\\alpha)\\, l_i"],
+    distractores: ["\\alpha\\, l_i", "(1-\\alpha)\\, v_i", "\\alpha + v_i", "-"],
+    soluciones: [[0, 1, 2, 3, 4], [0, 1, 4, 3, 2]],
+    explicacion: "La puntuación híbrida es el promedio ponderado: $\\alpha$ pesa a los vectores y $1-\\alpha$ a las palabras (ya normalizadas entre 0 y 1).",
+    alResolver: function (ok) { C.reto("formula", ok); }
+  });
+  B.ordenar($("consulta"), {
+    piezas: ["\\texttt{SELECT rowid, -bm25(fts) AS lex}", "\\texttt{FROM fts}", "\\texttt{WHERE fts MATCH '\"AB-1234\"'}", "\\texttt{ORDER BY lex DESC}"],
+    distractores: ["\\texttt{WHERE fts MATCH 'AB-1234'}", "\\texttt{ORDER BY bm25(fts) DESC}", "\\texttt{WHERE contenido = 'AB-1234'}", "\\texttt{GROUP BY rowid}"],
+    soluciones: [[0, 1, 2, 3]],
+    explicacion: "Primero lo que quieres ver (el signo cambiado para que sea positivo), la tabla de texto, la condición con el código <b>entre comillas</b> para que FTS5 lo lea como una frase y no como una resta de columnas, y al final el orden de mayor a menor.",
+    alResolver: function (ok) { C.reto("consulta", ok); }
+  });
+
+  /* ================= PARTE 2: VIDA REAL ================= */
+  (function () {
+    var CODIGO = { py: [["import", "import json, math, re, sqlite3, unicodedata"], ["import", "import numpy as np"], [null, ""], ["oraciones", "oraciones = ["], ["oraciones", "    \"Los pedidos salen del almacén de Madrid en 24 horas.\","], ["oraciones", "    \"El envío estándar tarda entre 2 y 4 días laborables.\","], ["oraciones", "    \"Puedes pagar con tarjeta, transferencia o contra reembolso.\","], ["oraciones", "    \"Tienes 30 días para devolver un producto desde que lo recibes.\","], ["oraciones", "    \"Debe estar sin usar y con su embalaje original.\","], ["oraciones", "    \"La garantía legal cubre los fallos de fabricación durante dos años.\","], ["oraciones", "    \"El repuesto AB-1234 se vende aparte y no tiene garantía.\","], ["oraciones", "    \"El reembolso llega por el mismo medio de pago en 5 días.\","], ["oraciones", "    \"Nuestro equipo atiende de lunes a viernes, de 9 a 18 horas.\","], ["oraciones", "    \"Los envíos a Canarias y Baleares pueden tardar un día más.\","], ["oraciones", "    \"Los pagos con tarjeta se confirman al instante.\","], ["oraciones", "    \"Si recibes un producto dañado, avísanos en las primeras 48 horas.\","], ["oraciones", "]"], ["vectores", "vectores = [  # devolución, envío, pago, garantía"], ["vectores", "    [0.0, 0.9, 0.1, 0.0], [0.0, 0.9, 0.0, 0.1], [0.1, 0.1, 0.9, 0.0],"], ["vectores", "    [0.9, 0.2, 0.0, 0.1], [0.8, 0.0, 0.0, 0.3], [0.1, 0.0, 0.0, 0.9],"], ["vectores", "    [0.2, 0.2, 0.2, 0.4], [0.5, 0.0, 0.7, 0.0], [0.2, 0.1, 0.1, 0.2],"], ["vectores", "    [0.0, 0.9, 0.0, 0.0], [0.0, 0.1, 0.9, 0.0], [0.5, 0.2, 0.0, 0.5],"], ["vectores", "]"], ["ajustes", "TAM, SOLAPE, ALFA, K = 3, 1, 0.5, 2"], [null, ""], ["deftok", "def tokens(texto):"], ["deftok", "    s = unicodedata.normalize(\"NFD\", texto.lower())"], ["deftok", "    s = \"\".join(c for c in s if unicodedata.category(c) != \"Mn\")"], ["deftok", "    return re.findall(r\"[a-z0-9]+\", s)"], [null, ""], ["defbm25", "def bm25(d, qt, docs):"], ["defbm25", "    N = len(docs)"], ["defbm25", "    avgdl = sum(len(x) for x in docs) / N"], ["defbm25", "    s = 0.0"], ["defbm25", "    for t in sorted(set(qt)):"], ["defbm25", "        n = sum(1 for x in docs if t in x)"], ["defbm25", "        if n == 0:"], ["defbm25", "            continue"], ["defbm25", "        idf = max(math.log((N - n + 0.5) / (n + 0.5)), 1e-6)"], ["defbm25", "        tf = d.count(t)"], ["defbm25", "        s += idf * tf * 2.2 / (tf + 1.2 * (0.25 + 0.75 * len(d) / avgdl))"], ["defbm25", "    return s"], [null, ""], ["inifrag", "fragmentos = []"], ["forini", "for ini in range(0, len(oraciones), TAM - SOLAPE):"], ["trozo", "    trozo = oraciones[ini:ini + TAM]"], ["emb", "    emb = [sum(vectores[i][d] for i in range(ini, ini + len(trozo))) / len(trozo) for d in range(4)]"], ["agrega", "    fragmentos.append((\" \".join(trozo), emb, ini + 1, ini + len(trozo)))"], ["ultimo", "    if ini + TAM >= len(oraciones):"], ["ultimo", "        break"], [null, ""], ["conectar", "con = sqlite3.connect(\":memory:\")"], ["pragma", "con.execute(\"PRAGMA foreign_keys = ON\")"], ["crear", "con.executescript(\"\"\""], ["crear", "CREATE TABLE documentos (id_documento INTEGER PRIMARY KEY, titulo TEXT NOT NULL);"], ["crear", "CREATE TABLE fragmentos (id_fragmento INTEGER PRIMARY KEY,"], ["crear", "    id_documento INTEGER NOT NULL REFERENCES documentos(id_documento),"], ["crear", "    contenido TEXT NOT NULL, embedding TEXT NOT NULL, metadatos TEXT);"], ["crear", "CREATE VIRTUAL TABLE fts USING fts5(contenido);"], ["crear", "\"\"\")"], ["doc", "con.execute(\"INSERT INTO documentos VALUES (1, 'Politica de la tienda')\")"], ["forguardar", "for n, (texto, emb, desde, hasta) in enumerate(fragmentos, start=1):"], ["insertar", "    meta = json.dumps({\"origen\": \"politica_tienda\", \"desde\": desde, \"hasta\": hasta})"], ["insertar", "    con.execute(\"INSERT INTO fragmentos VALUES (?, 1, ?, ?, ?)\", (n, texto, json.dumps(emb), meta))"], ["insertarfts", "    con.execute(\"INSERT INTO fts(rowid, contenido) VALUES (?, ?)\", (n, texto))"], [null, ""], ["consulta", "consulta = \"AB-1234\""], ["qvec", "q = [0.0, 0.7, 0.5, 0.0]  # el embedding de la pregunta, inventado"], ["docs", "docs = [tokens(f[0]) for f in fragmentos]"], ["qt", "qt = tokens(consulta)"], ["inivec", "vec = []"], ["forvec", "for f in fragmentos:"], ["coseno", "    vec.append(sum(a * b for a, b in zip(q, f[1])) / (math.sqrt(sum(a * a for a in q)) * math.sqrt(sum(b * b for b in f[1]))))"], ["inilex", "lex = []"], ["forlex", "for d in docs:"], ["lexval", "    lex.append(bm25(d, qt, docs))"], ["maximo", "mx = max(lex) or 1.0"], ["inihib", "hib = []"], ["forhib", "for n in range(len(fragmentos)):"], ["mezcla", "    hib.append(ALFA * vec[n] + (1 - ALFA) * lex[n] / mx)"], [null, ""], ["topk", "orden = sorted(range(len(hib)), key=lambda n: hib[n], reverse=True)[:K]"], ["contexto", "contexto = \"\\n\\n\".join(\"### Fragmento %d\\n%s\" % (n + 1, fragmentos[n][0]) for n in orden)"], ["imp1", "print([round(x, 3) for x in vec])"], ["imp2", "print([round(x, 3) for x in lex])"], ["imp3", "print([round(x, 3) for x in hib])"], ["imp4", "print([n + 1 for n in orden])"], ["imp5", "print(contexto)"], [null, ""], ["verifcos", "M = np.array([f[1] for f in fragmentos])"], ["verifcos", "ref = M @ np.array(q) / (np.linalg.norm(M, axis=1) * np.linalg.norm(q))"], ["verifcos", "print(np.allclose(ref, vec))"], ["verifbm", "fts = dict(con.execute(\"SELECT rowid, -bm25(fts) FROM fts WHERE fts MATCH ?\", (\" OR \".join(qt),)))"], ["verifbm", "print(all(abs(fts.get(n + 1, 0.0) - lex[n]) < 1e-4 for n in range(len(lex))))"]], r: [["oraciones", "oraciones <- c("], ["oraciones", "  \"Los pedidos salen del almacén de Madrid en 24 horas.\","], ["oraciones", "  \"El envío estándar tarda entre 2 y 4 días laborables.\","], ["oraciones", "  \"Puedes pagar con tarjeta, transferencia o contra reembolso.\","], ["oraciones", "  \"Tienes 30 días para devolver un producto desde que lo recibes.\","], ["oraciones", "  \"Debe estar sin usar y con su embalaje original.\","], ["oraciones", "  \"La garantía legal cubre los fallos de fabricación durante dos años.\","], ["oraciones", "  \"El repuesto AB-1234 se vende aparte y no tiene garantía.\","], ["oraciones", "  \"El reembolso llega por el mismo medio de pago en 5 días.\","], ["oraciones", "  \"Nuestro equipo atiende de lunes a viernes, de 9 a 18 horas.\","], ["oraciones", "  \"Los envíos a Canarias y Baleares pueden tardar un día más.\","], ["oraciones", "  \"Los pagos con tarjeta se confirman al instante.\","], ["oraciones", "  \"Si recibes un producto dañado, avísanos en las primeras 48 horas.\""], ["oraciones", ")"], ["vectores", "vectores <- rbind(  # devolución, envío, pago, garantía"], ["vectores", "  c(0.0, 0.9, 0.1, 0.0), c(0.0, 0.9, 0.0, 0.1), c(0.1, 0.1, 0.9, 0.0),"], ["vectores", "  c(0.9, 0.2, 0.0, 0.1), c(0.8, 0.0, 0.0, 0.3), c(0.1, 0.0, 0.0, 0.9),"], ["vectores", "  c(0.2, 0.2, 0.2, 0.4), c(0.5, 0.0, 0.7, 0.0), c(0.2, 0.1, 0.1, 0.2),"], ["vectores", "  c(0.0, 0.9, 0.0, 0.0), c(0.0, 0.1, 0.9, 0.0), c(0.5, 0.2, 0.0, 0.5)"], ["vectores", ")"], ["ajustes", "TAM <- 3; SOLAPE <- 1; ALFA <- 0.5; K <- 2"], [null, ""], ["deftok", "tokens <- function(texto) {"], ["deftok", "  limpio <- tolower(stringi::stri_trans_general(texto, \"Latin-ASCII\"))"], ["deftok", "  strsplit(trimws(gsub(\"[^a-z0-9]+\", \" \", limpio)), \" +\")[[1]]"], ["deftok", "}"], [null, ""], ["defbm25", "bm25 <- function(d, qt, docs) {"], ["defbm25", "  N <- length(docs)"], ["defbm25", "  avgdl <- mean(sapply(docs, length))"], ["defbm25", "  s <- 0"], ["defbm25", "  for (t in sort(unique(qt))) {"], ["defbm25", "    n <- sum(sapply(docs, function(x) t %in% x))"], ["defbm25", "    if (n == 0) next"], ["defbm25", "    idf <- max(log((N - n + 0.5) / (n + 0.5)), 1e-6)"], ["defbm25", "    tf <- sum(d == t)"], ["defbm25", "    s <- s + idf * tf * 2.2 / (tf + 1.2 * (0.25 + 0.75 * length(d) / avgdl))"], ["defbm25", "  }"], ["defbm25", "  s"], ["defbm25", "}"], [null, ""], ["inifrag", "fragmentos <- list()"], ["forini", "for (ini in seq(1, length(oraciones), by = TAM - SOLAPE)) {"], ["trozo", "  trozo <- oraciones[ini:min(ini + TAM - 1, length(oraciones))]"], ["emb", "  emb <- colMeans(vectores[ini:(ini + length(trozo) - 1), , drop = FALSE])"], ["agrega", "  fragmentos[[length(fragmentos) + 1]] <- list(texto = paste(trozo, collapse = \" \"), emb = emb, desde = ini, hasta = ini + length(trozo) - 1)"], ["ultimo", "  if (ini + TAM - 1 >= length(oraciones)) break"], [null, "}"], [null, ""], ["crear", "tabla <- data.frame(id_fragmento = integer(0), contenido = character(0), desde = integer(0), hasta = integer(0))"], ["forguardar", "for (n in seq_along(fragmentos)) {"], ["insertar", "  f <- fragmentos[[n]]"], ["insertar", "  tabla[n, ] <- list(n, f$texto, f$desde, f$hasta)"], [null, "}"], [null, ""], ["consulta", "consulta <- \"AB-1234\""], ["qvec", "q <- c(0.0, 0.7, 0.5, 0.0)  # el embedding de la pregunta, inventado"], ["docs", "docs <- lapply(fragmentos, function(f) tokens(f$texto))"], ["qt", "qt <- tokens(consulta)"], ["inivec", "vec <- c()"], ["forvec", "for (f in fragmentos) {"], ["coseno", "  vec <- c(vec, sum(q * f$emb) / (sqrt(sum(q^2)) * sqrt(sum(f$emb^2))))"], [null, "}"], ["inilex", "lex <- c()"], ["forlex", "for (d in docs) {"], ["lexval", "  lex <- c(lex, bm25(d, qt, docs))"], [null, "}"], ["maximo", "mx <- if (max(lex) > 0) max(lex) else 1"], ["inihib", "hib <- c()"], ["forhib", "for (n in seq_along(fragmentos)) {"], ["mezcla", "  hib <- c(hib, ALFA * vec[n] + (1 - ALFA) * lex[n] / mx)"], [null, "}"], [null, ""], ["topk", "orden <- order(hib, decreasing = TRUE)[1:K]"], ["contexto", "contexto <- paste(sprintf(\"### Fragmento %d\\n%s\", orden, sapply(fragmentos[orden], function(f) f$texto)), collapse = \"\\n\\n\")"], ["imp1", "print(round(vec, 3))"], ["imp2", "print(round(lex, 3))"], ["imp3", "print(round(hib, 3))"], ["imp4", "print(orden)"], ["imp5", "writeLines(contexto)"], [null, ""], ["verifcos", "M <- do.call(rbind, lapply(fragmentos, function(f) f$emb))"], ["verifcos", "ref <- drop(M %*% q) / (sqrt(rowSums(M^2)) * sqrt(sum(q^2)))"], ["verifcos", "print(isTRUE(all.equal(ref, vec)))"], ["verifbm", "print(all(round(lex, 4) == c(0, 0, 1.1377, 1.0781, 0, 0)))"]] };
+    var TAM = 3, SOL = 1, ALFA = 0.5, K = 2;
+    var FR = trocear(TAM, SOL), NF = FR.length;
+    var PQ = PREGS[1];
+    var DD = datos(TAM, SOL, 1);
+    var HIB = hibrida(DD, ALFA);
+    var ORDEN = ranking(HIB, false).slice(0, K);
+    var EV = [], fase = 1, nch = 0, vecA = [], lexA = [], hibA = [];
+    function foto(id, extra) {
+      EV.push(Object.assign({ id: id, fase: fase, nch: nch, vec: vecA.slice(), lex: lexA.slice(), hib: hibA.slice(), i: null, orden: null, ok: null }, extra || {}));
+    }
+    foto("import"); foto("oraciones"); foto("vectores"); foto("ajustes"); foto("deftok"); foto("defbm25"); foto("inifrag");
+    FR.forEach(function (c, i) {
+      foto("forini", { i: i });
+      foto("trozo", { i: i });
+      foto("emb", { i: i });
+      nch = i + 1;
+      foto("agrega", { i: i });
+      foto("ultimo", { i: i });
+    });
+    fase = 2;
+    foto("conectar"); foto("pragma"); foto("crear"); foto("doc");
+    FR.forEach(function (c, i) { foto("forguardar", { i: i }); foto("insertar", { i: i }); foto("insertarfts", { i: i }); });
+    fase = 3;
+    foto("consulta"); foto("qvec"); foto("docs"); foto("qt"); foto("inivec");
+    FR.forEach(function (c, i) { foto("forvec", { i: i }); vecA.push(DD.vec[i]); foto("coseno", { i: i }); });
+    foto("inilex");
+    FR.forEach(function (c, i) { foto("forlex", { i: i }); lexA.push(DD.lex[i]); foto("lexval", { i: i }); });
+    foto("maximo"); foto("inihib");
+    FR.forEach(function (c, i) { foto("forhib", { i: i }); hibA.push(HIB[i]); foto("mezcla", { i: i }); });
+    fase = 4;
+    foto("topk", { orden: ORDEN }); foto("contexto", { orden: ORDEN });
+    foto("imp1", { orden: ORDEN }); foto("imp2", { orden: ORDEN }); foto("imp3", { orden: ORDEN }); foto("imp4", { orden: ORDEN }); foto("imp5", { orden: ORDEN });
+    foto("verifcos", { orden: ORDEN }); foto("verifbm", { orden: ORDEN, fin: true });
+
+    function rangoTxt(c) { return (c.ini + 1) + "-" + c.fin; }
+    function narrar(e, ctx) {
+      var py = ctx.lang() === "py", ix = ctx.ix, c = e.i !== null ? FR[e.i] : null;
+      switch (e.id) {
+        case "import": return py ? "Carga lo que hace falta: <b>sqlite3</b> (la base de datos), <b>json</b>, <b>re</b> y <b>unicodedata</b> para partir texto, <b>math</b> y <b>numpy</b> para comprobar al final." : "En R no se importa nada aquí: <code>stringi</code> se llama con su prefijo más abajo. Tampoco hay <code>RSQLite</code> en esta máquina, así que no hay base de datos: la tabla será un <b>data.frame</b>.";
+        case "oraciones": return "Las <b>12 oraciones</b> del reglamento, las mismas del recorrido.";
+        case "vectores": return "El vector de 4 números de cada oración (devolución, envío, pago, garantía), escrito a mano. Un modelo real los generaría solo.";
+        case "ajustes": return "Los ajustes: tamaño <b>3</b>, solape <b>1</b>, peso <b>α = 0.5</b> y <b>k = 2</b> fragmentos para el contexto.";
+        case "deftok": return "Define <b>tokens</b>: pasa a minúsculas, quita las tildes y parte en palabras de letras y números. «AB-1234» se vuelve «ab» y «1234». Es lo que hace FTS5 por dentro.";
+        case "defbm25": return "Define <b>bm25</b>: para cada palabra de la pregunta cuenta en cuántos fragmentos aparece (peso idf) y cuántas veces en este (tf), y compensa el largo. Es la fórmula del recuadro del paso 6. Aquí solo se define; se llama más abajo.";
+        case "inifrag": return "Una lista vacía donde irán los fragmentos.";
+        case "forini": return "Empieza un fragmento en la oración <b>" + (e.i * (TAM - SOL) + 1) + "</b>. El bucle avanza " + (TAM - SOL) + " oraciones cada vez: tamaño menos solape.";
+        case "trozo": return "Toma hasta " + TAM + " oraciones: de la <b>" + (c.ini + 1) + "</b> a la <b>" + c.fin + "</b>" + (py ? " (el corte <code>[" + c.ini + ":" + (c.ini + TAM) + "]</code> no incluye el final)." : ".");
+        case "emb": return "Su embedding es el <b>promedio</b> de los " + (c.fin - c.ini) + " vectores: " + jsonVec(embDe(c)) + ".";
+        case "agrega": return "Guarda el fragmento " + (e.i + 1) + " con su texto, su embedding y las oraciones que cubre. Hay <b>" + e.nch + "</b>.";
+        case "ultimo": return (e.i === NF - 1) ? "Este fragmento ya llega a la oración 12, la última: <b>se corta el bucle</b>." : "Todavía no llega a la última oración (" + c.fin + " de 12): sigue.";
+        case "conectar": return py ? "Abre una base SQLite <b>en memoria</b>: existe mientras corre el programa y no deja archivos." : "En R no hay base de datos aquí: sin <code>RSQLite</code> no se conecta nada.";
+        case "pragma": return py ? "Activa las <b>claves ajenas</b>: SQLite las trae apagadas por defecto. Sin esta línea aceptaría un fragmento que apunta a un documento que no existe." : "En R no aplica: no hay claves ajenas, porque no hay base de datos.";
+        case "crear": return py ? "Crea tres tablas: <b>documentos</b> (la que la Figura 10 olvida definir), <b>fragmentos</b> con su clave ajena y una tabla virtual <b>fts</b> de texto completo." : "El equivalente de la tabla es un <b>data.frame</b> con las columnas id_fragmento, contenido, desde y hasta. El embedding queda en la lista de fragmentos.";
+        case "doc": return py ? "Inserta el único documento (id 1). Todos los fragmentos apuntarán a él." : "En R el documento es uno solo y no hace falta tabla para él.";
+        case "forguardar": return "Va a guardar el fragmento <b>" + (e.i + 1) + "</b>.";
+        case "insertar": return py ? "Inserta la fila con <code>?</code> como marcadores (consulta parametrizada). El embedding se guarda como <b>texto JSON</b> y los metadatos también: {\"origen\", \"desde\": " + (c.ini + 1) + ", \"hasta\": " + c.fin + "}." : "Agrega una fila al data.frame con el id, el texto y las oraciones que cubre.";
+        case "insertarfts": return py ? "Mete el mismo texto en la tabla de texto completo, con el mismo número de fila. FTS5 lo parte en palabras y construye su índice." : "En R no hay índice de texto: el BM25 se calcula a mano más abajo.";
+        case "consulta": return "La pregunta: <b>«AB-1234»</b>, un código de producto.";
+        case "qvec": return "Su vector, <b>[0.0, 0.7, 0.5, 0.0]</b>: inventado, cerca de envío y pago. Un modelo de embeddings no conoce el código y lo coloca en cualquier sitio.";
+        case "docs": return "Parte en palabras el texto de cada fragmento. Son los " + NF + " «documentos» sobre los que se cuenta.";
+        case "qt": return "Las palabras de la pregunta: <b>ab</b> y <b>1234</b>.";
+        case "inivec": return "Una lista para el coseno de cada fragmento con la pregunta.";
+        case "forvec": return "Toma el fragmento <b>" + (e.i + 1) + "</b> (oraciones " + rangoTxt(c) + ").";
+        case "coseno": return "Producto punto dividido entre las dos normas: coseno = <b>" + f3(DD.vec[e.i]) + "</b>.";
+        case "inilex": return "Una lista para la puntuación de palabras.";
+        case "forlex": return "Toma el fragmento <b>" + (e.i + 1) + "</b>.";
+        case "lexval": return DD.lex[e.i] > 0.001 ? "BM25 = <b>" + f3(DD.lex[e.i]) + "</b>: este fragmento contiene «ab» y «1234», que casi nadie más tiene." : "BM25 = <b>0</b>: este fragmento no contiene ni «ab» ni «1234».";
+        case "maximo": return "El mayor BM25 es <b>" + f3(DD.mx) + "</b>. Servirá para llevar las puntuaciones de palabras a [0, 1].";
+        case "inihib": return "Una lista para la puntuación mezclada.";
+        case "forhib": return "Toma el fragmento <b>" + (e.i + 1) + "</b>.";
+        case "mezcla": return "h = 0.5 · " + f3(DD.vec[e.i]) + " + 0.5 · " + f3(DD.lexn[e.i]) + " = <b>" + f3(HIB[e.i]) + "</b>.";
+        case "topk": return "Ordena de mayor a menor y se queda con los <b>" + K + "</b> mejores: fragmentos <b>" + e.orden.map(function (n) { return n + 1; }).join(" y ") + "</b>. (Con solo vectores habría ganado el fragmento 1.)";
+        case "contexto": return "Arma el <b>contexto</b>: un bloque «### Fragmento n» con el texto de cada uno, como la solución 5 del ejercicio.";
+        case "imp1": return "Imprime el coseno de los 6 fragmentos." + (py ? "" : " R antepone <code>[1]</code> al vector.");
+        case "imp2": return "Imprime el BM25: solo los fragmentos 3 y 4 tienen algo.";
+        case "imp3": return "Imprime la mezcla. Gana el fragmento 4 y el 3 queda segundo.";
+        case "imp4": return "Imprime los " + K + " elegidos, " + (py ? "contando desde 1 porque se sumó 1." : "ya contados desde 1, como los cuenta R.");
+        case "imp5": return "Imprime el contexto que recibiría el modelo.";
+        case "verifcos": return py ? "Comprueba el coseno con NumPy en una sola operación de matrices: <b>True</b>." : "Comprueba el coseno con la forma de matriz, <code>M %*% q</code>: <b>TRUE</b>.";
+        case "verifbm": return py ? "Pide a FTS5 su propio <code>bm25()</code> (con el signo cambiado) y lo compara con el nuestro: <b>True</b>. Coinciden." : "R no tiene FTS5 aquí: compara con los valores que dio FTS5 en Python (0, 0, 1.1377, 1.0781, 0, 0): <b>TRUE</b>.";
+      }
+      return "";
+    }
+    function visual(e, anterior, ctx) {
+      var n = e ? e.nch : 0, h = '<thead><tr><th>frag.</th><th>oraciones</th><th>coseno</th><th>BM25</th><th>mezcla</th></tr></thead><tbody>', i;
+      for (i = 0; i < n; i++) {
+        var c = FR[i], act = e && e.i === i && e.fase >= 1;
+        var top = e && e.orden && e.orden.indexOf(i) >= 0;
+        h += '<tr class="' + (act ? "vact " : "") + (top ? "top" : "") + '"><td class="pl">C' + (i + 1) + '</td><td class="pl">' + rangoTxt(c) + '</td><td>' + (e && i < e.vec.length ? f3(e.vec[i]) : "·") + '</td><td>' + (e && i < e.lex.length ? f3(e.lex[i]) : "·") + '</td><td>' + (e && i < e.hib.length ? f3(e.hib[i]) : "·") + '</td></tr>';
+      }
+      if (!n) h += '<tr><td class="pl" colspan="5">todavía no hay fragmentos</td></tr>';
+      $("vrTabla").innerHTML = h + '</tbody>';
+      var txt = "";
+      if (e && e.fase === 1 && e.i !== null) txt = "fragmento " + (e.i + 1) + ": oraciones " + rangoTxt(FR[e.i]) + (e.id === "ultimo" && e.i === NF - 1 ? " (el último)" : "");
+      else if (e && e.fase === 3 && e.i !== null) txt = "fragmento " + (e.i + 1) + " contra «AB-1234»";
+      else if (e && e.fase === 4) txt = "los elegidos: " + e.orden.map(function (k) { return "C" + (k + 1); }).join(", ");
+      $("vrCuenta").textContent = txt;
+      var ctxh = "";
+      if (e && e.orden && (e.id === "contexto" || e.fase === 4 && e.id !== "topk")) {
+        ctxh = e.orden.map(function (k) {
+          var fc = FR[k], s = "", j;
+          for (j = fc.ini; j < fc.fin; j++) s += (PQ.resp.indexOf(j) >= 0 ? "<mark>" + esc(ORA[j]) + "</mark> " : esc(ORA[j]) + " ");
+          return '<div class="fr">### Fragmento ' + (k + 1) + '</div><p>' + s + '</p>';
+        }).join("");
+      }
+      $("vrCtx").innerHTML = ctxh || '<p>(se arma al final)</p>';
+    }
+    B.vidaReal($("vidareal"), {
+      codigo: CODIGO,
+      eventos: EV,
+      narrar: narrar,
+      vars: function (e, ctx) {
+        var v = [], ix = ctx.ix;
+        if (e && e.i !== null) v.push('<span class="vj">fragmento (fila) = <b>' + ix(e.i) + '</b></span>');
+        if (e && e.fase === 1 && e.i !== null) v.push('<span class="vk">inicio = <b>' + ix(e.i * (TAM - SOL)) + '</b></span>');
+        v.push('<span>fragmentos = <b>' + (e ? e.nch : 0) + '</b></span>');
+        if (e && e.fase >= 3) v.push('<span>cosenos = <b>' + e.vec.length + '</b></span>');
+        return v;
+      },
+      visual: visual,
+      demora: function (e) {
+        if (!e) return 600;
+        if (e.id === "forini" || e.id === "forguardar" || e.id === "forvec" || e.id === "forlex" || e.id === "forhib") return 220;
+        if (e.id === "trozo" || e.id === "insertarfts" || e.id === "ultimo" || e.id === "inivec" || e.id === "inilex" || e.id === "inihib") return 360;
+        return 900;
+      }
+    });
+    $("salidaPy").textContent = "[0.989, 0.37, 0.142, 0.549, 0.976, 0.648]\n[0.0, 0.0, 1.138, 1.078, 0.0, 0.0]\n[0.494, 0.185, 0.571, 0.748, 0.488, 0.324]\n[4, 3]\n### Fragmento 4\nEl repuesto AB-1234 se vende aparte y no tiene garantía. El reembolso llega por el mismo medio de pago en 5 días. Nuestro equipo atiende de lunes a viernes, de 9 a 18 horas.\n\n### Fragmento 3\nDebe estar sin usar y con su embalaje original. La garantía legal cubre los fallos de fabricación durante dos años. El repuesto AB-1234 se vende aparte y no tiene garantía.\nTrue\nTrue";
+    $("salidaR").textContent = "[1] 0.989 0.370 0.142 0.549 0.976 0.648\n[1] 0.000 0.000 1.138 1.078 0.000 0.000\n[1] 0.494 0.185 0.571 0.748 0.488 0.324\n[1] 4 3\n### Fragmento 4\nEl repuesto AB-1234 se vende aparte y no tiene garantía. El reembolso llega por el mismo medio de pago en 5 días. Nuestro equipo atiende de lunes a viernes, de 9 a 18 horas.\n\n### Fragmento 3\nDebe estar sin usar y con su embalaje original. La garantía legal cubre los fallos de fabricación durante dos años. El repuesto AB-1234 se vende aparte y no tiene garantía.\n[1] TRUE\n[1] TRUE";
+
+    B.numerico(cuerpo("vrPred"), {
+      pregunta: "El reglamento tiene 12 oraciones. Con tamaño 3 y solape 1, ¿cuántas veces va a ejecutarse el cálculo del coseno (la línea dentro del bucle <code>for f in fragmentos</code>)?",
+      respuesta: NF,
+      tolerancia: 0,
+      pistas: ["Es una vez por fragmento, no por oración.", "Los fragmentos empiezan en las oraciones 1, 3, 5, 7, 9 y 11. El último ya llega a la 12."],
+      diagnostico: function (v) {
+        if (v === 12) return "12 son las oraciones. El coseno se calcula por <b>fragmento</b>, y con solape 1 hay menos fragmentos que oraciones.";
+        if (v === 4) return "4 serían fragmentos sin solape. Con solape 1 el bucle avanza dos oraciones cada vez, no tres.";
+        return null;
+      },
+      explicacion: "<b>6</b> fragmentos: (1-3), (3-5), (5-7), (7-9), (9-11) y (11-12). El coseno corre 6 veces, y lo mismo el BM25 y la mezcla. Ahora dale a reproducir y mira cómo se llena la tabla.",
+      alResolver: function (ok) { C.reto("codigo1", ok); }
+    });
+    prop("codigo2", {
+      pregunta: "En SQLite haces la búsqueda por palabras con <code>SELECT rowid FROM fts WHERE fts MATCH 'AB-1234'</code>. ¿Qué pasa?",
+      opciones: [
+        "Error: no such column: 1234. FTS5 lee el guion como una resta de columnas",
+        "Devuelve el fragmento 4, que contiene el código",
+        "Devuelve todos los fragmentos, porque el guion es un comodín",
+        "Devuelve vacío, porque no distingue mayúsculas"
+      ],
+      correcta: 0,
+      pistas: [null,
+        "Eso pasaría si el guion fuera parte de la palabra. En la sintaxis de consulta de FTS5 no lo es.",
+        "El guion no es un comodín.",
+        "FTS5 sí encuentra «AB» aunque el texto lo tenga igual: el problema está antes de buscar, en cómo se lee la consulta."],
+      explicacion: "En la sintaxis de consulta de FTS5 el guion tiene un significado propio, y «1234» se interpreta como el nombre de una columna: <i>no such column: 1234</i> (se comprobó en SQLite 3.45). Se arregla entre comillas dobles, <code>MATCH '\"AB-1234\"'</code>, que lo lee como una frase, o separando las palabras como hace el programa: <code>ab OR 1234</code>."
+    });
+    prop("codigo3", {
+      pregunta: "Pides <code>SELECT rowid, bm25(fts) FROM fts WHERE fts MATCH ... ORDER BY bm25(fts) DESC</code> para ver primero el fragmento más relevante. ¿Qué obtienes?",
+      opciones: [
+        "El menos relevante primero, porque en FTS5 el mejor tiene el número más negativo",
+        "El más relevante primero, como en cualquier puntuación",
+        "Un error: bm25() no se puede usar en ORDER BY",
+        "El orden de inserción, porque DESC se ignora"
+      ],
+      correcta: 0,
+      pistas: [null,
+        "En FTS5, bm25() devuelve un número que es menor cuanto más relevante. Con DESC queda al revés.",
+        "Sí se puede usar: es la forma de ordenar. El detalle es el signo.",
+        "DESC sí se aplica. Mira a qué lado del cero está el mejor."],
+      explicacion: "FTS5 devuelve <code>bm25()</code> con signo negativo para que <code>ORDER BY bm25(fts)</code> (ascendente) ponga primero al mejor. Con DESC queda el peor primero. Para sumar a otra puntuación, cámbiale el signo: <code>-bm25(fts)</code>. Es lo que hace el programa."
+    });
+  })();
+
+  /* ---------------- tarjetas ---------------- */
+  B.tarjetas($("tarjetas"), [
+    ["¿Qué dos fases tiene un <b>RAG</b>?", "Recuperar del almacén los fragmentos que se parecen a la pregunta, y pasárselos al modelo como contexto. Si la recuperación falla, ningún modelo acierta."],
+    ["¿Para qué sirve el <b>solape</b> al partir un documento?", "Para que una idea no quede cortada entre dos fragmentos. Cuesta más filas y más texto repetido."],
+    ["¿Qué guarda cada fila de la <b>tabla vectorial</b>?", "El texto del fragmento, su embedding y sus metadatos (origen, fecha, sección, permisos)."],
+    ["¿Por qué un fragmento muy grande se busca mal?", "Su vector es un promedio de muchos temas (dilución) y además puede no caber en la ventana de contexto."],
+    ["¿Cuándo falla la búsqueda vectorial?", "Con códigos de producto, nombres propios y siglas: no tienen significado y su vector cae en cualquier sitio."],
+    ["En FTS5, ¿qué signo tiene <code>bm25()</code> y qué implica?", "Es negativo: el mejor es el más negativo. <code>ORDER BY bm25(fts)</code> sin DESC pone primero al mejor; para sumarlo se usa <code>-bm25(fts)</code>."],
+    ["¿Cómo se mezclan la vectorial y las palabras?", "$h = \\alpha v + (1-\\alpha) l$, con $l$ = BM25 dividido entre el mayor para llevarlo a [0, 1]."],
+    ["Si cambias el modelo de embeddings, ¿qué haces?", "Reprocesar toda la colección: los espacios de dos modelos no son comparables y la dimensión de la columna debe coincidir."]
+  ]);
+
+  /* ---------------- conexiones ---------------- */
+  B.conexiones("rag-busqueda-hibrida");
+})();
+
+</script>
+</body>
+</html>

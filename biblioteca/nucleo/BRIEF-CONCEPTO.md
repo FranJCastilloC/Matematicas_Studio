@@ -20,6 +20,13 @@ de Python y R con `python3` y `Rscript` para que los números que muestra la pá
 - Datos pequeños y limpios (las cuentas dan redondas), inventados y declarados como tales, salvo que se indique un dataset real.
 - Es una biblioteca de matemática: si el concepto se usa en un modelo o en una materia, se menciona para atar, pero la página
   explica la matemática.
+- Excepción: el grupo "Infraestructura y programación" (arquitectura de computadores, redes, bases de datos, Python y R) explica
+  un concepto de computación, no de matemática. Se sigue el mismo estándar (imagen central manipulable, pasos con chequeo, vida
+  real en Python y en R, retos, memoria, citas, conexiones). Lo que cambia: la "fórmula" de la parte de memoria puede ser una
+  sentencia SQL, una máscara de red, el orden de un protocolo o un fragmento de código que se arma con `B.ordenar`; la vida real
+  usa lo que cada lenguaje trae (Python: `sqlite3`, `ipaddress`, `hashlib`, `struct`; en esta máquina R tiene `DBI`, `dplyr` y
+  `tidyverse` pero NO `RSQLite` ni `sqldf`: en R se escribe el equivalente con `dplyr`, `merge` o bucles y la página lo dice);
+  los datos son tablas, paquetes o programas pequeños inventados; y el material de la materia se cita igual que un libro.
 
 ## Estructura obligatoria (copia la de `conceptos/covarianza.html`, que es el modelo; léela entera antes de empezar)
 1. `topbar` con marca, `subnav` (Paso a paso, Vida real, Retos, Memoria, Lecturas, Conexiones), `#medidor`, `#btnTema`.

@@ -1,0 +1,1532 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Jerarquía de memoria y localidad</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+/* ---------- escenario ---------- */
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.esc-head .hint { font-size: 12.5px; color: var(--ink-2); }
+.esc-pn[hidden] { display: none; }
+.esc-nota { font-size: 12.5px; color: var(--ink-3); margin: 10px 0 0; }
+.ctl { display: grid; gap: 4px; margin: 8px 0; font-size: 13px; color: var(--ink-2); }
+.ctl label { display: flex; justify-content: space-between; gap: 8px; }
+.ctl label b { font-family: var(--f-mono); font-weight: 500; color: var(--ink); }
+.ctl input[type=range] { width: 100%; accent-color: var(--accent); }
+.ctl-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
+.cuenta { font-family: var(--f-mono); font-size: 12.5px; color: var(--ink-2); font-variant-numeric: tabular-nums; margin-top: 8px; overflow-wrap: anywhere; }
+.cuenta b { color: var(--ink); font-weight: 500; }
+.cuenta b.pos { color: var(--pos); }
+.cuenta b.neg { color: var(--neg); }
+.cuenta .oculto { color: var(--accent); font-weight: 600; }
+
+/* escalera de niveles */
+.escalera { display: grid; gap: 6px; margin-top: 8px; }
+.nv { display: grid; grid-template-columns: 92px minmax(0, 1fr) 88px; gap: 8px; align-items: center; padding: 6px 8px; border: 1px solid var(--line-soft); border-radius: 8px; background: var(--surface); }
+.nv .nm { display: grid; line-height: 1.2; }
+.nv .nm b { font-size: 13px; font-weight: 600; color: var(--ink); }
+.nv .nm small { font-family: var(--f-mono); font-size: 10.5px; color: var(--ink-3); }
+.nv .pb { min-width: 0; }
+.nv .pista { height: 9px; background: var(--surface-2); border-radius: 3px; overflow: hidden; }
+.nv .pista i { display: block; height: 100%; border-radius: 3px; background: var(--j); transition: width .25s; }
+.nv .coste { display: block; margin-top: 3px; font-family: var(--f-mono); font-size: 10px; color: var(--ink-3); letter-spacing: .04em; }
+.nv .tm { font-family: var(--f-mono); font-size: 12.5px; text-align: right; font-variant-numeric: tabular-nums; color: var(--ink); }
+.nv .tm.oculto { color: var(--accent); font-weight: 600; }
+.nv.hdd .pista i { background: var(--neg); }
+.nv.lleno .pista i { background: var(--pos); }
+.nv.sin-barra .pista { visibility: hidden; }
+
+/* matriz 8x8 de palabras */
+.gridm { display: grid; grid-template-columns: 54px repeat(8, minmax(0, 1fr)); gap: 3px; max-width: 420px; margin: 6px 0; }
+.gridm .gl { font-family: var(--f-mono); font-size: 10px; color: var(--ink-3); display: flex; align-items: center; justify-content: flex-end; padding-right: 5px; line-height: 1.1; text-align: right; }
+.gridm .gl.arriba { color: var(--accent); font-weight: 600; }
+.gridm .gc { aspect-ratio: 1; display: grid; place-items: center; border-radius: 4px; background: var(--cell-zero); font-family: var(--f-mono); font-size: 10px; color: var(--ink-3); font-variant-numeric: tabular-nums; border: 1px solid transparent; }
+.gridm .gc.pos { background: color-mix(in oklab, var(--pos) 38%, var(--cell-zero)); color: var(--ink); }
+.gridm .gc.neg { background: color-mix(in oklab, var(--neg) 42%, var(--cell-zero)); color: var(--ink); }
+.gridm .gc.num { border-color: var(--ink-3); color: var(--ink); }
+.gridm .gc.ahora { border-color: var(--ink); box-shadow: 0 0 0 1.5px var(--ink); font-weight: 600; }
+.gridm .gc.linea-arriba { outline: 1.5px solid var(--accent); outline-offset: -1.5px; }
+.leyenda { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: var(--ink-2); margin-top: 4px; }
+.leyenda i { display: inline-block; width: 11px; height: 11px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+.leyenda i.pos { background: color-mix(in oklab, var(--pos) 55%, var(--cell-zero)); }
+.leyenda i.neg { background: color-mix(in oklab, var(--neg) 55%, var(--cell-zero)); }
+.leyenda i.acc { background: var(--cell-zero); border: 1.5px solid var(--accent); }
+
+/* cien accesos */
+.cien { display: grid; grid-template-columns: repeat(20, minmax(0, 1fr)); gap: 2px; max-width: 380px; margin: 8px 0; }
+.cien i { aspect-ratio: 1; border-radius: 2px; background: var(--pos); opacity: .8; }
+.cien i.f { background: var(--neg); opacity: 1; }
+.apiladas { margin-top: 10px; display: grid; gap: 6px; }
+.apiladas .fila { display: grid; grid-template-columns: 92px minmax(0, 1fr) 76px; gap: 8px; align-items: center; font-size: 12px; color: var(--ink-2); }
+.apiladas .barra { height: 10px; background: var(--surface-2); border-radius: 3px; overflow: hidden; display: flex; }
+.apiladas .barra i { display: block; height: 100%; transition: width .2s; }
+.apiladas .barra i.a { background: var(--pos); }
+.apiladas .barra i.m { background: var(--neg); }
+.apiladas b { font-family: var(--f-mono); font-weight: 500; text-align: right; font-variant-numeric: tabular-nums; color: var(--ink); }
+
+/* embudo de accesos */
+.embudo { width: 100%; border-collapse: collapse; font-family: var(--f-mono); font-size: 12px; font-variant-numeric: tabular-nums; margin-top: 6px; }
+.embudo th { font-weight: 500; color: var(--ink-3); font-size: 11px; text-align: right; padding: 4px 6px; border-bottom: 1px solid var(--line); }
+.embudo td { text-align: right; padding: 3px 6px; border-bottom: 1px solid var(--line-soft); color: var(--ink-2); }
+.embudo th:first-child, .embudo td:first-child { text-align: left; color: var(--ink); }
+.embudo td.oculto { color: var(--accent); font-weight: 600; }
+.embudo tr.on td { background: var(--accent-soft); }
+.vivo-g { font-family: var(--f-mono); font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.vivo-g b { color: var(--ink); font-weight: 500; }
+.grande { font-family: var(--f-mono); font-size: 14px; color: var(--ink-2); margin: 6px 0 12px; font-variant-numeric: tabular-nums; }
+.grande b { font-size: 18px; color: var(--ink); font-weight: 500; }
+
+/* retos propios */
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.ojo-opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
+.ojo-opts .opt { text-align: center; }
+.objetivos { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.objetivos li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.objetivos .m { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.objetivos li.hecho { color: var(--ink); }
+.objetivos li.hecho .m { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 3px var(--surface); }
+.enunciado { font-size: 14.5px; color: var(--ink); margin: 4px 0 12px; }
+.enunciado b { font-family: var(--f-mono); font-weight: 500; }
+
+/* vida real */
+.vr-tabla2 { width: 100%; border-collapse: collapse; font-family: var(--f-mono); font-size: 12px; font-variant-numeric: tabular-nums; }
+.vr-tabla2 th { font-weight: 500; color: var(--ink-3); font-size: 11px; text-align: right; padding: 4px 6px; border-bottom: 1px solid var(--line); }
+.vr-tabla2 td { text-align: right; padding: 4px 6px; border-bottom: 1px solid var(--line-soft); color: var(--ink-2); }
+.vr-tabla2 th:first-child, .vr-tabla2 td:first-child { text-align: left; color: var(--ink); }
+.vr-tabla2 tr.on td { background: var(--accent-soft); color: var(--ink); font-weight: 600; }
+.vr-tabla2 td.nuevo { color: var(--accent); font-weight: 600; }
+.salidas { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: 12px; margin: 14px 0; }
+.salidas pre { margin: 0; padding: 10px 12px; background: var(--surface-2); border-radius: 8px; font-family: var(--f-mono); font-size: 12.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); }
+.salidas h4 { margin: 0 0 6px; font-family: var(--f-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); font-weight: 500; }
+.vr-cuenta { margin-top: 10px; font-family: var(--f-mono); font-size: 12.5px; color: var(--ink-2); overflow-wrap: anywhere; min-height: 1.4em; }
+.vr-cuenta b { color: var(--ink); font-weight: 500; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ Jerarquía de memoria y localidad</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Infraestructura · Arquitectura de computadores · UD2</p>
+    <h1>Jerarquía de memoria y localidad: por qué la memoria rápida alcanza</h1>
+    <p class="lede">
+      Una memoria que sea grande, rápida y barata a la vez no existe. Los computadores usan varias, una detrás de otra, y se apoyan
+      en una costumbre de los programas: <b>volver a usar lo que ya usaron y lo que está justo al lado</b>.
+      Con esa costumbre, el tiempo medio de acceso se parece al de la memoria más rápida, aunque casi todos los datos vivan lejos.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> Tienes una biblioteca enorme, a la que llegar cuesta mucho, y un escritorio pequeño. Tu trabajo exige consultar libros todo el día. ¿Cómo organizarías el escritorio para perder el menor tiempo posible? Escribe tus ideas, aunque sean torpes.</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: dejaría en el escritorio..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>Construir el tiempo medio de acceso</h2>
+      <p>Siete pasos. Cada uno termina con un chequeo: hasta que no lo resuelves, el siguiente queda cerrado. Equivocarte aquí no resta nada, es parte del método.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="La espera">
+          <span class="etapa">Paso 1</span>
+          <h3>Un procesador que espera</h3>
+          <p>Un procesador de 3 GHz da un paso de reloj cada 0.3 nanosegundos. Es tan rápido que, para sentir lo que pasa, hay que cambiar de escala: <b>supón que 1 nanosegundo dura 1 segundo.</b></p>
+          <p>En esa escala, el procesador da un paso en menos de un segundo y su memoria más cercana le responde en 1 segundo. Pero los datos no viven todos ahí cerca. Viven en una escalera de siete niveles, del más cercano al más lejano, y la tienes a la derecha. Hay una gran distancia entre el primero y el último: el material la pone en una tabla de tiempos, de un ciclo de CPU a una pulsación de tecla
+            <cite class="cita" data-fuente="arq3" data-pag="7" data-pimp="4" data-seccion="1.4 Disparidad de velocidades (Tabla 2)" data-que="Una tabla de tiempos: ciclo de CPU de 0.3 ns, DRAM de 50 a 100 ns, SSD NVMe de 10 a 100 microsegundos y HDD de 5 a 10 milisegundos. El texto dice seis órdenes de magnitud; con esas cifras son casi siete." data-cuando="Al terminar este paso"></cite>.</p>
+          <div class="check" id="chk1"><p class="check-tit">Predice antes de ver nada</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Tres cosas">
+          <span class="etapa">Paso 2</span>
+          <h3>Tres cosas que no caben juntas</h3>
+          <p>Ahora la escalera muestra sus tiempos reales. Cada vez que bajas un nivel pasan tres cosas a la vez:</p>
+          <ul>
+            <li>La <b>capacidad sube</b>: de menos de 1 KB en los registros a terabytes en los discos.</li>
+            <li>El <b>tiempo de acceso sube</b>: de medio nanosegundo a diez milisegundos.</li>
+            <li>El <b>coste por byte baja</b>: guardar un byte en un registro es carísimo, y en un disco casi gratis.</li>
+          </ul>
+          <p>Por eso no existe una memoria grande, rápida y barata a la vez. No es un descuido de los fabricantes: es un compromiso de ingeniería. Las cifras de esta página son valores representativos dentro de los rangos de la Tabla 6 del material
+            <cite class="cita" data-fuente="arq2" data-pag="14" data-pimp="11" data-seccion="5.3 Parámetros y Tabla 6" data-que="La Tabla 6: para cada nivel, la tecnología, la capacidad y el tiempo de acceso, de los registros (menos de 1 ns) al HDD (1 a 10 ms)." data-cuando="Al terminar este paso"></cite>.
+            Las barras están en <b>escala logarítmica</b>: cada marca vale diez veces la anterior. Si no, la barra del HDD aplastaría a todas las demás (la página de Logaritmos lo explica).</p>
+          <details class="profundizar">
+            <summary>¿Por qué las memorias rápidas son pequeñas?</summary>
+            <div>
+              <p>Depende de cómo se guarda un bit. La memoria rápida (SRAM) usa un circuito de seis transistores por bit: responde enseguida y no necesita refresco, pero ocupa mucha área y cuesta más. La memoria grande (DRAM) usa un condensador y un transistor por bit: es muy densa y barata, pero el condensador pierde carga y hay que refrescarlo cada pocos milisegundos
+                <cite class="cita" data-fuente="arq2" data-pag="14" data-pimp="11" data-seccion="5.4 SRAM frente a DRAM" data-que="Cómo guarda un bit cada tecnología: el biestable de seis transistores de la SRAM frente al condensador y el transistor de la DRAM, y por qué una es rápida y cara y la otra densa y barata." data-cuando="Si quieres entender de dónde sale el compromiso"></cite>.</p>
+              <p>El material también da un coste por gigabyte de cada nivel
+                <cite class="cita" data-fuente="arq2" data-pag="15" data-pimp="12" data-seccion="5.5 Coste por gigabyte" data-que="Una comparación de coste por gigabyte entre SRAM, DRAM y almacenamiento, para justificar económicamente la jerarquía." data-cuando="Después de leer lo de SRAM y DRAM"></cite>.
+                No tomes esas cifras como dato (la de la SRAM es muy baja frente a los precios reales): aquí solo importa el orden, que baja al descender.</p>
+            </div>
+          </details>
+          <details class="profundizar">
+            <summary>Las tablas del material no coinciden del todo</summary>
+            <div>
+              <p>La unidad 1 dice que los registros guardan "unos pocos bytes" y la RAM responde en "decenas de nanosegundos"
+                <cite class="cita" data-fuente="arq1" data-pag="13" data-pimp="10" data-seccion="3.2 Memoria y jerarquía (Tabla 3)" data-que="La primera tabla de la jerarquía, con magnitudes orientativas: registros de pocos bytes, caché de KB a MB, RAM de GB y SSD o HDD de cientos de GB a TB." data-cuando="Para comparar con la Tabla 6 de la unidad 2"></cite>.
+                La unidad 2 habla de "unos pocos cientos de bytes" y de menos de 1 KB para los registros, y de 50 a 100 ns para la RAM. Son órdenes de magnitud aproximados, no errores graves. En esta página usamos una sola tabla, la 6.</p>
+              <p>Otro detalle: el material dice que entre la CPU y el HDD hay "seis órdenes de magnitud". Con 0.3 ns frente a 5 o 10 ms son casi siete, como vas a calcular ahora.</p>
+            </div>
+          </details>
+          <div class="check" id="chk2"><p class="check-tit">Calcula con los datos en vivo</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Localidad">
+          <span class="etapa">Paso 3</span>
+          <h3>Los programas tienen hábitos</h3>
+          <p>Si los programas pidieran datos al azar, la escalera no serviría de nada. Pero tienen dos hábitos, y se llaman <b>localidad</b>
+            <cite class="cita" data-fuente="arq2" data-pag="14" data-pimp="11" data-seccion="5.2 Principio de localidad" data-que="La definición de localidad temporal (variables de un bucle) y espacial (elementos consecutivos de un array, instrucciones)." data-cuando="Al terminar este paso"></cite>
+            <cite class="cita" data-fuente="arq2diapo" data-pag="17" data-seccion="Jerarquía: niveles y localidad" data-que="Una diapositiva con los niveles de la jerarquía y el principio de localidad en resumen." data-cuando="Para repasar después de este paso"></cite>:</p>
+          <ul>
+            <li><b>Localidad temporal:</b> lo que usaste hace poco, lo vas a usar otra vez. En <code>suma = suma + a[i]</code>, la variable <code>suma</code> se toca en cada vuelta del bucle.</li>
+            <li><b>Localidad espacial:</b> lo que está al lado de lo que usaste, lo vas a usar pronto. Si lees <code>a[0]</code>, casi seguro lees después <code>a[1]</code>.</li>
+          </ul>
+          <p>La jerarquía las aprovecha así: cuando traes un dato de la memoria lenta, traes también a sus vecinos, en una <b>línea</b> de palabras consecutivas (en el material, de 32 o 64 bytes), y la dejas arriba. Si el programa sigue sus hábitos, lo siguiente ya estará arriba.</p>
+          <p>En el dibujo, una matriz de 8 × 8 palabras está guardada fila por fila: cada fila es una línea. La memoria rápida solo guarda las 4 últimas líneas que usaste. Puedes recorrer la matriz en dos órdenes.</p>
+          <div class="check" id="chk3"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+          <div class="check" id="chk3b"><p class="check-tit">Ahora, el otro orden</p><div class="cuerpo"></div></div>
+          <details class="profundizar">
+            <summary>Y si la memoria rápida fuera más grande</summary>
+            <div>
+              <p>Con la memoria rápida de 8 líneas, recorrer por columnas también da 8 fallos: cada línea que traes en la primera columna sigue arriba cuando vuelves a ella para la segunda. Ahí actúa la localidad temporal. Lo que importa es cuántas líneas distintas usas antes de volver a la primera. Cómo se decide en qué lugar de la memoria rápida cae cada línea, y a quién se expulsa, es el tema de la página de Memoria caché.</p>
+            </div>
+          </details>
+        </section>
+
+        <section class="paso card" data-titulo="Acierto y fallo">
+          <span class="etapa">Paso 4</span>
+          <h3>Acierto, fallo y un promedio</h3>
+          <p>Pon delante del nivel lento uno pequeño y rápido. Cada vez que el procesador pide un dato, pasa una de dos cosas
+            <cite class="cita" data-fuente="arq2" data-pag="15" data-pimp="12" data-seccion="6.1 Funcionamiento de la caché" data-que="Acierto (hit): el dato está en la caché. Fallo (miss): no está, se lee del nivel inferior y se copia a la caché." data-cuando="Al terminar este paso"></cite>
+            <cite class="cita" data-fuente="arq2" data-pag="16" data-pimp="13" data-seccion="6.2 Líneas o bloques" data-que="La caché trae bloques de 32 o 64 bytes contiguos, para aprovechar la localidad espacial." data-cuando="Para conectar con el paso anterior"></cite>:</p>
+          <ul>
+            <li><b>Acierto:</b> el dato está arriba. Cuesta 1 ns (el tiempo de mirar en la L1).</li>
+            <li><b>Fallo:</b> no está. Hay que ir a la RAM, que tarda otros 100 ns, y copiar el dato arriba. Cuesta 1 + 100 = 101 ns.</li>
+          </ul>
+          <p>No todos los accesos cuestan lo mismo, así que lo que importa es el <b>tiempo medio</b>. A la derecha hay 100 accesos: verdes los que aciertan, coral los que fallan. Mueve la tasa de aciertos y mira cuántos de cada color.</p>
+          <div class="cita" id="citaHipo" hidden></div>
+          <div class="check" id="chk4"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="La fórmula">
+          <span class="etapa">Paso 5</span>
+          <h3>El tiempo medio de acceso</h3>
+          <p>Lo que acabas de calcular tiene una fórmula. Con <span data-tex="t_a"></span> el tiempo de acierto, <span data-tex="h"></span> la tasa de aciertos y <span data-tex="P"></span> la penalización por fallo (lo que cuesta ir al nivel de abajo)
+            <cite class="cita" data-fuente="arq2" data-pag="17" data-pimp="14" data-seccion="6.6 Métricas" data-que="Tasa de aciertos y de fallos (1 menos los aciertos) y la fórmula del tiempo medio de acceso: tiempo de acierto más tasa de fallos por penalización. No trae ningún ejemplo numérico." data-cuando="Al terminar este paso"></cite>
+            <cite class="cita" data-fuente="arq2diapo" data-pag="22" data-seccion="Caché: escritura y tiempo medio de acceso" data-que="La misma fórmula en una diapositiva, junto a las políticas de escritura." data-cuando="Para repasar después de este paso"></cite>:</p>
+          <div class="fbloque">
+            <div data-tex="T \;=\; t_a \;+\; (1-h)\,P" data-display></div>
+            <div class="vivo" id="vivoT"></div>
+          </div>
+          <p>El material da la fórmula pero ningún ejemplo con números: el 6 ns de antes sale de esta página. Mueve la tasa de aciertos y cambia el nivel de abajo: con la RAM, 95 % da 6 ns. Con el HDD, con el mismo 95 %, el tiempo medio se dispara a cientos de microsegundos.</p>
+          <p>Fíjate en algo contraintuitivo: subir de 95 % a 99 % parece poco, pero el tiempo medio baja de 6 ns a 2 ns. <b>Los fallos pesan por lo que cuestan, no por lo que se ven.</b></p>
+          <details class="profundizar">
+            <summary>Es una esperanza</summary>
+            <div>
+              <p>El tiempo de un acceso es una variable aleatoria con dos valores: <span data-tex="t_a"></span> con probabilidad <span data-tex="h"></span>, y <span data-tex="t_a + P"></span> con probabilidad <span data-tex="1-h"></span>. Su esperanza es <span data-tex="h\,t_a + (1-h)(t_a+P) = t_a + (1-h)P"></span>. Es la misma fórmula. Si quieres repasar esa idea, está en la página de Esperanza y varianza de una variable aleatoria.</p>
+            </div>
+          </details>
+          <div class="check" id="chk5"><p class="check-tit">Calcula con los datos en vivo</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="En cascada">
+          <span class="etapa">Paso 6</span>
+          <h3>Varios niveles, uno detrás de otro</h3>
+          <p>Entre la L1 y la RAM hay en realidad dos escalones más, la L2 y la L3. Cada fallo baja un nivel
+            <cite class="cita" data-fuente="arq2" data-pag="17" data-pimp="14" data-seccion="6.7 Niveles múltiples de caché" data-que="L1 dividida en instrucciones y datos, L2 más grande y lenta, y L3 compartida entre núcleos." data-cuando="Al terminar este paso"></cite>.
+            Cada nivel solo ve los accesos que fallaron en el de arriba, y su tasa de aciertos se mide sobre esos. Con <span data-tex="f_i = 1-h_i"></span>:</p>
+          <div class="fbloque">
+            <div data-tex="T \;=\; t_1 + f_1\Big(t_2 + f_2\big(t_3 + f_3\,t_{\text{RAM}}\big)\Big)" data-display></div>
+            <div class="vivo" id="vivoCas"></div>
+          </div>
+          <p>Es la fórmula del paso anterior, aplicada de adentro hacia afuera: la "penalización" de cada nivel es el tiempo medio del nivel de abajo. A la derecha, de 1 000 accesos, mira cuántos llegan a cada nivel.</p>
+          <div class="check" id="chk6"><p class="check-tit">Calcula con los datos en vivo</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="La trampa">
+          <span class="etapa">Paso 7</span>
+          <h3>Un fallo raro que lo estropea todo</h3>
+          <p>La RAM también es un nivel intermedio: si el programa pide algo que no está en la RAM, hay que ir al disco (en el material se llama fallo de página, y es "considerablemente más lento" que un fallo de caché
+            <cite class="cita" data-fuente="arq2" data-pag="19" data-pimp="16" data-seccion="7.4 Fallo de página" data-que="Qué pasa cuando la página no está en la RAM: el sistema operativo la busca en el disco (swap), elige un marco y la carga. No da cifras de tiempo." data-cuando="Al terminar este paso"></cite>).
+            El material no da cifras, así que usamos las de la Tabla 6: la RAM tarda 100 ns y un HDD, 10 ms.</p>
+
+          <div class="destacado" id="destacado">
+            <p class="dest-tit">Una confusión muy común</p>
+            <h4>Si el 99.99 % de los accesos acierta en la RAM, ¿no está casi perfecto?</h4>
+            <p>Un acierto del 99.99 % suena a perfección. Pero el 0.01 % restante cuesta cien mil veces más que un acierto. Lo que cuenta es la <b>tasa de fallos multiplicada por lo que cuesta cada fallo</b>:</p>
+            <div class="fbloque">
+              <div data-tex="T \;=\; 100\ \text{ns} \;+\; f_{\text{HDD}} \times 10\ \text{ms}" data-display></div>
+            </div>
+            <div class="check" id="chk7"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+          </div>
+          <p>La localidad no solo hace que el tiempo medio sea corto: es lo que mantiene bajísima esa tasa de fallos. Un programa que salte al azar por un conjunto de datos mayor que la RAM no tiene ese hábito, y el disco manda
+            <cite class="cita" data-fuente="arq2" data-pag="21" data-pimp="18" data-seccion="Conclusiones" data-que="La localidad como idea transversal de la unidad y los compromisos de ingeniería de cada nivel." data-cuando="Para cerrar el recorrido"></cite>.
+            Por eso la jerarquía funciona, y por eso también falla cuando un programa no cumple su parte.</p>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+        </div>
+
+        <div class="esc-pn" id="pnEsc">
+          <div class="seg" id="escModo" role="group" aria-label="Escala de tiempo" hidden>
+            <button type="button" data-m="real" aria-pressed="true">Tiempo real</button>
+            <button type="button" data-m="humana" aria-pressed="false">Escala humana</button>
+          </div>
+          <div class="escalera" id="escalera"></div>
+          <p class="esc-nota" id="escNota"></p>
+        </div>
+
+        <div class="esc-pn" id="pnGrid" hidden>
+          <div class="ctl-row">
+            <div class="seg" id="gridOrden" role="group" aria-label="Orden de recorrido">
+              <button type="button" data-o="filas" aria-pressed="true">Por filas</button>
+              <button type="button" data-o="columnas" aria-pressed="false">Por columnas</button>
+            </div>
+            <div class="seg" id="gridCap" role="group" aria-label="Líneas que caben arriba" hidden>
+              <button type="button" data-c="4" aria-pressed="true">Caben 4 líneas</button>
+              <button type="button" data-c="8" aria-pressed="false">Caben 8</button>
+            </div>
+          </div>
+          <div class="gridm" id="gridm"></div>
+          <div class="leyenda"><span><i class="pos"></i>acierto</span><span><i class="neg"></i>fallo</span><span><i class="acc"></i>línea que está arriba</span></div>
+          <div class="ctl">
+            <label for="gridK">Accesos hechos <b id="gridKv">0</b></label>
+            <input type="range" id="gridK" min="0" max="64" value="0">
+          </div>
+          <div class="ctl-row"><button type="button" id="gridPlay">Recorrer</button><button type="button" class="ghost" id="gridReset">Reiniciar</button></div>
+          <div class="cuenta" id="gridCuenta"></div>
+          <p class="esc-nota" id="gridNota"></p>
+        </div>
+
+        <div class="esc-pn" id="pnDos" hidden>
+          <div class="ctl">
+            <label for="hRng">Tasa de aciertos de la memoria rápida <b id="hVal"></b></label>
+            <input type="range" id="hRng" min="0" max="100" step="1" value="95">
+          </div>
+          <div class="seg" id="abajoSeg" role="group" aria-label="Nivel de abajo" hidden>
+            <button type="button" data-n="100" aria-pressed="true">Abajo: RAM</button>
+            <button type="button" data-n="100000" aria-pressed="false">Abajo: SSD</button>
+            <button type="button" data-n="10000000" aria-pressed="false">Abajo: HDD</button>
+          </div>
+          <div class="cien" id="cien" aria-label="Cien accesos"></div>
+          <div class="leyenda"><span><i class="pos"></i>acierto</span><span><i class="neg"></i>fallo</span></div>
+          <div class="cuenta" id="dosCuenta"></div>
+          <div class="apiladas" id="dosBarra"></div>
+        </div>
+
+        <div class="esc-pn" id="pnCas" hidden>
+          <div class="ctl"><label for="h1">L1 acierta <b id="h1v"></b></label><input type="range" id="h1" min="0" max="100" step="1" value="95"></div>
+          <div class="ctl"><label for="h2">L2 acierta (de lo que le llega) <b id="h2v"></b></label><input type="range" id="h2" min="0" max="100" step="1" value="80"></div>
+          <div class="ctl"><label for="h3">L3 acierta (de lo que le llega) <b id="h3v"></b></label><input type="range" id="h3" min="0" max="100" step="1" value="70"></div>
+          <table class="embudo" id="embudo"></table>
+          <div class="grande" id="casGrande"></div>
+        </div>
+
+        <div class="esc-pn" id="pnTrampa" hidden>
+          <div class="ctl">
+            <label for="nRng">Fallos que llegan al HDD, por cada 100 000 accesos <b id="nVal"></b></label>
+            <input type="range" id="nRng" min="0" max="100" step="1" value="10">
+          </div>
+          <div class="cuenta" id="trCuenta"></div>
+          <div class="apiladas" id="trBarra"></div>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>El tiempo medio de la jerarquía del paso 6, escrito como lo haría un programa. Elige Python o R, dale a reproducir y mira cómo 1 000 accesos bajan nivel por nivel y cuánto cuesta cada uno. Después, el mismo número calculado al revés.</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir</p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="true">Python</button>
+            <button type="button" data-lang="r" aria-pressed="false">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">1 · de arriba abajo</span><span data-f="2">2 · de abajo arriba</span><span data-f="3">3 · comprobar</span>
+        </div>
+        <h3 class="mini-tit vr-tit">Los 1 000 accesos nivel por nivel</h3>
+        <div class="tabla-wrap" style="overflow-x:auto"><table class="vr-tabla2" id="vrTabla"></table></div>
+        <div class="vr-cuenta" id="vrCuenta"></div>
+      </div>
+    </div>
+
+    <div class="salidas">
+      <div><h4>Lo que imprime Python</h4><pre>1.7
+1.7
+6.0
+115.7</pre></div>
+      <div><h4>Lo que imprime R</h4><pre>[1] 1.7
+[1] 1.7
+[1] 6
+[1] 115.7</pre></div>
+    </div>
+
+    <p class="vr-nota">Aquí no hay una función de librería que calcule la jerarquía, así que el programa se verifica contra la cuenta a mano. El bucle de arriba hacia abajo cuenta cuántos accesos pagan cada nivel (1 000, 50, 10 y 3) y suma: 1 000 + 250 + 150 + 300 = 1 700 ns, o 1.7 ns por acceso. El bucle de abajo hacia arriba aplica la fórmula del paso 6 y da lo mismo. La tercera cuenta es la fórmula de un solo nivel (L1 y RAM) del paso 5, y la última pasa los 10 ms del HDD a la escala humana: 115.7 días. Python y R imprimen los números con formatos distintos (<code>6.0</code> y <code>6</code>), pero son el mismo valor. R no trae <code>reversed</code>: recorre al revés con <code>length(niveles):1</code>.</p>
+
+    <details class="profundizar">
+      <summary>La versión vectorizada, sin bucles</summary>
+      <div>
+        <p>Los accesos que llegan a cada nivel son el producto acumulado de las tasas de fallos de los niveles de arriba. Con NumPy:</p>
+        <pre class="vr-pre" style="padding:10px 12px">import numpy as np
+f = 1 - np.array(aciertos)
+llegan = 1000 * np.concatenate(([1], np.cumprod(f[:-1])))
+print(round(float(np.sum(llegan * np.array(tiempo)) / 1000), 2))   # 1.7</pre>
+        <p>En R: <code>llegan &lt;- 1000 * c(1, cumprod(1 - aciertos[-4]))</code> y después <code>print(round(sum(llegan * tiempo) / 1000, 2))</code>, que imprime <code>[1] 1.7</code>. Aquí <code>llegan</code> vale 1000, 50, 10 y 3, igual que en el bucle.</p>
+      </div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>El primer elemento, en R</h3><span class="estado" data-reto="codigo2"></span></div>
+        <div id="codigo2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Dividir y perder los decimales</h3><span class="estado" data-reto="codigo3"></span></div>
+        <div id="codigo3"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: la biblioteca te avisa en el índice cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>¿Buena localidad o mala?</h3><span class="estado" data-reto="ojo"></span></div>
+        <p class="desc">Una matriz de 8 × 8 y una memoria rápida de 4 líneas. Los números dicen en qué orden se piden las primeras palabras. Decide sin calcular. Apruebas con 4 de 5.</p>
+        <div id="ojo"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Construir</span><h3>Arma la jerarquía</h3><span class="estado" data-reto="construir"></span></div>
+        <p class="desc">Mueve las tres tasas de aciertos hasta cumplir cada objetivo. Los tiempos son los del paso 6: 1, 5, 15 y 100 ns. Se marcan solos.</p>
+        <div class="ctl"><label for="c1">L1 acierta <b id="c1v"></b></label><input type="range" id="c1" min="0" max="100" step="1" value="50"></div>
+        <div class="ctl"><label for="c2">L2 acierta <b id="c2v"></b></label><input type="range" id="c2" min="0" max="100" step="1" value="50"></div>
+        <div class="ctl"><label for="c3">L3 acierta <b id="c3v"></b></label><input type="range" id="c3" min="0" max="100" step="1" value="50"></div>
+        <div class="grande" id="constrVivo"></div>
+        <ul class="objetivos" id="objetivos"></ul>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>Calcúlalo con lápiz</h3><span class="estado" data-reto="mano"></span></div>
+        <p class="desc">Un solo nivel de caché delante de uno más lento. Haz la cuenta completa antes de pedir pistas.</p>
+        <div class="enunciado" id="manoDatos"></div>
+        <div id="mano"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Alguien se equivocó</h3><span class="estado" data-reto="error"></span></div>
+        <p class="desc">Una de las líneas tiene un error. Tócala.</p>
+        <div id="error"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Qué es localidad espacial</h3><span class="estado" data-reto="prop1"></span></div>
+        <div id="prop1"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>De 95 % a 99 %</h3><span class="estado" data-reto="prop2"></span></div>
+        <div id="prop2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Cambiar el HDD por un SSD</h3><span class="estado" data-reto="prop3"></span></div>
+        <div id="prop3"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Por qué la rápida es chica</h3><span class="estado" data-reto="prop4"></span></div>
+        <div id="prop4"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Una línea de 64 bytes</h3><span class="estado" data-reto="prop5"></span></div>
+        <div id="prop5"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Dos jerarquías, un empate</h3><span class="estado" data-reto="prop6"></span></div>
+        <div id="prop6"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Recordar a la fuerza es lo que fija. Arma la fórmula de memoria y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Fórmula de memoria</span><h3>Arma la fórmula pieza por pieza</h3><span class="estado" data-reto="formula"></span></div>
+        <p class="desc">El tiempo medio de acceso con un nivel rápido y uno lento. Hay piezas de más que no pertenecen. No mires arriba.</p>
+        <div id="formula"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el material</h2>
+      <p class="lecturas-intro">Ya construiste la idea con las manos. Ahora ve a la versión técnica del máster y comprueba que la reconoces. Cada entrada dice qué vas a encontrar y en qué momento conviene leerla. Si abres la biblioteca con doble clic, el enlace abre el PDF en esa página.</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> Los tiempos y capacidades de cada nivel son valores representativos dentro de los rangos de la Tabla 6 del material
+    (0.5, 1, 5, 15 y 100 ns; 100 microsegundos para el SSD y 10 ms para el HDD). Las tasas de aciertos, la matriz de 8 × 8 y los 1 000 accesos son inventados,
+    elegidos para que las cuentas den limpias. El material trae la fórmula del tiempo medio pero ningún ejemplo numérico, ni la simulación de recorridos, ni
+    la escala humana: son de esta página. Tu progreso se guarda solo en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+(function () {
+  "use strict";
+  /*
+    Ejemplo comun de la ruta "Arquitectura de computadores" (para las demas paginas de la ruta):
+    el byte 0110 1101 (109) y el byte 0000 1101 (13); un programa de 4 lineas que suma dos numeros;
+    una cache de 4 lineas; un disco de 7200 rpm; las cargas A a E del ejercicio de UD2.
+    En esta pagina: jerarquia L1 1 ns, L2 5 ns, L3 15 ns, RAM 100 ns con aciertos 95 %, 80 % y 70 %
+    (de 1000 accesos llegan 1000, 50, 10 y 3; tiempo medio 1.7 ns); matriz de 8 x 8 palabras con cache de 4 lineas.
+  */
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var RETOS = ["ojo", "construir", "mano", "error", "formula", "prop1", "prop2", "prop3", "prop4", "prop5", "prop6", "codigo1", "codigo2", "codigo3"];
+  var C = B.concepto({ id: "jerarquia-memoria", retos: RETOS, pasos: 7 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  /* ---------------- utilidades ---------------- */
+  var NBSP = " ";
+  function num2(v) { var r = Math.round(v * 100) / 100; return String(r); }
+  function num1(v) { var r = Math.round(v * 10) / 10; return String(r); }
+  function miles(n) { return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, NBSP); }
+  function real(ns) {
+    if (ns < 1000) return num2(ns) + " ns";
+    if (ns < 1e6) return num2(ns / 1e3) + " µs";
+    return num2(ns / 1e6) + " ms";
+  }
+  function hum(s) {
+    if (s < 60) return num2(s) + " s";
+    if (s < 3600) { var m = Math.floor(s / 60); return m + " min " + Math.round(s - m * 60) + " s"; }
+    if (s < 86400) return num1(s / 3600) + " h";
+    return num1(s / 86400) + " días";
+  }
+  function copia(a) { return a.slice(); }
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+
+  /* ---------------- datos de la jerarquia ---------------- */
+  var NIV = [
+    { n: "Registros", cap: "menos de 1 KB", ns: 0.5, coste: 5 },
+    { n: "Caché L1", cap: "32 KB", ns: 1, coste: 5 },
+    { n: "Caché L2", cap: "512 KB", ns: 5, coste: 4 },
+    { n: "Caché L3", cap: "8 MB", ns: 15, coste: 4 },
+    { n: "RAM", cap: "16 GB", ns: 100, coste: 3 },
+    { n: "SSD", cap: "1 TB", ns: 1e5, coste: 2 },
+    { n: "HDD", cap: "4 TB", ns: 1e7, coste: 1 }
+  ];
+  var LOGMIN = Math.log10(0.5), LOGMAX = Math.log10(1e7);
+  function anchoLog(ns) { return 4 + 96 * (Math.log10(ns) - LOGMIN) / (LOGMAX - LOGMIN); }
+  function puntos(n) { var s = ""; for (var i = 0; i < 5; i++) s += i < n ? "●" : "○"; return s; }
+
+  /* ---------------- simulacion de la memoria rapida (LRU) ---------------- */
+  // seq: indices 0..63 de palabras guardadas por filas; una linea = una fila de 8 palabras
+  function sim(seq, cap) {
+    var lineas = [], res = [];
+    seq.forEach(function (c) {
+      var l = Math.floor(c / 8), k = lineas.indexOf(l);
+      if (k >= 0) { lineas.splice(k, 1); lineas.push(l); res.push(true); }
+      else { res.push(false); lineas.push(l); if (lineas.length > cap) lineas.shift(); }
+    });
+    return res;
+  }
+  function lineasEn(seq, cap, k) {
+    var lineas = [];
+    for (var i = 0; i < k; i++) {
+      var l = Math.floor(seq[i] / 8), j = lineas.indexOf(l);
+      if (j >= 0) { lineas.splice(j, 1); lineas.push(l); }
+      else { lineas.push(l); if (lineas.length > cap) lineas.shift(); }
+    }
+    return lineas;
+  }
+  function dibujarGrid(el, seq, k, cap, o) {
+    o = o || {};
+    var res = sim(seq, cap), ult = {};
+    for (var i = 0; i < k; i++) ult[seq[i]] = i;
+    var arriba = o.colorear ? lineasEn(seq, cap, k) : [];
+    var h = "";
+    for (var r = 0; r < 8; r++) {
+      h += '<span class="gl' + (arriba.indexOf(r) >= 0 ? " arriba" : "") + '">línea ' + r + '</span>';
+      for (var c = 0; c < 8; c++) {
+        var idx = r * 8 + c, cls = "gc", t = "";
+        if (idx in ult) {
+          t = String(ult[idx] + 1);
+          if (o.colorear) cls += res[ult[idx]] ? " pos" : " neg"; else cls += " num";
+          if (o.colorear && ult[idx] === k - 1) cls += " ahora";
+        }
+        if (arriba.indexOf(r) >= 0) cls += " linea-arriba";
+        h += '<span class="' + cls + '">' + t + '</span>';
+      }
+    }
+    el.innerHTML = h;
+    return res;
+  }
+  var FILAS = []; var COLS = [];
+  (function () { var r, c; for (r = 0; r < 8; r++) for (c = 0; c < 8; c++) FILAS.push(r * 8 + c); for (c = 0; c < 8; c++) for (r = 0; r < 8; r++) COLS.push(r * 8 + c); })();
+
+  /* ---------------- tiempo medio ---------------- */
+  var TA = 1;
+  function tiempo2(h, P) { return TA + (1 - h) * P; }
+  function cascada(h1, h2, h3) {
+    var f1 = 1 - h1, f2 = 1 - h2, f3 = 1 - h3;
+    return { t: 1 + f1 * (5 + f2 * (15 + f3 * 100)), ll: [1000, 1000 * f1, 1000 * f1 * f2, 1000 * f1 * f2 * f3] };
+  }
+
+  /* ---------------- estado del recorrido ---------------- */
+  var est = { paso: 0, chk1: false, chk3: false, chk3b: false, chk4: false, chk6: false, chk7: false, escModo: "real", orden: "filas", cap: 4, k: 0, P: 100, timer: null };
+  var pasos;
+
+  var HINTS = [
+    "Aún no se ven los tiempos: predice primero",
+    "Barras en escala logarítmica",
+    "Recorre la matriz y cuenta los fallos",
+    "Mueve la tasa de aciertos",
+    "Cambia la tasa y el nivel de abajo",
+    "Mueve las tres tasas de aciertos",
+    "Mueve los fallos que llegan al disco"
+  ];
+
+  /* ---- panel: escalera ---- */
+  function pintarEscalera() {
+    var modo = est.paso;
+    var h = "";
+    NIV.forEach(function (n, i) {
+      var cls = "nv" + (i === 6 ? " hdd" : "") + (modo === 0 ? " sin-barra" : "");
+      var tm, tmCls = "tm";
+      if (modo === 0) {
+        if (i <= 1 || est.chk1) tm = hum(n.ns); else { tm = "?"; tmCls += " oculto"; }
+      } else {
+        tm = est.escModo === "humana" ? hum(n.ns) : real(n.ns);
+      }
+      h += '<div class="' + cls + '"><div class="nm"><b>' + n.n + '</b><small>' + n.cap + '</small></div>' +
+        '<div class="pb"><div class="pista"><i style="width:' + anchoLog(n.ns).toFixed(1) + '%"></i></div>' +
+        (modo >= 1 ? '<span class="coste">coste por byte ' + puntos(n.coste) + '</span>' : '') + '</div>' +
+        '<div class="' + tmCls + '">' + tm + '</div></div>';
+    });
+    $("escalera").innerHTML = h;
+    $("escModo").hidden = modo !== 1;
+    $("escNota").textContent = modo === 0
+      ? "Escala humana: 1 ns dura 1 segundo. Los tiempos de los registros y la L1 se ven; el resto, cuando resuelvas el chequeo."
+      : est.escModo === "humana" ? "Escala humana: 1 ns dura 1 segundo."
+      : "Escala logarítmica: cada marca de la barra vale diez veces la anterior. Los puntos de coste solo muestran el orden, no cifras.";
+  }
+  [].forEach.call($("escModo").querySelectorAll("button"), function (b) {
+    b.addEventListener("click", function () {
+      est.escModo = b.getAttribute("data-m");
+      [].forEach.call($("escModo").querySelectorAll("button"), function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+      pintarEscalera();
+    });
+  });
+
+  /* ---- panel: matriz de 8 x 8 ---- */
+  function seqActual() { return est.orden === "filas" ? FILAS : COLS; }
+  function pintarGrid() {
+    var seq = seqActual(), k = est.k;
+    var res = dibujarGrid($("gridm"), seq, k, est.cap, { colorear: true });
+    var ac = 0, fa = 0;
+    for (var i = 0; i < k; i++) { if (res[i]) ac++; else fa++; }
+    $("gridKv").textContent = k;
+    $("gridK").value = k;
+    var bloq = !est.chk3;
+    $("gridK").disabled = bloq;
+    $("gridPlay").disabled = bloq;
+    $("gridReset").disabled = bloq;
+    var cols = $("gridOrden").querySelectorAll("button");
+    cols[0].disabled = bloq;
+    cols[1].disabled = !est.chk3b;
+    $("gridCap").hidden = !est.chk3b;
+    $("gridCuenta").innerHTML = bloq
+      ? 'Accesos: <b>0</b> de 64. Responde la predicción para activar el recorrido.'
+      : 'Accesos <b>' + k + '</b> de 64 · aciertos <b class="pos">' + ac + '</b> · viajes a la RAM (fallos) <b class="neg">' + fa + '</b>' +
+        (k > 0 ? ' · tasa de aciertos <b>' + num1(100 * ac / k) + ' %</b>' : '');
+    $("gridNota").textContent = est.orden === "filas"
+      ? "Memoria rápida: las " + est.cap + " últimas líneas usadas. Cada vez que falla, trae una línea entera de 8 palabras."
+      : "Mismas " + est.cap + " líneas arriba. Ahora cada acceso cae en una línea distinta de la anterior.";
+  }
+  function pararGrid() { if (est.timer) { clearInterval(est.timer); est.timer = null; } $("gridPlay").textContent = "Recorrer"; }
+  $("gridK").addEventListener("input", function () { pararGrid(); est.k = +this.value; pintarGrid(); });
+  $("gridPlay").addEventListener("click", function () {
+    if (est.timer) { pararGrid(); return; }
+    if (est.k >= 64) est.k = 0;
+    $("gridPlay").textContent = "Pausa";
+    est.timer = setInterval(function () {
+      if (est.k >= 64) { pararGrid(); return; }
+      est.k++;
+      pintarGrid();
+    }, 120);
+  });
+  $("gridReset").addEventListener("click", function () { pararGrid(); est.k = 0; pintarGrid(); });
+  [].forEach.call($("gridOrden").querySelectorAll("button"), function (b) {
+    b.addEventListener("click", function () {
+      pararGrid();
+      est.orden = b.getAttribute("data-o");
+      est.k = 0;
+      [].forEach.call($("gridOrden").querySelectorAll("button"), function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+      pintarGrid();
+    });
+  });
+  [].forEach.call($("gridCap").querySelectorAll("button"), function (b) {
+    b.addEventListener("click", function () {
+      pararGrid();
+      est.cap = +b.getAttribute("data-c");
+      est.k = 0;
+      [].forEach.call($("gridCap").querySelectorAll("button"), function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+      pintarGrid();
+    });
+  });
+
+  /* ---- panel: dos niveles ---- */
+  function pintarDos() {
+    var hp = +$("hRng").value, h = hp / 100;
+    $("hVal").textContent = hp + " %";
+    var cien = "", i;
+    for (i = 0; i < 100; i++) cien += '<i class="' + (i < hp ? "" : "f") + '"></i>';
+    $("cien").innerHTML = cien;
+    var paso5 = est.paso === 4;
+    var P = paso5 ? est.P : 100;
+    var f = 1 - h, T = tiempo2(h, P);
+    var aportA = TA, aportF = f * P;
+    if (!paso5) {
+      var fallos = 100 - hp;
+      $("dosCuenta").innerHTML = 'De 100 accesos: <b class="pos">' + hp + '</b> aciertan (1 ns cada uno) y <b class="neg">' + fallos + '</b> fallan (101 ns cada uno).<br>' +
+        (est.chk4 ? 'Tiempo total: ' + hp + ' × 1 + ' + fallos + ' × 101 = <b>' + miles(hp + fallos * 101) + ' ns</b>. Tiempo medio: <b>' + num2(T) + ' ns</b>.'
+          : 'Tiempo medio: <b class="oculto">?</b> (predice arriba).');
+      $("dosBarra").innerHTML = "";
+    } else {
+      $("dosCuenta").innerHTML = "";
+      $("dosBarra").innerHTML = '<div class="fila"><span>aporte del acierto</span><span class="barra"><i class="a" style="width:' + (100 * aportA / T).toFixed(1) + '%"></i></span><b>' + real(aportA) + '</b></div>' +
+        '<div class="fila"><span>aporte de fallos</span><span class="barra"><i class="m" style="width:' + (100 * aportF / T).toFixed(1) + '%"></i></span><b>' + real(aportF) + '</b></div>';
+      $("vivoT").innerHTML = "T = " + real(TA) + " + (1 − " + num2(h) + ") × " + real(P) + " = " + real(TA) + " + " + real(aportF) + " = <b>" + real(T) + "</b>";
+    }
+  }
+  $("hRng").addEventListener("input", pintarDos);
+  [].forEach.call($("abajoSeg").querySelectorAll("button"), function (b) {
+    b.addEventListener("click", function () {
+      est.P = +b.getAttribute("data-n");
+      [].forEach.call($("abajoSeg").querySelectorAll("button"), function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+      pintarDos();
+    });
+  });
+
+  /* ---- panel: cascada ---- */
+  function pintarCas() {
+    var hs = [+$("h1").value, +$("h2").value, +$("h3").value];
+    $("h1v").textContent = hs[0] + " %"; $("h2v").textContent = hs[1] + " %"; $("h3v").textContent = hs[2] + " %";
+    var r = cascada(hs[0] / 100, hs[1] / 100, hs[2] / 100);
+    var tt = [1, 5, 15, 100], nom = ["L1", "L2", "L3", "RAM"];
+    var camino = [1, 6, "?", "?"];
+    var h = '<thead><tr><th>nivel</th><th>llegan de 1 000</th><th>mirar</th><th>un acierto aquí cuesta</th></tr></thead><tbody>';
+    for (var i = 0; i < 4; i++) {
+      var oculto = i >= 2 && !est.chk6;
+      var val = oculto ? "?" : (i === 0 ? 1 : i === 1 ? 6 : i === 2 ? 21 : 121) + " ns";
+      h += '<tr><td>' + nom[i] + '</td><td>' + miles(r.ll[i]) + '</td><td>' + tt[i] + ' ns</td><td' + (oculto ? ' class="oculto"' : "") + '>' + val + '</td></tr>';
+    }
+    $("embudo").innerHTML = h + '</tbody>';
+    $("casGrande").innerHTML = "Tiempo medio = <b>" + num2(r.t) + " ns</b>";
+    var f = hs.map(function (x) { return num2(1 - x / 100); });
+    $("vivoCas").innerHTML = "T = 1 + " + f[0] + " × (5 + " + f[1] + " × (15 + " + f[2] + " × 100)) = <b>" + num2(r.t) + " ns</b>";
+  }
+  ["h1", "h2", "h3"].forEach(function (id) { $(id).addEventListener("input", pintarCas); });
+
+  /* ---- panel: trampa ---- */
+  function pintarTrampa() {
+    var n = +$("nRng").value;
+    $("nVal").textContent = miles(n);
+    var f = n / 100000;
+    var aportM = 100, aportD = f * 1e7, T = aportM + aportD;
+    if (!est.chk7) {
+      $("trCuenta").innerHTML = "Fallos al HDD: <b>" + num2(f * 100) + " %</b> de los accesos a la RAM.<br>Tiempo medio: <b class=\"oculto\">?</b> (predice arriba).";
+      $("trBarra").innerHTML = "";
+      return;
+    }
+    $("trCuenta").innerHTML = "T = 100 ns + " + num2(f) + " × 10 ms = 100 ns + " + real(aportD) + " = <b>" + real(T) + "</b><br>Es <b>" + num1(T / 100) + " veces</b> el tiempo de la RAM sola.";
+    var tope = 100 + 100 * 100;
+    $("trBarra").innerHTML = '<div class="fila"><span>RAM</span><span class="barra"><i class="a" style="width:' + (100 * aportM / tope).toFixed(2) + '%"></i></span><b>' + real(aportM) + '</b></div>' +
+      '<div class="fila"><span>fallos al HDD</span><span class="barra"><i class="m" style="width:' + (100 * aportD / tope).toFixed(2) + '%"></i></span><b>' + real(aportD) + '</b></div>';
+  }
+  $("nRng").addEventListener("input", pintarTrampa);
+
+  function mostrar(id) {
+    ["pnEsc", "pnGrid", "pnDos", "pnCas", "pnTrampa"].forEach(function (p) { $(p).hidden = p !== id; });
+  }
+  function entrar(i) {
+    est.paso = i;
+    pararGrid();
+    $("escHint").textContent = HINTS[i];
+    if (i <= 1) { mostrar("pnEsc"); pintarEscalera(); }
+    else if (i === 2) { mostrar("pnGrid"); pintarGrid(); }
+    else if (i === 3 || i === 4) {
+      mostrar("pnDos");
+      $("abajoSeg").hidden = i !== 4;
+      if (i === 3) est.P = 100;
+      pintarDos();
+    }
+    else if (i === 5) { mostrar("pnCas"); pintarCas(); }
+    else { mostrar("pnTrampa"); pintarTrampa(); }
+  }
+
+  /* ---------------- chequeos de cada paso ---------------- */
+  B.opcionMultiple(cuerpo("chk1"), {
+    pregunta: "En la escala humana, donde 1 ns dura 1 segundo y un dato de la caché L1 llega en 1 segundo, un dato que está en el <b>disco duro (HDD, unos 10 ms)</b> tarda en llegar...",
+    opciones: ["Unos 10 segundos", "Unas 3 horas", "Unos 4 meses", "Unos 3 años"],
+    correcta: 2,
+    pistas: [
+      "Diez segundos serían 10 ns, que es lo que tarda un acceso a la caché L2 o L3. Un milisegundo tiene un millón de nanosegundos.",
+      "Unas 3 horas son unos 10 000 ns, es decir, 10 microsegundos. El HDD tarda mil veces más que eso.",
+      null,
+      "Tres años serían unos 100 ms, lo que dura una pulsación de tecla. El HDD tarda diez veces menos."
+    ],
+    explicacion: "10 ms son 10 000 000 ns. Si cada nanosegundo dura un segundo, son 10 000 000 s, unos <b>116 días</b>: casi cuatro meses. Mientras tanto, el procesador podría haber hecho más de 30 millones de pasos de reloj. Ahora la escalera muestra el resto de los tiempos en esa escala.",
+    alResolver: function () { est.chk1 = true; pintarEscalera(); pasos.completar(0); }
+  });
+
+  B.numerico(cuerpo("chk2"), {
+    pregunta: "Mira los tiempos reales de la escalera. ¿Cuántos <b>órdenes de magnitud</b> separan la L1 (1 ns) del HDD (10 ms)? Es decir, cuántas veces hay que multiplicar por 10 para ir de uno al otro.",
+    respuesta: 7,
+    tolerancia: 0,
+    pistas: [
+      "Pasa los 10 ms a nanosegundos: un milisegundo tiene un millón de nanosegundos.",
+      "10 ms son 10 000 000 ns. Cuenta los ceros del número: ese es el exponente de 10."
+    ],
+    diagnostico: function (v) {
+      if (v === 10000000 || v === 1e7) return "Esa es la razón entre los tiempos (diez millones de veces). Te pido el exponente: $10^{?} = 10\\,000\\,000$.";
+      if (v === 6) return "Seis serían 1 ns frente a 1 ms. El HDD tarda 10 ms, diez veces más.";
+      if (v === 8) return "Ocho serían 1 ns frente a 100 ms. El HDD tarda 10 ms.";
+      return null;
+    },
+    explicacion: "$10\\ \\text{ms} / 1\\ \\text{ns} = 10^7$: <b>siete órdenes de magnitud</b>. Por eso el material dice \"seis\" y la cuenta con sus propios números da casi siete. Entre la L1 y la RAM hay solo dos, y por eso conviene que casi todo se resuelva arriba.",
+    alResolver: function () { pasos.completar(1); }
+  });
+
+  function cerrar3() { if (est.chk3 && est.chk3b) pasos.completar(2); }
+  B.numerico(cuerpo("chk3"), {
+    pregunta: "La matriz tiene 64 palabras, guardadas por filas. La memoria rápida trae una línea entera de 8 palabras cada vez que falla. Si recorres la matriz <b>por filas</b>, de la primera palabra a la última, ¿cuántas veces tienes que ir a la memoria lenta?",
+    respuesta: 8,
+    tolerancia: 0,
+    pistas: [
+      "Cuando falla la palabra 0, la línea trae las palabras 0 a 7. ¿Qué pasa con las siguientes siete?",
+      "Cada línea de 8 palabras provoca un solo fallo, el de su primera palabra. ¿Cuántas líneas hay?"
+    ],
+    diagnostico: function (v) {
+      if (v === 64) return "Esos serían los viajes si cada palabra se trajera sola. Pero cada viaje trae también a sus siete vecinas.";
+      if (v === 1) return "Un solo viaje no alcanza: la memoria rápida solo guarda 4 líneas de las 8 que hay.";
+      return null;
+    },
+    explicacion: "Una línea por fila: <b>8 fallos y 56 aciertos</b>. De cada 8 accesos, el primero falla y trae a los otros siete. Eso es la localidad espacial. <b>Ahora toca el recorrido por filas</b> y compruébalo.",
+    alResolver: function () { est.chk3 = true; pintarGrid(); cerrar3(); }
+  });
+  B.opcionMultiple(cuerpo("chk3b"), {
+    pregunta: "Con la misma memoria rápida (4 líneas), recorres ahora la matriz <b>por columnas</b>: primero la palabra 0 de cada fila, luego la 1 de cada fila, y así. ¿Cuántos viajes a la memoria lenta esperas?",
+    opciones: ["8, igual que por filas", "16", "64, casi todos los accesos fallan", "0, porque ya está todo arriba"],
+    correcta: 2,
+    pistas: [
+      "En la primera columna cada palabra está en una línea distinta. ¿Cuántas líneas distintas toca antes de volver a la primera?",
+      "Pasa a la segunda columna y mira si la línea que usaste al principio sigue arriba.",
+      null,
+      "Al empezar no hay nada arriba. El primer acceso siempre falla."
+    ],
+    explicacion: "Para recorrer una columna usas las 8 líneas, pero arriba solo caben 4. Cuando vuelves a la primera línea, hace tiempo que se expulsó. <b>Los 64 accesos fallan</b>: ocho veces más viajes que por filas, con los mismos datos. <b>Ahora pruébalo</b>, y después cambia a 8 líneas.",
+    alResolver: function () { est.chk3b = true; pintarGrid(); cerrar3(); }
+  });
+
+  B.opcionMultiple(cuerpo("chk4"), {
+    pregunta: "De 100 accesos, 95 aciertan (1 ns cada uno) y 5 fallan (101 ns cada uno). El <b>tiempo medio</b> por acceso será...",
+    opciones: ["1 ns, porque casi todos aciertan", "6 ns", "11 ns", "50 ns"],
+    correcta: 1,
+    pistas: [
+      "Los 5 fallos son pocos, pero cada uno cuesta 101 veces lo que cuesta un acierto. Suma los tiempos de los 100 accesos y divide.",
+      null,
+      "11 ns saldrían con 10 fallos de cada 100. Aquí son 5.",
+      "50 ns sería si la mitad de los accesos fallara."
+    ],
+    explicacion: "95 × 1 + 5 × 101 = 95 + 505 = 600 ns en 100 accesos: <b>6 ns por acceso</b>. Seis veces el tiempo de un acierto, aunque el 95 % de los accesos acierte. <b>Ahora mueve la tasa</b> y mira cómo cambia el promedio.",
+    alResolver: function () {
+      est.chk4 = true;
+      pintarDos();
+      var v = $("hipotesis").value.trim();
+      if (v) $("citaHipo").hidden = false;
+      pasos.completar(3);
+    }
+  });
+
+  B.numerico(cuerpo("chk5"), {
+    pregunta: "La L1 tarda 1 ns y, cuando falla, la RAM tarda otros 100 ns. ¿Qué <b>tasa de aciertos</b> (en %, sin el signo) necesitas para que el tiempo medio no pase de 2 ns? Usa el deslizador o la fórmula $1 + (1-h)\\cdot 100 \\le 2$.",
+    respuesta: 99,
+    tolerancia: 0,
+    pistas: [
+      "Con el nivel de abajo en RAM, mueve el deslizador hasta que el tiempo medio sea 2 ns.",
+      "Despeja: $(1-h)\\cdot 100 = 1$, así que $1-h = 0.01$."
+    ],
+    diagnostico: function (v) {
+      if (Math.abs(v - 0.99) < 1e-9) return "Está bien, pero pedí el porcentaje: 0.99 es 99 %.";
+      if (v === 1) return "Eso es la tasa de fallos (1 %). Te pido la de aciertos.";
+      if (v === 98) return "Con 98 % el tiempo medio da $1 + 0.02 \\cdot 100 = 3$ ns.";
+      if (v === 95) return "Con 95 % el tiempo medio da 6 ns, el del paso anterior.";
+      return null;
+    },
+    explicacion: "$1 + (1-h)\\cdot 100 = 2$ da $1-h = 0.01$, o sea <b>h = 99 %</b>. Para bajar de 6 ns a 2 ns hay que pasar de 5 fallos por cada 100 accesos a 1 por cada 100.",
+    alResolver: function () { pasos.completar(4); }
+  });
+
+  B.numerico(cuerpo("chk6"), {
+    pregunta: "Un acceso falla en la L1, falla en la L2 y <b>acierta en la L3</b>. Tuvo que mirar en los tres niveles, y cada vez pagó el tiempo de mirar (1, 5 y 15 ns). ¿Cuánto cuesta en total, en ns?",
+    respuesta: 21,
+    tolerancia: 0,
+    pistas: [
+      "Mira la tabla: un acierto en la L2 cuesta 6 ns, que es 1 + 5. Falta el tiempo de mirar en la L3.",
+      "Suma los tiempos de mirar en L1, L2 y L3."
+    ],
+    diagnostico: function (v) {
+      if (v === 15) return "Eso es solo el tiempo de mirar en la L3. Antes tuvo que mirar y fallar en la L1 y en la L2.";
+      if (v === 121) return "Esos son los 121 ns de un acceso que llega hasta la RAM. Este acierta en la L3.";
+      if (v === 6) return "Esos son los de un acierto en la L2. Falta mirar en la L3.";
+      return null;
+    },
+    explicacion: "1 + 5 + 15 = <b>21 ns</b>. Un acceso que llega hasta la RAM cuesta 1 + 5 + 15 + 100 = 121 ns. Ahora la tabla muestra los dos.",
+    alResolver: function () { est.chk6 = true; pintarCas(); pasos.completar(5); }
+  });
+
+  B.opcionMultiple(cuerpo("chk7"), {
+    pregunta: "La RAM tarda 100 ns y acierta siempre salvo en 1 de cada 10 000 accesos, que hay que traer del HDD (10 ms). El tiempo medio de acceso a memoria será...",
+    opciones: ["Casi igual: unos 100 ns", "Unos 200 ns, el doble", "Unos 1 100 ns, once veces más", "Unos 100 000 ns, mil veces más"],
+    correcta: 2,
+    pistas: [
+      "Un solo fallo cada 10 000 parece nada. Pero cuesta 10 ms, que son 10 000 000 ns. Multiplica $0.0001 \\times 10\\,000\\,000$.",
+      "Calcula el aporte del disco: $0.0001 \\times 10\\,000\\,000$ ns. ¿Es parecido a 100 ns?",
+      null,
+      "Mil veces más serían 100 fallos por cada 10 000 accesos, no uno."
+    ],
+    explicacion: "$0.0001 \\times 10\\,000\\,000 = 1\\,000$ ns de aporte del disco, sumados a los 100 ns de la RAM: <b>1 100 ns</b>. Un fallo cada 10 000 accesos hace al sistema <b>once veces más lento</b>. <b>Ahora mueve el deslizador</b> para ver cuántos fallos puede permitirse.",
+    alResolver: function () { est.chk7 = true; pintarTrampa(); pasos.completar(6); }
+  });
+
+  pasos = B.pasos($("recorrido"), {
+    concepto: C,
+    alEntrar: entrar,
+    alTerminar: function () { location.hash = "retos"; }
+  });
+  est.chk1 = pasos.hecho(0);
+  est.chk3 = pasos.hecho(2);
+  est.chk3b = pasos.hecho(2);
+  est.chk4 = pasos.hecho(3);
+  est.chk6 = pasos.hecho(5);
+  est.chk7 = pasos.hecho(6);
+  entrar(0);
+
+  /* ---------------- hipotesis inicial ---------------- */
+  (function () {
+    var ta = $("hipotesis"), t = null;
+    ta.value = B.nota("jerarquia-memoria", "hipotesis");
+    function cita() {
+      var v = ta.value.trim(), el = $("citaHipo");
+      el.textContent = "";
+      if (v) el.appendChild(document.createTextNode("Al principio escribiste: «" + v + "». ¿Se parece a lo que construimos? Un escritorio chico con lo que usas más es la memoria rápida, y la biblioteca es la lenta. ¿Qué te faltaba?"));
+      el.hidden = !v || !est.chk4;
+    }
+    cita();
+    ta.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { B.nota("jerarquia-memoria", "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; cita(); }, 500);
+    });
+  })();
+
+  /* ---------------- marcadores de estado de retos ---------------- */
+  function pintarEstados() {
+    [].forEach.call(document.querySelectorAll("[data-reto]"), function (el) {
+      var ok = C.retoOk(el.getAttribute("data-reto"));
+      el.textContent = ok ? "resuelto" : "pendiente";
+      el.classList.toggle("ok", ok);
+    });
+  }
+  C.alCambiar(pintarEstados);
+
+  /* ---------------- reto: ojo clinico ---------------- */
+  function patron(tipo) {
+    var seq = [], r, k, c, rows;
+    if (tipo === "filas") {
+      var r0 = Math.floor(Math.random() * 8);
+      for (r = 0; r < 8; r++) for (c = 0; c < 8; c++) seq.push(((r0 + r) % 8) * 8 + c);
+    } else if (tipo === "columnas") {
+      var c0 = Math.floor(Math.random() * 8);
+      for (c = 0; c < 8; c++) for (r = 0; r < 8; r++) seq.push(r * 8 + (c0 + c) % 8);
+    } else if (tipo === "bloque") {
+      var b = Math.floor(Math.random() * 7);
+      for (k = 0; k < 4; k++) for (c = 0; c < 16; c++) seq.push(b * 8 + c);
+    } else if (tipo === "alternar2") {
+      rows = B.mezclar([0, 1, 2, 3, 4, 5, 6, 7]).slice(0, 2);
+      for (k = 0; k < 2; k++) for (c = 0; c < 8; c++) { seq.push(rows[0] * 8 + c); seq.push(rows[1] * 8 + c); }
+    } else {
+      rows = B.mezclar([0, 1, 2, 3, 4, 5, 6, 7]).slice(0, 6);
+      for (c = 0; c < 8; c++) for (r = 0; r < 6; r++) seq.push(rows[r] * 8 + c);
+    }
+    return seq;
+  }
+  var PORQUE = {
+    filas: "Recorres cada línea entera antes de pasar a la siguiente: un fallo por línea y siete aciertos.",
+    columnas: "Cada acceso cae en una línea distinta de la anterior. Hay 8 líneas en juego y arriba caben 4: cuando vuelves a una, ya se expulsó.",
+    bloque: "Siempre repites las mismas dos líneas: se traen una vez y quedan arriba. Localidad temporal y espacial a la vez.",
+    alternar2: "Aunque saltes entre dos filas, solo son dos líneas y caben las dos. Cada una falla una vez.",
+    rotar6: "Rotas entre 6 líneas con solo 4 sitios. Siempre se expulsa justo la que vas a necesitar: falla todo."
+  };
+  (function () {
+    var cont = $("ojo");
+    cont.innerHTML = '<div class="ronda"></div><div class="gridm" id="ojoGrid"></div>' +
+      '<div class="cuenta" id="ojoCuenta"></div>' +
+      '<div class="ojo-opts"><button type="button" class="opt" data-a="buena">Pocos fallos</button><button type="button" class="opt" data-a="mala">Muchos fallos</button></div>' +
+      '<div class="fb" aria-live="polite"></div><div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    var tipos, ronda, aciertos, respondida, seq;
+    function nueva() {
+      tipos = B.mezclar(["filas", "columnas", "bloque", "alternar2", "rotar6"]);
+      ronda = 0; aciertos = 0;
+      mostrarRonda();
+    }
+    function mostrarRonda() {
+      respondida = false;
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 5 · aciertos " + aciertos;
+      seq = patron(tipos[ronda]);
+      dibujarGrid($("ojoGrid"), seq, 16, 4, { colorear: false });
+      $("ojoCuenta").innerHTML = "Se muestran los 16 primeros accesos. El patrón sigue igual hasta el final (" + seq.length + " accesos).";
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (b) { b.disabled = false; b.className = "opt"; });
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+    }
+    cont.querySelector(".ojo-opts").addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || respondida) return;
+      respondida = true;
+      var res = sim(seq, 4), fallos = res.filter(function (x) { return !x; }).length, tasa = fallos / seq.length;
+      var correcta = tasa < 0.25 ? "buena" : "mala", ok = b.getAttribute("data-a") === correcta;
+      if (ok) aciertos++;
+      b.classList.add(ok ? "ok" : "mal");
+      if (!ok) cont.querySelector('[data-a="' + correcta + '"]').classList.add("ok");
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (x) { x.disabled = true; });
+      dibujarGrid($("ojoGrid"), seq, seq.length, 4, { colorear: true });
+      $("ojoCuenta").innerHTML = "Fallos: <b class=\"neg\">" + fallos + "</b> de " + seq.length + " (" + num1(100 * tasa) + " %).";
+      cont.querySelector(".fb").innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No.</span> ') + PORQUE[tipos[ronda]];
+      var sig = cont.querySelector(".sig");
+      sig.hidden = false;
+      if (ronda === 4) {
+        var aprobo = aciertos >= 4;
+        C.reto("ojo", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertos + " de 5" + (aprobo ? ". Aprobado." : ". Necesitas 4 para aprobar.");
+        sig.textContent = "Otra tanda";
+      } else {
+        sig.textContent = "Siguiente ronda";
+      }
+    });
+    cont.querySelector(".sig").addEventListener("click", function () {
+      if (ronda === 4) nueva(); else { ronda++; mostrarRonda(); }
+    });
+    nueva();
+  })();
+
+  /* ---------------- reto: construir ---------------- */
+  (function () {
+    var OBJ = [
+      { t: "Tiempo medio de 3 ns o menos.", ok: function (r, h) { return r.t <= 3 + 1e-9; } },
+      { t: "Tiempo medio entre 1.6 y 1.8 ns.", ok: function (r, h) { return r.t >= 1.6 - 1e-9 && r.t <= 1.8 + 1e-9; } },
+      { t: "Tiempo medio de 2 ns o menos con la L1 acertando solo el 90 % o menos. Hay que compensar con las otras dos.", ok: function (r, h) { return r.t <= 2 + 1e-9 && h[0] <= 90; } }
+    ];
+    var logrados = [false, false, false], avisado = false;
+    var ul = $("objetivos");
+    OBJ.forEach(function (o) { var li = document.createElement("li"); li.innerHTML = '<span class="m"></span><span>' + o.t + '</span>'; ul.appendChild(li); });
+    function actualizar() {
+      var h = [+$("c1").value, +$("c2").value, +$("c3").value];
+      $("c1v").textContent = h[0] + " %"; $("c2v").textContent = h[1] + " %"; $("c3v").textContent = h[2] + " %";
+      var r = cascada(h[0] / 100, h[1] / 100, h[2] / 100);
+      $("constrVivo").innerHTML = "Tiempo medio = <b>" + num2(r.t) + " ns</b> · llegan a la RAM <b>" + miles(r.ll[3]) + "</b> de 1 000 accesos";
+      OBJ.forEach(function (o, i) { if (!logrados[i] && o.ok(r, h)) logrados[i] = true; ul.children[i].classList.toggle("hecho", logrados[i]); });
+      if (!avisado && logrados.every(Boolean)) { avisado = true; C.reto("construir", true); }
+    }
+    ["c1", "c2", "c3"].forEach(function (id) { $(id).addEventListener("input", actualizar); });
+    actualizar();
+  })();
+
+  /* ---------------- reto: a mano ---------------- */
+  (function () {
+    var D;
+    function generar() {
+      var tas = [1, 2, 3], hs = [80, 90, 95, 96, 98, 99], Ps = [50, 80, 100, 120, 200];
+      D = { ta: tas[Math.floor(Math.random() * tas.length)], h: hs[Math.floor(Math.random() * hs.length)], P: Ps[Math.floor(Math.random() * Ps.length)] };
+      D.f = (100 - D.h) / 100;
+      D.T = D.ta + D.f * D.P;
+      $("manoDatos").innerHTML = "La memoria rápida tarda <b>" + D.ta + " ns</b> y acierta el <b>" + D.h + " %</b> de las veces. Cuando falla, hay que ir a un nivel que tarda otros <b>" + D.P + " ns</b>.";
+    }
+    var cfg = {
+      pregunta: "¿Cuánto tarda, en promedio, un acceso? Responde en ns.",
+      respuesta: function () { return D.T; },
+      tolerancia: 0.011,
+      pistas: [
+        function () { return "La tasa de fallos es $1 - h = 1 - " + num2(D.h / 100) + " = " + num2(D.f) + "$."; },
+        function () { return "El aporte de los fallos es $" + num2(D.f) + " \\cdot " + D.P + " = " + num2(D.f * D.P) + "$ ns."; },
+        function () { return "Suma el tiempo de acierto: $" + D.ta + " + " + num2(D.f * D.P) + "$."; }
+      ],
+      diagnostico: function (v) {
+        if (Math.abs(v - (D.ta + D.h / 100 * D.P)) < 0.011) return "Multiplicaste la penalización por la tasa de <b>aciertos</b>. Lo que se suma es la de fallos, $1-h$.";
+        if (Math.abs(v - D.f * D.P) < 0.011) return "Esos son solo los fallos. Falta sumar lo que cuesta mirar arriba, $t_a$.";
+        if (Math.abs(v - (D.ta + D.P)) < 0.011) return "Esos son los ns de un fallo. Falta pesar con la tasa de fallos.";
+        return null;
+      },
+      explicacion: function () { return D.ta + " + (1 − " + num2(D.h / 100) + ") × " + D.P + " = " + D.ta + " + " + num2(D.f * D.P) + " = " + num2(D.T) + " ns."; },
+      reintentable: true,
+      textoReintentar: "Otro ejercicio",
+      antesDeReintentar: generar,
+      alResolver: function (ok) { C.reto("mano", ok); }
+    };
+    generar();
+    B.numerico($("mano"), cfg);
+  })();
+
+  /* ---------------- reto: cazar el error ---------------- */
+  B.cazarError($("error"), {
+    variantes: [
+      {
+        intro: "L1 de 1 ns, RAM de 100 ns, 90 % de aciertos. Alguien calculó el tiempo medio así:",
+        lineas: ["h = 0.90", "f = 1 - h = 0.10", "P = 100\\ \\text{ns}", "f \\cdot P = 0.10 \\cdot 100 = 10\\ \\text{ns}", "T = f \\cdot P = 10\\ \\text{ns}"],
+        erronea: 4,
+        explicacion: "Se le olvidó $t_a$: todos los accesos pagan al menos el 1 ns de mirar arriba. Es $T = 1 + 10 = 11$ ns."
+      },
+      {
+        intro: "L1 de 2 ns que acierta el 90 %, L2 de 10 ns que acierta el 80 % de lo que le llega, RAM de 100 ns. Alguien calculó el tiempo medio así:",
+        lineas: ["\\text{a la L2 llega el } 10\\,\\%", "\\text{a la RAM llega } 10\\,\\% \\cdot 80\\,\\% = 8\\,\\%", "T = 2 + 0.10 \\cdot 10 + 0.08 \\cdot 100", "T = 2 + 1 + 8 = 11\\ \\text{ns}"],
+        erronea: 1,
+        explicacion: "A la RAM solo llegan los que fallan en la L1 <b>y</b> en la L2: $10\\,\\% \\cdot 20\\,\\% = 2\\,\\%$. Usó la tasa de aciertos de la L2 en lugar de la de fallos. El resultado correcto es $2 + 1 + 2 = 5$ ns."
+      },
+      {
+        intro: "RAM de 100 ns y 1 fallo al HDD (10 ms) por cada 10 000 accesos. Alguien calculó el tiempo medio así:",
+        lineas: ["\\text{RAM}: 100\\ \\text{ns}", "\\text{fallos al HDD}: 1/10\\,000 = 0.0001", "\\text{aporte del HDD}: 0.0001 \\cdot 10 = 0.001\\ \\text{ns}", "T = 100 + 0.001 = 100.001\\ \\text{ns}"],
+        erronea: 2,
+        explicacion: "Mezcló unidades: el 10 son milisegundos, no nanosegundos. $10\\ \\text{ms} = 10\\,000\\,000$ ns, así que el aporte es $0.0001 \\cdot 10\\,000\\,000 = 1\\,000$ ns y $T = 1\\,100$ ns."
+      }
+    ],
+    alResolver: function (ok) { C.reto("error", ok); }
+  });
+
+  /* ---------------- retos: propiedades ---------------- */
+  function prop(id, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple($(id), cfg);
+  }
+  prop("prop1", {
+    pregunta: "¿Cuál de estas situaciones es un ejemplo de <b>localidad espacial</b>?",
+    opciones: [
+      "Leer los elementos de un array uno detrás de otro",
+      "Usar la variable contador del bucle en cada vuelta",
+      "Leer un dato al azar de la RAM",
+      "Volver a leer el mismo archivo una hora después"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "Eso es localidad temporal: la misma dirección se vuelve a usar enseguida.",
+      "Al azar no hay hábito que aprovechar: ni espacial ni temporal.",
+      "Una hora es mucho tiempo: la copia de arriba ya se expulsó. Y tampoco son datos vecinos."],
+    explicacion: "La espacial es usar datos <b>vecinos</b> de los que acabas de usar: por eso la línea trae 32 o 64 bytes. La temporal es volver a la <b>misma</b> dirección."
+  });
+  prop("prop2", {
+    pregunta: "Con L1 de 1 ns y RAM de 100 ns, subes la tasa de aciertos de 95 % a 99 %. El tiempo medio...",
+    opciones: [
+      "Baja de 6 ns a 2 ns",
+      "Baja un 4 %",
+      "No cambia: sigue siendo 1 ns",
+      "Baja a 1 ns exactamente"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "El 4 % es la diferencia entre las tasas, pero los fallos pasan de 5 a 1 por cada 100, y cada uno cuesta 100 ns más.",
+      "El tiempo medio nunca es solo el de acertar, salvo que se acierte siempre.",
+      "A 1 ns exactos solo se llega con 100 % de aciertos."],
+    explicacion: "Con 95 %: $1 + 0.05 \\cdot 100 = 6$ ns. Con 99 %: $1 + 0.01 \\cdot 100 = 2$ ns. Cinco veces menos fallos, tres veces menos tiempo: <b>cada punto de acierto vale mucho</b>."
+  });
+  prop("prop3", {
+    pregunta: "Un sistema tiene 1 fallo al disco por cada 10 000 accesos. Cambias el HDD (10 ms) por un SSD (100 µs). El aporte de esos fallos al tiempo medio...",
+    opciones: [
+      "Se divide entre 100: de 1 000 ns a 10 ns",
+      "Se divide entre 10",
+      "Se divide entre 2",
+      "No cambia: la tasa de fallos es la misma"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "10 ms frente a 100 µs: pasa a ns y divide.",
+      "El SSD no es el doble de rápido que el HDD. Compara 10 000 000 ns con 100 000 ns.",
+      "La tasa es la misma, pero lo que cuesta cada fallo cambió, y el aporte es tasa por costo."],
+    explicacion: "El aporte es tasa × penalización. Con el HDD: $0.0001 \\times 10\\,000\\,000 = 1\\,000$ ns. Con el SSD: $0.0001 \\times 100\\,000 = 10$ ns. Cien veces menos con la misma localidad."
+  });
+  prop("prop4", {
+    pregunta: "¿Por qué la memoria más rápida de la jerarquía es también la más pequeña?",
+    opciones: [
+      "Porque cada bit rápido necesita más circuito, ocupa más área y cuesta más",
+      "Porque los datos rápidos ocupan menos espacio",
+      "Porque el sistema operativo limita su tamaño",
+      "Porque no necesita guardar muchos datos para que el programa funcione"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "Un bit ocupa lo mismo en cualquier memoria. Lo que cambia es el circuito que lo guarda.",
+      "Es una cuestión física, de hardware, no una regla del software.",
+      "Al contrario: ojalá cupiera todo. El límite viene del coste y del área."],
+    explicacion: "La SRAM usa seis transistores por bit; la DRAM, un transistor y un condensador. La primera es rápida pero ocupa mucha área y cuesta más por byte: por eso es chica."
+  });
+  prop("prop5", {
+    pregunta: "La memoria rápida trae líneas de 64 bytes. Un array de enteros de 4 bytes empieza justo al comienzo de una línea y lo lees entero, en orden. Para los primeros 16 enteros, ¿cuántos fallos hay?",
+    opciones: ["1", "16", "15", "0"],
+    correcta: 0,
+    pistas: [null,
+      "Cada entero ocupa 4 bytes. ¿Cuántos caben en una línea de 64?",
+      "Los 15 son los aciertos, no los fallos.",
+      "Al empezar no hay nada arriba: el primer acceso falla."],
+    explicacion: "64 / 4 = 16 enteros caben en una línea. El primero falla, trae la línea entera y los otros 15 aciertan: <b>1 fallo y 15 aciertos</b>. Eso es la localidad espacial."
+  });
+  prop("prop6", {
+    pregunta: "Jerarquía A: L1 de 1 ns con 90 % de aciertos y nivel de abajo de 100 ns. Jerarquía B: L1 de 1 ns con 95 % de aciertos y nivel de abajo de 200 ns. ¿Cuál tiene menor tiempo medio?",
+    opciones: [
+      "Tienen el mismo: 11 ns",
+      "La B, porque acierta más",
+      "La A, porque su nivel de abajo es más rápido",
+      "No se puede saber sin las capacidades"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "Acierta más, pero cada fallo cuesta el doble. Haz las dos cuentas.",
+      "Falla más veces. Haz las dos cuentas.",
+      "El tiempo medio solo depende de $t_a$, $h$ y $P$."],
+    explicacion: "A: $1 + 0.10 \\cdot 100 = 11$ ns. B: $1 + 0.05 \\cdot 200 = 11$ ns. Un nivel de abajo el doble de lento compensa justo la mitad de los fallos. Mirar solo la tasa de aciertos engaña."
+  });
+
+  /* ---------------- formula de memoria ---------------- */
+  B.ordenar($("formula"), {
+    piezas: ["T", "=", "t_a", "+", "(1-h)", "\\cdot", "P"],
+    distractores: ["h", "-", "t_a \\cdot P", "\\dfrac{P}{h}"],
+    soluciones: [[0, 1, 2, 3, 4, 5, 6], [0, 1, 4, 5, 6, 3, 2]],
+    explicacion: "El tiempo de mirar arriba, que pagan todos, más la tasa de fallos por lo que cuesta cada fallo.",
+    alResolver: function (ok) { C.reto("formula", ok); }
+  });
+
+  /* ---------------- vida real: el algoritmo en codigo ---------------- */
+  (function () {
+    var CODIGO = {
+      py: [
+        ["niv", 'niveles  = ["L1", "L2", "L3", "RAM"]'],
+        ["tiempo", "tiempo   = [1, 5, 15, 100]           # ns que cuesta mirar en cada nivel"],
+        ["acier", "aciertos = [0.95, 0.80, 0.70, 1.00]  # tasa de aciertos de cada nivel"],
+        [null, ""],
+        ["llegan", "llegan = 1000                        # accesos que llegan a L1"],
+        ["total0", "total = 0"],
+        ["for1", "for i in range(len(niveles)):        # de arriba hacia abajo"],
+        ["pagan", "    total += llegan * tiempo[i]      # todos los que llegan pagan por mirar"],
+        ["bajan", "    llegan = round(llegan * (1 - aciertos[i]))   # los fallos bajan un nivel"],
+        ["print1", "print(total / 1000)                  # ns por acceso"],
+        [null, ""],
+        ["medio0", "medio = 0.0"],
+        ["for2", "for i in reversed(range(len(niveles))):   # de abajo hacia arriba"],
+        ["rec", "    medio = tiempo[i] + (1 - aciertos[i]) * medio"],
+        ["print2", "print(round(medio, 2))               # el mismo resultado"],
+        [null, ""],
+        ["unnivel", "un_nivel = tiempo[0] + (1 - aciertos[0]) * tiempo[3]   # solo L1 y RAM"],
+        ["print3", "print(round(un_nivel, 2))"],
+        [null, ""],
+        ["hdd", "hdd_ns = 1e7                         # un HDD tarda 10 ms = 10 000 000 ns"],
+        ["print4", "print(round(hdd_ns / 86400, 1))      # escala humana: 1 ns pasa a 1 s, y esto son días"]
+      ],
+      r: [
+        ["niv", 'niveles  <- c("L1", "L2", "L3", "RAM")'],
+        ["tiempo", "tiempo   <- c(1, 5, 15, 100)           # ns que cuesta mirar en cada nivel"],
+        ["acier", "aciertos <- c(0.95, 0.80, 0.70, 1.00)  # tasa de aciertos de cada nivel"],
+        [null, ""],
+        ["llegan", "llegan <- 1000                         # accesos que llegan a L1"],
+        ["total0", "total <- 0"],
+        ["for1", "for (i in 1:length(niveles)) {         # de arriba hacia abajo"],
+        ["pagan", "  total <- total + llegan * tiempo[i]  # todos los que llegan pagan por mirar"],
+        ["bajan", "  llegan <- round(llegan * (1 - aciertos[i]))   # los fallos bajan un nivel"],
+        [null, "}"],
+        ["print1", "print(total / 1000)                    # ns por acceso"],
+        [null, ""],
+        ["medio0", "medio <- 0"],
+        ["for2", "for (i in length(niveles):1) {         # de abajo hacia arriba"],
+        ["rec", "  medio <- tiempo[i] + (1 - aciertos[i]) * medio"],
+        [null, "}"],
+        ["print2", "print(round(medio, 2))                 # el mismo resultado"],
+        [null, ""],
+        ["unnivel", "un_nivel <- tiempo[1] + (1 - aciertos[1]) * tiempo[4]   # solo L1 y RAM"],
+        ["print3", "print(round(un_nivel, 2))"],
+        [null, ""],
+        ["hdd", "hdd_ns <- 1e7                          # un HDD tarda 10 ms = 10 000 000 ns"],
+        ["print4", "print(round(hdd_ns / 86400, 1))        # escala humana: 1 ns pasa a 1 s, y esto son días"]
+      ]
+    };
+    var NOM = ["L1", "L2", "L3", "RAM"], TT = [1, 5, 15, 100], AC = [0.95, 0.80, 0.70, 1.00];
+
+    /* eventos: una foto del estado despues de ejecutar cada linea (se calcula igual que el codigo) */
+    var EV = [];
+    (function () {
+      var fase = 0, llv = null, total = null, mv = null;
+      var llegan = [null, null, null, null], pagan = [null, null, null, null], medio = [null, null, null, null];
+      function foto(id, extra) {
+        EV.push(Object.assign({ id: id, fase: fase, llv: llv, total: total, mv: mv, llegan: llegan.slice(), pagan: pagan.slice(), medio: medio.slice(), i: null }, extra || {}));
+      }
+      foto("niv"); foto("tiempo"); foto("acier");
+      fase = 1;
+      llv = 1000; llegan[0] = 1000; foto("llegan");
+      total = 0; foto("total0");
+      for (var i = 0; i < 4; i++) {
+        foto("for1", { i: i });
+        total += llv * TT[i]; pagan[i] = llv * TT[i];
+        foto("pagan", { i: i });
+        llv = Math.round(llv * (1 - AC[i]));
+        if (i < 3) llegan[i + 1] = llv;
+        foto("bajan", { i: i });
+      }
+      foto("print1", { fin1: true });
+      fase = 2;
+      mv = 0; foto("medio0");
+      for (var j = 3; j >= 0; j--) {
+        foto("for2", { i: j });
+        mv = TT[j] + (1 - AC[j]) * mv; medio[j] = mv;
+        foto("rec", { i: j });
+      }
+      foto("print2");
+      fase = 3;
+      foto("unnivel", { un: 6 });
+      foto("print3", { un: 6 });
+      foto("hdd", { dias: 115.7 });
+      foto("print4", { dias: 115.7, fin: true });
+    })();
+
+    function nv(v) { return v === null ? "" : (Number.isInteger(v) ? B.fmt(v, 0) : num2(v)); }
+    function narrar(e, ctx) {
+      var py = ctx.lang() === "py", ix = ctx.ix;
+      switch (e.id) {
+        case "niv": return "Los cuatro niveles que hay entre el procesador y la RAM, de arriba hacia abajo.";
+        case "tiempo": return "Cuánto cuesta <b>mirar</b> en cada nivel: 1, 5, 15 y 100 ns. Los mismos del paso 6.";
+        case "acier": return "La tasa de aciertos de cada nivel, sobre lo que le llega: 95 %, 80 %, 70 %. La RAM siempre tiene el dato: 100 %.";
+        case "llegan": return "Empiezan <b>1 000 accesos</b>, y todos llegan a la L1.";
+        case "total0": return "El tiempo total empieza en cero.";
+        case "for1": return "Nivel <b>i = " + ix(e.i) + "</b>: " + NOM[e.i] + ".";
+        case "pagan": return "Los <b>" + nv(e.llegan[e.i]) + "</b> accesos que llegan pagan <b>" + TT[e.i] + " ns</b> cada uno por mirar: " + nv(e.pagan[e.i]) + " ns. El total va en <b>" + nv(e.total) + "</b>.";
+        case "bajan": return e.i < 3
+          ? "Fallan " + nv(e.llv) + " de los que llegaron (1 − " + num2(AC[e.i]) + " de " + nv(e.llegan[e.i]) + "). Esos <b>" + nv(e.llv) + "</b> bajan a " + NOM[e.i + 1] + "."
+          : "En la RAM nadie falla (aciertos = 1): bajan <b>0</b> accesos. No hay un nivel más abajo.";
+        case "print1": return "Imprime el total entre 1 000: <b>1 700 / 1 000 = 1.7 ns</b> por acceso.";
+        case "medio0": return "Segunda forma: se parte de un nivel imaginario de abajo que cuesta cero.";
+        case "for2": return "Nivel <b>i = " + ix(e.i) + "</b>: " + NOM[e.i] + ". Ahora se recorre de abajo hacia arriba.";
+        case "rec": return NOM[e.i] + ": " + TT[e.i] + " + (1 − " + num2(AC[e.i]) + ") × (medio del nivel de abajo) = <b>" + nv(e.medio[e.i]) + " ns</b>. Es el tiempo medio de un acceso que entra por este nivel.";
+        case "print2": return "El medio de la L1 es el tiempo medio de todo: <b>1.7 ns</b>, el mismo de antes.";
+        case "unnivel": return "La fórmula del paso 5 con un solo nivel de caché: 1 + (1 − 0.95) × 100 = <b>6</b> ns. Si los niveles L2 y L3 no existieran, el tiempo medio sería 6 ns.";
+        case "print3": return py ? "Python imprime <b>6.0</b>." : "R imprime <b>[1] 6</b>: el mismo número, sin el .0.";
+        case "hdd": return "Un HDD tarda 10 ms, que son <b>10 000 000 ns</b>.";
+        case "print4": return "10 000 000 / 86 400 = <b>115.7</b>. En la escala humana (1 ns = 1 s), un acceso al HDD son 115.7 días.";
+      }
+      return "";
+    }
+    function visual(e, anterior, ctx) {
+      var h = '<thead><tr><th>nivel</th><th>llegan</th><th>tiempo</th><th>pagan</th><th>medio</th></tr></thead><tbody>';
+      for (var i = 0; i < 4; i++) {
+        var on = e && e.i === i && (e.id === "for1" || e.id === "pagan" || e.id === "bajan" || e.id === "for2" || e.id === "rec");
+        var visT = e && e.fase >= 1;
+        var nuevoL = e && e.id === "bajan" && e.i + 1 === i;
+        h += '<tr' + (on ? ' class="on"' : '') + '><td>' + NOM[i] + '</td>' +
+          '<td' + (nuevoL ? ' class="nuevo"' : '') + '>' + (e ? nv(e.llegan[i]) : "") + '</td>' +
+          '<td>' + (e && e.id !== "niv" ? TT[i] : "") + '</td>' +
+          '<td' + (e && e.id === "pagan" && e.i === i ? ' class="nuevo"' : '') + '>' + (e ? nv(e.pagan[i]) : "") + '</td>' +
+          '<td' + (e && e.id === "rec" && e.i === i ? ' class="nuevo"' : '') + '>' + (e ? nv(e.medio[i]) : "") + '</td></tr>';
+        void visT;
+      }
+      $("vrTabla").innerHTML = h + '</tbody>';
+      var c = "";
+      if (e) {
+        if (e.fase === 1 && e.total !== null) c = "total = " + nv(e.total) + " ns" + (e.fin1 ? " · 1 700 / 1 000 = <b>1.7</b> ns por acceso" : "");
+        else if (e.fase === 2 && e.mv !== null) c = "medio = <b>" + nv(e.mv) + "</b> ns" + (e.id === "print2" ? " · coincide con la primera cuenta" : "");
+        else if (e.fase === 3) c = e.id === "hdd" || e.id === "print4" ? "10 000 000 ns / 86 400 = <b>115.7</b> días en la escala humana" : "un solo nivel: 1 + 0.05 × 100 = <b>6</b> ns";
+      }
+      $("vrCuenta").innerHTML = c;
+    }
+    B.vidaReal($("vidareal"), {
+      codigo: CODIGO,
+      eventos: EV,
+      narrar: narrar,
+      vars: function (e, ctx) {
+        var v = [], ix = ctx.ix;
+        if (e && e.i !== null) v.push('<span>i = <b>' + ix(e.i) + '</b></span>');
+        if (e && e.fase === 1 && e.llv !== null) v.push('<span>llegan = <b>' + nv(e.llv) + '</b></span>');
+        if (e && e.fase === 1 && e.total !== null) v.push('<span>total = <b>' + nv(e.total) + '</b></span>');
+        if (e && e.fase === 2 && e.mv !== null) v.push('<span>medio = <b>' + nv(e.mv) + '</b></span>');
+        return v;
+      },
+      visual: visual,
+      demora: function (e) { return !e ? 600 : e.id === "for1" || e.id === "for2" ? 450 : e.id === "pagan" || e.id === "bajan" || e.id === "rec" ? 950 : 900; }
+    });
+
+    /* chequeo de prediccion y trampas reales */
+    B.numerico(cuerpo("vrPred"), {
+      pregunta: "De los 1 000 accesos, 95 % aciertan en la L1, el 80 % de los que fallan aciertan en la L2, y el 70 % de los que quedan aciertan en la L3. ¿Cuántos accesos llegan hasta la <b>RAM</b>?",
+      respuesta: 3,
+      tolerancia: 0,
+      pistas: [
+        "Fallan en la L1: 1 000 × 0.05 = 50. Esos 50 bajan a la L2.",
+        "De los 50, fallan en la L2 el 20 %: 10. De esos 10, fallan en la L3 el 30 %."
+      ],
+      diagnostico: function (v) {
+        if (v === 50) return "Esos son los que llegan a la L2. Faltan dos niveles más por filtrar.";
+        if (v === 10) return "Esos son los que llegan a la L3. Falta un nivel por filtrar.";
+        if (v === 30) return "Eso es 30 % de 100. Va en cascada: el 30 % de los 10 que llegan a la L3.";
+        return null;
+      },
+      explicacion: "1 000 → 50 → 10 → <b>3</b>. De cada 1 000 accesos, solo 3 llegan a la RAM, y aun así pagan 100 ns cada uno (300 ns, casi un 18 % del total de 1 700 ns). Ahora dale a reproducir y mira cómo bajan.",
+      alResolver: function (ok) { C.reto("codigo1", ok); }
+    });
+    prop("codigo2", {
+      pregunta: "Copias a R la línea de Python <code>tiempo[0]</code> para obtener el tiempo de la L1. ¿Qué obtienes?",
+      opciones: [
+        "<code>numeric(0)</code>, un vector vacío y sin error: en R el primer elemento es <code>tiempo[1]</code>",
+        "El primer elemento, 1, igual que en Python",
+        "Un error, porque el índice 0 no existe",
+        "El último elemento, 100"
+      ],
+      correcta: 0,
+      pistas: [null,
+        "En Python 0 es el primero. En R los índices empiezan en 1.",
+        "R no avisa: devuelve un vector vacío. Y cualquier cuenta con un vector vacío da un vector vacío.",
+        "El último se pide con índices negativos en Python, no con el 0."],
+      explicacion: "En R el 0 es un índice válido que no selecciona nada: <code>tiempo[0]</code> da <code>numeric(0)</code>, y <code>un_nivel</code> también saldría vacío, sin ningún error. Por eso en el código de R el primer nivel es <code>tiempo[1]</code> y la RAM es <code>tiempo[4]</code>. Las tablas de la página muestran los índices como los escribe cada lenguaje."
+    });
+    prop("codigo3", {
+      pregunta: "En Python escribes <code>print(1e7 // 86400)</code> en lugar de <code>print(1e7 / 86400)</code>. ¿Qué imprime?",
+      opciones: [
+        "115.0: la división entera descarta los decimales",
+        "115.74074074074075, igual que con una barra",
+        "Un error, porque 1e7 no es un entero",
+        "0, porque 1e7 es menor que 86400"
+      ],
+      correcta: 0,
+      pistas: [null,
+        "Con dos barras no se obtiene el cociente exacto.",
+        "Python acepta <code>//</code> con números decimales. Devuelve un decimal.",
+        "1e7 es 10 000 000, mucho mayor que 86 400."],
+      explicacion: "<code>//</code> es la división entera: da 115.0 (115 días completos, un decimal por ser <code>1e7</code> decimal) y se pierde el 0.7 del último día. En R el equivalente es <code>%/%</code>, y allí <code>1e7 %/% 86400</code> imprime <code>[1] 115</code>."
+    });
+  })();
+
+  /* ---------------- tarjetas ---------------- */
+  B.tarjetas($("tarjetas"), [
+    ["¿Qué tres cosas cambian al bajar un nivel de la jerarquía?", "Sube la capacidad, sube el tiempo de acceso y baja el coste por byte. Ninguna memoria es a la vez grande, rápida y barata."],
+    ["¿Cuántos órdenes de magnitud separan la L1 del HDD?", "Siete: 10 ms frente a 1 ns es una razón de $10^7$. En escala humana, un segundo frente a unos cuatro meses."],
+    ["Localidad temporal y espacial", "Temporal: lo que usaste hace poco lo vas a usar otra vez. Espacial: lo que está al lado de lo que usaste lo vas a usar pronto."],
+    ["¿Para qué trae la memoria rápida una línea entera y no una sola palabra?", "Para aprovechar la localidad espacial: las palabras vecinas probablemente se usarán enseguida."],
+    ["Fórmula del tiempo medio de acceso", "$T = t_a + (1-h)\\,P$: tiempo de acierto más tasa de fallos por penalización."],
+    ["¿Por qué subir de 95 % a 99 % de aciertos importa tanto?", "Porque los fallos cuestan mucho: pasan de 5 a 1 por cada 100 accesos y el tiempo medio baja de 6 ns a 2 ns (con L1 de 1 ns y RAM de 100 ns)."],
+    ["¿Cómo se calcula el tiempo medio con varios niveles?", "De abajo hacia arriba: la penalización de cada nivel es el tiempo medio del nivel de abajo. $T = t_1 + f_1(t_2 + f_2(t_3 + f_3\\,t_{\\text{RAM}}))$."],
+    ["¿Por qué un 99.99 % de aciertos en la RAM no es \"casi perfecto\"?", "Porque cada fallo va al disco y cuesta 10 ms. Un fallo cada 10 000 accesos suma 1 000 ns al tiempo medio de 100 ns: once veces más lento."]
+  ]);
+
+  /* ---------------- conexiones ---------------- */
+  B.conexiones("jerarquia-memoria");
+})();
+</script>
+</body>
+</html>

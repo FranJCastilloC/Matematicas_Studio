@@ -1,0 +1,1965 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Clave pública, firma y TLS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+:root { --amb: #a8661a; --amb-soft: #f7ecd9; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --amb: #e0a64a; --amb-soft: #33281a; } }
+:root[data-theme="dark"] { --amb: #e0a64a; --amb-soft: #33281a; }
+
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.esc-head .hint { font-size: 12.5px; color: var(--ink-2); }
+
+/* colores por tipo de clave */
+.k-pub { --c: var(--j); }
+.k-priv { --c: var(--k); }
+.k-ses { --c: var(--amb); }
+.k-hash { --c: var(--ink-2); }
+
+/* buzon */
+.buz { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1fr); gap: 8px; align-items: stretch; }
+.actor { border: 1px solid var(--line); border-radius: 8px; padding: 8px; background: var(--surface); text-align: center; font-size: 12.5px; }
+.actor h4 { margin: 0; font: 500 12.5px var(--f-body); }
+.actor small { display: block; font: 10.5px var(--f-mono); color: var(--ink-3); margin-bottom: 4px; overflow-wrap: anywhere; }
+.actor.hoy { border-color: var(--accent); box-shadow: 0 0 0 1.5px var(--accent); }
+.buzon { border: 2px solid var(--j); border-radius: 10px; padding: 8px; background: color-mix(in oklab, var(--j) 8%, var(--surface)); text-align: center; font-size: 12.5px; }
+.buzon h4 { margin: 0 0 4px; font: 500 12.5px var(--f-body); }
+.buzon .ranura { height: 8px; width: 60%; margin: 6px auto; border-radius: 4px; background: var(--ink); opacity: .7; }
+.buzon .cartas { font: 500 18px var(--f-mono); }
+.buzon small { display: block; font: 10.5px var(--f-mono); color: var(--ink-3); overflow-wrap: anywhere; }
+.carta { display: inline-block; width: 18px; height: 12px; border: 1.5px solid var(--ink-2); border-radius: 2px; margin: 1px; background: var(--surface); }
+
+.camino-info { font-size: 13.5px; color: var(--ink); min-height: 4.6em; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; margin: 8px 0; overflow-wrap: anywhere; }
+.camino-info b { font-weight: 500; font-family: var(--f-mono); }
+.camino-info .mal { color: var(--bad); font-weight: 500; }
+.camino-info .bien { color: var(--ok); font-weight: 500; }
+
+/* llaves y flujo RSA */
+.llaves { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+.llave { border: 1.5px solid var(--c); border-radius: 8px; padding: 6px 8px; background: color-mix(in oklab, var(--c) 9%, var(--surface)); font-size: 12px; }
+.llave b { display: block; font-weight: 500; font-size: 12.5px; }
+.llave span { display: block; font-family: var(--f-mono); font-size: 12px; margin-top: 2px; overflow-wrap: anywhere; }
+.llave small { color: var(--ink-3); font-size: 10.5px; }
+.rango { display: flex; align-items: center; gap: 10px; margin: 6px 0 4px; font-size: 13px; color: var(--ink-2); }
+.rango input[type=range] { flex: 1; min-width: 0; accent-color: var(--accent); }
+.rango b { font-family: var(--f-mono); font-weight: 500; color: var(--ink); min-width: 4.5ch; text-align: right; }
+.flujo { display: grid; grid-template-columns: minmax(0, 1fr) 16px minmax(0, 1fr) 16px minmax(0, 1fr); gap: 4px; align-items: center; margin: 8px 0; }
+.flujo .fl { text-align: center; color: var(--ink-3); font-family: var(--f-mono); }
+.caja { border: 1px solid var(--line); border-radius: 8px; padding: 6px 4px; text-align: center; font-size: 11.5px; line-height: 1.3; background: var(--surface); min-height: 64px; overflow-wrap: anywhere; }
+.caja b { display: block; font: 500 17px var(--f-mono); margin-top: 3px; color: var(--ink); }
+.caja.pub { border-color: var(--j); }
+.caja.ok { border-color: var(--ok); box-shadow: 0 0 0 1.5px var(--ok); }
+.caja.no { border-color: var(--bad); box-shadow: 0 0 0 1.5px var(--bad); }
+.caja.apagada { opacity: .4; }
+.tbl { width: 100%; border-collapse: collapse; font-family: var(--f-mono); font-size: 12px; margin-top: 8px; font-variant-numeric: tabular-nums; }
+.tbl th { text-align: left; color: var(--ink-3); font-weight: 500; padding: 3px 6px; border-bottom: 1px solid var(--line); }
+.tbl td { padding: 3px 6px; border-bottom: 1px solid var(--line-soft); color: var(--ink-2); overflow-wrap: anywhere; }
+.tbl td.r { text-align: right; color: var(--ink); }
+.tbl tr.ultima td { background: var(--accent-soft); color: var(--ink); }
+
+/* certificado y tls */
+.cert { border: 2px solid var(--ink-2); border-radius: 10px; padding: 8px 10px; background: var(--surface); font-size: 12.5px; }
+.cert h4 { margin: 0 0 6px; font: 500 12.5px var(--f-body); color: var(--ink-3); letter-spacing: .04em; text-transform: uppercase; }
+.cert .cf { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 6px; padding: 3px 0; border-bottom: 1px dashed var(--line-soft); }
+.cert .cf span:first-child { color: var(--ink-3); }
+.cert .cf span:last-child { font-family: var(--f-mono); overflow-wrap: anywhere; }
+.cert .cf.cambia span:last-child { background: var(--amb-soft); color: var(--amb); font-weight: 500; }
+.tls-fila { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 8px; align-items: center; padding: 6px 8px; margin-bottom: 4px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); font-size: 12.5px; opacity: .55; }
+.tls-fila .n { font: 500 12px var(--f-mono); color: var(--ink-3); }
+.tls-fila small { display: block; font: 10.5px var(--f-mono); color: var(--ink-3); }
+.tls-fila.hecha { opacity: 1; }
+.tls-fila.aqui { opacity: 1; border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1.5px var(--accent); }
+.tls-fila.falla { opacity: 1; border-color: var(--bad); background: color-mix(in oklab, var(--bad) 10%, var(--surface)); box-shadow: 0 0 0 1.5px var(--bad); }
+
+/* bloques de los pasos */
+.vivo2 { font-family: var(--f-mono); font-size: 13px; color: var(--ink-2); margin-top: 6px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.vivo2 b { color: var(--ink); font-weight: 500; }
+.mover-eq { margin-top: 12px; font-family: var(--f-mono); font-size: 13px; line-height: 1.7; color: var(--ink-2); overflow-wrap: anywhere; }
+.mover-eq b { color: var(--ink); font-weight: 500; }
+
+/* retos propios */
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.afirm { font-size: 15px; margin: 10px 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); }
+.capa-opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 6px; margin-top: 10px; }
+.capa-opts .opt { text-align: center; }
+.objetivos { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.objetivos li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.objetivos .m { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.objetivos li.hecho { color: var(--ink); }
+.objetivos li.hecho .m { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 3px var(--surface); }
+.grande { font-family: var(--f-mono); font-size: 14px; color: var(--ink-2); margin: 6px 0 12px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.grande b { font-size: 18px; color: var(--ink); font-weight: 500; }
+
+/* vida real */
+.vr-sal { margin: 0; padding: 8px 10px; background: var(--surface-2); border-radius: 8px; font: 12px/1.55 var(--f-mono); white-space: pre-wrap; overflow-wrap: anywhere; min-height: 3em; color: var(--ink); }
+.vr-claves { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+@media (max-width: 520px) {
+  .buz { grid-template-columns: 1fr; }
+  .llaves, .vr-claves { grid-template-columns: 1fr; }
+  .flujo { grid-template-columns: 1fr; }
+  .flujo .fl { transform: rotate(90deg); }
+  .cert .cf { grid-template-columns: 1fr; gap: 0; }
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ Clave pública, firma y TLS</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Infraestructura y programación · Redes de computadores · UD6</p>
+    <h1>Clave pública, firma y TLS: acordar un secreto sin haberse visto</h1>
+    <p class="lede">
+      Tu navegador y <b>www.ejemplo.org</b> nunca se han visto, y alguien en la red lee todo lo que pasa. Aun así acuerdan un secreto y se reconocen. El truco son <b>dos claves distintas</b>: una que cualquiera puede conocer y otra que nunca sale de su dueño. Lo vas a mover con las manos, con números pequeños: cifrar, firmar, verificar un certificado y recorrer el apretón de manos de TLS.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> Cuando abres una página con candado, tu navegador y el servidor acuerdan una clave secreta para cifrar la conversación, y lo hacen por la misma red donde un atacante puede copiar todo lo que viaja. ¿Cómo crees que se ponen de acuerdo en un secreto sin que el atacante lo vea? Escríbelo como te salga, aunque esté mal.</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: el servidor manda algo que solo el navegador puede..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>De un buzón a un apretón de manos seguro</h2>
+      <p>Siete pasos. Cada uno termina con un chequeo: hasta que no lo resuelves, el siguiente queda cerrado. Equivocarte aquí no resta nada, es parte del método.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="El problema de la llave">
+          <span class="etapa">Paso 1</span>
+          <h3>Un buzón que cualquiera cierra y solo tú abres</h3>
+          <p>El equipo <b>192.168.10.37</b> quiere hablar en secreto con <b>www.ejemplo.org</b> (192.168.10.70). Hay una forma rápida de cifrar: el <b>cifrado simétrico</b>, donde una misma clave cierra y abre. Pero tiene un problema de partida: las dos puntas necesitan esa clave <b>antes</b> de empezar, y mandarla por la red es justo lo que no se puede hacer a ciegas <cite class="cita" data-fuente="red6" data-pag="13" data-pimp="10" data-seccion="18. Cifrado simétrico" data-que="El cifrado simétrico: una clave compartida, AES con claves de 128, 192 o 256 bits, rápido, y el problema de distribuir la clave de forma segura." data-cuando="Antes de tocar el escenario"></cite>.</p>
+          <p>La salida es repartir el trabajo entre dos llaves. Piensa en un <b>buzón de calle</b>: cualquiera puede echar una carta por la ranura, pero solo quien tiene la llave del buzón saca las cartas. El material usa justo esa imagen: el buzón es la clave pública y la caja fuerte compartida es el cifrado simétrico <cite class="cita" data-fuente="red6" data-pag="14" data-pimp="11" data-seccion="20. Enfoque híbrido" data-que="La idea de usar el asimétrico solo para acordar la clave de sesión y el simétrico para los datos, con la analogía del buzón y la caja fuerte." data-cuando="Al terminar este paso"></cite>
+          <cite class="cita" data-fuente="red6diapo" data-pag="26" data-seccion="Enfoque híbrido y analogía" data-que="La misma analogía del buzón en una sola diapositiva." data-cuando="Si quieres un repaso corto"></cite>.</p>
+          <p>En el escenario hay un buzón. Echa cartas, intenta sacarlas como atacante y ábrelo como dueño. Todavía no hay números: solo la idea.</p>
+          <div class="check" id="chk1"><p class="check-tit">Predice antes de seguir</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Dos llaves">
+          <span class="etapa">Paso 2</span>
+          <h3>Un par de claves ligadas por una cuenta de un solo sentido</h3>
+          <p>En la vida real el buzón son dos números. La <b>clave pública</b> sirve para cerrar (cifrar) y la <b>clave privada</b> para abrir (descifrar). Están relacionadas por una función matemática fácil de calcular en un sentido y prácticamente imposible de deshacer en el otro, y por eso publicar una no regala la otra <cite class="cita" data-fuente="red6" data-pag="13" data-pimp="10" data-seccion="19. Cifrado asimétrico" data-que="El par de claves relacionadas por una función de un solo sentido, los ejemplos RSA y curvas elípticas, y que no hace falta un canal seguro previo." data-cuando="Mientras mueves el escenario"></cite>.</p>
+          <p>El ejemplo es <b>RSA</b> con números diminutos: el servidor tiene un par, y su clave pública está a la vista de todos. Mueve el mensaje, mira cómo se cifra con la pública y ábrelo con la privada. Cuando termines el chequeo se activa el botón del atacante.</p>
+          <p>Un aviso honesto: el material nombra RSA y las curvas elípticas, pero <b>no muestra ni una cuenta</b>. Todo lo numérico de esta página sale de aparte del material.</p>
+          <div class="check" id="chk2"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="La cuenta de RSA">
+          <span class="etapa">Paso 3</span>
+          <h3>Elevar y quedarse con el resto</h3>
+          <p>Cifrar y descifrar son la misma operación con distinto exponente: elevar a una potencia y quedarse con el <b>resto de dividir por n</b>.</p>
+          <div class="fbloque">
+            <div data-tex="c = m^{e} \bmod n \qquad\qquad m = c^{d} \bmod n" data-display></div>
+            <div class="vivo2" id="vivoRsa"></div>
+          </div>
+          <p>Las claves salen de dos primos <span data-tex="p"></span> y <span data-tex="q"></span>: <span data-tex="n = pq"></span> va en las dos claves, <span data-tex="e"></span> es el exponente público, y <span data-tex="d"></span> es el inverso de <span data-tex="e"></span> módulo <span data-tex="\varphi = (p-1)(q-1)"></span>. Quien no conoce los primos no puede calcular <span data-tex="\varphi"></span> y por eso no obtiene <span data-tex="d"></span>. En el escenario está la tabla de cómo se arma el par.</p>
+          <details class="profundizar">
+            <summary>¿Por qué descifrar devuelve el mensaje?</summary>
+            <div>
+              <p>Se elige <span data-tex="e"></span> y <span data-tex="d"></span> para que <span data-tex="e \cdot d"></span> deje resto 1 al dividir por <span data-tex="\varphi"></span>. Aquí, <span data-tex="17 \times 2753 = 46801 = 15 \times 3120 + 1"></span>. Un teorema de Euler asegura que entonces <span data-tex="(m^{e})^{d} \equiv m \pmod n"></span>: elevar a <span data-tex="e"></span> y luego a <span data-tex="d"></span> te deja donde empezaste. No hace falta que lo demuestres para usarlo.</p>
+              <p>Y no se calcula <span data-tex="65^{17}"></span> de golpe, porque tiene 31 cifras. El programa de la parte 2 eleva al cuadrado y reduce en cada vuelta, para no pasar nunca de unos pocos millones.</p>
+            </div>
+          </details>
+          <details class="profundizar">
+            <summary>¿Por qué este juguete no es seguro?</summary>
+            <div>
+              <p>Porque <span data-tex="n = 3233"></span> se parte en primos probando divisores: en una docena de intentos aparece el 53. Con eso se calcula <span data-tex="\varphi"></span> y de ahí <span data-tex="d"></span>. Los primos reales miden cientos de cifras y <span data-tex="n"></span> tiene 2048 bits o más: nadie sabe factorizarlo en un tiempo razonable. Ese es todo el secreto: la seguridad es el costo de factorizar.</p>
+            </div>
+          </details>
+          <div class="check" id="chk3"><p class="check-tit">Calcula con lápiz</p><div class="cuerpo"></div></div>
+
+          <div class="destacado" id="destacado">
+            <p class="dest-tit">Una confusión muy común</p>
+            <h4>¿Y si el mensaje es mayor que n?</h4>
+            <p>Un mensaje es un número y solo caben mensajes menores que <span data-tex="n = 3233"></span>. Si metes uno mayor, la cuenta no falla ni avisa: simplemente trabaja con el resto. En el programa de la parte 2 vas a ver ese error.</p>
+            <div class="check" id="chk3b"><p class="check-tit">Predice antes de tocar el botón</p><div class="cuerpo"></div></div>
+            <div class="btn-row" style="margin-top:14px">
+              <button type="button" class="primary" id="btnGrande" disabled>Cifrar y descifrar 3300</button>
+              <span class="zhint" id="grandeHint">Responde la predicción para activar el botón.</span>
+            </div>
+            <div class="mover-eq" id="grandeEq"></div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Firmar">
+          <span class="etapa">Paso 4</span>
+          <h3>Firmar es usar el par al revés</h3>
+          <p>Si cifras con la pública, solo la privada abre. Si haces la cuenta al revés, con la <b>privada</b>, cualquiera con la pública puede comprobar que solo el dueño de la privada pudo hacerla. Eso es una <b>firma digital</b>.</p>
+          <p>No se firma el documento entero sino su <b>hash</b>, una huella de tamaño fijo que cambia por completo si cambia un solo bit <cite class="cita" data-fuente="red6" data-pag="14" data-pimp="11" data-seccion="21. Funciones hash y firma digital" data-que="Hash de longitud fija, efecto avalancha y la firma como hash cifrado con la clave privada, que da autenticidad y no repudio." data-cuando="Al terminar este paso"></cite>
+          <cite class="cita" data-fuente="red6diapo" data-pag="27" data-seccion="Funciones hash y firma digital" data-que="El mismo texto de la teoría en una diapositiva." data-cuando="Si quieres un repaso corto"></cite>.</p>
+          <div class="fbloque">
+            <div data-tex="s = h^{d} \bmod n \qquad\qquad s^{e} \bmod n \overset{?}{=} h" data-display></div>
+            <div class="vivo2" id="vivoFirma"></div>
+          </div>
+          <p>Aquí <span data-tex="h"></span> es el hash del nombre (SHA-256 reducido módulo <span data-tex="n"></span> para que quepa en el juguete). En el escenario, el servidor firma y el receptor comprueba. Cuando termines el chequeo podrás cambiar lo que recibe.</p>
+          <p>Una precisión: el material dice que la firma es «cifrar el hash con la clave privada» y que lo cifrado con una clave solo se abre con la otra. Sirve para imaginarlo, y es lo que hace el programa de aquí. Pero la firma real (RSA con relleno, ECDSA) no es literalmente cifrar, y esa frase junta dos usos: <b>confidencialidad</b> se cifra con la pública, <b>firma</b> se hace con la privada.</p>
+          <details class="profundizar">
+            <summary>El hash de juguete tiene muchísimas colisiones</summary>
+            <div>
+              <p>Reducir un SHA-256 módulo 3233 deja solo 3233 huellas posibles: con unos pocos miles de textos distintos ya hay dos con la misma huella, y una firma valdría para los dos. Un hash real conserva sus 256 bits y eso lo hace «resistente a colisiones». El juguete sirve para ver la mecánica, no la seguridad.</p>
+            </div>
+          </details>
+          <div class="check" id="chk4"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="El certificado">
+          <span class="etapa">Paso 5</span>
+          <h3>¿De quién es esta clave pública?</h3>
+          <p>Falta una pieza. Si el servidor te manda su clave pública, ¿cómo sabes que es la de www.ejemplo.org y no la de un atacante? Para eso existe el <b>certificado digital</b>: la clave pública junto con una identidad, <b>firmada por una autoridad de certificación</b> (CA) en la que tu navegador ya confía <cite class="cita" data-fuente="red6" data-pag="15" data-pimp="12" data-seccion="22. Certificados digitales y TLS (Tabla 8)" data-que="El certificado como clave pública más identidad firmada por una CA, TLS como sucesor de SSL y la tabla de mecanismos (AES, RSA o ECC, hash SHA-256, firma). Ojo: la tabla se titula «Certificados digitales» pero contiene los cuatro mecanismos, y su rótulo «Tabla 8» se repite más adelante." data-cuando="Antes de tocar el escenario"></cite>
+          <cite class="cita" data-fuente="red6diapo" data-pag="28" data-seccion="Certificados digitales y TLS" data-que="El mismo contenido con la tabla de cuatro mecanismos." data-cuando="Si quieres un repaso corto"></cite>.</p>
+          <p>Es la misma firma del paso anterior, aplicada a otra cosa: la CA firma el hash del contenido del certificado con <b>su</b> clave privada. El navegador trae la lista de CA de confianza con sus claves públicas, y con ellas comprueba la firma. En el escenario la CA es otra clave de juguete.</p>
+          <div class="check" id="chk5"><p class="check-tit">Elige y explica</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="El apretón de manos">
+          <span class="etapa">Paso 6</span>
+          <h3>Cómo se arma una conexión HTTPS</h3>
+          <p>Ya tienes todas las piezas. El apretón de manos de TLS las junta en cinco etapas, y todo ocurre dentro de la conexión TCP que ya se abrió al puerto 443 <cite class="cita" data-fuente="red5" data-pag="11" data-pimp="8" data-seccion="4.1 a 4.3 Puertos, TCP y three-way handshake" data-que="Los puertos (443 para HTTPS) y el apretón de tres pasos de TCP, que ocurre antes del de TLS." data-cuando="Antes de recorrer las etapas"></cite>. El material lo resume así: el cliente propone versiones y algoritmos, el servidor elige y manda su certificado, el cliente verifica la firma, ambos acuerdan una clave de sesión con la clave pública y desde ahí los datos viajan con AES <cite class="cita" data-fuente="red6" data-pag="15" data-pimp="12" data-seccion="22.1 Negociación simplificada de TLS" data-que="Los cinco pasos del apretón de manos: versiones y algoritmos, certificado, verificación contra las CA de confianza, clave de sesión con la clave pública y datos con AES." data-cuando="Mientras avanzas las etapas del escenario"></cite>
+          <cite class="cita" data-fuente="red6" data-pag="16" data-pimp="13" data-seccion="22.1 Negociación simplificada de TLS" data-que="El cierre del ejemplo paso a paso, hasta que los datos viajan cifrados." data-cuando="Al terminar de recorrer las cinco etapas"></cite>.</p>
+          <p>Avanza las etapas del escenario. Fíjate en lo que viaja en la etapa 4: es el único momento en que el secreto cruza la red.</p>
+          <div class="check" id="chk6"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+
+          <div class="destacado" id="destacado2">
+            <p class="dest-tit">Una confusión muy común</p>
+            <h4>Si el atacante está en medio, ¿no puede poner su propia clave?</h4>
+            <p>Sí que puede ponerla: un intermedio que ve pasar el certificado puede cambiarlo por uno suyo. Es la idea del ataque de intermediario (MITM) del material <cite class="cita" data-fuente="red6" data-pag="6" data-pimp="3" data-seccion="3.3 MITM" data-que="El ataque de intermediario: ARP spoofing, DNS spoofing y Evil twin, donde el atacante se coloca entre los dos extremos." data-cuando="Antes del botón de abajo"></cite>. Lo que no puede es hacer que la CA firme ese certificado nuevo.</p>
+            <div class="check" id="chk6b"><p class="check-tit">Predice antes de tocar el botón</p><div class="cuerpo"></div></div>
+            <div class="btn-row" style="margin-top:14px">
+              <button type="button" class="primary" id="btnInter" disabled aria-pressed="false">Poner un intermedio que cambia un byte</button>
+              <span class="zhint" id="interHint">Responde la predicción para activar el botón.</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="TLS 1.3 y Diffie-Hellman">
+          <span class="etapa">Paso 7</span>
+          <h3>Lo que el material simplifica: la clave de sesión de hoy</h3>
+          <p>En el apretón de manos de arriba, el paso 4 cifra la clave de sesión con la clave pública del servidor. Eso describe <b>TLS 1.2 con RSA</b>. En <b>TLS 1.3</b>, la versión de la bibliografía del propio material (RFC 8446), la clave de sesión se acuerda con <b>Diffie-Hellman efímero</b> y la clave del certificado solo sirve para <b>firmar</b> <cite class="cita" data-fuente="red6" data-pag="21" data-pimp="18" data-seccion="Bibliografía" data-que="Las referencias de la unidad: RFC 7296 (IKEv2), RFC 8446 (TLS 1.3), NIST SP 800-41 y otras. Ahí está la versión actual del apretón de manos, que la unidad no desarrolla." data-cuando="Cuando quieras leer cómo es TLS 1.3 de verdad"></cite>. Diffie-Hellman no se menciona en ninguna página del material.</p>
+          <p>La idea, con números de juguete: cada punta elige un número secreto (<span data-tex="a"></span> el cliente, <span data-tex="b"></span> el servidor), manda <span data-tex="g^{x} \bmod P"></span> y cada una eleva lo que recibe a su secreto. Las dos llegan al mismo número sin que ese número viaje.</p>
+          <div class="fbloque">
+            <div data-tex="A = g^{a} \bmod P \qquad B = g^{b} \bmod P \qquad K = B^{a} \bmod P = A^{b} \bmod P" data-display></div>
+            <div class="vivo2" id="vivoDh"></div>
+          </div>
+          <p>La VPN del material hace lo mismo en su tercera fase: intercambio de claves con un método asimétrico para acordar la clave simétrica del túnel <cite class="cita" data-fuente="red6" data-pag="12" data-pimp="9" data-seccion="16. Establecimiento de un túnel VPN" data-que="Las cinco fases de un túnel: autenticación, negociación de algoritmos, intercambio de claves, túnel con IP interna y transmisión cifrada." data-cuando="Después de este paso, para ver el mismo patrón en una VPN"></cite>.</p>
+          <div class="cita" id="citaHipo" hidden></div>
+          <div class="check" id="chk7"><p class="check-tit">Calcula con lápiz</p><div class="cuerpo"></div></div>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+        </div>
+
+        <div id="esBuzon">
+          <div class="buz">
+            <div class="actor" id="aCli"><h4>Cliente</h4><small>192.168.10.37</small>Quiere mandar un secreto<div id="cartasCli" style="margin-top:4px"></div></div>
+            <div class="buzon"><h4>Buzón del servidor</h4><small>www.ejemplo.org · 192.168.10.70</small><div class="ranura"></div><div class="cartas" id="nCartas">0</div><small>cartas dentro</small></div>
+            <div class="actor" id="aAtq"><h4>Atacante</h4><small>en la red</small>Ve todo lo que pasa</div>
+          </div>
+          <div class="btn-row" style="margin-top:8px">
+            <button type="button" id="bEchar">Cliente echa una carta</button>
+            <button type="button" id="bAtaque">Atacante intenta sacar una</button>
+            <button type="button" class="primary" id="bAbrir">Servidor abre con su llave</button>
+          </div>
+          <div class="camino-info" id="buzInfo">Toca un botón.</div>
+        </div>
+
+        <div id="esRsa">
+          <div class="llaves" id="llaves"></div>
+          <div class="rango"><span>Mensaje</span><input type="range" id="slM" min="2" max="3232" value="65" aria-label="Mensaje"><b id="slMv">65</b></div>
+          <div class="btn-row"><button type="button" data-p="2">2</button><button type="button" data-p="65">65</button><button type="button" data-p="777">777</button><button type="button" data-p="3232">3232</button></div>
+          <div class="flujo" id="flujo"></div>
+          <div class="btn-row">
+            <button type="button" class="primary" id="bPriv">Descifrar con la privada</button>
+            <button type="button" id="bPub" disabled>Intentar con la pública (atacante)</button>
+          </div>
+          <div class="camino-info" id="rsaInfo"></div>
+          <div id="rsaGen"></div>
+        </div>
+
+        <div id="esFirma">
+          <div class="llaves">
+            <div class="llave k-priv"><b>Emisor: el servidor</b><span id="fEmNombre"></span><small id="fEmHash"></small></div>
+            <div class="llave k-pub"><b>Receptor: el cliente</b><span id="fReNombre"></span><small id="fReHash"></small></div>
+          </div>
+          <div class="seg" id="segNombre" role="group" aria-label="Nombre recibido" style="margin-bottom:6px">
+            <button type="button" data-v="0" aria-pressed="true">Nombre intacto</button>
+            <button type="button" data-v="1" aria-pressed="false">Una letra cambiada</button>
+          </div>
+          <div class="seg" id="segFirma" role="group" aria-label="Firma recibida" style="margin-bottom:6px">
+            <button type="button" data-v="0" aria-pressed="true">Firma intacta</button>
+            <button type="button" data-v="1" aria-pressed="false">Firma alterada en 1</button>
+          </div>
+          <div class="flujo" id="flujoF"></div>
+          <div class="camino-info" id="firmaInfo"></div>
+        </div>
+
+        <div id="esCert">
+          <div class="cert" id="certCaja"></div>
+          <div class="seg" id="segCert" role="group" aria-label="Contenido del certificado" style="margin:8px 0">
+            <button type="button" data-v="0" aria-pressed="true">Certificado original</button>
+            <button type="button" data-v="1" aria-pressed="false">Un byte cambiado</button>
+          </div>
+          <div class="flujo" id="flujoC"></div>
+          <div class="camino-info" id="certInfo"></div>
+        </div>
+
+        <div id="esTls">
+          <div id="tlsFilas"></div>
+          <div class="camino-info" id="tlsInfo"></div>
+          <div class="btn-row">
+            <button type="button" id="bTlsAnt">Etapa anterior</button>
+            <button type="button" class="primary" id="bTlsSig">Siguiente etapa</button>
+            <button type="button" class="ghost" id="bTlsRe">Empezar de nuevo</button>
+          </div>
+        </div>
+
+        <div id="esDh">
+          <div class="rango"><span>a (cliente)</span><input type="range" id="slA" min="1" max="22" value="3" aria-label="Secreto del cliente"><b id="slAv">3</b></div>
+          <div class="rango"><span>b (servidor)</span><input type="range" id="slB" min="1" max="22" value="7" aria-label="Secreto del servidor"><b id="slBv">7</b></div>
+          <div class="flujo" id="flujoD"></div>
+          <div class="camino-info" id="dhInfo"></div>
+          <div class="seg" id="segFs" role="group" aria-label="Qué se roba" style="margin-bottom:6px">
+            <button type="button" data-v="rsa" aria-pressed="true">TLS 1.2 con RSA</button>
+            <button type="button" data-v="dh" aria-pressed="false">TLS 1.3 con DH efímero</button>
+          </div>
+          <div class="camino-info" id="fsInfo"></div>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>El mismo par de claves del recorrido, calculado por un programa con primos de dos cifras: genera las claves, cifra el 65, lo descifra, firma el hash de www.ejemplo.org, verifica (y rechaza una letra cambiada) y acuerda un secreto estilo Diffie-Hellman. Elige Python o R, dale a reproducir y mira las tablas llenarse.</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir</p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="true">Python</button>
+            <button type="button" data-lang="r" aria-pressed="false">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">1 · las claves</span><span data-f="2">2 · cifrar y descifrar</span><span data-f="3">3 · firmar y verificar</span><span data-f="4">4 · acordar un secreto</span>
+        </div>
+        <div class="vr-claves" id="vrClaves"></div>
+        <h3 class="mini-tit vr-tit" id="vrTablaTit">La cuenta en curso</h3>
+        <div class="tabla-wrap"><table class="tbl" id="vrTabla"></table></div>
+        <h3 class="mini-tit vr-tit">Lo que imprimió el programa</h3>
+        <pre class="vr-sal" id="vrSalida"></pre>
+      </div>
+    </div>
+
+    <p class="vr-nota">Una aclaración honesta: este RSA <b>no es seguro</b>. Con primos de dos cifras, <code>3233</code> se factoriza de cabeza y cualquiera obtiene la clave privada; las claves reales tienen 2048 bits o más. Tampoco hay un relleno (padding), que la firma y el cifrado reales exigen. En Python la función propia se compara con <code>pow(m, e, n)</code>, que hace la potencia modular de fábrica. R no trae esa función, así que se compara con <code>lento()</code>, que multiplica <code>e</code> veces reduciendo en cada paso: tarda más pero no puede equivocarse. Los números y los nombres son inventados, y no se abre ninguna conexión de red.</p>
+
+    <details class="profundizar">
+      <summary>La versión de una línea con librería</summary>
+      <div>
+        <p>En Python 3.8 o más reciente, el inverso modular también es una función de fábrica: <code>pow(17, -1, 3120)</code> devuelve <code>2753</code>, el mismo <code>d</code> que sale del bucle de Euclides. Y <code>pow(65, 17, 3233)</code> da <code>2790</code>. En la práctica nadie escribe RSA a mano: se usa una librería de criptografía (en Python, <code>cryptography</code>; en la terminal, <code>openssl</code>), que además añade el relleno y trabaja con claves de verdad. Aquí no se ejecutan, y el material tampoco las menciona.</p>
+      </div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>La potencia que no es potencia</h3><span class="estado" data-reto="codigo2"></span></div>
+        <div id="codigo2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>El mensaje que no cabe</h3><span class="estado" data-reto="codigo3"></span></div>
+        <div id="codigo3"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: la biblioteca te avisa en el índice cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>¿Qué clave interviene?</h3><span class="estado" data-reto="ojo"></span></div>
+        <p class="desc">Cinco situaciones. Decide qué clave se usa en cada una, sin calcular nada. Apruebas con 4 de 5.</p>
+        <div id="ojo"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Construir</span><h3>Dos secretos, un mismo número</h3><span class="estado" data-reto="construir"></span></div>
+        <p class="desc">Con g = 5 y P = 23, mueve los secretos del cliente y del servidor hasta cumplir cada objetivo. Se marcan solos.</p>
+        <div class="rango"><span>a (cliente)</span><input type="range" id="slCa" min="1" max="22" value="3" aria-label="Secreto del cliente"><b id="slCav">3</b></div>
+        <div class="rango"><span>b (servidor)</span><input type="range" id="slCb" min="1" max="22" value="7" aria-label="Secreto del servidor"><b id="slCbv">7</b></div>
+        <div class="grande" id="constrVivo"></div>
+        <ul class="objetivos" id="objetivos"></ul>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>Encuentra la clave privada</h3><span class="estado" data-reto="mano"></span></div>
+        <p class="desc">Te doy dos primos pequeños y un exponente público. Calcula la clave privada con lápiz.</p>
+        <div id="mano"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Alguien se equivocó</h3><span class="estado" data-reto="error"></span></div>
+        <p class="desc">Una de las líneas tiene un error. Tócala.</p>
+        <div id="error"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Qué garantiza una firma</h3><span class="estado" data-reto="prop1"></span></div>
+        <div id="prop1"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Un atacante con la clave pública</h3><span class="estado" data-reto="prop2"></span></div>
+        <div id="prop2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Por qué no todo con RSA</h3><span class="estado" data-reto="prop3"></span></div>
+        <div id="prop3"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Recordar a la fuerza es lo que fija. Arma la fórmula del cifrado y el orden del apretón de manos, y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Fórmula de memoria</span><h3>Arma el cifrado de RSA pieza por pieza</h3><span class="estado" data-reto="formula"></span></div>
+        <p class="desc">Hay piezas de más que no pertenecen. No mires arriba.</p>
+        <div id="formula"></div>
+      </article>
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Orden de memoria</span><h3>Las cinco etapas de TLS, en orden</h3><span class="estado" data-reto="orden"></span></div>
+        <p class="desc">Una de las piezas no pertenece al apretón de manos.</p>
+        <div id="orden"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el material</h2>
+      <p class="lecturas-intro">Ya armaste la idea con las manos. Ahora ve a la versión del material de la unidad y comprueba que la reconoces. Cada entrada dice qué vas a encontrar y en qué momento conviene leerla. Recuerda que el material no trae ninguna cuenta de RSA ni menciona Diffie-Hellman. Si abres la biblioteca con doble clic, el enlace abre el PDF en esa página.</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> Los primos, las claves, el mensaje 65, la CA y los secretos son inventados, elegidos para que las cuentas sean limpias (n = 3233, c = 2790). Este RSA es solo una maqueta para ver la mecánica y no es seguro.
+    Todo el cálculo con números sale de aparte del material de la unidad, que no trae ninguna cuenta de criptografía. Tu progreso se guarda solo en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+/*
+  EJEMPLO COMUN DE LA RUTA "REDES DE COMPUTADORES" (lo reutilizan las demás páginas de la ruta; viene de redes-capas.html)
+
+  Bloque de la empresa: 192.168.10.0/24, partido en subredes del tamaño justo (de mayor a menor).
+    Ventas   50 equipos   192.168.10.0/26    VLAN 10   hosts .1 a .62,  broadcast .63   puerta de enlace 192.168.10.1
+    Soporte  20 equipos   192.168.10.64/27   VLAN 20   hosts .65 a .94, broadcast .95   puerta de enlace 192.168.10.65
+    Enlace    2 equipos   192.168.10.96/30   hosts .97 y .98,           broadcast .99   entre el router y el proveedor
+  Equipo de ejemplo:  192.168.10.37 (Ventas, VLAN 10), MAC 3C:A9:F4:1B:8E:02, puerto de origen 49152.
+  Servidor de ejemplo: www.ejemplo.org = 192.168.10.70 (Soporte, VLAN 20), MAC 5E:6F:70:81:92:A3, puerto 80 (443 con TLS).
+  Router: interfaz VLAN 10 = 192.168.10.1 (MAC 0A:1B:2C:3D:4E:5F); interfaz VLAN 20 = 192.168.10.65 (MAC 0A:1B:2C:3D:4E:60).
+
+  EJEMPLO DE ESTA PAGINA (RSA de juguete, NO es seguro): p = 61, q = 53, n = 3233, fi = 3120, e = 17, d = 2753.
+  Mensaje 65 -> cifrado 2790. Hash de "www.ejemplo.org" (SHA-256 mod 3233) = 771, firma 2550; con "www.ejemp1o.org" el hash es 215.
+  CA de juguete: n = 4757, e = 13, d = 1777; el certificado "www.ejemplo.org|3233|17" tiene hash 2854 y firma 3709.
+  Clave de sesion de juguete 1234 -> cifrada 2183. Diffie-Hellman: P = 23, g = 5, a = 6, b = 15 -> A = 8, B = 19, K = 2.
+*/
+(function () {
+  "use strict";
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+
+  var RETOS = ["ojo", "construir", "mano", "error", "formula", "orden", "prop1", "prop2", "prop3", "codigo1", "codigo2", "codigo3"];
+  var C = B.concepto({ id: "clave-publica-tls", retos: RETOS, pasos: 7 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  /* ---------------- la matematica del juguete ---------------- */
+  var N = 3233, E = 17, D = 2753, FI = 3120;
+  var CAN = 4757, CAE = 13;
+  var HASH_OK = 771, HASH_MAL = 215;      // SHA-256 de "www.ejemplo.org" y de "www.ejemp1o.org", modulo 3233 (calculados con hashlib)
+  var CERT_HASH = { 0: 2854, 1: 734 };     // SHA-256 de "www.ejemplo.org|3233|17" y de "www.ejemplo.org|3233|19", modulo 4757
+  var CERT_FIRMA = 3709;                   // el hash 2854 elevado a 1777 modulo 4757
+  var SESION = 1234;
+  var DHP = 23, DHG = 5;
+
+  function pot(b, ex, mod) {
+    var r = 1;
+    b = b % mod;
+    while (ex > 0) {
+      if (ex % 2 === 1) r = (r * b) % mod;
+      b = (b * b) % mod;
+      ex = Math.floor(ex / 2);
+    }
+    return r;
+  }
+  function tablaPot(b, ex, mod) {
+    var filas = [], r = 1;
+    b = b % mod;
+    while (ex > 0) {
+      var odd = ex % 2 === 1, ea = ex;
+      if (odd) r = (r * b) % mod;
+      b = (b * b) % mod;
+      ex = Math.floor(ex / 2);
+      filas.push([ea, odd ? "sí" : "no", r, b]);
+    }
+    return filas;
+  }
+  var SIG = pot(HASH_OK, D, N);            // 2550
+
+  var est = { paso: 0, buz: 0, leidas: 0, m: 65, desc: null, k2: false, k3b: false, nom: 0, fir: 0, k4: false, cert: 0, k5: false, tls: 1, inter: false, k6b: false, a: 3, b: 7, fs: "rsa", k7: false };
+  var pasos;
+
+  /* ---------------- escenario: buzon ---------------- */
+  function pintarBuzon() {
+    $("nCartas").textContent = est.buz;
+    var h = "";
+    for (var i = 0; i < Math.min(est.buz, 12); i++) h += '<span class="carta"></span>';
+    $("cartasCli").innerHTML = h;
+  }
+  $("bEchar").addEventListener("click", function () {
+    est.buz++;
+    pintarBuzon();
+    $("buzInfo").innerHTML = "La carta cae por la ranura. El atacante la vio pasar, pero va cerrada: <b>no puede leerla</b>. Tampoco hizo falta ninguna reunión previa entre el cliente y el servidor.";
+  });
+  $("bAtaque").addEventListener("click", function () {
+    $("buzInfo").innerHTML = est.buz === 0
+      ? "No hay nada que sacar todavía. Echa una carta primero."
+      : "La ranura solo deja entrar cartas. <b>Conocer el buzón no sirve para abrirlo</b>: sin la llave del dueño, nada sale.";
+  });
+  $("bAbrir").addEventListener("click", function () {
+    if (est.buz === 0) { $("buzInfo").innerHTML = "El buzón está vacío."; return; }
+    est.leidas += est.buz;
+    $("buzInfo").innerHTML = "El servidor abre con su llave y lee <b>" + est.buz + "</b> carta" + (est.buz > 1 ? "s" : "") + ". Solo él tiene esa llave; la ranura la conoce todo el mundo.";
+    est.buz = 0;
+    pintarBuzon();
+  });
+
+  /* ---------------- escenario: RSA ---------------- */
+  function pintarRsa() {
+    if (est.paso < 2 && est.m > 3232) est.m = 3232;
+    var m = est.m, paso = est.paso;
+    var c = pot(m, E, N), dpriv = pot(c, D, N), dpub = pot(c, E, N);
+    var notado = paso >= 2;
+    $("slM").max = paso >= 2 ? 4000 : 3232;
+    if (+$("slM").value !== m) $("slM").value = m;
+    $("slMv").textContent = m;
+    $("llaves").innerHTML =
+      '<div class="llave k-pub"><b>Clave pública</b><span>' + (notado ? "(n, e) = (3233, 17)" : "3233 y 17") + '</span><small>la conoce todo el mundo</small></div>' +
+      '<div class="llave k-priv"><b>Clave privada</b><span>' + (notado ? "(n, d) = (3233, 2753)" : "3233 y 2753") + '</span><small>solo el servidor</small></div>';
+    var f3;
+    if (est.desc === "priv") {
+      var igual = dpriv === m;
+      f3 = '<div class="caja ' + (igual ? "ok" : "no") + '">Descifrado con la privada<b>' + dpriv + '</b></div>';
+    } else if (est.desc === "pub") {
+      var igual2 = dpub === m;
+      f3 = '<div class="caja ' + (igual2 ? "ok" : "no") + '">Intento con la pública<b>' + dpub + '</b></div>';
+    } else {
+      f3 = '<div class="caja apagada">Descifrado<b>?</b></div>';
+    }
+    $("flujo").innerHTML = '<div class="caja">Mensaje<b>' + m + '</b></div><span class="fl">&rarr;</span>' +
+      '<div class="caja pub">Cifrado con la pública<b>' + c + '</b></div><span class="fl">&rarr;</span>' + f3;
+    var txt;
+    if (!est.desc) txt = "Mueve el mensaje y mira cómo cambia el cifrado: números vecinos dan cifrados que no se parecen. Después descifra.";
+    else if (est.desc === "priv") {
+      txt = m >= N
+        ? "El mensaje <b>" + m + "</b> es mayor o igual que n = 3233, así que la cuenta trabaja con su resto: <b>" + (m % N) + "</b>. Lo que sale no es lo que cifraste."
+        : "Con la privada, la cuenta devuelve <b>" + dpriv + "</b>: exactamente el mensaje. Solo quien tiene el 2753 puede hacerlo.";
+    } else {
+      txt = dpub === m
+        ? "Casualidad de este mensaje: la pública devuelve el mismo número (pasa con 1 y con n − 1). Prueba con otro mensaje."
+        : "Aplicar otra vez la pública da <b>" + dpub + "</b>, un número sin relación con el mensaje <b>" + m + "</b>. Cerrar no sirve para abrir.";
+    }
+    $("rsaInfo").innerHTML = txt;
+    $("bPub").disabled = !est.k2;
+    $("rsaGen").innerHTML = paso >= 2
+      ? '<table class="tbl"><tr><th>Cómo se arma el par</th><th class="r">valor</th></tr>' +
+        '<tr><td>Dos primos <b>p</b> y <b>q</b></td><td class="r">61 y 53</td></tr>' +
+        '<tr><td><b>n</b> = p × q</td><td class="r">3233</td></tr>' +
+        '<tr><td><b>φ</b> = (p − 1)(q − 1)</td><td class="r">60 × 52 = 3120</td></tr>' +
+        '<tr><td><b>e</b>, sin factores comunes con φ</td><td class="r">17</td></tr>' +
+        '<tr><td><b>d</b>, con e × d = 1 + k × φ</td><td class="r">2753</td></tr>' +
+        '<tr><td>Comprobación</td><td class="r">17 × 2753 = 46801 = 15 × 3120 + 1</td></tr></table>'
+      : "";
+    pintarVivoRsa(m, c, dpriv);
+  }
+  function pintarVivoRsa(m, c, dpriv) {
+    $("vivoRsa").innerHTML = "c = " + m + "<sup>17</sup> mod 3233 = <b>" + c + "</b> &nbsp;·&nbsp; m = " + c + "<sup>2753</sup> mod 3233 = <b>" + dpriv + "</b>" + (m >= N ? " (m es mayor o igual que n)" : "");
+  }
+  $("slM").addEventListener("input", function () { est.m = +this.value; pintarRsa(); });
+  $("esRsa").addEventListener("click", function (ev) {
+    var b = ev.target.closest("[data-p]");
+    if (!b) return;
+    est.m = +b.getAttribute("data-p");
+    pintarRsa();
+  });
+  $("bPriv").addEventListener("click", function () { est.desc = "priv"; pintarRsa(); });
+  $("bPub").addEventListener("click", function () { est.desc = "pub"; pintarRsa(); });
+
+  $("btnGrande").addEventListener("click", function () {
+    est.m = 3300;
+    est.desc = "priv";
+    pintarRsa();
+    $("grandeEq").innerHTML = "<b>3300</b> → cifrado <b>" + pot(3300, E, N) + "</b> → descifrado <b>" + pot(pot(3300, E, N), D, N) + "</b>.<br>Y 3300 − 3233 = 67: el servidor no recupera tu mensaje, recupera su resto.";
+  });
+
+  /* ---------------- escenario: firma ---------------- */
+  function pintarFirma() {
+    var nomR = est.nom ? "www.ejemp1o.org" : "www.ejemplo.org";
+    var hR = est.nom ? HASH_MAL : HASH_OK;
+    var firmaR = est.fir ? SIG + 1 : SIG;
+    var v = pot(firmaR, E, N);
+    var ok = v === hR;
+    $("fEmNombre").textContent = "www.ejemplo.org";
+    $("fEmHash").textContent = "hash h = " + HASH_OK + " · firma s = " + HASH_OK + "^2753 mod 3233 = " + SIG;
+    $("fReNombre").textContent = nomR;
+    $("fReHash").textContent = "hash del nombre recibido = " + hR;
+    $("flujoF").innerHTML = '<div class="caja k-priv">Firma recibida<b>' + firmaR + '</b></div><span class="fl">&rarr;</span>' +
+      '<div class="caja pub ' + (ok ? "ok" : "no") + '">Firma elevada a e<b>' + v + '</b></div><span class="fl">=?</span>' +
+      '<div class="caja ' + (ok ? "ok" : "no") + '">Hash del nombre<b>' + hR + '</b></div>';
+    var t;
+    if (ok) t = '<span class="bien">Firma válida.</span> Dos cosas a la vez: el hash coincide (el nombre no cambió: <b>integridad</b>) y solo el dueño de la privada pudo producir esa firma (<b>autenticidad</b>).';
+    else if (est.nom && !est.fir) t = '<span class="mal">Firma inválida.</span> La firma sigue dando <b>' + v + '</b>, pero el nombre recibido tiene hash <b>' + hR + '</b>. Cambiar una letra cambió la huella entera: alguien tocó el texto.';
+    else if (!est.nom && est.fir) t = '<span class="mal">Firma inválida.</span> Una firma alterada en una unidad da <b>' + v + '</b> en vez de <b>' + HASH_OK + '</b>: ni se parece. Sin la privada nadie puede fabricar un número que verifique.';
+    else t = '<span class="mal">Firma inválida.</span> Cambiaron el nombre y la firma: <b>' + v + '</b> no coincide con <b>' + hR + '</b>.';
+    $("firmaInfo").innerHTML = t;
+    [].forEach.call($("segNombre").children, function (b) { b.setAttribute("aria-pressed", +b.getAttribute("data-v") === est.nom ? "true" : "false"); b.disabled = !est.k4; });
+    [].forEach.call($("segFirma").children, function (b) { b.setAttribute("aria-pressed", +b.getAttribute("data-v") === est.fir ? "true" : "false"); b.disabled = !est.k4; });
+    $("vivoFirma").innerHTML = "h = <b>" + HASH_OK + "</b> &nbsp;·&nbsp; s = " + HASH_OK + "<sup>2753</sup> mod 3233 = <b>" + SIG + "</b> &nbsp;·&nbsp; s<sup>17</sup> mod 3233 = <b>" + pot(SIG, E, N) + "</b>";
+  }
+  $("segNombre").addEventListener("click", function (ev) { var b = ev.target.closest("button"); if (!b || b.disabled) return; est.nom = +b.getAttribute("data-v"); pintarFirma(); });
+  $("segFirma").addEventListener("click", function (ev) { var b = ev.target.closest("button"); if (!b || b.disabled) return; est.fir = +b.getAttribute("data-v"); pintarFirma(); });
+
+  /* ---------------- escenario: certificado ---------------- */
+  function pintarCert() {
+    var cam = est.cert === 1;
+    var hc = CERT_HASH[est.cert];
+    var v = pot(CERT_FIRMA, CAE, CAN);
+    var ok = v === hc;
+    $("certCaja").innerHTML = '<h4>Certificado digital</h4>' +
+      '<div class="cf"><span>Sujeto</span><span>www.ejemplo.org</span></div>' +
+      '<div class="cf' + (cam ? " cambia" : "") + '"><span>Clave pública</span><span>n = 3233, e = ' + (cam ? "19" : "17") + '</span></div>' +
+      '<div class="cf"><span>Emisor</span><span>CA de juguete (clave pública 4757 y 13)</span></div>' +
+      '<div class="cf"><span>Firma de la CA</span><span>' + CERT_FIRMA + '</span></div>';
+    $("flujoC").innerHTML = '<div class="caja">Huella del contenido (mod 4757)<b>' + hc + '</b></div><span class="fl">=?</span>' +
+      '<div class="caja pub ' + (ok ? "ok" : "no") + '">Firma de la CA elevada a 13<b>' + v + '</b></div><span class="fl"></span><div class="caja ' + (ok ? "ok" : "no") + '">' + (ok ? "Confiable" : "Rechazado") + '<b>' + (ok ? "sí" : "no") + '</b></div>';
+    $("certInfo").innerHTML = ok
+      ? '<span class="bien">El navegador acepta.</span> Calcula la huella del contenido (<b>' + hc + '</b>) y, con la clave pública de la CA que ya traía, comprueba la firma: <b>3709<sup>13</sup> mod 4757 = ' + v + '</b>. Coinciden, así que la CA vio ese contenido exacto.'
+      : '<span class="mal">El navegador rechaza.</span> Un byte distinto en el contenido cambia la huella a <b>' + hc + '</b>, pero la firma de la CA sigue apuntando a <b>' + v + '</b>. Para arreglarlo habría que firmar de nuevo, y eso solo lo hace la CA.';
+    [].forEach.call($("segCert").children, function (b) { b.setAttribute("aria-pressed", +b.getAttribute("data-v") === est.cert ? "true" : "false"); b.disabled = !est.k5; });
+  }
+  $("segCert").addEventListener("click", function (ev) { var b = ev.target.closest("button"); if (!b || b.disabled) return; est.cert = +b.getAttribute("data-v"); pintarCert(); });
+
+  /* ---------------- escenario: apretón de manos TLS ---------------- */
+  var ETAPAS = [
+    ["Cliente → servidor", "Versiones de TLS y algoritmos que acepto"],
+    ["Servidor → cliente", "Elijo versión y algoritmos, y mando mi certificado"],
+    ["Cliente, en su equipo", "Verifica la firma del certificado"],
+    ["Cliente → servidor", "Clave de sesión cifrada con la pública"],
+    ["Los dos", "Datos cifrados con AES y la clave de sesión"]
+  ];
+  function pintarTls() {
+    var t = est.tls, falla = est.inter && t >= 3;
+    var h = "";
+    ETAPAS.forEach(function (x, i) {
+      var n = i + 1, cls = "tls-fila";
+      if (falla && n === 3) cls += " falla";
+      else if (n === t) cls += " aqui";
+      else if (n < t && !(falla && n >= 3)) cls += " hecha";
+      h += '<div class="' + cls + '"><span class="n">' + n + '</span><span>' + x[1] + '<small>' + x[0] + '</small></span></div>';
+    });
+    $("tlsFilas").innerHTML = h;
+    var hc = CERT_HASH[est.inter ? 1 : 0], v = pot(CERT_FIRMA, CAE, CAN);
+    var info;
+    if (t === 1) info = "<b>Cliente → servidor.</b> «Hablo TLS 1.2 y 1.3, y sé usar AES con claves de 128 y de 256 bits.» Todavía no hay nada secreto: esto viaja en claro.";
+    else if (t === 2) info = "<b>Servidor → cliente.</b> «Usemos AES.» Y su certificado: <b>www.ejemplo.org</b>, clave pública (3233, 17), firma de la CA <b>3709</b>." + (est.inter ? " <span class=\"mal\">Un intermedio cambió un byte en el camino: e dice 19.</span>" : "");
+    else if (t === 3) info = est.inter
+      ? '<span class="mal">El cliente verifica y falla.</span> La huella del certificado recibido es <b>' + hc + '</b>, pero la firma de la CA da <b>' + v + '</b>. El navegador corta y avisa. Nadie llega a cifrar nada, y el atacante no puede arreglarlo sin la privada de la CA.'
+      : '<b>El cliente verifica.</b> Huella del certificado: <b>' + hc + '</b>. Firma de la CA elevada a 13 módulo 4757: <b>' + v + '</b>. Coinciden: esa clave pública es de www.ejemplo.org.';
+    else if (t === 4) info = "<b>Cliente → servidor.</b> El cliente elige un secreto, <b>" + SESION + "</b>, y lo cifra con la pública del servidor: " + SESION + "<sup>17</sup> mod 3233 = <b>" + pot(SESION, E, N) + "</b>. Por la red solo viaja el <b>" + pot(SESION, E, N) + "</b>. El servidor lo abre con su privada: " + pot(SESION, E, N) + "<sup>2753</sup> mod 3233 = <b>" + pot(pot(SESION, E, N), D, N) + "</b>.";
+    else info = "<b>Los dos.</b> Ya comparten <b>" + SESION + "</b> sin que viajara. Con esa clave de sesión los datos van cifrados con AES (simétrico, rápido). En la vida real la clave mide 128 o 256 bits, no cuatro cifras.";
+    $("tlsInfo").innerHTML = info;
+    $("bTlsAnt").disabled = t === 1;
+    $("bTlsSig").disabled = t === 5 || falla;
+    var b = $("btnInter");
+    b.setAttribute("aria-pressed", est.inter ? "true" : "false");
+    b.textContent = est.inter ? "Quitar el intermedio" : "Poner un intermedio que cambia un byte";
+  }
+  $("bTlsSig").addEventListener("click", function () { if (est.tls < 5) { est.tls++; pintarTls(); } });
+  $("bTlsAnt").addEventListener("click", function () { if (est.tls > 1) { est.tls--; pintarTls(); } });
+  $("bTlsRe").addEventListener("click", function () { est.tls = 1; pintarTls(); });
+  $("btnInter").addEventListener("click", function () {
+    est.inter = !est.inter;
+    est.tls = est.inter ? 3 : 1;
+    pintarTls();
+    $("escHint").textContent = est.inter ? "El intermedio cambió un byte" : "Avanza las cinco etapas";
+  });
+
+  /* ---------------- escenario: Diffie-Hellman ---------------- */
+  function pintarDh() {
+    var a = est.a, b = est.b;
+    var A = pot(DHG, a, DHP), Bv = pot(DHG, b, DHP), K1 = pot(Bv, a, DHP), K2 = pot(A, b, DHP);
+    $("slA").value = a; $("slB").value = b;
+    $("slAv").textContent = a; $("slBv").textContent = b;
+    $("flujoD").innerHTML = '<div class="caja k-pub">Cliente manda A<b>' + A + '</b></div><span class="fl"></span><div class="caja k-priv">Servidor manda B<b>' + Bv + '</b></div><span class="fl">&rarr;</span><div class="caja ok">Secreto K, el mismo<b>' + K1 + '</b></div>';
+    $("dhInfo").innerHTML = "El atacante ve P = 23, g = 5, <b>A = " + A + "</b> y <b>B = " + Bv + "</b>, pero no a ni b. El cliente calcula " + Bv + "<sup>" + a + "</sup> mod 23 = <b>" + K1 + "</b> y el servidor " + A + "<sup>" + b + "</sup> mod 23 = <b>" + K2 + "</b>. Con P = 23 el atacante probaría 22 valores de a; con un P de 2048 bits no hay atajo.";
+    $("vivoDh").innerHTML = "A = 5<sup>" + a + "</sup> mod 23 = <b>" + A + "</b> &nbsp;·&nbsp; B = 5<sup>" + b + "</sup> mod 23 = <b>" + Bv + "</b> &nbsp;·&nbsp; K = <b>" + K1 + "</b>";
+    [].forEach.call($("segFs").children, function (x) { x.setAttribute("aria-pressed", x.getAttribute("data-v") === est.fs ? "true" : "false"); x.disabled = !est.k7; });
+    $("fsInfo").innerHTML = est.fs === "rsa"
+      ? "<b>TLS 1.2 con RSA.</b> Un atacante grabó hoy el tráfico, incluido el <b>" + pot(SESION, E, N) + "</b> de la clave de sesión cifrada. Dentro de un año roba la clave privada del servidor, 2753. Calcula " + pot(SESION, E, N) + "<sup>2753</sup> mod 3233 = <b>" + SESION + "</b>: <span class=\"mal\">recupera la clave de sesión y lee toda la conversación grabada.</span>"
+      : "<b>TLS 1.3 con Diffie-Hellman efímero.</b> El atacante grabó A y B y después roba la clave privada del servidor. Pero esa clave solo <b>firmó</b> el apretón: ni a ni b están en ella, y se borraron al terminar. <span class=\"bien\">Lo grabado sigue siendo ilegible.</span> Se llama secreto hacia adelante.";
+  }
+  $("slA").addEventListener("input", function () { est.a = +this.value; pintarDh(); });
+  $("slB").addEventListener("input", function () { est.b = +this.value; pintarDh(); });
+  $("segFs").addEventListener("click", function (ev) { var b = ev.target.closest("button"); if (!b || b.disabled) return; est.fs = b.getAttribute("data-v"); pintarDh(); });
+
+  /* ---------------- control de modos ---------------- */
+  var MODOS = [
+    { hint: "Echa cartas, ataca y abre el buzón", bloques: ["esBuzon"] },
+    { hint: "Cifra con la pública, abre con la privada", bloques: ["esRsa"] },
+    { hint: "Mueve el mensaje, incluso más allá de n", bloques: ["esRsa"] },
+    { hint: "Verifica una firma, intacta o alterada", bloques: ["esFirma"] },
+    { hint: "El navegador verifica a la CA", bloques: ["esCert"] },
+    { hint: "Avanza las cinco etapas", bloques: ["esTls"] },
+    { hint: "Mueve los dos secretos", bloques: ["esDh"] }
+  ];
+  var TODOS = ["esBuzon", "esRsa", "esFirma", "esCert", "esTls", "esDh"];
+  function entrar(i) {
+    est.paso = i;
+    var m = MODOS[i];
+    TODOS.forEach(function (id) { $(id).hidden = m.bloques.indexOf(id) < 0; });
+    $("escHint").textContent = i === 5 && est.inter ? "El intermedio cambió un byte" : m.hint;
+    if (i === 0) pintarBuzon();
+    if (i === 1 || i === 2) pintarRsa();
+    if (i === 3) pintarFirma();
+    if (i === 4) pintarCert();
+    if (i === 5) pintarTls();
+    if (i === 6) pintarDh();
+  }
+
+  /* ---------------- chequeos de cada paso ---------------- */
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+
+  B.opcionMultiple(cuerpo("chk1"), {
+    pregunta: "Antes de ver nada: el cliente y el servidor nunca se han visto, y un atacante copia todo lo que viaja por la red. Quieren compartir una clave secreta. Si el servidor simplemente se la manda al cliente por la red, ¿cuál es el problema?",
+    opciones: [
+      "El atacante la copia al pasar y desde ese momento lee todo lo que se cifre con ella",
+      "La red comprime la clave y llega rota",
+      "El servidor ya no puede usar una clave que mandó",
+      "No hay problema: la clave solo sirve si la ven los dos"
+    ],
+    correcta: 0,
+    pistas: [null, "Las redes no comprimen una clave: transportan los bytes tal cual.", "El servidor sigue sabiendo la clave después de mandarla.", "Si la ve un tercero, ya no es un secreto de dos."],
+    explicacion: "Una clave simétrica que viaja a la vista no sirve: quien la copie lee y escribe como si fuera uno de los dos. Hace falta una forma de repartir el secreto sin mandarlo, y eso es lo que resuelve el par de claves.",
+    alResolver: function () { pasos.completar(0); }
+  });
+
+  B.opcionMultiple(cuerpo("chk2"), {
+    pregunta: "Cifraste el 65 con la clave pública y salió 2790. Un atacante conoce la pública y ve pasar el 2790. Antes de tocar: si aplica otra vez la pública al 2790, ¿qué obtiene?",
+    opciones: [
+      "El 65 original, porque la pública también abre",
+      "Otro número sin relación con el 65",
+      "Un mensaje de error",
+      "El 2790 otra vez"
+    ],
+    correcta: 1,
+    pistas: ["Si la pública abriera lo que ella cierra, el buzón no serviría de nada: cualquiera lo vaciaría.", null,
+      "La cuenta no se rompe: siempre da un número. Lo que no da es el mensaje.", "La cuenta mezcla el número, no lo deja igual (salvo casos raros)."],
+    explicacion: "Cerrar y abrir son operaciones distintas: la pública cierra y solo la privada abre. Ahora toca el botón del atacante y compruébalo con el 65 y con otros mensajes.",
+    alResolver: function () { est.k2 = true; $("bPub").disabled = false; pasos.completar(1); }
+  });
+
+  B.numerico(cuerpo("chk3"), {
+    pregunta: "Con la clave pública (n = 3233, e = 17), cifra el mensaje $m = 2$: calcula $2^{17} \\bmod 3233$.",
+    respuesta: 1752,
+    tolerancia: 0,
+    pistas: [
+      "Primero la potencia: $2^{17} = 131072$.",
+      "Ahora el resto: ¿cuántas veces cabe 3233 en 131072? Prueba con 40 veces: $40 \\times 3233 = 129320$."
+    ],
+    diagnostico: function (v) {
+      if (v === 131072) return "Esa es la potencia sin reducir. Falta quedarte con el resto de dividir por 3233.";
+      if (v === 34) return "Eso es $2 \\times 17$. El exponente no multiplica: el 2 se multiplica por sí mismo 17 veces.";
+      return null;
+    },
+    explicacion: "$2^{17} = 131072 = 40 \\times 3233 + 1752$, así que el cifrado es $1752$. Pon el mensaje en 2 en el escenario y compruébalo.",
+    alResolver: function () { pasos.completar(2); }
+  });
+
+  B.opcionMultiple(cuerpo("chk3b"), {
+    pregunta: "Cifras el mensaje 3300, que es mayor que n = 3233, y el servidor lo descifra con su privada. ¿Qué número obtiene?",
+    opciones: ["3300", "67", "Un error, porque no cabe", "0"],
+    correcta: 1,
+    pistas: ["Eso sería lo ideal, pero la cuenta solo trabaja con restos módulo 3233: ¿qué pasa con un número mayor que 3233?", null,
+      "La cuenta no avisa de nada: calcula igual. Piensa en qué resto deja 3300 al dividir por 3233.", "Solo saldría 0 si el mensaje fuera múltiplo de 3233."],
+    explicacion: "$3300 = 3233 + 67$: para la cuenta, el 3300 y el 67 son el mismo número. El servidor obtiene 67 sin ningún aviso. Toca el botón y míralo.",
+    alResolver: function () { est.k3b = true; $("btnGrande").disabled = false; $("grandeHint").textContent = ""; }
+  });
+
+  B.opcionMultiple(cuerpo("chk4"), {
+    pregunta: "El receptor recibe el nombre con <b>una letra cambiada</b> y la firma original. Antes de tocar nada: ¿qué pasa al verificar?",
+    opciones: [
+      "Pasa: la firma sigue siendo del servidor",
+      "Falla: el hash del nombre cambió y ya no coincide con el que sale de la firma",
+      "Falla: la firma se borra sola cuando se toca el texto",
+      "Pasa, pero con un aviso"
+    ],
+    correcta: 1,
+    pistas: ["La firma sigue siendo del servidor, sí, pero firmó <i>otro</i> texto. ¿Qué compara la verificación?", null,
+      "La firma es un número: nada la borra. Lo que cambia es con qué se compara.", "La verificación solo tiene dos resultados: coincide o no coincide."],
+    explicacion: "Un solo carácter distinto cambia el hash por completo (efecto avalancha). La firma sigue elevándose al mismo 771, pero el hash del nombre recibido es 215: no coinciden. Ahora puedes cambiar el nombre y la firma en el escenario.",
+    alResolver: function () { est.k4 = true; pintarFirma(); pasos.completar(3); }
+  });
+
+  B.opcionMultiple(cuerpo("chk5"), {
+    pregunta: "El navegador recibe un certificado que dice «www.ejemplo.org» con la clave (3233, 17). ¿Por qué se lo cree?",
+    opciones: [
+      "Porque lo firmó una CA, y el navegador ya tenía la clave pública de esa CA para comprobar la firma",
+      "Porque el certificado dice www.ejemplo.org: está escrito ahí",
+      "Porque el servidor lo firmó con su propia clave privada",
+      "Porque llega dentro de una conexión HTTPS"
+    ],
+    correcta: 0,
+    pistas: [null, "Cualquiera puede escribir un nombre en un certificado. Lo que no puede cualquiera es lograr la firma de una CA.",
+      "Un certificado firmado por el propio servidor no demuestra nada: el atacante también puede firmar el suyo. Hace falta alguien externo de confianza.",
+      "Es circular: el certificado es lo que se usa para <i>establecer</i> el HTTPS."],
+    explicacion: "La confianza viene de fuera: el navegador ya trae las claves públicas de las CA de confianza, verifica su firma sobre el certificado y, si coincide, acepta la clave pública que va dentro. Ahora puedes cambiar un byte del certificado en el escenario.",
+    alResolver: function () { est.k5 = true; pintarCert(); pasos.completar(4); }
+  });
+
+  B.opcionMultiple(cuerpo("chk6"), {
+    pregunta: "En la etapa 4 el cliente quiere que el servidor conozca la clave de sesión sin que la lea el atacante. ¿Qué viaja por la red?",
+    opciones: [
+      "La clave de sesión en claro",
+      "La clave de sesión cifrada con la clave pública del servidor",
+      "La clave privada del servidor",
+      "El hash de la clave de sesión"
+    ],
+    correcta: 1,
+    pistas: ["Eso es justo lo que el atacante querría ver. La clave pública sirve para evitarlo.", null,
+      "La privada nunca sale de su dueño: si viajara, dejaría de ser privada.", "Con un hash el servidor no podría recuperar la clave: los hashes no se deshacen."],
+    explicacion: "Solo el servidor tiene la privada que abre lo cifrado con su pública. Avanza hasta la etapa 4 y mira el número que viaja.",
+    alResolver: function () { pasos.completar(5); }
+  });
+
+  B.opcionMultiple(cuerpo("chk6b"), {
+    pregunta: "Un intermedio cambia el certificado por otro suyo, con su propia clave pública. ¿Qué evita que el navegador lo acepte?",
+    opciones: [
+      "Nada: el navegador acepta cualquier clave pública que reciba",
+      "El intermedio no puede producir una firma válida de la CA para su certificado, porque no tiene la clave privada de la CA",
+      "El servidor se da cuenta y apaga la conexión",
+      "La clave pública del atacante sería demasiado corta"
+    ],
+    correcta: 1,
+    pistas: ["Entonces el candado no valdría de nada. Lo que protege es la verificación de la firma.", null,
+      "El servidor ni se entera: el intermedio le habla al navegador, no a él.", "El tamaño de la clave no es lo que decide: lo que decide es quién firmó."],
+    explicacion: "Puede cambiar el contenido, pero la firma de la CA solo se produce con la privada de la CA. Sin ella, la verificación falla. Ahora pon un intermedio en el escenario.",
+    alResolver: function () { est.k6b = true; $("btnInter").disabled = false; $("interHint").textContent = ""; }
+  });
+
+  B.numerico(cuerpo("chk7"), {
+    pregunta: "El cliente elige $a = 3$, con $g = 5$ y $P = 23$. Calcula lo que manda: $A = 5^{3} \\bmod 23$.",
+    respuesta: 10,
+    tolerancia: 0,
+    pistas: ["Primero la potencia: $5^3 = 125$.", "Ahora el resto: $23 \\times 5 = 115$, y $125 - 115$ es lo que sobra."],
+    diagnostico: function (v) {
+      if (v === 125) return "Esa es $5^3$ sin reducir. Falta el resto de dividir por 23.";
+      if (v === 15) return "Eso es $5 \\times 3$: el exponente no multiplica, indica cuántas veces multiplicas el 5.";
+      return null;
+    },
+    explicacion: "$5^3 = 125 = 5 \\times 23 + 10$, así que $A = 10$. Con el control $a$ del escenario en 3 puedes comprobarlo.",
+    alResolver: function () { est.k7 = true; pintarDh(); pasos.completar(6); }
+  });
+
+  pasos = B.pasos($("recorrido"), {
+    concepto: C,
+    alEntrar: entrar,
+    alTerminar: function () { location.hash = "retos"; }
+  });
+  est.k2 = pasos.hecho(1);
+  est.k3b = pasos.hecho(2);
+  est.k4 = pasos.hecho(3);
+  est.k5 = pasos.hecho(4);
+  est.k6b = pasos.hecho(5);
+  est.k7 = pasos.hecho(6);
+  if (est.k3b) { $("btnGrande").disabled = false; $("grandeHint").textContent = ""; }
+  if (est.k6b) { $("btnInter").disabled = false; $("interHint").textContent = ""; }
+  pintarBuzon();
+  entrar(0);
+
+  /* ---------------- hipotesis inicial ---------------- */
+  (function () {
+    var ta = $("hipotesis"), t = null;
+    ta.value = B.nota("clave-publica-tls", "hipotesis");
+    function cita() {
+      var v = ta.value.trim(), el = $("citaHipo");
+      if (!el) return;
+      el.hidden = !v;
+      if (v) { el.textContent = ""; el.appendChild(document.createTextNode("Al principio escribiste: «" + v + "». ¿Se parece a lo que construimos? ¿Qué te faltaba?")); }
+    }
+    ta.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { B.nota("clave-publica-tls", "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; cita(); }, 500);
+    });
+    cita();
+  })();
+
+  /* ---------------- marcadores de estado de retos ---------------- */
+  function pintarEstados() {
+    [].forEach.call(document.querySelectorAll("[data-reto]"), function (el) {
+      var ok = C.retoOk(el.getAttribute("data-reto"));
+      el.textContent = ok ? "resuelto" : "pendiente";
+      el.classList.toggle("ok", ok);
+    });
+  }
+  C.alCambiar(pintarEstados);
+
+  /* ---------------- reto: ojo clinico ---------------- */
+  (function () {
+    var POOL = [
+      ["El cliente cifra la clave de sesión para que solo el servidor pueda leerla.", "pub", "Se cifra con la clave pública del servidor: cualquiera puede cerrar, solo la privada abre."],
+      ["El servidor firma el hash de un documento.", "priv", "Firmar es hacer la cuenta con la clave privada del firmante: solo él puede."],
+      ["El navegador verifica la firma de la CA en un certificado.", "pub", "Se verifica con la clave pública de la CA, que el navegador ya trae."],
+      ["El servidor recupera la clave de sesión que llegó cifrada.", "priv", "Lo que se cifró con su pública solo se abre con su privada."],
+      ["Se cifran los datos de la conversación HTTPS, ya establecida.", "sim", "Los datos van con AES y la clave de sesión: simétrico, rápido, y las dos puntas la comparten."],
+      ["Detectar que un byte de un archivo cambió, sin usar ninguna clave.", "nin", "Un hash no usa clave: cualquier cambio altera la huella."],
+      ["Cualquier persona comprueba que una firma es del dueño de un certificado.", "pub", "Verificar solo necesita la clave pública del firmante, que es pública."]
+    ];
+    var NOM = { pub: "la clave pública", priv: "la clave privada", sim: "la clave simétrica", nin: "ninguna clave" };
+    var cont = $("ojo");
+    cont.innerHTML = '<div class="ronda"></div><p class="afirm"></p>' +
+      '<div class="capa-opts">' + [["pub", "Pública"], ["priv", "Privada"], ["sim", "Simétrica (sesión)"], ["nin", "Ninguna clave"]].map(function (x) { return '<button type="button" class="opt" data-a="' + x[0] + '">' + x[1] + '</button>'; }).join("") + '</div>' +
+      '<div class="fb" aria-live="polite"></div><div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    var orden, ronda, aciertos, respondida;
+    function nueva() { orden = B.mezclar(POOL.map(function (_, i) { return i; })).slice(0, 5); ronda = 0; aciertos = 0; mostrar(); }
+    function mostrar() {
+      respondida = false;
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 5 · aciertos " + aciertos;
+      cont.querySelector(".afirm").textContent = POOL[orden[ronda]][0];
+      [].forEach.call(cont.querySelectorAll(".capa-opts .opt"), function (b) { b.disabled = false; b.className = "opt"; });
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+    }
+    cont.querySelector(".capa-opts").addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || respondida) return;
+      respondida = true;
+      var it = POOL[orden[ronda]], ok = b.getAttribute("data-a") === it[1];
+      if (ok) aciertos++;
+      b.classList.add(ok ? "ok" : "mal");
+      if (!ok) cont.querySelector('[data-a="' + it[1] + '"]').classList.add("ok");
+      [].forEach.call(cont.querySelectorAll(".capa-opts .opt"), function (x) { x.disabled = true; });
+      cont.querySelector(".fb").innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No: era ' + NOM[it[1]] + '.</span> ') + it[2];
+      var sig = cont.querySelector(".sig");
+      sig.hidden = false;
+      if (ronda === 4) {
+        var aprobo = aciertos >= 4;
+        C.reto("ojo", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertos + " de 5" + (aprobo ? ". Aprobado." : ". Necesitas 4 para aprobar.");
+        sig.textContent = "Otra tanda";
+      } else sig.textContent = "Siguiente ronda";
+    });
+    cont.querySelector(".sig").addEventListener("click", function () { if (ronda === 4) nueva(); else { ronda++; mostrar(); } });
+    nueva();
+  })();
+
+  /* ---------------- reto: construir ---------------- */
+  (function () {
+    var OBJ = [
+      { t: "Una clave compartida K igual a 2.", ok: function (r) { return r.K === 2; } },
+      { t: "Una clave compartida igual a 1: un caso malo, porque cualquiera la adivina sin conocer a ni b.", ok: function (r) { return r.K === 1; } },
+      { t: "Que el cliente y el servidor manden el mismo número (A = B) y que la clave compartida no sea 1.", ok: function (r) { return r.A === r.B && r.K !== 1; } }
+    ];
+    var logrados = [false, false, false], avisado = false, a = 3, b = 7;
+    var ul = $("objetivos");
+    OBJ.forEach(function (o) { var li = document.createElement("li"); li.innerHTML = '<span class="m"></span><span>' + o.t + '</span>'; ul.appendChild(li); });
+    function pintar() {
+      var A = pot(DHG, a, DHP), Bv = pot(DHG, b, DHP), K = pot(Bv, a, DHP);
+      $("slCav").textContent = a; $("slCbv").textContent = b;
+      $("constrVivo").innerHTML = "A = <b>" + A + "</b> · B = <b>" + Bv + "</b> · K = <b>" + K + "</b>";
+      var r = { A: A, B: Bv, K: K };
+      OBJ.forEach(function (o, i) { if (!logrados[i] && o.ok(r)) logrados[i] = true; ul.children[i].classList.toggle("hecho", logrados[i]); });
+      if (!avisado && logrados.every(Boolean)) { avisado = true; C.reto("construir", true); }
+    }
+    $("slCa").addEventListener("input", function () { a = +this.value; pintar(); });
+    $("slCb").addEventListener("input", function () { b = +this.value; pintar(); });
+    pintar();
+  })();
+
+  /* ---------------- reto: a mano ---------------- */
+  (function () {
+    var CASOS = [[5, 11, 3], [3, 11, 3], [7, 11, 7], [5, 7, 5], [7, 13, 5], [11, 13, 7]];
+    var cas;
+    function dDe(c) { var fi = (c[0] - 1) * (c[1] - 1); for (var d = 1; d < fi; d++) if ((c[2] * d) % fi === 1) return d; return 0; }
+    function generar() { cas = CASOS[Math.floor(Math.random() * CASOS.length)]; }
+    generar();
+    B.numerico($("mano"), {
+      pregunta: function () {
+        return "Primos $p = " + cas[0] + "$ y $q = " + cas[1] + "$, exponente público $e = " + cas[2] + "$. Calcula la clave privada $d$ (el menor positivo): $n = pq$, $\\varphi = (p-1)(q-1)$ y $d$ cumple que $e \\cdot d$ deja resto 1 al dividir por $\\varphi$.";
+      },
+      respuesta: function () { return dDe(cas); },
+      tolerancia: 0,
+      pistas: [
+        function () { return "$\\varphi = " + (cas[0] - 1) + " \\times " + (cas[1] - 1) + " = " + ((cas[0] - 1) * (cas[1] - 1)) + "$."; },
+        function () { var fi = (cas[0] - 1) * (cas[1] - 1); return "Busca $d$ con $e \\cdot d = k \\cdot " + fi + " + 1$: el producto tiene que valer " + (fi + 1) + ", " + (2 * fi + 1) + ", " + (3 * fi + 1) + "..."; },
+        function () { var fi = (cas[0] - 1) * (cas[1] - 1); for (var k = 1; k < 50; k++) if ((k * fi + 1) % cas[2] === 0) return "Con $k = " + k + "$ el producto es " + (k * fi + 1) + ", que se puede dividir entre $e = " + cas[2] + "$."; return ""; }
+      ],
+      diagnostico: function (v) {
+        var fi = (cas[0] - 1) * (cas[1] - 1), n = cas[0] * cas[1], d = dDe(cas);
+        if (v === n) return "Ese es $n = pq$, la parte que va en las dos claves. Te piden $d$.";
+        if (v === fi) return "Ese es $\\varphi$. Te piden el $d$ que cumple $e \\cdot d \\equiv 1 \\pmod{\\varphi}$.";
+        if (v > d && (v * cas[2]) % fi === 1) return "Ese $d$ también funciona, pero te piden el menor positivo.";
+        return null;
+      },
+      explicacion: function () {
+        var fi = (cas[0] - 1) * (cas[1] - 1), d = dDe(cas);
+        return "$\\varphi = " + fi + "$ y $e \\cdot d = " + cas[2] + " \\times " + d + " = " + (cas[2] * d) + " = " + ((cas[2] * d - 1) / fi) + " \\times " + fi + " + 1$. Entonces $d = " + d + "$.";
+      },
+      reintentable: true,
+      textoReintentar: "Otro ejercicio",
+      antesDeReintentar: generar,
+      alResolver: function (ok) { C.reto("mano", ok); }
+    });
+  })();
+
+  /* ---------------- reto: cazar el error ---------------- */
+  B.cazarError($("error"), {
+    variantes: [
+      {
+        intro: "Alguien explica cómo firma el servidor un documento y cómo lo comprueba el cliente:",
+        lineas: ["\\text{1. El servidor calcula el hash del documento}", "\\text{2. Lo cifra con la clave pública del cliente y lo manda con el documento}",
+          "\\text{3. El cliente calcula el hash del documento que recibió}", "\\text{4. Eleva la firma con la clave pública del servidor y compara los dos hashes}"],
+        erronea: 1,
+        explicacion: "La firma se hace con la clave <b>privada del firmante</b>, el servidor. Si usara la pública del cliente, cualquiera podría producirla y no probaría nada."
+      },
+      {
+        intro: "Alguien calcula con RSA de juguete (p = 7, q = 11, e = 7, d = 43). Revisa su cuenta:",
+        lineas: ["n = 7 \\times 11 = 77", "\\varphi = (7-1)(11-1) = 60", "e \\cdot d = 7 \\times 43 = 301 = 5 \\times 60 + 1",
+          "\\text{Cifra } m = 2:\\; c = 2 \\times 7 \\bmod 77 = 14"],
+        erronea: 3,
+        explicacion: "El exponente no multiplica: $c = m^{e} \\bmod n = 2^{7} \\bmod 77 = 128 \\bmod 77 = 51$. Con la privada: $51^{43} \\bmod 77 = 2$."
+      },
+      {
+        intro: "Alguien resume el apretón de manos de TLS (la versión simplificada del material). Revisa cada etapa:",
+        lineas: ["\\text{1. El cliente manda las versiones y algoritmos que acepta}", "\\text{2. El servidor elige y manda su certificado}",
+          "\\text{3. El cliente verifica la firma de la CA con la clave pública de la CA}", "\\text{4. El cliente cifra la clave de sesión con la clave privada del servidor}",
+          "\\text{5. Los datos viajan cifrados con AES y la clave de sesión}"],
+        erronea: 3,
+        explicacion: "El cliente no tiene la clave privada del servidor, y no debe tenerla. La clave de sesión se cifra con la clave <b>pública</b> del servidor, para que solo él la abra con su privada."
+      }
+    ],
+    alResolver: function (ok) { C.reto("error", ok); }
+  });
+
+  /* ---------------- retos: propiedades ---------------- */
+  function prop(id, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple($(id), cfg);
+  }
+  prop("prop1", {
+    pregunta: "Una firma digital verifica correctamente. ¿Qué garantiza?",
+    opciones: [
+      "Que el documento no cambió y que lo firmó quien tiene la clave privada",
+      "Que nadie más pudo leer el documento",
+      "Que el contenido del documento es verdadero",
+      "Que el documento se mandó por una conexión cifrada"
+    ],
+    correcta: 0,
+    pistas: [null, "La firma no cifra el documento: va a la vista. Eso sería confidencialidad, otro objetivo.",
+      "Una firma solo prueba quién y qué texto, no si lo dicho es cierto: se puede firmar una mentira.",
+      "La firma es independiente del canal: sirve aunque el documento viaje en claro."],
+    explicacion: "Una firma aporta <b>integridad</b> (el hash coincide) y <b>autenticidad</b> con <b>no repudio</b> (solo el dueño de la privada pudo hacerla). No aporta confidencialidad ni dice nada sobre si el contenido es cierto."
+  });
+  prop("prop2", {
+    pregunta: "Un atacante ve el cifrado 2790 y conoce la clave pública (3233, 17). ¿Qué le falta para leer el mensaje?",
+    opciones: [
+      "La clave privada d = 2753 (que podría obtener factorizando 3233 en 61 × 53)",
+      "Nada: con la clave pública ya puede descifrar",
+      "La clave de sesión AES, que está escrita en el certificado",
+      "El hash del mensaje"
+    ],
+    correcta: 0,
+    pistas: [null, "Si la pública bastara para descifrar, no habría diferencia entre las dos claves. Lo viste en el paso 2.",
+      "El certificado trae solo la clave pública y la identidad firmada, no ninguna clave de sesión.", "El hash no se usa para descifrar nada: es una huella de un solo sentido."],
+    explicacion: "Le falta la privada. En este juguete podría conseguirla factorizando 3233 (basta con probar divisores). Con un <i>n</i> de 2048 bits, factorizar no es viable, y de ahí sale la seguridad."
+  });
+  prop("prop3", {
+    pregunta: "Según el material, ¿por qué se usa RSA solo para acordar la clave de sesión y AES para los datos?",
+    opciones: [
+      "Porque lo asimétrico es más costoso y lo simétrico es mucho más rápido; se combinan",
+      "Porque AES es más seguro que RSA en todos los casos",
+      "Porque RSA no puede cifrar texto",
+      "Porque el certificado solo admite claves simétricas"
+    ],
+    correcta: 0,
+    pistas: [null, "No se trata de cuál es más fuerte, sino de cuál es más barato de calcular para muchos datos.",
+      "RSA cifra números; los textos son bytes que se pueden leer como números. El problema es el costo, no la posibilidad.",
+      "El certificado lleva una clave pública, que es asimétrica."],
+    explicacion: "Es el enfoque híbrido: el asimétrico resuelve el reparto de la clave (sin canal seguro previo) pero es costoso, y el simétrico, como AES, es muy rápido para el volumen de datos."
+  });
+
+  /* ---------------- formula de memoria ---------------- */
+  B.ordenar($("formula"), {
+    pregunta: "El cifrado de RSA con la clave pública:",
+    piezas: ["c =", "m^{e}", "\\bmod\\; n"],
+    distractores: ["m^{d}", "\\bmod\\; \\varphi", "m \\cdot e"],
+    soluciones: [[0, 1, 2]],
+    explicacion: "El mensaje elevado al exponente público, y el resto de dividir por $n$. Para descifrar es lo mismo con $d$: $m = c^{d} \\bmod n$.",
+    alResolver: function (ok) { C.reto("formula", ok); }
+  });
+  B.ordenar($("orden"), {
+    pregunta: "El apretón de manos simplificado de TLS, etapa por etapa:",
+    piezas: ["\\text{1. Versiones y algoritmos}", "\\text{2. Certificado del servidor}", "\\text{3. Verificar la firma de la CA}", "\\text{4. Clave de sesión con la pública}", "\\text{5. Datos con AES}"],
+    distractores: ["\\text{Clave de sesión con la privada del cliente}", "\\text{Datos en claro por TCP}"],
+    soluciones: [[0, 1, 2, 3, 4]],
+    explicacion: "Primero se acuerdan versión y algoritmos, el servidor se presenta con su certificado, el cliente lo verifica, acuerdan la clave de sesión con la pública y solo entonces cifran los datos con AES.",
+    alResolver: function (ok) { C.reto("orden", ok); }
+  });
+
+  /* ---------------- vida real: el programa en codigo ---------------- */
+  (function () {
+    var CODIGO = {
+ "py": [
+  [
+   "prep",
+   "import hashlib"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   null,
+   "# RSA de juguete (NO es seguro): los primos reales miden cientos de cifras"
+  ],
+  [
+   "p",
+   "p = 61"
+  ],
+  [
+   "q",
+   "q = 53"
+  ],
+  [
+   "n",
+   "n = p * q"
+  ],
+  [
+   "fi",
+   "fi = (p - 1) * (q - 1)"
+  ],
+  [
+   "e",
+   "e = 17"
+  ],
+  [
+   "pnfi",
+   "print(n, fi)"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   null,
+   "# d: el inverso de e módulo fi, con Euclides extendido"
+  ],
+  [
+   "r0r1",
+   "r0, r1 = fi, e"
+  ],
+  [
+   "t0t1",
+   "t0, t1 = 0, 1"
+  ],
+  [
+   "eucw",
+   "while r1 != 0:"
+  ],
+  [
+   "euck",
+   "    k = r0 // r1"
+  ],
+  [
+   "eucr",
+   "    r0, r1 = r1, r0 - k * r1"
+  ],
+  [
+   "euct",
+   "    t0, t1 = t1, t0 - k * t1"
+  ],
+  [
+   "d",
+   "d = t0 % fi"
+  ],
+  [
+   "pd",
+   "print(d)"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   null,
+   "# potencia modular: elevar al cuadrado y reducir, sin números enormes"
+  ],
+  [
+   "pdef",
+   "def potmod(base, ex, mod):"
+  ],
+  [
+   "pres",
+   "    res = 1"
+  ],
+  [
+   "pbase",
+   "    base = base % mod"
+  ],
+  [
+   "pw",
+   "    while ex > 0:"
+  ],
+  [
+   "pif",
+   "        if ex % 2 == 1:"
+  ],
+  [
+   "pmul",
+   "            res = (res * base) % mod"
+  ],
+  [
+   "pcua",
+   "        base = (base * base) % mod"
+  ],
+  [
+   "pmit",
+   "        ex = ex // 2"
+  ],
+  [
+   "pret",
+   "    return res"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "m",
+   "m = 65"
+  ],
+  [
+   "cifrar",
+   "c = potmod(m, e, n)"
+  ],
+  [
+   "pc",
+   "print(c)"
+  ],
+  [
+   "descif",
+   "m2 = potmod(c, d, n)"
+  ],
+  [
+   "pm2",
+   "print(m2)"
+  ],
+  [
+   "ver",
+   "print(c == pow(m, e, n))"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   null,
+   "# firma: el hash del nombre, reducido módulo n, elevado a d"
+  ],
+  [
+   "hdef",
+   "def hashmod(texto):"
+  ],
+  [
+   null,
+   "    return int(hashlib.sha256(texto).hexdigest(), 16) % n"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "hash",
+   "h = hashmod(b\"www.ejemplo.org\")"
+  ],
+  [
+   "firma",
+   "s = potmod(h, d, n)"
+  ],
+  [
+   "ps",
+   "print(h, s)"
+  ],
+  [
+   "vfirma",
+   "print(potmod(s, e, n) == h)"
+  ],
+  [
+   "hash2",
+   "h2 = hashmod(b\"www.ejemp1o.org\")"
+  ],
+  [
+   "vfalla",
+   "print(potmod(s, e, n) == h2)"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   null,
+   "# acuerdo de clave tipo Diffie-Hellman (TLS 1.3), también de juguete"
+  ],
+  [
+   "dP",
+   "P = 23"
+  ],
+  [
+   "dg",
+   "g = 5"
+  ],
+  [
+   "da",
+   "a = 6"
+  ],
+  [
+   "db",
+   "b = 15"
+  ],
+  [
+   "dA",
+   "A = potmod(g, a, P)"
+  ],
+  [
+   "dB",
+   "B = potmod(g, b, P)"
+  ],
+  [
+   "dc",
+   "print(potmod(B, a, P), potmod(A, b, P))"
+  ]
+ ],
+ "r": [
+  [
+   "prep",
+   "library(digest)"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   null,
+   "# RSA de juguete (NO es seguro): los primos reales miden cientos de cifras"
+  ],
+  [
+   "p",
+   "p <- 61"
+  ],
+  [
+   "q",
+   "q <- 53"
+  ],
+  [
+   "n",
+   "n <- p * q"
+  ],
+  [
+   "fi",
+   "fi <- (p - 1) * (q - 1)"
+  ],
+  [
+   "e",
+   "e <- 17"
+  ],
+  [
+   "pnfi",
+   "writeLines(paste(n, fi))"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   null,
+   "# d: el inverso de e módulo fi, con Euclides extendido"
+  ],
+  [
+   "r0r1",
+   "r0 <- fi; r1 <- e"
+  ],
+  [
+   "t0t1",
+   "t0 <- 0; t1 <- 1"
+  ],
+  [
+   "eucw",
+   "while (r1 != 0) {"
+  ],
+  [
+   "euck",
+   "  k <- r0 %/% r1"
+  ],
+  [
+   "eucr",
+   "  rr <- r0 - k * r1; r0 <- r1; r1 <- rr"
+  ],
+  [
+   "euct",
+   "  tt <- t0 - k * t1; t0 <- t1; t1 <- tt"
+  ],
+  [
+   null,
+   "}"
+  ],
+  [
+   "d",
+   "d <- t0 %% fi"
+  ],
+  [
+   "pd",
+   "print(d)"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   null,
+   "# potencia modular: elevar al cuadrado y reducir, sin números enormes"
+  ],
+  [
+   "pdef",
+   "potmod <- function(base, ex, mod) {"
+  ],
+  [
+   "pres",
+   "  res <- 1"
+  ],
+  [
+   "pbase",
+   "  base <- base %% mod"
+  ],
+  [
+   "pw",
+   "  while (ex > 0) {"
+  ],
+  [
+   "pif",
+   "    if (ex %% 2 == 1) {"
+  ],
+  [
+   "pmul",
+   "      res <- (res * base) %% mod"
+  ],
+  [
+   null,
+   "    }"
+  ],
+  [
+   "pcua",
+   "    base <- (base * base) %% mod"
+  ],
+  [
+   "pmit",
+   "    ex <- ex %/% 2"
+  ],
+  [
+   null,
+   "  }"
+  ],
+  [
+   "pret",
+   "  res"
+  ],
+  [
+   null,
+   "}"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   null,
+   "# R no trae pow(m, e, n): para comprobar, se multiplica ex veces reduciendo cada vez"
+  ],
+  [
+   null,
+   "lento <- function(base, ex, mod) {"
+  ],
+  [
+   null,
+   "  res <- 1"
+  ],
+  [
+   null,
+   "  for (i in seq_len(ex)) res <- (res * base) %% mod"
+  ],
+  [
+   null,
+   "  res"
+  ],
+  [
+   null,
+   "}"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "m",
+   "m <- 65"
+  ],
+  [
+   "cifrar",
+   "c <- potmod(m, e, n)"
+  ],
+  [
+   "pc",
+   "print(c)"
+  ],
+  [
+   "descif",
+   "m2 <- potmod(c, d, n)"
+  ],
+  [
+   "pm2",
+   "print(m2)"
+  ],
+  [
+   "ver",
+   "print(c == lento(m, e, n))"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   null,
+   "# firma: el hash del nombre, reducido módulo n, elevado a d"
+  ],
+  [
+   "hdef",
+   "hashmod <- function(texto) {"
+  ],
+  [
+   null,
+   "  hex <- strsplit(digest(texto, algo = \"sha256\", serialize = FALSE), \"\")[[1]]"
+  ],
+  [
+   null,
+   "  h <- 0"
+  ],
+  [
+   null,
+   "  for (x in hex) h <- (h * 16 + strtoi(x, 16L)) %% n"
+  ],
+  [
+   null,
+   "  h"
+  ],
+  [
+   null,
+   "}"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "hash",
+   "h <- hashmod(\"www.ejemplo.org\")"
+  ],
+  [
+   "firma",
+   "s <- potmod(h, d, n)"
+  ],
+  [
+   "ps",
+   "writeLines(paste(h, s))"
+  ],
+  [
+   "vfirma",
+   "print(potmod(s, e, n) == h)"
+  ],
+  [
+   "hash2",
+   "h2 <- hashmod(\"www.ejemp1o.org\")"
+  ],
+  [
+   "vfalla",
+   "print(potmod(s, e, n) == h2)"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   null,
+   "# acuerdo de clave tipo Diffie-Hellman (TLS 1.3), también de juguete"
+  ],
+  [
+   "dP",
+   "P <- 23"
+  ],
+  [
+   "dg",
+   "g <- 5"
+  ],
+  [
+   "da",
+   "a <- 6"
+  ],
+  [
+   "db",
+   "b <- 15"
+  ],
+  [
+   "dA",
+   "A <- potmod(g, a, P)"
+  ],
+  [
+   "dB",
+   "B <- potmod(g, b, P)"
+  ],
+  [
+   "dc",
+   "writeLines(paste(potmod(B, a, P), potmod(A, b, P)))"
+  ]
+ ]
+};
+    var SAL = {"py": ["3233 3120", "2753", "2790", "65", "True", "771 2550", "True", "False", "2 2"], "r": ["3233 3120", "[1] 2753", "[1] 2790", "[1] 65", "[1] TRUE", "771 2550", "[1] TRUE", "[1] FALSE", "2 2"]};
+
+    var EV = [];
+    (function () {
+      var V = {}, T = null, fase = 1, sal = 0;
+      function copia(t) { return t ? { tit: t.tit, cab: t.cab, filas: t.filas.slice() } : null; }
+      function foto(id, x) { EV.push(Object.assign({ id: id, fase: fase, sal: sal, V: Object.assign({}, V), T: copia(T) }, x || {})); }
+      function tabla(tit, b, ex, mod) { return { tit: tit, cab: ["ex", "impar", "res", "base"], filas: tablaPot(b, ex, mod) }; }
+
+      foto("prep");
+      V.p = 61; foto("p");
+      V.q = 53; foto("q");
+      V.n = 3233; foto("n");
+      V.fi = 3120; foto("fi");
+      V.e = 17; foto("e");
+      sal = 1; foto("pnfi");
+      V.r0 = 3120; V.r1 = 17;
+      T = { tit: "Euclides extendido", cab: ["k", "r0", "r1", "t0", "t1"], filas: [] };
+      foto("r0r1");
+      V.t0 = 0; V.t1 = 1;
+      T.filas.push(["-", 3120, 17, 0, 1]);
+      foto("t0t1");
+      while (V.r1 !== 0) {
+        foto("eucw", { sigue: true });
+        var a = V.r0, b = V.r1, k = Math.floor(a / b);
+        V.k = k; foto("euck", { it: { a: a, b: b, k: k } });
+        V.r0 = b; V.r1 = a - k * b; foto("eucr", { it: { a: a, b: b, k: k } });
+        var ta = V.t0, tb = V.t1;
+        V.t0 = tb; V.t1 = ta - k * tb;
+        T.filas.push([k, V.r0, V.r1, V.t0, V.t1]);
+        foto("euct", { it: { k: k, ta: ta, tb: tb } });
+      }
+      foto("eucw", { sigue: false });
+      V.d = ((V.t0 % 3120) + 3120) % 3120; foto("d", { t0: V.t0 });
+      sal = 2; foto("pd");
+
+      fase = 2; T = null;
+      foto("pdef");
+      V.m = 65; foto("m");
+      V.ex = 17; V.base = 65;
+      T = { tit: "potmod(65, 17, 3233)", cab: ["ex", "impar", "res", "base"], filas: [] };
+      foto("cifrar", { llama: true });
+      V.res = 1; foto("pres");
+      V.base = 65; foto("pbase");
+      var ex = 17, base = 65, res = 1;
+      while (ex > 0) {
+        foto("pw", { sigue: true });
+        var odd = ex % 2 === 1;
+        foto("pif", { odd: odd });
+        if (odd) { var r0 = res; res = (res * base) % 3233; V.res = res; foto("pmul", { r0: r0, b: base }); }
+        var b0 = base; base = (base * base) % 3233; V.base = base; foto("pcua", { b0: b0 });
+        var ea = ex; ex = Math.floor(ex / 2); V.ex = ex;
+        T.filas.push([ea, odd ? "sí" : "no", res, base]);
+        foto("pmit", { ea: ea });
+      }
+      foto("pw", { sigue: false });
+      foto("pret", { res: res });
+      delete V.ex; delete V.base; delete V.res;
+      V.c = res; foto("cifrar", { ret: true });
+      sal = 3; foto("pc");
+      V.m2 = pot(2790, 2753, 3233);
+      T = tabla("potmod(2790, 2753, 3233)", 2790, 2753, 3233);
+      foto("descif", { vueltas: T.filas.length });
+      sal = 4; foto("pm2");
+      sal = 5; foto("ver");
+
+      fase = 3; T = null;
+      foto("hdef");
+      V.h = HASH_OK; foto("hash");
+      V.s = SIG;
+      T = tabla("potmod(771, 2753, 3233)", HASH_OK, 2753, 3233);
+      foto("firma");
+      sal = 6; foto("ps");
+      T = tabla("potmod(2550, 17, 3233)", SIG, 17, 3233);
+      sal = 7; foto("vfirma");
+      V.h2 = HASH_MAL; T = null; foto("hash2");
+      T = tabla("potmod(2550, 17, 3233)", SIG, 17, 3233);
+      sal = 8; foto("vfalla");
+
+      fase = 4; T = null;
+      V.P = 23; foto("dP");
+      V.g = 5; foto("dg");
+      V.a = 6; foto("da");
+      V.b = 15; foto("db");
+      V.A = 8; T = tabla("potmod(5, 6, 23)", 5, 6, 23); foto("dA");
+      V.B = 19; T = tabla("potmod(5, 15, 23)", 5, 15, 23); foto("dB");
+      V.K = 2; T = null; sal = 9; foto("dc", { fin: true });
+    })();
+
+    function narrar(e, ctx) {
+      var py = ctx.lang() === "py";
+      switch (e.id) {
+        case "prep": return py ? "Carga <b>hashlib</b>, la librería estándar que calcula SHA-256, un hash. Se usará para la firma."
+          : "Carga <b>digest</b>, el paquete que calcula SHA-256. R base no trae ninguna función hash.";
+        case "p": return "El primer primo, <b>61</b>. Los reales tienen cientos de cifras; este es de juguete y por eso <b>no es seguro</b>.";
+        case "q": return "El segundo primo, <b>53</b>.";
+        case "n": return "<b>n = 61 × 53 = 3233</b>. Este número va en las dos claves, la pública y la privada.";
+        case "fi": return "φ = (61 − 1)(53 − 1) = 60 × 52 = <b>3120</b>. Solo lo puede calcular quien conoce los primos; el código lo llama <code>fi</code>.";
+        case "e": return "<b>e = 17</b>: el exponente público. Tiene que ser coprimo con 3120, es decir, no compartir factores con él.";
+        case "pnfi": return "Imprime <b>3233 3120</b>.";
+        case "r0r1": return "Empieza Euclides extendido para hallar d: <b>r0 = fi = 3120</b> y <b>r1 = e = 17</b>. Se irán dividiendo restos.";
+        case "t0t1": return "Los coeficientes <b>t0 = 0</b> y <b>t1 = 1</b> acompañan a los restos: al final dirán por cuánto hay que multiplicar e.";
+        case "eucw": return e.sigue ? "¿<b>r1 ≠ 0</b>? Sí, r1 = " + e.V.r1 + ": otra vuelta."
+          : "r1 llegó a <b>0</b>: el bucle termina. En <b>r0</b> queda el máximo común divisor, 1 (por eso e y fi son coprimos), y en <b>t0</b> queda " + e.V.t0 + ".";
+        case "euck": return "El cociente entero: <b>k = " + e.it.a + (py ? " // " : " %/% ") + e.it.b + " = " + e.it.k + "</b>.";
+        case "eucr": return "Restos nuevos: <b>r0</b> pasa a ser " + e.it.b + " y <b>r1</b> a ser " + e.it.a + " − " + e.it.k + " × " + e.it.b + " = <b>" + e.V.r1 + "</b>.";
+        case "euct": return "Lo mismo con los coeficientes: <b>t0</b> pasa a ser " + e.it.tb + " y <b>t1</b> a ser " + e.it.ta + " − " + e.it.k + " × " + e.it.tb + " = <b>" + e.V.t1 + "</b>. La fila queda en la tabla.";
+        case "d": return "<b>d = t0 " + (py ? "%" : "%%") + " fi = " + e.t0 + " mod 3120 = 2753</b>. " + (py ? "En Python el resto de un negativo sale entre 0 y fi − 1." : "El <code>%%</code> de R también da un resultado entre 0 y fi − 1.") + " Comprobación: 17 × 2753 = 46801 = 15 × 3120 + 1.";
+        case "pd": return "Imprime la clave privada: <b>2753</b>.";
+        case "pdef": return py ? "Define <b>potmod</b>, la potencia modular: eleva al cuadrado y reduce en cada vuelta, sin números enormes."
+          : "Define <b>potmod</b>, la potencia modular. R no trae una función para esto, así que se escribe a mano.";
+        case "m": return "El mensaje, <b>65</b>. Tiene que ser menor que n = 3233.";
+        case "cifrar": return e.ret ? "Vuelve con el cifrado: <b>c = 2790</b>. La tabla muestra las cinco vueltas: dos productos (exponente impar) y cinco cuadrados."
+          : "Llama a <b>potmod(65, 17, 3233)</b> para cifrar con la pública. Cada vuelta de la función va a la tabla.";
+        case "pres": return "<b>res = 1</b>: aquí se va acumulando el resultado.";
+        case "pbase": return "<b>base = 65 " + (py ? "%" : "%%") + " 3233 = 65</b>: se reduce por si la base fuera mayor que mod (ver la trampa del mensaje que no cabe).";
+        case "pw": return e.sigue ? "¿<b>ex &gt; 0</b>? ex = " + e.V.ex + ": sigue." : "<b>ex</b> llegó a 0: el bucle termina.";
+        case "pif": return "¿<b>ex " + (py ? "%" : "%%") + " 2 == 1</b>? ex = " + e.V.ex + " es " + (e.odd ? "<b>impar</b>: este bit del exponente vale 1, hay que multiplicar." : "<b>par</b>: este bit vale 0, no se multiplica.");
+        case "pmul": return "Impar: <b>res = (" + e.r0 + " × " + e.b + ") " + (py ? "%" : "%%") + " 3233 = " + e.V.res + "</b>.";
+        case "pcua": return "<b>base = (" + e.b0 + " × " + e.b0 + ") " + (py ? "%" : "%%") + " 3233 = " + e.V.base + "</b>: la base al cuadrado, reducida.";
+        case "pmit": return "<b>ex = " + e.ea + (py ? " // " : " %/% ") + "2 = " + e.V.ex + "</b>: se descarta el último bit del exponente. La fila queda en la tabla.";
+        case "pret": return "Devuelve <b>res = " + e.res + "</b>.";
+        case "pc": return "Imprime el cifrado: <b>2790</b>.";
+        case "descif": return "<b>potmod(2790, 2753, 3233)</b>: la misma función con la clave privada. 2753 en binario tiene " + e.vueltas + " cifras, así que son " + e.vueltas + " vueltas (la tabla muestra todas de una vez). Devuelve <b>65</b>: el mensaje original.";
+        case "pm2": return "Imprime <b>65</b>. Ida y vuelta completa.";
+        case "ver": return py ? "Compara con la función de fábrica: <code>pow(65, 17, 3233)</code> también da 2790, así que la comparación es <b>True</b>."
+          : "R no tiene <code>pow(m, e, n)</code>. Compara con <b>lento()</b>, que multiplica 17 veces reduciendo cada vez: da lo mismo, <b>TRUE</b>.";
+        case "hdef": return py ? "Define <b>hashmod</b>: el SHA-256 del texto, leído como un número de 256 bits y reducido módulo n para que quepa en el juguete."
+          : "Define <b>hashmod</b>: el SHA-256 del texto, reducido módulo n con un bucle sobre los 64 dígitos hexadecimales (así se evitan los números enormes).";
+        case "hash": return "El hash de <b>www.ejemplo.org</b> reducido módulo 3233 es <b>771</b>.";
+        case "firma": return "<b>Firmar</b>: <b>s = potmod(771, 2753, 3233) = 2550</b>. Es el hash elevado a la clave privada d. La tabla muestra las vueltas.";
+        case "ps": return "Imprime el hash y la firma: <b>771 2550</b>.";
+        case "vfirma": return "<b>Verificar</b> con la clave pública: <b>potmod(2550, 17, 3233) = 771</b>, igual al hash del nombre. Resultado: <b>" + (py ? "True" : "TRUE") + "</b>.";
+        case "hash2": return "Alguien cambió una letra (www.ejemp<b>1</b>o.org). El hash del texto recibido es <b>215</b>: una letra cambia la huella entera.";
+        case "vfalla": return "La firma sigue dando <b>771</b>, pero el hash del nombre recibido es <b>215</b>. Resultado: <b>" + (py ? "False" : "FALSE") + "</b>: se rechaza.";
+        case "dP": return "Ahora un acuerdo de clave estilo Diffie-Hellman, también de juguete. El primo público <b>P = 23</b>.";
+        case "dg": return "La base pública <b>g = 5</b>.";
+        case "da": return "El secreto del cliente, <b>a = 6</b>. No sale de su equipo.";
+        case "db": return "El secreto del servidor, <b>b = 15</b>. No sale del suyo.";
+        case "dA": return "El cliente calcula y manda <b>A = 5<sup>6</sup> mod 23 = 8</b>.";
+        case "dB": return "El servidor calcula y manda <b>B = 5<sup>15</sup> mod 23 = 19</b>.";
+        case "dc": return "Cada uno eleva lo que recibió a su secreto: 19<sup>6</sup> mod 23 = <b>2</b> y 8<sup>15</sup> mod 23 = <b>2</b>. El mismo número, sin haber viajado nunca.";
+      }
+      return "";
+    }
+
+    var VISTAS = { 1: ["p", "q", "n", "fi", "e", "r0", "r1", "t0", "t1", "k", "d"], 2: ["m", "ex", "base", "res", "c", "m2"], 3: ["h", "s", "h2"], 4: ["P", "g", "a", "b", "A", "B", "K"] };
+    function visual(e, ant, ctx) {
+      var V = e ? e.V : {};
+      var pub = V.n && V.e ? "n = " + V.n + " · e = " + V.e : "todavía no";
+      var priv = V.n && V.d ? "n = " + V.n + " · d = " + V.d : "todavía no";
+      $("vrClaves").innerHTML = '<div class="llave k-pub"><b>Clave pública</b><span>' + pub + '</span></div><div class="llave k-priv"><b>Clave privada</b><span>' + priv + '</span></div>';
+      var T = e && e.T;
+      $("vrTablaTit").textContent = T ? T.tit : "La cuenta en curso";
+      if (T) {
+        var h = "<tr>" + T.cab.map(function (c) { return "<th>" + c + "</th>"; }).join("") + "</tr>";
+        T.filas.forEach(function (f, i) { h += '<tr' + (i === T.filas.length - 1 ? ' class="ultima"' : "") + ">" + f.map(function (x) { return '<td class="r">' + x + "</td>"; }).join("") + "</tr>"; });
+        $("vrTabla").innerHTML = h;
+      } else $("vrTabla").innerHTML = '<tr><td>Una tabla se llena cuando empieza una cuenta (Euclides o una potencia modular).</td></tr>';
+      $("vrSalida").textContent = SAL[ctx.lang()].slice(0, e ? e.sal : 0).join("\n");
+    }
+    B.vidaReal($("vidareal"), {
+      codigo: CODIGO,
+      eventos: EV,
+      narrar: narrar,
+      vars: function (e) {
+        if (!e) return [];
+        var lista = VISTAS[e.fase] || [], out = [];
+        lista.forEach(function (k) { if (e.V[k] !== undefined) out.push("<span>" + k + " = <b>" + e.V[k] + "</b></span>"); });
+        return out;
+      },
+      visual: visual,
+      demora: function (e) { return !e ? 600 : /^(eucw|pw|pif|pres|pbase)$/.test(e.id) ? 450 : /^(cifrar|descif|firma|vfirma|vfalla)$/.test(e.id) ? 1100 : 750; }
+    });
+
+    B.numerico($("vrPred").querySelector(".cuerpo"), {
+      pregunta: "Antes de reproducir: en la primera llamada, <code>potmod(65, 17, 3233)</code>, el cuerpo del <code>while</code> va dividiendo el exponente entre 2 (parte entera) hasta llegar a 0. ¿Cuántas vueltas da el bucle?",
+      respuesta: 5,
+      tolerancia: 0,
+      pistas: ["Cuenta: el exponente va 17, 8, 4, 2, 1 y después 0.", "Otra forma de verlo: cuántas cifras tiene 17 escrito en binario ($10001$)."],
+      diagnostico: function (v) {
+        if (v === 17) return "Eso sería multiplicar 17 veces, que es lo que hace el método lento. Esta función divide el exponente entre 2 en cada vuelta.";
+        if (v === 4) return "El exponente pasa por 17, 8, 4, 2 y 1: son cinco valores mayores que 0, y cada uno es una vuelta.";
+        return null;
+      },
+      explicacion: "$17 \\to 8 \\to 4 \\to 2 \\to 1 \\to 0$: cinco vueltas, porque 17 en binario es $10001$ (cinco cifras). En vez de 16 productos, son 5 cuadrados y 2 productos. Con el exponente 2753 serían 12 vueltas. Ahora dale a reproducir y compara.",
+      alResolver: function (ok) { C.reto("codigo1", ok); }
+    });
+    prop("codigo2", {
+      pregunta: "En Python escribes <code>(65 ^ 17) % 3233</code> esperando elevar 65 a la 17. ¿Qué da?",
+      opciones: ["80", "2790", "Un error, porque ^ no existe en Python", "0"],
+      correcta: 0,
+      pistas: [null, "2790 sale con <code>pow(65, 17, 3233)</code> o con <code>65 ** 17 % 3233</code>. El símbolo <code>^</code> hace otra cosa.",
+        "<code>^</code> sí existe en Python: simplemente no es la potencia.", "Sale un número, no 0: <code>^</code> combina los bits de 65 y 17."],
+      explicacion: "En Python <code>^</code> es el <b>XOR</b> bit a bit: $65 \\oplus 17 = 80$, y $80 \\bmod 3233 = 80$. La potencia es <code>**</code> o <code>pow</code>. En R el <code>^</code> sí es potencia, pero $65^{17}$ (unos $6.6 \\times 10^{30}$) no cabe exacto en un número decimal de 53 bits: <code>65^17 %% 3233</code> da 887 con un aviso, en vez de 2790. Por eso se reduce en cada vuelta."
+    });
+    prop("codigo3", {
+      pregunta: "Cambias el mensaje a <code>m = 3300</code> (mayor que n = 3233), cifras con <code>potmod(m, e, n)</code> y descifras con <code>potmod(c, d, n)</code>. ¿Qué imprime el descifrado?",
+      opciones: ["67", "3300", "Un error de desbordamiento", "0"],
+      correcta: 0,
+      pistas: [null, "Eso sería lo ideal, pero la cuenta trabaja con restos módulo 3233. Mira la línea <code>base = base % mod</code> al entrar a la función.",
+        "No hay ningún desbordamiento: los números siguen siendo pequeños, y la función no comprueba nada.", "Solo saldría 0 si el mensaje fuera múltiplo de 3233."],
+      explicacion: "La función empieza con <code>base % mod</code>, así que 3300 se convierte en 67 sin avisar, y 67 es lo que vuelve. El mensaje se pierde en silencio: por eso las implementaciones reales limitan el tamaño del mensaje y lo rellenan antes de cifrar."
+    });
+  })();
+
+  /* ---------------- tarjetas ---------------- */
+  B.tarjetas($("tarjetas"), [
+    ["¿Qué problema resuelve la criptografía de clave pública?", "Acordar un secreto con alguien con quien nunca te has visto, sin tener que mandar la clave por un canal inseguro. La pública se puede repartir a todos; la privada no sale de su dueño."],
+    ["¿Qué hace cada clave del par?", "La <b>pública</b> cierra (cifra) y verifica firmas. La <b>privada</b> abre (descifra) y firma."],
+    ["La cuenta de RSA", "$c = m^{e} \\bmod n$ para cifrar y $m = c^{d} \\bmod n$ para descifrar. El mensaje tiene que ser menor que $n$."],
+    ["¿De dónde salen $n$, $e$ y $d$?", "$n = pq$ con dos primos; $e$ coprimo con $\\varphi = (p-1)(q-1)$; $d$ cumple $e \\cdot d \\equiv 1 \\pmod{\\varphi}$. Quien no conoce $p$ y $q$ no puede calcular $d$."],
+    ["¿Cómo se firma y cómo se verifica?", "Se firma el <b>hash</b> con la privada: $s = h^{d} \\bmod n$. Se verifica con la pública: $s^{e} \\bmod n$ debe dar el hash del texto recibido."],
+    ["¿Qué es un certificado y por qué se confía en él?", "Una clave pública unida a una identidad y firmada por una CA. El navegador ya trae las claves públicas de las CA de confianza y verifica su firma."],
+    ["Las cinco etapas del TLS simplificado del material", "Versiones y algoritmos, certificado del servidor, verificación de la firma de la CA, clave de sesión acordada con la clave pública, y datos cifrados con AES."],
+    ["¿Qué cambia en TLS 1.3 respecto a lo que cuenta el material?", "La clave de sesión se acuerda con Diffie-Hellman efímero, y la clave del certificado solo firma. Así, robar la privada después no descifra lo grabado (secreto hacia adelante)."]
+  ]);
+
+  /* ---------------- conexiones ---------------- */
+  B.conexiones("clave-publica-tls");
+})();
+
+</script>
+</body>
+</html>

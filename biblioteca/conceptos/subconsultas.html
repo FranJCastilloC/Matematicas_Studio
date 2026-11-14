@@ -1,0 +1,1952 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Subconsultas: IN, EXISTS y correlacionadas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+/* ---------- tablas del escenario ---------- */
+.tabla-wrap { overflow-x: auto; margin-top: 10px; }
+.tabla { width: 100%; border-collapse: collapse; font-family: var(--f-mono); font-size: 12px; font-variant-numeric: tabular-nums; }
+.tabla th { font-weight: 500; color: var(--ink-3); font-size: 11px; text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.tabla td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--line-soft); color: var(--ink); white-space: nowrap; }
+.tabla tr.sel td { background: var(--accent-soft); color: var(--ink); }
+.tabla tr.cur td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+.tabla tr.fuera td { opacity: .45; }
+.tabla td.si { color: var(--ok); font-weight: 600; }
+.tabla td.no { color: var(--ink-3); }
+.tabla td.q { color: var(--accent); font-weight: 600; }
+.tabla tr.nueva td { background: color-mix(in oklab, var(--ok) 20%, var(--surface)); }
+.tabla td.nulo { color: var(--bad); font-weight: 600; }
+.sc-tit { font-family: var(--f-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); margin: 14px 0 2px; }
+.sc-tit:first-child { margin-top: 0; }
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.esc-head .hint, .sc-ctl .hint { font-size: 12.5px; color: var(--ink-2); }
+.sc-ctl { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+.sc-ctl:empty { display: none; }
+.sc-ctl button:disabled, .tabla button:disabled { opacity: .45; cursor: not-allowed; }
+.sc-ctl button.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.tt-own { border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); font-family: var(--f-mono); font-size: 11.5px; padding: 2px 8px; cursor: pointer; }
+.tt-own:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.sc-caja { margin-top: 10px; padding: 8px 10px; border: 1px dashed var(--line); border-radius: 8px; font-family: var(--f-mono); font-size: 12.5px; color: var(--ink-2); overflow-wrap: anywhere; }
+.sc-caja b { color: var(--ink); font-weight: 600; }
+.sc-caja .q { color: var(--accent); font-weight: 600; }
+.sc-kv { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 3px 12px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); font-family: var(--f-mono); font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.sc-kv dt { color: var(--ink-3); }
+.sc-kv dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
+.sc-kv dd.q { color: var(--accent); font-weight: 600; }
+.sc-nota { margin-top: 8px; font-size: 13px; color: var(--ink-2); min-height: 2.6em; overflow-wrap: anywhere; }
+.sc-nota b { color: var(--ink); font-weight: 500; }
+.sc-nota .mal { color: var(--bad); }
+.sc-nota .bien { color: var(--ok); }
+
+/* ---------- retos propios ---------- */
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.ctx-ojo { font-size: 13px; color: var(--ink-2); margin: 6px 0; }
+.prog-pre { font-family: var(--f-mono); font-size: 13px; background: var(--surface-2); border-radius: 8px; padding: 10px 14px; margin: 8px 0; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ojo-opts3 { display: grid; grid-template-columns: 1fr; gap: 6px; margin-top: 10px; }
+.ojo-opts3 .opt { text-align: left; }
+.objetivos { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.objetivos li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.objetivos .m { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.objetivos li.hecho { color: var(--ink); }
+.objetivos li.hecho .m { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 3px var(--surface); }
+.grande { font-family: var(--f-mono); font-size: 14px; color: var(--ink-2); margin: 6px 0 12px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.grande b { font-size: 16px; color: var(--ink); font-weight: 500; }
+.cons-t select { font-family: var(--f-mono); font-size: 12px; padding: 3px 4px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); }
+.salida { font-family: var(--f-mono); font-size: 12.5px; background: var(--surface-2); border-radius: 8px; padding: 8px 12px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); margin: 8px 0; }
+.vr-tabla td.cur { box-shadow: inset 0 0 0 2px var(--accent); font-weight: 600; }
+.vr-extra { margin-top: 12px; font-family: var(--f-mono); font-size: 12.5px; color: var(--ink-2); overflow-wrap: anywhere; }
+.vr-extra .sc-caja { margin-top: 8px; }
+@media (max-width: 480px) {
+  .tabla { font-size: 11px; }
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ Subconsultas</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Infraestructura y programación · Bases de datos relacionales y SQL · Base de datos (SM142051) · UD2</p>
+    <h1>Subconsultas: IN, EXISTS y correlacionadas</h1>
+    <p class="lede">
+      A veces la pregunta que quieres hacerle a una tabla depende de la respuesta a <b>otra pregunta</b>: «los clientes que compraron un periférico» necesita primero saber qué se compró.
+      Una <b>subconsulta</b> es esa pregunta de apoyo, escrita dentro de la principal. Vas a ver dos formas muy distintas de contestarla: una que se calcula <b>una sola vez</b> y otra que se repite <b>por cada fila</b>.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> La tienda tiene 5 clientes y una tabla con todas sus compras. Quieres la lista de los clientes que compraron algún periférico, y para eso necesitas mirar las compras mientras recorres los clientes. ¿Cómo lo harías a mano, con papel? ¿Mirarías las compras una sola vez o volverías a ellas con cada cliente? Escríbelo como te salga, aunque esté mal.</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: primero anotaría quién compró un periférico y después revisaría la lista de clientes, o bien..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>De una pregunta dentro de otra a una pregunta por cada fila</h2>
+      <p>Siete pasos. Cada uno termina con un chequeo: hasta que no lo resuelves, el siguiente queda cerrado. Equivocarte aquí no resta nada, es parte del método.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="Una consulta dentro de otra">
+          <span class="etapa">Paso 1</span>
+          <h3>Para contestar una pregunta, antes hay que contestar otra</h3>
+          <p>Quieres saber qué clientes compraron algún producto de la categoría <b>Periféricos</b>. El nombre del cliente está en la tabla <code>clientes</code>, pero lo que compró está en otras tablas. Entonces la pregunta se contesta en dos tiempos: primero, <b>de quién son</b> las compras de periféricos; después, <b>cuáles de mis clientes</b> están entre esos.
+            Esa primera pregunta, escrita dentro de la segunda, es una <b>subconsulta</b>. El material la introduce con el producto cuyo precio supera la media (<code>precio &gt; (SELECT AVG(precio) ...)</code>) y con una lista de clientes
+            <cite class="cita" data-fuente="bd2" data-pag="13" data-pimp="10" data-seccion="4. Subconsultas; 4.1 escalares; 4.2 IN, ANY, ALL y EXISTS" data-que="La definición de subconsulta (un SELECT anidado en otro, típicamente en WHERE), el Código 9 de la media y el Código 10 con IN, que usa la categoría «Redes»." data-cuando="Al terminar este paso"></cite>
+            <cite class="cita" data-fuente="bd2diapo" data-pag="35" data-seccion="Subconsultas: ejemplo" data-que="La misma consulta con IN en una sola diapositiva: clientes que compraron algo de «Redes»." data-cuando="Después de este paso"></cite>.</p>
+          <pre class="prog-pre">SELECT nombre
+FROM clientes
+WHERE id_cliente IN (
+    SELECT p.id_cliente
+    FROM pedidos p
+    JOIN lineas_pedido l ON l.id_pedido = p.id_pedido
+    JOIN productos pr ON pr.id_producto = l.id_producto
+    WHERE pr.categoria = 'Periféricos'
+);</pre>
+          <p>Es justo la tarea 7 del ejercicio de la UD2
+            <cite class="cita" data-fuente="bd2ej" data-pag="4" data-pimp="3" data-seccion="Tareas a resolver, tareas 7 y 8" data-que="El enunciado de la tarea 7 (clientes que compraron un producto de «Periféricos») y de la tarea 8 (clientes que nunca han hecho un pedido), las dos que resuelves con subconsultas." data-cuando="Después de este paso"></cite>.
+            A la derecha están las compras de la tienda, una fila por producto comprado. Mira la columna <b>categoría</b> y contesta antes de tocar nada.</p>
+          <details class="profundizar">
+            <summary>¿Por qué no un JOIN, que también junta las tablas?</summary>
+            <div>
+              <p>Se puede, pero un JOIN devuelve <b>una fila por cada compra</b>, no una por cliente: Marta Ruiz compró tres periféricos y saldría tres veces. Con <code>IN</code>, cada cliente de la tabla <code>clientes</code> se compara una sola vez con la lista y sale como mucho una vez. Con los datos de esta página, el JOIN daría 5 filas y el <code>IN</code> da 3 (se comprobó en SQLite 3.45.3; el material no lo compara). Por eso la solución del ejercicio añade <code>DISTINCT</code>: con <code>IN</code> no hace falta.</p>
+            </div>
+          </details>
+          <div class="check" id="chk1"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Independiente: corre una vez">
+          <span class="etapa">Paso 2</span>
+          <h3>La subconsulta independiente se calcula una sola vez</h3>
+          <p>Fíjate en la subconsulta del paso anterior: no menciona nada de la tabla <code>clientes</code>. Se puede copiar, pegar y ejecutar <b>sola</b>, y siempre da la misma lista de ids. A eso se le llama <b>subconsulta independiente</b>. El material dice que se ejecuta «una única vez, de forma independiente»
+            <cite class="cita" data-fuente="bd2" data-pag="13" data-pimp="10" data-seccion="4.3 Subconsultas correlacionadas" data-que="La frase que contrasta las anteriores (una única ejecución, independiente) con la correlacionada, que se evalúa de nuevo por cada fila de la consulta externa." data-cuando="Al terminar este paso"></cite>:
+            primero se arma la lista, y después la consulta de fuera recorre los clientes y comprueba, uno por uno, si su id <b>está en la lista</b>.</p>
+          <div class="fbloque">
+            <div data-tex="\text{ejecuciones de la interna} = 1 \qquad c \in \{x_1, \dots, x_k\}" data-display></div>
+            <div class="vivo" id="vivo2"></div>
+          </div>
+          <p>Cuando resuelvas la predicción se abrirá el botón <b>Siguiente cliente</b>: avanza uno por uno y mira el contador de la subconsulta.</p>
+          <details class="profundizar">
+            <summary>La subconsulta escalar: una lista de un solo valor</summary>
+            <div>
+              <p>El caso más simple es una subconsulta que devuelve <b>un solo valor</b>. En <code>WHERE precio &gt; (SELECT AVG(precio) FROM productos)</code>, la interna da el precio medio de los seis productos: $717.20 / 6 = 119.5333$. Es independiente (no mira a la consulta de fuera) y se calcula una vez. Después se compara cada producto con ese número: quedan el Monitor (349.00) y el Router (129.00). Es el Código 9 del material.</p>
+            </div>
+          </details>
+          <details class="profundizar">
+            <summary>«Una vez» es el modelo, el motor puede hacer otra cosa</summary>
+            <div>
+              <p>SQL es declarativo: dices <b>qué</b> quieres y el motor decide <b>cómo</b>
+                <cite class="cita" data-fuente="bd1" data-pag="10" data-pimp="8" data-seccion="6. Query: definición" data-que="Una query es declarativa: describe qué datos quieres y el SGBD decide cómo obtenerlos y los optimiza." data-cuando="Después de este paso"></cite>.
+                «Se ejecuta una vez» describe lo que la consulta <b>significa</b> y lo que puedes razonar; un motor real puede reescribir una subconsulta como un JOIN o guardarla en caché. El material no entra en cómo se ejecuta de verdad (no trae planes de ejecución).</p>
+            </div>
+          </details>
+          <div class="check" id="chk2"><p class="check-tit">Elige y explica</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="EXISTS: una pregunta por fila">
+          <span class="etapa">Paso 3</span>
+          <h3>EXISTS pregunta, cliente por cliente, si hay alguna compra</h3>
+          <p>Hay otra manera de contestar lo mismo, sin armar la lista. Para cada cliente, la consulta de fuera le hace una pregunta a la de dentro: <b>«¿existe alguna compra de periféricos de este cliente?»</b>. <code>EXISTS</code> solo responde sí o no, según haya o no alguna fila
+            <cite class="cita" data-fuente="bd2diapo" data-pag="34" data-seccion="Subconsultas: cuando devuelve varios valores" data-que="Las cuatro opciones en cajas: IN (¿pertenece al conjunto?), ANY, ALL y EXISTS (¿hay alguna fila?). Solo los rótulos, sin ejemplos de ANY ni ALL." data-cuando="Al terminar este paso"></cite>.</p>
+          <pre class="prog-pre">SELECT c.nombre
+FROM clientes c
+WHERE EXISTS (
+    SELECT 1
+    FROM compras k
+    WHERE k.id_cliente = c.id_cliente
+      AND k.categoria = 'Periféricos'
+);</pre>
+          <p>Para no repetir los tres JOIN, aquí <code>compras</code> es la tabla de la derecha (pedidos, líneas y productos ya juntos). La parte nueva es <code>c.id_cliente</code>: <b>la interna nombra al cliente que la externa está mirando ahora mismo</b>. Por eso ya no se puede calcular una vez: cambia con cada cliente.</p>
+          <div class="fbloque">
+            <div data-tex="\text{ejecuciones de la interna} = |C|" data-display></div>
+            <div class="vivo" id="vivo3"></div>
+          </div>
+          <p>El material coloca EXISTS en el apartado de IN, ANY y ALL (4.2) y después dice que su uso más habitual es el correlacionado (4.3): las dos cosas son ciertas, pero en esta página EXISTS se ve siempre por fila. Contesta la predicción y avanza cliente por cliente.</p>
+          <div class="check" id="chk3"><p class="check-tit">Calcula con los datos en vivo</p><div class="cuerpo"></div></div>
+
+          <div class="destacado" id="destacado">
+            <p class="dest-tit">Una confusión muy común</p>
+            <h4>Dentro de un EXISTS escribo <code>SELECT 1</code>. ¿Y si escribo <code>SELECT *</code> o <code>SELECT NULL</code>?</h4>
+            <p>Verás las tres formas en consultas reales. El material usa <code>SELECT 1</code> y explica que EXISTS comprueba «únicamente si la subconsulta devuelve alguna fila, sin importar su contenido».</p>
+            <div class="check" id="chk3b"><p class="check-tit">Predice</p><div class="cuerpo"></div></div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Correlacionada">
+          <span class="etapa">Paso 4</span>
+          <h3>Correlacionada: la interna depende de la fila de fuera</h3>
+          <p>Una subconsulta es <b>correlacionada</b> cuando hace referencia a una columna de la consulta externa (aquí, <code>c.id_cliente</code>). Para saberlo basta una prueba: <b>¿se puede ejecutar sola?</b> La independiente sí. La correlacionada no: pegada aparte da el error «no such column: c.id_cliente» en SQLite, porque nadie le dice quién es <code>c</code>. El material lo resume con una pregunta de repaso
+            <cite class="cita" data-fuente="bd2diapo" data-pag="37" data-seccion="Preguntas de repaso" data-que="Qué distingue a la correlacionada de la independiente: la primera referencia una columna de la externa y se reevalúa por cada fila; la segunda se ejecuta una vez, de forma autónoma." data-cuando="Al terminar este paso"></cite>.</p>
+          <div class="fbloque">
+            <div data-tex="\operatorname{EXISTS}(c) \iff \exists\, k \in \text{compras}:\ k.\text{id\_cliente} = c.\text{id\_cliente} \ \wedge\ k.\text{categoría} = \text{Periféricos}" data-display></div>
+            <div class="vivo" id="vivo4"></div>
+          </div>
+          <p>A la derecha, cada compra tiene un botón con su <b>dueño</b>. Cuando contestes la predicción podrás cambiarlo: el pedido 5006 es un ratón de Javier. Mira cómo el resultado se rehace solo cada vez que cambias a quién pertenece una compra.</p>
+          <div class="check" id="chk4"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="NOT EXISTS: los que faltan">
+          <span class="etapa">Paso 5</span>
+          <h3>NOT EXISTS: los clientes para los que la interna no encuentra nada</h3>
+          <p>Con <code>NOT EXISTS</code> la pregunta se invierte: <b>«¿qué clientes no tienen ningún pedido?»</b>. Es la tarea 8 del ejercicio y el ejemplo con el que el material presenta las correlacionadas: Ana Molina, la única sin pedidos
+            <cite class="cita" data-fuente="bd2" data-pag="14" data-pimp="11" data-seccion="4.3 Subconsultas correlacionadas (ejemplo NOT EXISTS)" data-que="El ejemplo NOT EXISTS con SELECT 1 y el párrafo que lo explica: para cada cliente la interna comprueba si existe al menos un pedido, y NOT EXISTS se queda con los que fallan. Ese párrafo explicativo viene después del recuadro y se lee suelto." data-cuando="Al terminar este paso"></cite>
+            <cite class="cita" data-fuente="bd2diapo" data-pag="36" data-seccion="Subconsultas correlacionadas: clientes sin pedidos" data-que="La misma consulta con la nota de que la interna se reevalúa por cada fila externa, a diferencia de las anteriores." data-cuando="Después de este paso"></cite>.</p>
+          <pre class="prog-pre">SELECT c.nombre
+FROM clientes c
+WHERE NOT EXISTS (
+    SELECT 1 FROM pedidos p WHERE p.id_cliente = c.id_cliente
+);</pre>
+          <div class="fbloque">
+            <div data-tex="\text{sin pedidos} = C \setminus \{\, c \in C : \exists\, p \in P,\ p.\text{id\_cliente} = c.\text{id\_cliente} \,\}" data-display></div>
+            <div class="vivo" id="vivo5"></div>
+          </div>
+          <p>Es la misma pregunta de existencia del paso anterior, solo que te quedas con los clientes donde la respuesta es <b>no</b>. Otra forma de escribirla es un <code>LEFT JOIN</code> que conserva a los clientes sin pareja y filtra los que tienen <code>NULL</code> (la página de LEFT, RIGHT y FULL JOIN). Cuando resuelvas la predicción podrás quitar y devolver los pedidos de cada cliente.</p>
+          <div class="check" id="chk5"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="La trampa del NULL">
+          <span class="etapa">Paso 6</span>
+          <h3>NOT IN y un NULL en la lista: la trampa clásica</h3>
+          <p>Los clientes sin pedidos también se pueden pedir con <code>NOT IN</code>: <code>WHERE id_cliente NOT IN (SELECT id_cliente FROM pedidos)</code>. Con los datos de ahora da lo mismo que NOT EXISTS. Pero hay un detalle que el material no cubre aplicado a las subconsultas: <b>¿y si algún pedido no tiene cliente</b> (un <code>id_cliente</code> en <code>NULL</code>)?</p>
+          <p>Hay que recordar cómo trata SQL el <code>NULL</code>: no es un valor, es «no se sabe». Comparar algo con <code>NULL</code> no da verdadero ni falso, da <b>indeterminado</b>, y el <code>WHERE</code> descarta todo lo que no es verdadero
+            <cite class="cita" data-fuente="bd2" data-pag="8" data-pimp="5" data-seccion="NULL y lógica de tres valores" data-que="WHERE email = NULL nunca devuelve filas; hay que usar IS NULL. Los tres valores (verdadero, falso, indeterminado) y que WHERE trata el indeterminado como falso." data-cuando="Al terminar este paso"></cite>.</p>
+          <div class="fbloque">
+            <div data-tex="5 \ne \text{NULL} \;\Rightarrow\; \text{indeterminado} \qquad \text{id} \notin \{1,2,3,4,\text{NULL}\} \;\Rightarrow\; \text{nunca verdadero}" data-display></div>
+            <div class="vivo" id="vivo6"></div>
+          </div>
+          <p>Para que Ana (id 5) salga de un <code>NOT IN</code>, la comparación <code>5 &lt;&gt; x</code> tiene que ser verdadera con <b>cada</b> x de la lista. Si uno de los x es <code>NULL</code>, esa comparación es indeterminada y Ana se descarta. <code>NOT EXISTS</code> no sufre esto: solo busca filas con <code>=</code>, y una fila con <code>NULL</code> simplemente no coincide con nadie.</p>
+          <p>Y en la solución 7 del ejercicio hay un error de otro tipo: dice que Laura Sánchez compró periféricos, y no es cierto (su único pedido, el 5004, es el router, categoría «Redes»)
+            <cite class="cita" data-fuente="bd2ej" data-pag="6" data-pimp="5" data-seccion="Solución 7: clientes que compraron Periféricos" data-que="La consulta con IN y su resultado escrito, que nombra a cuatro clientes. Con los datos del ejercicio son tres: Marta, Javier y Diego (errata)." data-cuando="Después de este paso"></cite>.
+            Cuando resuelvas la predicción podrás agregar el pedido sin cliente.</p>
+          <div class="check" id="chk6"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Tabla derivada (con el material)">
+          <span class="etapa">Paso 7</span>
+          <h3>Una subconsulta en el FROM: la tabla derivada</h3>
+          <p>La subconsulta también puede ir en el <code>FROM</code>, como si fuera una tabla temporal: se calcula un resultado intermedio y después se filtra. Es el Código 11 del material: el gasto total de cada cliente y, de fuera, solo los que gastaron más de 200
+            <cite class="cita" data-fuente="bd2" data-pag="14" data-pimp="11" data-seccion="4.4 Subconsultas en la cláusula FROM; Código 11" data-que="La subconsulta en FROM con el alias gasto, la suma de cantidad por precio_unitario por cliente y el filtro total > 200." data-cuando="Al terminar este paso"></cite>.</p>
+          <pre class="prog-pre">SELECT gasto.id_cliente, gasto.total
+FROM (
+    SELECT p.id_cliente, SUM(lp.cantidad * lp.precio_unitario) AS total
+    FROM pedidos p
+    JOIN lineas_pedido lp ON lp.id_pedido = p.id_pedido
+    GROUP BY p.id_cliente
+) AS gasto
+WHERE gasto.total &gt; 200;</pre>
+          <div class="fbloque">
+            <div data-tex="\text{total}(c) = \sum_{\text{líneas de } c} \text{cantidad} \cdot \text{precio\_unitario}" data-display></div>
+            <div class="vivo" id="vivo7"></div>
+          </div>
+          <p>Aquí la subconsulta es independiente (se arma una vez) y, como la de IN, produce una colección que la consulta de fuera usa. La diferencia: en el <code>WHERE</code> sirve para filtrar y en el <code>FROM</code> es <b>la tabla sobre la que se consulta</b>. Ojo con un detalle de los datos: el pedido 5006 está <b>cancelado</b> y aun así cuenta en el gasto de Javier, porque nada en la consulta lo excluye
+            <cite class="cita" data-fuente="bd2ej" data-pag="6" data-pimp="5" data-seccion="Solución 6: total gastado por cliente" data-que="El total gastado por cliente con dos LEFT JOIN y COALESCE. Incluye el pedido 5006, cancelado (89.70 de ratones), y no lo dice: con WHERE estado <> 'Cancelado' Javier bajaría de 438.70 a 349.00." data-cuando="Después de este paso"></cite>.
+            Si al principio escribiste una hipótesis, vuelve a leerla ahora.</p>
+          <div class="cita" id="citaHipo" hidden></div>
+          <div class="check" id="chk7"><p class="check-tit">Calcula con los datos en vivo</p><div class="cuerpo"></div></div>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+        </div>
+        <div class="sc-ctl" id="escCtl"></div>
+        <div id="escTablas"></div>
+        <div id="escClientes"></div>
+        <div id="escKv"></div>
+        <div class="sc-nota" id="escNota" aria-live="polite"></div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>La misma tienda, ahora como programa. En Python se usa <code>sqlite3</code>, el motor que trae el lenguaje, con una base en memoria. En R esta máquina no tiene SQLite, así que las tablas son <code>data.frame</code> y los equivalentes se escriben con <code>dplyr</code>: <code>semi_join</code> hace de <code>EXISTS</code> o <code>IN</code> y <code>anti_join</code> hace de <code>NOT EXISTS</code>. Los bucles escritos a mano muestran <b>cuántas veces corre la interna</b>; al final se comparan con la versión de la librería.</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir</p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="true">Python</button>
+            <button type="button" data-lang="r" aria-pressed="false">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">1 · preparar las tablas</span><span data-f="2">2 · independiente (IN)</span><span data-f="3">3 · correlacionada (EXISTS)</span><span data-f="4">4 · NOT EXISTS</span><span data-f="5">5 · tabla derivada y librería</span><span data-f="6">6 · el NULL</span>
+        </div>
+        <h3 class="mini-tit vr-tit">los tres recorridos sobre los clientes</h3>
+        <div class="tabla-wrap"><table class="tabla vr-tabla" id="vrTabla"></table></div>
+        <div class="vr-cuenta" id="vrCuenta"></div>
+        <div class="vr-extra" id="vrExtra"></div>
+        <h3 class="mini-tit vr-tit">lo que el programa lleva impreso</h3>
+        <div class="salida" id="vrLog"></div>
+      </div>
+    </div>
+
+    <h3 class="mini-tit" style="margin:20px 0 6px">Lo que imprime cada lenguaje</h3>
+    <div class="vr-grid">
+      <div class="card"><p class="mini-tit">Python</p><div class="salida" id="salidaPy"></div></div>
+      <div class="card"><p class="mini-tit">R</p><div class="salida" id="salidaR"></div></div>
+    </div>
+
+    <p class="vr-nota">Los dos programas imprimen lo mismo, línea por línea, salvo la de la comparación (<code>True</code> en Python y <code>TRUE</code> en R, y dice «SQL» o «dplyr» según el lenguaje). El tamaño de las tablas es el de la UD2 pero con solo las columnas que hacen falta, y los resultados son los reales de SQLite 3.45.3 y de R con <code>dplyr</code> 1.2.1. El conteo «la interna corrió 5 veces» es el del <b>bucle escrito a mano</b>: el motor SQL de verdad decide por su cuenta cómo ejecutar el <code>EXISTS</code>. Los datos son los de la tienda en línea del ejercicio
+      <cite class="cita" data-fuente="bd2ej" data-pag="3" data-pimp="2" data-seccion="Código 2: datos de ejemplo" data-que="Los clientes, los productos, los pedidos 5001 a 5006 y las nueve líneas con sus precios. La tabla de líneas tiene cantidad y precio_unitario, que usa la tabla derivada del paso 7." data-cuando="Antes de reproducir"></cite>.
+      El pedido 5007 sin cliente de la última parte lo inventa esta página.</p>
+
+    <details class="profundizar">
+      <summary>Las tres formas en una línea con la librería</summary>
+      <div>
+        <p>En R, las mismas tres preguntas sin bucles:</p>
+        <pre class="prog-pre">semi_join(clientes, filter(compras, categoria == "Periféricos"), by = "id_cliente")   # EXISTS
+filter(clientes, id_cliente %in% lista)                                               # IN
+anti_join(clientes, pedidos, by = "id_cliente")                                       # NOT EXISTS</pre>
+        <p>En Python, con <code>sqlite3</code>, es la misma consulta SQL de los pasos 3 y 5, sin el bucle: el motor hace el recorrido por dentro.</p>
+      </div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>El NA de R no se comporta como el NULL de SQL</h3><span class="estado" data-reto="codigo2"></span></div>
+        <div id="codigo2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Una subconsulta escalar con varias filas</h3><span class="estado" data-reto="codigo3"></span></div>
+        <div id="codigo3"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: la biblioteca te avisa en el índice cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>¿Corre una vez o por cada fila?</h3><span class="estado" data-reto="ojo"></span></div>
+        <p class="desc">Cinco consultas del esquema de la tienda. Decide, sin ejecutar nada, de qué tipo es la subconsulta. Apruebas con 4 de 5.</p>
+        <div id="ojo"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Construir</span><h3>Reparte los pedidos</h3><span class="estado" data-reto="construir"></span></div>
+        <p class="desc">Cambia a qué cliente pertenece cada pedido hasta cumplir los cuatro objetivos. Se dan por logrados una vez que los alcanzas.</p>
+        <div class="grande" id="construirVivo"></div>
+        <div class="tabla-wrap"><table class="tabla cons-t" id="consTabla"></table></div>
+        <ul class="objetivos" id="objetivos"></ul>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>Cuentas de subconsultas</h3><span class="estado" data-reto="mano"></span></div>
+        <p class="desc">Datos al azar. Haz la cuenta con papel antes de pedir pistas.</p>
+        <div id="mano"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Alguien se equivocó</h3><span class="estado" data-reto="error"></span></div>
+        <p class="desc">Una de las líneas tiene un error. Tócala.</p>
+        <div id="error"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Cuál es independiente</h3><span class="estado" data-reto="prop1"></span></div>
+        <div id="prop1"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Qué mira EXISTS</h3><span class="estado" data-reto="prop2"></span></div>
+        <div id="prop2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>NOT IN o NOT EXISTS</h3><span class="estado" data-reto="prop3"></span></div>
+        <div id="prop3"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Recordar a la fuerza es lo que fija. Arma la consulta de memoria y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Consulta de memoria</span><h3>Clientes que nunca han hecho un pedido</h3><span class="estado" data-reto="formula"></span></div>
+        <p class="desc">Ordena las líneas de la consulta con NOT EXISTS. Hay piezas de más que no pertenecen. No mires arriba.</p>
+        <div id="formula"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el material</h2>
+      <p class="lecturas-intro">Ya construiste la idea con las manos. Ahora ve a la versión del máster y comprueba que la reconoces. Las subconsultas están en el apartado 4 de la teoría de la UD2 y en las diapositivas 33 a 37, y el ejercicio resuelto las usa en las tareas 7 y 8. Lo que el material <b>no</b> trae: ejemplos de ANY ni de ALL, cómo se ejecuta de verdad una subconsulta (planes de ejecución), la trampa de NOT IN con NULL, ni una comparación con el JOIN. Hay dos erratas en esta parte: la solución 7 del ejercicio nombra a Laura Sánchez sin razón, y la solución 6 cuenta el pedido cancelado sin decirlo. Cada entrada dice qué vas a encontrar y en qué momento conviene leerla. Si abres la biblioteca con doble clic, el enlace abre el PDF en esa página.</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> Los clientes, productos, pedidos y líneas son los de la tienda en línea del ejercicio de la UD2 (el pedido 5006 está cancelado). La tabla <code>compras</code> es una simplificación de esta página: pedidos, líneas y productos ya juntos. El pedido 5007 sin cliente, los datos de los retos y las consultas de ejemplo de la parte de retos son inventados aquí.
+    El modelo de «se ejecuta una vez o por fila», la trampa del NOT IN con NULL, la comparación con el JOIN y las trampas de R y de SQLite no vienen en el material de la unidad: son de esta página. Tu progreso se guarda solo en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+/*
+  Datos de esta pagina (los mismos de la ruta "Bases de datos": tienda en linea del ejercicio de la UD2, bd2ej PDF 3).
+  Consulte el comentario al inicio del script de conceptos/tabla-tupla-dominio.html para el esquema completo.
+  Aqui se usan: clientes (id, nombre), pedidos (id, cliente, estado), productos (id, nombre, categoria),
+  lineas_pedido (pedido, producto, cantidad, precio_unitario). Python: sqlite3 en memoria. R: data.frame y dplyr.
+*/
+(function () {
+  "use strict";
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var RETOS = ["ojo", "construir", "mano", "error", "formula", "prop1", "prop2", "prop3", "codigo1", "codigo2", "codigo3"];
+  var C = B.concepto({ id: "subconsultas", retos: RETOS, pasos: 7 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+  function azar(a) { return a[Math.floor(Math.random() * a.length)]; }
+  function azarN(a, b) { return a + Math.floor(Math.random() * (b - a + 1)); }
+  function r2(x) { return Math.round(x * 100) / 100; }
+
+  /* ---------------- los datos: la tienda en linea ---------------- */
+  var CLI = [
+    { id: 1, n: "Marta Ruiz", corto: "Marta" }, { id: 2, n: "Javier Gómez", corto: "Javier" }, { id: 3, n: "Laura Sánchez", corto: "Laura" },
+    { id: 4, n: "Diego Torres", corto: "Diego" }, { id: 5, n: "Ana Molina", corto: "Ana" }
+  ];
+  var PROD = {
+    101: { n: "Teclado mecánico", c: "Periféricos" }, 102: { n: "Monitor 27\" 4K", c: "Monitores" }, 103: { n: "Ratón inalámbrico", c: "Periféricos" },
+    104: { n: "Disco SSD 1TB", c: "Almacenamiento" }, 105: { n: "Webcam HD", c: "Periféricos" }, 106: { n: "Router Wi-Fi 6", c: "Redes" }
+  };
+  var PED0 = [[5001, 1, "Entregado"], [5002, 2, "Entregado"], [5003, 1, "Enviado"], [5004, 3, "Pendiente"], [5005, 4, "Entregado"], [5006, 2, "Cancelado"]];
+  var LIN = [[5001, 101, 1, 79.90], [5001, 103, 2, 29.90], [5002, 102, 1, 349.00], [5003, 104, 1, 89.50], [5003, 105, 1, 39.90],
+             [5004, 106, 1, 129.00], [5005, 101, 1, 79.90], [5005, 102, 1, 349.00], [5006, 103, 3, 29.90]];
+  var CATS = ["Periféricos", "Monitores", "Almacenamiento", "Redes"];
+  function cliente(id) { return CLI.filter(function (c) { return c.id === id; })[0]; }
+  function nombres(l) { return l.length ? l.map(function (c) { return c.n; }).join(", ") : "(ninguno)"; }
+
+  var est = { paso: 0, ok: [false, false, false, false, false, false, false], cat: "Periféricos", owner: {}, quitado: {}, nulo: false, k: 0, umbral: 200 };
+  var pasos;
+  function resetEst() {
+    est.cat = "Periféricos"; est.owner = {}; est.quitado = {}; est.nulo = false; est.k = 0; est.umbral = 200;
+    PED0.forEach(function (p) { est.owner[p[0]] = p[1]; });
+  }
+  function pedidosVivos() {
+    var l = [];
+    PED0.forEach(function (p) {
+      var c = est.owner[p[0]];
+      if (est.paso === 4 && est.quitado[c]) return;
+      l.push({ id: p[0], c: c, estado: p[2] });
+    });
+    if (est.paso === 5 && est.nulo) l.push({ id: 5007, c: null, estado: "Pendiente" });
+    return l;
+  }
+  function compras() {
+    var vivos = {}, l = [];
+    pedidosVivos().forEach(function (p) { vivos[p.id] = p; });
+    LIN.forEach(function (x) {
+      var p = vivos[x[0]];
+      if (!p || p.c === null) return;
+      l.push({ ped: x[0], c: p.c, prod: x[1], cat: PROD[x[1]].c, cant: x[2], pu: x[3], imp: r2(x[2] * x[3]) });
+    });
+    return l;
+  }
+  function conCompra(cat) {
+    var s = {};
+    compras().forEach(function (x) { if (x.cat === cat) s[x.c] = true; });
+    return CLI.filter(function (c) { return s[c.id]; });
+  }
+  function sinPedidos() {
+    var s = {};
+    pedidosVivos().forEach(function (p) { if (p.c !== null) s[p.c] = true; });
+    return CLI.filter(function (c) { return !s[c.id]; });
+  }
+  function totales() {
+    var t = {};
+    compras().forEach(function (x) { t[x.c] = r2((t[x.c] || 0) + x.imp); });
+    return t;
+  }
+  function ids(l) { return l.map(function (c) { return c.id; }); }
+
+  var MODOS = [
+    "Mira las compras y la categoría",
+    "Avanza cliente por cliente",
+    "Avanza y mira la ventana de la interna",
+    "Cambia el dueño de una compra",
+    "Quita y devuelve los pedidos de un cliente",
+    "Agrega un pedido sin cliente",
+    "Mueve el umbral del gasto"
+  ];
+
+  /* ---------------- pintar el escenario ---------------- */
+  function kv(pares) {
+    return '<dl class="sc-kv">' + pares.map(function (p) { return '<dt>' + p[0] + '</dt><dd' + (p[2] ? ' class="q"' : "") + '>' + p[1] + '</dd>'; }).join("") + '</dl>';
+  }
+  function tCompras(o) {
+    var h = '<p class="sc-tit">compras (pedidos, líneas y productos juntos)</p><div class="tabla-wrap"><table class="tabla"><thead><tr><th>pedido</th><th>cliente</th><th>producto</th><th>categoría</th>' + (o.imp ? '<th>importe</th>' : "") + '</tr></thead><tbody>';
+    compras().forEach(function (x) {
+      var cls = [];
+      if (o.sel && o.sel(x)) cls.push("sel");
+      if (o.cur && o.cur(x)) cls.push("cur");
+      var cel = o.own ? '<button type="button" class="tt-own" data-own="' + x.ped + '"' + (o.dis ? " disabled" : "") + '>' + x.c + " " + esc(cliente(x.c).corto) + '</button>' : x.c + " " + esc(cliente(x.c).corto);
+      h += '<tr class="' + cls.join(" ") + '"><td>' + x.ped + '</td><td>' + cel + '</td><td>' + esc(PROD[x.prod].n) + '</td><td>' + x.cat + '</td>' + (o.imp ? '<td>' + B.fmt(x.imp, 2) + '</td>' : "") + '</tr>';
+    });
+    return h + '</tbody></table></div>';
+  }
+  function tPedidos() {
+    var h = '<p class="sc-tit">pedidos</p><div class="tabla-wrap"><table class="tabla"><thead><tr><th>pedido</th><th>id_cliente</th><th>estado</th></tr></thead><tbody>';
+    var l = pedidosVivos();
+    if (!l.length) h += '<tr><td colspan="3">(sin pedidos)</td></tr>';
+    l.forEach(function (p) {
+      h += '<tr class="' + (p.c === null ? "nueva" : "") + '"><td>' + p.id + '</td><td class="' + (p.c === null ? "nulo" : "") + '">' + (p.c === null ? "NULL" : p.c + " " + esc(cliente(p.c).corto)) + '</td><td>' + p.estado + '</td></tr>';
+    });
+    return h + '</tbody></table></div>';
+  }
+  function controles() {
+    var i = est.paso, on = est.ok[i], dis = on ? "" : " disabled", h = "";
+    if (i === 0) {
+      h = CATS.map(function (c) { return '<button type="button" data-a="cat" data-v="' + c + '"' + dis + (est.cat === c ? ' class="on"' : "") + '>' + c + '</button>'; }).join("");
+      if (!on) h += '<span class="hint">Responde la predicción para cambiar la categoría.</span>';
+    } else if (i === 1 || i === 2) {
+      h = '<button type="button" class="primary" data-a="sig"' + dis + '>Siguiente cliente</button><button type="button" data-a="todos"' + dis + '>Todos</button><button type="button" class="ghost" data-a="reiniciar"' + dis + '>Reiniciar</button>';
+      if (!on) h += '<span class="hint">Responde la predicción para avanzar.</span>';
+    } else if (i === 3) {
+      h = '<button type="button" class="ghost" data-a="duenos"' + dis + '>Volver a los dueños originales</button>';
+      if (!on) h += '<span class="hint">Responde la predicción para cambiar dueños.</span>';
+    } else if (i === 4) {
+      h = '<button type="button" class="ghost" data-a="devolver"' + dis + '>Devolver todos los pedidos</button>';
+      if (!on) h += '<span class="hint">Responde la predicción para quitar pedidos.</span>';
+    } else if (i === 5) {
+      h = '<button type="button" data-a="nulo"' + dis + (est.nulo ? ' class="on"' : "") + '>' + (est.nulo ? "Quitar el pedido 5007 sin cliente" : "Agregar el pedido 5007 sin cliente (NULL)") + '</button>';
+      if (!on) h += '<span class="hint">Responde la predicción para agregarlo.</span>';
+    } else if (i === 6) {
+      h = [100, 200, 300, 400].map(function (u) { return '<button type="button" data-a="umbral" data-v="' + u + '"' + dis + (est.umbral === u ? ' class="on"' : "") + '>total &gt; ' + u + '</button>'; }).join("");
+      if (!on) h += '<span class="hint">Responde la predicción para ver los totales.</span>';
+    }
+    $("escCtl").innerHTML = h;
+  }
+  function accion(e) {
+    var b = e.target.closest ? e.target.closest("button[data-a]") : null;
+    if (!b || b.disabled) return;
+    var a = b.getAttribute("data-a"), v = b.getAttribute("data-v");
+    if (a === "cat") est.cat = v;
+    else if (a === "sig") { if (est.k < 5) est.k++; }
+    else if (a === "todos") est.k = 5;
+    else if (a === "reiniciar") est.k = 0;
+    else if (a === "duenos") PED0.forEach(function (p) { est.owner[p[0]] = p[1]; });
+    else if (a === "devolver") est.quitado = {};
+    else if (a === "nulo") est.nulo = !est.nulo;
+    else if (a === "umbral") est.umbral = +v;
+    else if (a === "quitar") est.quitado[+v] = !est.quitado[+v];
+    controles();
+    pintar();
+  }
+  $("escCtl").addEventListener("click", accion);
+  $("escClientes").addEventListener("click", accion);
+  $("escTablas").addEventListener("click", function (e) {
+    var b = e.target.closest ? e.target.closest("button[data-own]") : null;
+    if (!b || b.disabled || est.paso !== 3) return;
+    var p = +b.getAttribute("data-own");
+    est.owner[p] = est.owner[p] % 5 + 1;
+    pintar();
+  });
+
+  function pintar() {
+    var i = est.paso, on = est.ok[i], nota = "", pares = [], tab = "", cli = "", k = est.k;
+    var per = conCompra("Periféricos"), sin = sinPedidos();
+    if (i === 0) {
+      var lista = conCompra(est.cat);
+      tab = tCompras({ sel: function (x) { return on && x.cat === est.cat; } });
+      cli = '<div class="sc-caja">interna: ids de los clientes con una compra de «' + est.cat + '»<br>' +
+        (on ? '<b>{' + ids(lista).join(", ") + '}</b>' : '<span class="q">?</span>') + '<br>externa: clientes cuyo id está en esa lista<br>' +
+        (on ? '<b>' + esc(nombres(lista)) + '</b>' : '<span class="q">?</span>') + '</div>';
+      pares = [["líneas de «" + est.cat + "»", on ? compras().filter(function (x) { return x.cat === est.cat; }).length : "?", !on], ["clientes distintos", on ? lista.length : "?", !on]];
+      nota = on ? "La lista tiene un id por <b>cliente</b>, no uno por compra: varias compras del mismo cliente cuentan una vez." : "Busca en la tabla las compras de periféricos y piensa de quién son.";
+    } else if (i === 1) {
+      var li = ids(per);
+      tab = '';
+      cli = '<div class="sc-caja">interna (corre sola, una vez): <b>{' + li.join(", ") + '}</b><br>veces que corrió: ' + (on ? '<b>1</b>' : '<span class="q">?</span>') + '</div>' +
+        '<p class="sc-tit">externa: clientes, de a uno</p><div class="tabla-wrap"><table class="tabla"><thead><tr><th>id</th><th>cliente</th><th>¿id IN lista?</th></tr></thead><tbody>' +
+        CLI.map(function (c, r) {
+          var hecho = r < k;
+          var d = hecho ? (li.indexOf(c.id) >= 0) : null;
+          return '<tr class="' + (r === k - 1 ? "cur" : "") + '"><td>' + c.id + '</td><td>' + esc(c.n) + '</td><td class="' + (d === null ? "" : d ? "si" : "no") + '">' + (d === null ? (r === k ? "..." : "") : d ? "sí, sale" : "no") + '</td></tr>';
+        }).join("") + '</tbody></table></div>';
+      pares = [["clientes revisados", k + " de 5"], ["veces que corrió la interna", on ? "1" : "?", !on]];
+      nota = on ? (k === 5 ? "Terminó: la interna corrió <b>1</b> vez y los clientes se comprobaron contra la misma lista." : "Cada cliente se compara con la lista ya hecha. El contador de la interna no se mueve.") : "Aquí se verá cuántas veces corre la interna.";
+    } else if (i === 2) {
+      var cur = k > 0 ? CLI[k - 1] : null;
+      tab = tCompras({ cur: function (x) { return cur && on && x.c === cur.id; }, sel: function (x) { return cur && on && x.c === cur.id && x.cat === "Periféricos"; } });
+      var rows = CLI.map(function (c, r) {
+        var hecho = r < k, n = compras().filter(function (x) { return x.c === c.id && x.cat === "Periféricos"; }).length;
+        return '<tr class="' + (r === k - 1 ? "cur" : "") + '"><td>' + c.id + '</td><td>' + esc(c.n) + '</td><td>' + (hecho ? n : "") + '</td><td class="' + (hecho ? (n > 0 ? "si" : "no") : "") + '">' + (hecho ? (n > 0 ? "verdadero" : "falso") : (r === k ? "..." : "")) + '</td></tr>';
+      }).join("");
+      cli = '<p class="sc-tit">externa: clientes, de a uno</p><div class="tabla-wrap"><table class="tabla"><thead><tr><th>id</th><th>cliente</th><th>líneas halladas</th><th>EXISTS</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+      if (cur && on) {
+        var nn = compras().filter(function (x) { return x.c === cur.id && x.cat === "Periféricos"; }).length;
+        cli += '<div class="sc-caja">ventana de la interna con <b>c.id_cliente = ' + cur.id + '</b><br>busca compras del cliente ' + cur.id + ' en Periféricos: <b>' + nn + '</b><br>EXISTS = <b>' + (nn > 0 ? "verdadero" : "falso") + '</b></div>';
+      }
+      pares = [["clientes revisados", k + " de 5"], ["veces que corrió la interna", on ? String(k) : "?", !on], ["en el resultado hasta ahora", on ? CLI.slice(0, k).filter(function (c) { return per.indexOf(c) >= 0; }).length : "?", !on]];
+      nota = on ? (k === 5 ? "Terminó: la interna corrió <b>5</b> veces, una por cliente, y salieron " + per.length + "." : "La interna corre <b>otra vez</b> para cada cliente, con su propio id.") : "Aquí se verá la ventana de la interna para cada cliente.";
+    } else if (i === 3) {
+      tab = tCompras({ own: true, dis: !on, sel: function (x) { return per.some(function (c) { return c.id === x.c; }) && x.cat === "Periféricos"; } });
+      cli = '<div class="sc-caja">EXISTS, compras de periféricos:<br><b>' + esc(nombres(per)) + '</b></div>';
+      pares = [["clientes en el resultado", per.length]];
+      var cambiado = PED0.some(function (p) { return est.owner[p[0]] !== p[1]; });
+      nota = on ? (cambiado ? "El resultado se rehace entero: la interna depende de quién es cada compra." : "Toca el botón de un dueño para pasar la compra al cliente siguiente.") : "El botón de cada dueño se abre cuando contestes.";
+    } else if (i === 4) {
+      tab = tPedidos();
+      var fil = CLI.map(function (c) {
+        var n = pedidosVivos().filter(function (p) { return p.c === c.id; }).length, q = !!est.quitado[c.id];
+        var boton = q ? '<button type="button" data-a="quitar" data-v="' + c.id + '"' + (on ? "" : " disabled") + '>devolver</button>' : '<button type="button" data-a="quitar" data-v="' + c.id + '"' + (on ? "" : " disabled") + '>quitar pedidos</button>';
+        return '<tr class="' + (n === 0 ? "sel" : "") + '"><td>' + c.id + '</td><td>' + esc(c.n) + '</td><td>' + n + '</td><td class="' + (n === 0 ? "si" : "no") + '">' + (n === 0 ? "sale" : "no") + '</td><td>' + boton + '</td></tr>';
+      }).join("");
+      cli = '<p class="sc-tit">externa: clientes y su NOT EXISTS</p><div class="tabla-wrap"><table class="tabla"><thead><tr><th>id</th><th>cliente</th><th>pedidos</th><th>NOT EXISTS</th><th></th></tr></thead><tbody>' + fil + '</tbody></table></div>';
+      pares = [["clientes", CLI.length], ["con pedidos", CLI.length - sin.length], ["sin pedidos (el resultado)", sin.length]];
+      nota = on ? "Resultado: <b>" + esc(nombres(sin)) + "</b>." : "Los botones se abren cuando contestes.";
+    } else if (i === 5) {
+      tab = tPedidos();
+      var enLista = pedidosVivos().map(function (p) { return p.c === null ? "NULL" : p.c; });
+      var distintas = [];
+      enLista.forEach(function (v) { if (distintas.indexOf(v) < 0) distintas.push(v); });
+      distintas.sort();
+      var notIn = est.nulo ? [] : sin;
+      cli = '<div class="sc-caja">lista del NOT IN: <b>{' + distintas.join(", ") + '}</b></div>' +
+        '<div class="sc-caja">NOT IN → <b>' + esc(nombres(notIn)) + '</b><br>NOT EXISTS → <b>' + esc(nombres(sin)) + '</b></div>';
+      var ana = CLI[4];
+      cli += '<div class="sc-caja">' + (est.nulo ? 'Para Ana (id 5): 5 &lt;&gt; 1 verdadero, 5 &lt;&gt; 2 verdadero, 5 &lt;&gt; 3 verdadero, 5 &lt;&gt; 4 verdadero, <b>5 &lt;&gt; NULL indeterminado</b>. Todo junto: indeterminado, y el WHERE la descarta.' : 'Para Ana (id 5): 5 &lt;&gt; 1, 5 &lt;&gt; 2, 5 &lt;&gt; 3 y 5 &lt;&gt; 4 son verdaderas. Todo junto: verdadero, y sale.') + '</div>';
+      pares = [["pedidos con id_cliente NULL", est.nulo ? 1 : 0], ["NOT IN devuelve", notIn.length + " cliente(s)"], ["NOT EXISTS devuelve", sin.length + " cliente(s)"]];
+      nota = on ? (est.nulo ? '<span class="mal">NOT IN se quedó sin filas</span> por un solo NULL; NOT EXISTS sigue devolviendo a Ana.' : "Sin NULL en la lista, las dos formas coinciden.") : "El botón se abre cuando contestes.";
+      void ana;
+    } else if (i === 6) {
+      var t = totales();
+      tab = tCompras({ imp: true });
+      var f = CLI.map(function (c) {
+        var v = t[c.id], pasa = v !== undefined && v > est.umbral;
+        return '<tr class="' + (on && pasa ? "sel" : "") + '"><td>' + c.id + '</td><td>' + esc(c.n) + '</td><td>' + (on ? (v === undefined ? "sin líneas" : B.fmt(v, 2)) : '<span class="q">?</span>') + '</td><td class="' + (on ? (pasa ? "si" : "no") : "") + '">' + (on ? (pasa ? "sale" : "no") : "") + '</td></tr>';
+      }).join("");
+      cli = '<p class="sc-tit">tabla derivada «gasto» y el filtro de fuera</p><div class="tabla-wrap"><table class="tabla"><thead><tr><th>id</th><th>cliente</th><th>total</th><th>total &gt; ' + est.umbral + '</th></tr></thead><tbody>' + f + '</tbody></table></div>';
+      var pasan = CLI.filter(function (c) { return t[c.id] !== undefined && t[c.id] > est.umbral; }).length;
+      pares = [["umbral", est.umbral], ["clientes que pasan", on ? pasan : "?", !on]];
+      nota = on ? "Ana no aparece en la tabla derivada: no tiene líneas, así que el <code>GROUP BY</code> no le crea ningún grupo. Javier incluye el pedido 5006 aunque está cancelado." : "El total por cliente se muestra cuando contestes.";
+    }
+    $("escTablas").innerHTML = tab;
+    $("escClientes").innerHTML = cli;
+    $("escKv").innerHTML = pares.length ? kv(pares) : "";
+    $("escNota").innerHTML = nota;
+    $("escHint").textContent = MODOS[i];
+    vivos();
+  }
+  function vivos() {
+    var per = conCompra("Periféricos"), sin = sinPedidos(), t = totales();
+    $("vivo2").innerHTML = "lista = {" + ids(per).join(", ") + "} · la interna corrió: <b>" + (est.ok[1] ? "1" : "?") + "</b> vez · clientes revisados: " + (est.paso === 1 ? est.k : 0);
+    $("vivo3").innerHTML = "|C| = " + CLI.length + " clientes → la interna corre <b>" + (est.ok[2] ? CLI.length : "?") + "</b> veces";
+    $("vivo4").innerHTML = "EXISTS verdadero para: <b>" + (est.paso === 3 ? esc(nombres(per)) : "Marta Ruiz, Javier Gómez, Diego Torres") + "</b>";
+    $("vivo5").innerHTML = "|C| − |con pedidos| = " + CLI.length + " − " + (CLI.length - sin.length) + " = <b>" + sin.length + "</b>" + (est.paso === 4 ? " (" + esc(nombres(sin)) + ")" : "");
+    $("vivo6").innerHTML = "pedidos con id_cliente NULL: <b>" + (est.paso === 5 && est.nulo ? 1 : 0) + "</b> → NOT IN devuelve <b>" + (est.paso === 5 && est.nulo ? 0 : sin.length) + "</b> cliente(s), NOT EXISTS devuelve <b>" + sin.length + "</b>";
+    $("vivo7").innerHTML = est.ok[6] && est.paso === 6 ? "total(1) = " + B.fmt(t[1] || 0, 2) + " · total(2) = " + B.fmt(t[2] || 0, 2) + " · total(4) = " + B.fmt(t[4] || 0, 2) : "total(c) = suma de cantidad × precio de las líneas de c";
+  }
+  function entrar(i) {
+    est.paso = i;
+    resetEst();
+    controles();
+    pintar();
+  }
+
+  /* ---------------- chequeos de cada paso ---------------- */
+  B.numerico(cuerpo("chk1"), {
+    pregunta: "Mira la tabla de compras de la derecha. ¿Cuántos <b>clientes distintos</b> compraron algún producto de la categoría Periféricos?",
+    respuesta: 3,
+    tolerancia: 0,
+    pistas: [
+      "Busca las filas con categoría Periféricos y anota a quién pertenece cada una. Después cuenta los dueños, sin repetir.",
+      "Hay cinco compras de periféricos, pero algún cliente se repite."
+    ],
+    diagnostico: function (v) {
+      if (v === 5) return "5 son las <b>compras</b> de periféricos, no los clientes: Marta Ruiz compró tres. Te piden clientes distintos.";
+      if (v === 4) return "4 es lo que dice la solución 7 del ejercicio del material, y es una errata: incluye a Laura Sánchez, que solo compró un router (categoría Redes).";
+      if (v === 2) return "Te falta uno: revisa los pedidos 5005 y 5006.";
+      return null;
+    },
+    explicacion: "Son <b>3</b>: Marta Ruiz (pedidos 5001 y 5003, tres compras), Javier Gómez (5006, un ratón) y Diego Torres (5005, un teclado). La subconsulta devuelve la lista $\\{1, 2, 4\\}$ y la consulta de fuera se queda con esos tres clientes. <b>Ahora la escena muestra la lista</b>: cambia la categoría y mira cómo cambia.",
+    alResolver: function () { est.ok[0] = true; controles(); pintar(); pasos.completar(0); }
+  });
+
+  B.opcionMultiple(cuerpo("chk2"), {
+    pregunta: "La tienda crece a 1000 clientes. Con <code>id_cliente IN (SELECT ...)</code> y una subconsulta independiente, ¿cuántas veces corre la subconsulta?",
+    opciones: [
+      "Una sola vez: se arma la lista y después los 1000 clientes se comparan con ella",
+      "1000 veces, una por cada cliente",
+      "Ninguna: el IN se resuelve sin necesidad de la subconsulta",
+      "Depende de cuántos de esos clientes hayan comprado algo"
+    ],
+    correcta: 0,
+    mezclar: true,
+    pistas: [
+      null,
+      "Eso es lo que pasa con una subconsulta correlacionada. Esta no menciona nada de la consulta de fuera, así que el resultado es el mismo para todos los clientes.",
+      "La lista de ids sale de la subconsulta: sin ella no hay con qué comparar.",
+      "Qué clientes compraron algo cambia el <b>resultado</b>, no cuántas veces se calcula la lista."
+    ],
+    explicacion: "<b>Una sola vez</b>, y no depende de cuántos clientes haya. Esa es la diferencia con la correlacionada, y es la razón por la que la independiente escala bien. <b>Ahora el botón «Siguiente cliente» está abierto</b>: avanza y mira que el contador de la interna no se mueve.",
+    alResolver: function () { est.ok[1] = true; controles(); pintar(); pasos.completar(1); }
+  });
+
+  B.numerico(cuerpo("chk3"), {
+    pregunta: "La tabla clientes tiene 5 filas. Con el <code>EXISTS</code> correlacionado del paso, ¿cuántas veces se evalúa la subconsulta de dentro hasta terminar con todos los clientes?",
+    respuesta: 5,
+    tolerancia: 0,
+    pistas: [
+      "La interna depende de <code>c.id_cliente</code>: hay que evaluarla para cada fila que la externa procesa.",
+      "Una vez por cada cliente, sea verdadero o falso el resultado."
+    ],
+    diagnostico: function (v) {
+      if (v === 1) return "1 es lo que pasa con una subconsulta <b>independiente</b>. Esta menciona a <code>c</code> y no se puede calcular una vez para todos.";
+      if (v === 3) return "3 son los clientes para los que dio verdadero. La interna también se evalúa para los que dan falso: Laura y Ana.";
+      if (v === 4) return "Cuenta bien: son todos los clientes de la tabla, no solo los que tienen pedidos.";
+      return null;
+    },
+    explicacion: "Son $|C| = 5$ evaluaciones: la interna se evalúa una vez por <b>cada cliente de la tabla de fuera</b>, no por cada cliente del resultado. Con 1000 clientes serían 1000. <b>Ahora el escenario está abierto</b>: avanza cliente por cliente y mira la ventana de la interna.",
+    alResolver: function () { est.ok[2] = true; controles(); pintar(); pasos.completar(2); }
+  });
+
+  B.opcionMultiple(cuerpo("chk3b"), {
+    pregunta: "Cambias el <code>SELECT 1</code> de dentro del EXISTS por <code>SELECT *</code> o por <code>SELECT NULL</code>. ¿Cambia el resultado?",
+    opciones: [
+      "No: EXISTS solo mira si la subconsulta devuelve alguna fila, no lo que contiene",
+      "Sí: con SELECT NULL la subconsulta ya no devuelve nada",
+      "Sí: SELECT * trae más columnas y el EXISTS se vuelve falso",
+      "Depende de cuántas columnas tenga la tabla"
+    ],
+    correcta: 0,
+    mezclar: true,
+    pistas: [
+      null,
+      "Una fila con un NULL sigue siendo una fila: la subconsulta devuelve una fila cuyo valor es NULL.",
+      "Cuántas columnas se traen no importa: EXISTS no las lee.",
+      "El número de columnas no influye en si hay filas."
+    ],
+    explicacion: "No cambia nada. <code>EXISTS</code> pregunta «¿hay alguna fila?» y descarta lo que contiene. Con los datos de la página, las tres formas (<code>SELECT 1</code>, <code>SELECT *</code> y <code>SELECT NULL</code>) devuelven los mismos cuatro clientes con pedidos (se comprobó en SQLite). Por convención se escribe <code>SELECT 1</code>.",
+    alResolver: function () { /* sin candado: es una confusion, no un paso */ }
+  });
+
+  B.opcionMultiple(cuerpo("chk4"), {
+    pregunta: "Hoy el resultado del EXISTS es Marta, Javier y Diego. Si pasas el pedido 5006 (el ratón de Javier) a Ana Molina, ¿quiénes quedan en el resultado?",
+    opciones: [
+      "Marta Ruiz, Diego Torres y Ana Molina",
+      "Marta Ruiz, Javier Gómez, Diego Torres y Ana Molina",
+      "Marta Ruiz y Diego Torres",
+      "No cambia: la interna ya se calculó"
+    ],
+    correcta: 0,
+    mezclar: true,
+    pistas: [
+      null,
+      "Javier tiene otro pedido, el 5002, pero es un monitor: ¿le queda algún periférico?",
+      "Ana pasa a tener el ratón del 5006. ¿Y a quién se lo quitaste?",
+      "La correlacionada se evalúa por cada cliente con los datos de ahora, así que sí cambia."
+    ],
+    explicacion: "El 5006 era el único periférico de Javier (su otro pedido, el 5002, es un monitor), así que Javier <b>sale</b> del resultado, y Ana, que ahora tiene un ratón, <b>entra</b>. Quedan Marta, Diego y Ana. <b>Ahora los botones están abiertos</b>: mueve otras compras y comprueba tus predicciones.",
+    alResolver: function () { est.ok[3] = true; controles(); pintar(); pasos.completar(3); }
+  });
+
+  B.opcionMultiple(cuerpo("chk5"), {
+    pregunta: "Hoy solo Ana Molina no tiene pedidos. Quitas los pedidos de Laura Sánchez (el 5004). ¿Qué devuelve ahora el <code>NOT EXISTS</code>?",
+    opciones: [
+      "Laura Sánchez y Ana Molina",
+      "Solo Ana Molina",
+      "Solo Laura Sánchez",
+      "Nadie"
+    ],
+    correcta: 0,
+    mezclar: true,
+    pistas: [
+      null,
+      "Ana ya no tiene pedidos y no los recuperó. ¿Qué pasa con Laura ahora que no tiene ninguno?",
+      "Ana sigue sin pedidos: NOT EXISTS sigue devolviéndola.",
+      "Hay clientes para los que la interna ya no encuentra ninguna fila."
+    ],
+    explicacion: "Para Laura la interna ya no encuentra pedidos, así que NOT EXISTS es verdadero y entra; Ana sigue sin pedidos. El resultado son <b>Laura y Ana</b>. <b>Ahora los botones de la escena están abiertos</b>: prueba a quitar los pedidos de varios clientes.",
+    alResolver: function () { est.ok[4] = true; controles(); pintar(); pasos.completar(4); }
+  });
+
+  B.opcionMultiple(cuerpo("chk6"), {
+    pregunta: "Un pedido tiene <code>id_cliente</code> en NULL. ¿Qué devuelve <code>WHERE id_cliente NOT IN (SELECT id_cliente FROM pedidos)</code> sobre los cinco clientes?",
+    opciones: [
+      "Ninguna fila: ni siquiera Ana Molina sale",
+      "Ana Molina, igual que antes",
+      "Un error, porque la lista tiene un NULL",
+      "Los cinco clientes"
+    ],
+    correcta: 0,
+    mezclar: true,
+    pistas: [
+      null,
+      "Piensa en cómo queda la comparación de Ana con el NULL de la lista: no es verdadera.",
+      "SQL no da error: simplemente no devuelve filas. El NULL hace la comparación indeterminada.",
+      "Para que un cliente salga, la comparación tiene que ser verdadera con todos los valores de la lista, y con el NULL no lo es."
+    ],
+    explicacion: "<b>Ninguna fila.</b> Para Ana, <code>5 &lt;&gt; NULL</code> es indeterminado, y un <code>AND</code> con un indeterminado nunca es verdadero: el <code>WHERE</code> la descarta. Para los demás clientes ya era falso. <b>Ahora el botón está abierto</b>: agrega el pedido sin cliente y compara con <code>NOT EXISTS</code>.",
+    alResolver: function () { est.ok[5] = true; controles(); pintar(); pasos.completar(5); }
+  });
+
+  B.numerico(cuerpo("chk7"), {
+    pregunta: "Calcula con las líneas de la tabla de la derecha: ¿cuánto suma el gasto total de Diego Torres (id 4)?",
+    respuesta: 428.9,
+    tolerancia: 0.01,
+    pistas: [
+      "Busca las líneas del cliente 4 y multiplica cantidad por el precio de cada una.",
+      "Tiene el pedido 5005: un teclado a 79.90 y un monitor a 349.00."
+    ],
+    diagnostico: function (v) {
+      if (Math.abs(v - 349) < 0.01) return "349.00 es solo el monitor. Falta el teclado del mismo pedido.";
+      if (Math.abs(v - 79.9) < 0.01) return "79.90 es solo el teclado. Falta el monitor.";
+      return null;
+    },
+    explicacion: "$79.90 + 349.00 = 428.90$: el teclado y el monitor del pedido 5005. Es el valor de la tabla derivada para el cliente 4 y supera 200. <b>Ahora la escena muestra los totales</b>: mueve el umbral y mira quién pasa. Ana no aparece porque no tiene líneas que sumar.",
+    alResolver: function () { est.ok[6] = true; controles(); pintar(); pasos.completar(6); }
+  });
+
+  pasos = B.pasos($("recorrido"), {
+    concepto: C,
+    alEntrar: entrar,
+    alTerminar: function () { location.hash = "retos"; }
+  });
+  (function () { var q; for (q = 0; q < 7; q++) est.ok[q] = pasos.hecho(q); })();
+  entrar(0);
+
+  /* ---------------- hipotesis inicial ---------------- */
+  (function () {
+    var ta = $("hipotesis"), t = null;
+    ta.value = B.nota("subconsultas", "hipotesis");
+    function cita() {
+      var v = ta.value.trim(), el = $("citaHipo");
+      if (!el) return;
+      el.hidden = !v;
+      if (v) { el.textContent = ""; el.appendChild(document.createTextNode("Al principio escribiste: «" + v + "». ¿Miraste las compras una vez o con cada cliente? Así se distinguen la independiente y la correlacionada.")); }
+    }
+    cita();
+    ta.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { B.nota("subconsultas", "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; cita(); }, 500);
+    });
+  })();
+
+  /* ---------------- marcadores de estado de retos ---------------- */
+  function pintarEstados() {
+    [].forEach.call(document.querySelectorAll("[data-reto]"), function (el) {
+      var ok = C.retoOk(el.getAttribute("data-reto"));
+      el.textContent = ok ? "resuelto" : "pendiente";
+      el.classList.toggle("ok", ok);
+    });
+  }
+  C.alCambiar(pintarEstados);
+
+  /* ---------------- reto: ojo clinico ---------------- */
+  var CONSULTAS = [
+    { sql: "SELECT nombre FROM productos\nWHERE precio > (SELECT AVG(precio) FROM productos);", tipo: "indep", why: "La interna (el precio medio) no menciona la fila de fuera: se calcula una vez y se compara cada producto con ese número." },
+    { sql: "SELECT nombre FROM clientes\nWHERE id_cliente IN (SELECT id_cliente FROM pedidos WHERE estado = 'Entregado');", tipo: "indep", why: "La interna se puede ejecutar sola y siempre da la misma lista de ids: es independiente." },
+    { sql: "SELECT nombre FROM productos\nWHERE id_producto NOT IN (SELECT id_producto FROM lineas_pedido);", tipo: "indep", why: "La interna no depende del producto de fuera: es una lista que se calcula una vez." },
+    { sql: "SELECT nombre FROM clientes\nWHERE fecha_alta > (SELECT MIN(fecha_alta) FROM clientes);", tipo: "indep", why: "La interna da un solo valor (la fecha más antigua) que no depende de la fila de fuera." },
+    { sql: "SELECT c.nombre FROM clientes c\nWHERE EXISTS (SELECT 1 FROM pedidos p\n              WHERE p.id_cliente = c.id_cliente AND p.estado = 'Enviado');", tipo: "corr", why: "La interna usa c.id_cliente: depende del cliente que la externa mira y se evalúa de nuevo por cada uno." },
+    { sql: "SELECT pr.nombre FROM productos pr\nWHERE NOT EXISTS (SELECT 1 FROM lineas_pedido l\n                  WHERE l.id_producto = pr.id_producto);", tipo: "corr", why: "La interna menciona pr.id_producto, una columna de la consulta de fuera: se reevalúa por cada producto." },
+    { sql: "SELECT p.id_pedido FROM pedidos p\nWHERE (SELECT COUNT(*) FROM lineas_pedido l\n       WHERE l.id_pedido = p.id_pedido) > 1;", tipo: "corr", why: "Aunque está en el WHERE como un valor, la interna usa p.id_pedido: es correlacionada y se evalúa por cada pedido." },
+    { sql: "SELECT c.nombre FROM clientes c\nWHERE c.fecha_alta > (SELECT MIN(p.fecha_pedido) FROM pedidos p\n                      WHERE p.id_cliente = c.id_cliente);", tipo: "corr", why: "La interna filtra por c.id_cliente: cada cliente tiene su propia fecha mínima, así que se evalúa por cliente." }
+  ];
+  var NOMBRES = { indep: "independiente: corre una vez", corr: "correlacionada: corre por cada fila de fuera" };
+  (function () {
+    var cont = $("ojo");
+    cont.innerHTML = '<div class="ronda"></div><p class="ctx-ojo">Esquema: clientes(id_cliente, nombre, fecha_alta), pedidos(id_pedido, id_cliente, fecha_pedido, estado), productos(id_producto, nombre, precio), lineas_pedido(id_pedido, id_producto, cantidad).</p><div class="prog-pre"></div>' +
+      '<div class="ojo-opts3"><button type="button" class="opt" data-a="indep">Independiente: la interna corre una sola vez</button><button type="button" class="opt" data-a="corr">Correlacionada: la interna corre por cada fila de fuera</button></div>' +
+      '<div class="fb" aria-live="polite"></div><div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    var orden, ronda, aciertos, respondida, actual;
+    function nueva() { orden = B.mezclar(CONSULTAS).slice(0, 5); ronda = 0; aciertos = 0; mostrar(); }
+    function mostrar() {
+      respondida = false;
+      actual = orden[ronda];
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 5 · aciertos " + aciertos;
+      cont.querySelector(".prog-pre").textContent = actual.sql;
+      [].forEach.call(cont.querySelectorAll(".ojo-opts3 .opt"), function (x) { x.disabled = false; x.className = "opt"; });
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+    }
+    cont.querySelector(".ojo-opts3").addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || respondida) return;
+      respondida = true;
+      var ok = b.getAttribute("data-a") === actual.tipo;
+      if (ok) aciertos++;
+      b.classList.add(ok ? "ok" : "mal");
+      if (!ok) cont.querySelector('[data-a="' + actual.tipo + '"]').classList.add("ok");
+      [].forEach.call(cont.querySelectorAll(".ojo-opts3 .opt"), function (x) { x.disabled = true; });
+      cont.querySelector(".fb").innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No.</span> ') + "Era " + NOMBRES[actual.tipo] + ". " + esc(actual.why);
+      var sig = cont.querySelector(".sig");
+      sig.hidden = false;
+      if (ronda === 4) {
+        var aprobo = aciertos >= 4;
+        C.reto("ojo", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertos + " de 5" + (aprobo ? ". Aprobado." : ". Necesitas 4 para aprobar.");
+        sig.textContent = "Otra tanda";
+      } else sig.textContent = "Siguiente ronda";
+    });
+    cont.querySelector(".sig").addEventListener("click", function () {
+      if (ronda === 4) nueva(); else { ronda++; mostrar(); }
+    });
+    nueva();
+  })();
+
+  /* ---------------- reto: construir ---------------- */
+  (function () {
+    var due = {}, avisado = false, ul = $("objetivos");
+    PED0.forEach(function (p) { due[p[0]] = p[1]; });
+    var PER_PED = { 5001: true, 5003: true, 5005: true, 5006: true };   // pedidos que llevan algun periferico
+    var CONT = { 5001: "teclado y ratón", 5002: "monitor", 5003: "disco y webcam", 5004: "router", 5005: "teclado y monitor", 5006: "3 ratones" };
+    function calc() {
+      var tienen = {}, per = {};
+      PED0.forEach(function (p) { tienen[due[p[0]]] = true; if (PER_PED[p[0]]) per[due[p[0]]] = true; });
+      return { sin: CLI.filter(function (c) { return !tienen[c.id]; }), per: CLI.filter(function (c) { return per[c.id]; }) };
+    }
+    var OBJ = [
+      { t: "NOT EXISTS (clientes sin pedidos) devuelve exactamente a dos clientes.", f: function (r) { return r.sin.length === 2; } },
+      { t: "NOT EXISTS no devuelve a nadie: todos los clientes tienen algún pedido.", f: function (r) { return r.sin.length === 0; } },
+      { t: "Exactamente dos clientes compraron periféricos.", f: function (r) { return r.per.length === 2; } },
+      { t: "Ana Molina es la única que compró periféricos.", f: function (r) { return r.per.length === 1 && r.per[0].id === 5; } }
+    ];
+    var logrados = [false, false, false, false];
+    OBJ.forEach(function (o) { var li = document.createElement("li"); li.innerHTML = '<span class="m"></span><span>' + o.t + '</span>'; ul.appendChild(li); });
+    function render() {
+      var h = '<thead><tr><th>pedido</th><th>contiene</th><th>pertenece a</th></tr></thead><tbody>';
+      PED0.forEach(function (p) {
+        h += '<tr><td>' + p[0] + '</td><td>' + CONT[p[0]] + (PER_PED[p[0]] ? " (periféricos)" : "") + '</td><td><select data-p="' + p[0] + '" aria-label="Dueño del pedido ' + p[0] + '">' +
+          CLI.map(function (c) { return '<option value="' + c.id + '"' + (due[p[0]] === c.id ? " selected" : "") + '>' + c.id + " " + esc(c.corto) + '</option>'; }).join("") + '</select></td></tr>';
+      });
+      $("consTabla").innerHTML = h + '</tbody>';
+      var r = calc();
+      $("construirVivo").innerHTML = "sin pedidos: <b>" + esc(nombres(r.sin)) + "</b><br>compraron periféricos: <b>" + esc(nombres(r.per)) + "</b>";
+      OBJ.forEach(function (o, i) { if (!logrados[i] && o.f(r)) logrados[i] = true; ul.children[i].classList.toggle("hecho", logrados[i]); });
+      if (!avisado && logrados.every(Boolean)) { avisado = true; C.reto("construir", true); }
+    }
+    $("consTabla").addEventListener("change", function (e) {
+      var t = e.target;
+      if (t.hasAttribute && t.hasAttribute("data-p")) { due[t.getAttribute("data-p")] = +t.value; render(); }
+    });
+    render();
+  })();
+
+  /* ---------------- reto: a mano ---------------- */
+  (function () {
+    var D;
+    function generar() {
+      var tipo = azar(["ejec", "sin", "join", "total"]), n, k, a, b, p1, p2, v, i, s, nz;
+      if (tipo === "ejec") { n = azarN(6, 40); D = { tipo: tipo, n: n, ans: n }; }
+      else if (tipo === "sin") { n = azarN(6, 20); k = azarN(2, n - 2); D = { tipo: tipo, n: n, k: k, ans: n - k }; }
+      else if (tipo === "join") {
+        v = [azarN(0, 3), azarN(1, 3), azarN(0, 3), azarN(1, 3)];
+        s = 0; nz = 0;
+        for (i = 0; i < v.length; i++) { s += v[i]; if (v[i] > 0) nz++; }
+        if (s === nz) { v[1] = 3; s = 0; nz = 0; for (i = 0; i < v.length; i++) { s += v[i]; if (v[i] > 0) nz++; } }
+        D = { tipo: tipo, v: v, s: s, nz: nz, ans: s - nz };
+      } else { a = azarN(2, 5); b = azarN(2, 5); p1 = azar([10, 12, 15, 20, 25]); p2 = azar([8, 14, 30, 40]); D = { tipo: tipo, a: a, b: b, p1: p1, p2: p2, ans: a * p1 + b * p2 }; }
+    }
+    generar();
+    B.numerico($("mano"), {
+      pregunta: function () {
+        if (D.tipo === "ejec") return "La tabla clientes tiene " + D.n + " filas. Una subconsulta <b>correlacionada</b> se usa en el WHERE de esa tabla. ¿Cuántas veces se evalúa la interna?";
+        if (D.tipo === "sin") return "Hay " + D.n + " clientes y " + D.k + " de ellos tienen al menos un pedido. ¿Cuántas filas devuelve <code>NOT EXISTS</code> (clientes sin pedidos)?";
+        if (D.tipo === "join") return "Cuatro clientes compraron esta cantidad de líneas de periféricos: " + D.v.join(", ") + ". Un JOIN devuelve una fila por línea, y un IN una fila por cliente que compró. ¿Cuántas filas <b>más</b> devuelve el JOIN que el IN?";
+        return "Un cliente tiene dos líneas: " + D.a + " unidades a " + D.p1 + " y " + D.b + " unidades a " + D.p2 + ". ¿Cuánto suma su total en la tabla derivada?";
+      },
+      respuesta: function () { return D.ans; },
+      tolerancia: 0,
+      pistas: [
+        function () {
+          if (D.tipo === "ejec") return "La interna se evalúa una vez por cada fila de la consulta de fuera.";
+          if (D.tipo === "sin") return "Los que no tienen pedidos son los que quedan al quitar los que sí tienen.";
+          if (D.tipo === "join") return "Primero cuenta las filas del JOIN (la suma de las líneas) y después cuántos clientes compraron algo (los que no son 0).";
+          return "Cada línea aporta cantidad por precio; después se suman las dos.";
+        },
+        function () {
+          if (D.tipo === "ejec") return "Son " + D.n + " filas, así que $" + D.n + "$ evaluaciones.";
+          if (D.tipo === "sin") return "$" + D.n + " - " + D.k + "$.";
+          if (D.tipo === "join") return "JOIN: " + D.s + " filas. IN: " + D.nz + " clientes con compras.";
+          return "$" + D.a + " \\times " + D.p1 + " + " + D.b + " \\times " + D.p2 + "$.";
+        }
+      ],
+      diagnostico: function (v) {
+        if (D.tipo === "sin" && v === D.k) return "Esos son los clientes <b>con</b> pedidos. NOT EXISTS devuelve a los que no tienen ninguno.";
+        if (D.tipo === "join" && v === D.s) return "Esas son las filas del JOIN. Te piden cuántas más que el IN.";
+        if (D.tipo === "join" && v === D.nz) return "Esas son las filas del IN (los clientes que compraron). Resta eso a las del JOIN.";
+        if (D.tipo === "total" && v === D.a + D.b) return "Esas son las unidades. Hay que multiplicar cada una por su precio y sumar.";
+        return null;
+      },
+      explicacion: function () {
+        if (D.tipo === "ejec") return "$" + D.n + "$ evaluaciones: una por cada fila de la tabla de fuera, no por cada fila del resultado.";
+        if (D.tipo === "sin") return "$" + D.n + " - " + D.k + " = " + D.ans + "$ clientes sin pedidos.";
+        if (D.tipo === "join") return "JOIN: $" + D.v.join(" + ") + " = " + D.s + "$ filas. IN: " + D.nz + " clientes. Diferencia: $" + D.s + " - " + D.nz + " = " + D.ans + "$.";
+        return "$" + D.a + " \\times " + D.p1 + " + " + D.b + " \\times " + D.p2 + " = " + (D.a * D.p1) + " + " + (D.b * D.p2) + " = " + D.ans + "$.";
+      },
+      reintentable: true,
+      textoReintentar: "Otro ejercicio",
+      antesDeReintentar: generar,
+      alResolver: function (ok) { C.reto("mano", ok); }
+    });
+  })();
+
+  /* ---------------- reto: cazar el error ---------------- */
+  B.cazarError($("error"), {
+    variantes: [
+      {
+        intro: "Una consulta con <code>EXISTS</code> correlacionado sobre 5 clientes da 3 clientes en el resultado. Alguien razonó así:",
+        lineas: ["\\text{la tabla de fuera tiene 5 clientes}",
+          "\\text{el resultado tiene 3 clientes}",
+          "\\text{la interna corrió una vez por cada cliente del resultado: } 3 \\text{ veces}",
+          "\\text{luego la interna se evaluó 3 veces en total}"],
+        erronea: 2,
+        explicacion: "La interna se evalúa por cada fila de la <b>tabla de fuera</b>, sea verdadero o falso el resultado. Fueron $5$ evaluaciones, no 3."
+      },
+      {
+        intro: "La lista de <code>SELECT id_cliente FROM pedidos</code> es $\\{1, 2, 1, 3, 4, 2, \\text{NULL}\\}$. Alguien evalúa <code>5 NOT IN</code> esa lista:",
+        lineas: ["5 \\neq 1,\\ 5 \\neq 2,\\ 5 \\neq 3,\\ 5 \\neq 4 \\text{ son todas verdaderas}",
+          "\\text{queda la comparación con el NULL de la lista}",
+          "5 \\neq \\text{NULL} \\text{ es verdadera, porque 5 no es NULL}",
+          "\\text{luego Ana (id 5) pasa el NOT IN y sale en el resultado}"],
+        erronea: 2,
+        explicacion: "Comparar con <code>NULL</code> no da verdadero: da <b>indeterminado</b>. Con una comparación indeterminada, el conjunto no es verdadero y el WHERE descarta a Ana. Con un NULL en la lista, <code>NOT IN</code> no devuelve filas."
+      },
+      {
+        intro: "Marta Ruiz compró tres líneas de periféricos, Javier una y Diego una. Alguien compara un JOIN con un IN:",
+        lineas: ["\\text{periféricos por cliente: Marta 3, Javier 1, Diego 1}",
+          "\\text{JOIN con las compras: una fila por línea} \\Rightarrow 5 \\text{ filas}",
+          "\\text{IN con la subconsulta: también una fila por línea} \\Rightarrow 5 \\text{ filas}",
+          "\\text{luego JOIN e IN dan el mismo número de filas}"],
+        erronea: 2,
+        explicacion: "Con <code>IN</code> la consulta de fuera recorre la tabla <b>clientes</b> y cada cliente sale como mucho una vez: son 3 filas, no 5. Es el JOIN el que repite a Marta tres veces."
+      }
+    ],
+    alResolver: function (ok) { C.reto("error", ok); }
+  });
+
+  /* ---------------- retos: propiedades ---------------- */
+  function prop(id, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple($(id), cfg);
+  }
+  prop("prop1", {
+    pregunta: "¿Cuál de estas subconsultas se puede copiar y ejecutar <b>sola</b>, y por eso es independiente?",
+    opciones: [
+      "<code>SELECT id_cliente FROM pedidos WHERE estado = 'Enviado'</code>",
+      "<code>SELECT 1 FROM pedidos p WHERE p.id_cliente = c.id_cliente</code>",
+      "<code>SELECT COUNT(*) FROM lineas_pedido l WHERE l.id_pedido = p.id_pedido</code>",
+      "<code>SELECT MIN(p.fecha_pedido) FROM pedidos p WHERE p.id_cliente = c.id_cliente</code>"
+    ],
+    correcta: 0,
+    pistas: [null, "Menciona <code>c.id_cliente</code>, una columna de una consulta de fuera: sola daría «no such column».", "Menciona <code>p.id_pedido</code>, que no existe sin una consulta de fuera que lo defina.", "Usa <code>c.id_cliente</code>: depende del cliente que la externa mira."],
+    explicacion: "Solo la primera no nombra nada que venga de fuera. Las otras tres usan una columna de la consulta externa (<code>c.id_cliente</code> o <code>p.id_pedido</code>), así que son correlacionadas y no se pueden ejecutar solas."
+  });
+  prop("prop2", {
+    pregunta: "¿Qué comprueba <code>EXISTS (subconsulta)</code>?",
+    opciones: [
+      "Si la subconsulta devuelve alguna fila, sin importar lo que contenga",
+      "Si el primer valor que devuelve la subconsulta es distinto de cero",
+      "Si todas las filas de la subconsulta cumplen la condición",
+      "Si la subconsulta devuelve exactamente una fila"
+    ],
+    correcta: 0,
+    pistas: [null, "EXISTS no lee los valores: por eso da igual escribir SELECT 1, SELECT * o SELECT NULL.", "Eso es más parecido a ALL, que el material solo nombra.", "Una o varias filas dan el mismo resultado: verdadero."],
+    explicacion: "<code>EXISTS</code> es verdadero si la subconsulta devuelve al menos una fila, y falso si no devuelve ninguna. El contenido no se mira (el material: «sin importar su contenido»)."
+  });
+  prop("prop3", {
+    pregunta: "Quieres los clientes sin pedidos y <code>pedidos.id_cliente</code> admite NULL. ¿Cuál es la forma segura?",
+    opciones: [
+      "<code>NOT EXISTS (SELECT 1 FROM pedidos p WHERE p.id_cliente = c.id_cliente)</code>",
+      "<code>id_cliente NOT IN (SELECT id_cliente FROM pedidos)</code>",
+      "<code>id_cliente &lt;&gt; (SELECT id_cliente FROM pedidos)</code>",
+      "Las dos primeras son igual de seguras"
+    ],
+    correcta: 0,
+    pistas: [null, "Con un NULL en la lista, NOT IN no devuelve ninguna fila.", "Eso compara contra una subconsulta escalar que devuelve varias filas: no es lo que quieres y SQLite usa solo la primera.", "No: con un NULL en la lista, la segunda se queda sin filas y la primera no."],
+    explicacion: "<code>NOT EXISTS</code> solo busca filas que coincidan con <code>=</code>, y un NULL no coincide con nadie. <code>NOT IN</code> se rompe con un solo NULL en la lista. Si las tablas pueden tener NULL, usa NOT EXISTS o filtra con <code>WHERE id_cliente IS NOT NULL</code> dentro de la subconsulta."
+  });
+
+  /* ---------------- consulta de memoria ---------------- */
+  B.ordenar($("formula"), {
+    piezas: ["\\texttt{SELECT c.nombre}", "\\texttt{FROM clientes c}", "\\texttt{WHERE NOT EXISTS (}", "\\texttt{SELECT 1}", "\\texttt{FROM pedidos p}", "\\texttt{WHERE p.id\\_cliente = c.id\\_cliente}", "\\texttt{)}"],
+    distractores: ["\\texttt{WHERE EXISTS (}", "\\texttt{GROUP BY c.nombre}", "\\texttt{WHERE p.id\\_cliente IN (}"],
+    soluciones: [[0, 1, 2, 3, 4, 5, 6]],
+    explicacion: "Los clientes <b>sin pedidos</b>: la externa recorre <code>clientes</code> y, para cada uno, la interna busca un pedido con su id. <code>NOT EXISTS</code> se queda con los clientes donde no encuentra ninguno. El resultado con los datos de la tienda es Ana Molina.",
+    alResolver: function (ok) { C.reto("formula", ok); }
+  });
+
+  /* ---------------- vida real: el algoritmo en codigo ---------------- */
+  (function () {
+    var CODIGO = {
+ "py": [
+  [
+   "imp",
+   "import sqlite3"
+  ],
+  [
+   "con",
+   "con = sqlite3.connect(\":memory:\")"
+  ],
+  [
+   "crear",
+   "con.executescript(\"\"\""
+  ],
+  [
+   "crear",
+   "CREATE TABLE clientes (id_cliente INTEGER PRIMARY KEY, nombre TEXT);"
+  ],
+  [
+   "crear",
+   "CREATE TABLE pedidos (id_pedido INTEGER PRIMARY KEY, id_cliente INTEGER);"
+  ],
+  [
+   "crear",
+   "CREATE TABLE productos (id_producto INTEGER PRIMARY KEY, categoria TEXT);"
+  ],
+  [
+   "crear",
+   "CREATE TABLE lineas_pedido (id_pedido INTEGER, id_producto INTEGER,"
+  ],
+  [
+   "crear",
+   "                           cantidad INTEGER, precio_unitario REAL);"
+  ],
+  [
+   "crear",
+   "INSERT INTO clientes VALUES (1,'Marta Ruiz'), (2,'Javier Gómez'), (3,'Laura Sánchez'),"
+  ],
+  [
+   "crear",
+   "                            (4,'Diego Torres'), (5,'Ana Molina');"
+  ],
+  [
+   "crear",
+   "INSERT INTO pedidos VALUES (5001,1), (5002,2), (5003,1), (5004,3), (5005,4), (5006,2);"
+  ],
+  [
+   "crear",
+   "INSERT INTO productos VALUES (101,'Periféricos'), (102,'Monitores'), (103,'Periféricos'),"
+  ],
+  [
+   "crear",
+   "                             (104,'Almacenamiento'), (105,'Periféricos'), (106,'Redes');"
+  ],
+  [
+   "crear",
+   "INSERT INTO lineas_pedido VALUES (5001,101,1,79.90), (5001,103,2,29.90), (5002,102,1,349.00),"
+  ],
+  [
+   "crear",
+   "    (5003,104,1,89.50), (5003,105,1,39.90), (5004,106,1,129.00),"
+  ],
+  [
+   "crear",
+   "    (5005,101,1,79.90), (5005,102,1,349.00), (5006,103,3,29.90);"
+  ],
+  [
+   "crear",
+   "\"\"\")"
+  ],
+  [
+   "vista",
+   "# \"compras\": una línea por producto comprado, con su cliente y su categoría"
+  ],
+  [
+   "vista",
+   "con.execute(\"\"\"CREATE VIEW compras AS"
+  ],
+  [
+   "vista",
+   "    SELECT p.id_pedido, p.id_cliente, pr.categoria"
+  ],
+  [
+   "vista",
+   "    FROM pedidos p"
+  ],
+  [
+   "vista",
+   "    JOIN lineas_pedido l ON l.id_pedido = p.id_pedido"
+  ],
+  [
+   "vista",
+   "    JOIN productos pr ON pr.id_producto = l.id_producto\"\"\")"
+  ],
+  [
+   "texto",
+   "texto = lambda v: \", \".join(v) or \"(ninguno)\""
+  ],
+  [
+   "leer",
+   "clientes = con.execute(\"SELECT id_cliente, nombre FROM clientes\").fetchall()"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "dep",
+   "lista = {f[0] for f in con.execute(\"SELECT id_cliente FROM compras WHERE categoria = 'Periféricos'\")}"
+  ],
+  [
+   "pdep",
+   "print(\"interna independiente, una vez:\", sorted(lista))"
+  ],
+  [
+   "in0",
+   "con_in = []"
+  ],
+  [
+   "forin",
+   "for id_c, nombre in clientes:"
+  ],
+  [
+   "ifin",
+   "    if id_c in lista:"
+  ],
+  [
+   "appin",
+   "        con_in.append(nombre)"
+  ],
+  [
+   "pin",
+   "print(\"IN:\", texto(con_in))"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "ej0",
+   "ejecuciones = 0"
+  ],
+  [
+   "ex0",
+   "con_exists = []"
+  ],
+  [
+   "forex",
+   "for id_c, nombre in clientes:"
+  ],
+  [
+   "cuenta",
+   "    ejecuciones += 1"
+  ],
+  [
+   "hay",
+   "    hay = con.execute(\"SELECT 1 FROM compras WHERE id_cliente = ? AND categoria = 'Periféricos' LIMIT 1\","
+  ],
+  [
+   "hay",
+   "                      (id_c,)).fetchone()"
+  ],
+  [
+   "ifex",
+   "    if hay:"
+  ],
+  [
+   "appex",
+   "        con_exists.append(nombre)"
+  ],
+  [
+   "pex",
+   "print(\"EXISTS:\", texto(con_exists))"
+  ],
+  [
+   "pej",
+   "print(\"la interna corrió\", ejecuciones, \"veces\")"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "no0",
+   "sin_pedidos = []"
+  ],
+  [
+   "forno",
+   "for id_c, nombre in clientes:"
+  ],
+  [
+   "ifno",
+   "    if con.execute(\"SELECT 1 FROM pedidos WHERE id_cliente = ?\", (id_c,)).fetchone() is None:"
+  ],
+  [
+   "appno",
+   "        sin_pedidos.append(nombre)"
+  ],
+  [
+   "pno",
+   "print(\"NOT EXISTS:\", texto(sin_pedidos))"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "gasto",
+   "gasto = con.execute(\"\"\"SELECT g.id_cliente, g.total"
+  ],
+  [
+   "gasto",
+   "    FROM (SELECT p.id_cliente, ROUND(SUM(l.cantidad * l.precio_unitario), 2) AS total"
+  ],
+  [
+   "gasto",
+   "          FROM pedidos p JOIN lineas_pedido l ON l.id_pedido = p.id_pedido"
+  ],
+  [
+   "gasto",
+   "          GROUP BY p.id_cliente) AS g"
+  ],
+  [
+   "gasto",
+   "    WHERE g.total > 200\"\"\").fetchall()"
+  ],
+  [
+   "pgasto",
+   "print(\"gasto > 200:\", \", \".join(f\"{i}={t:.2f}\" for i, t in gasto))"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "sqlin",
+   "sql_in = [f[0] for f in con.execute(\"SELECT nombre FROM clientes WHERE id_cliente IN \""
+  ],
+  [
+   "sqlin",
+   "    \"(SELECT id_cliente FROM compras WHERE categoria = 'Periféricos')\")]"
+  ],
+  [
+   "sqlex",
+   "sql_ex = [f[0] for f in con.execute(\"SELECT nombre FROM clientes c WHERE EXISTS \""
+  ],
+  [
+   "sqlex",
+   "    \"(SELECT 1 FROM compras k WHERE k.id_cliente = c.id_cliente AND k.categoria = 'Periféricos')\")]"
+  ],
+  [
+   "sqlno",
+   "sql_no = [f[0] for f in con.execute(\"SELECT nombre FROM clientes c WHERE NOT EXISTS \""
+  ],
+  [
+   "sqlno",
+   "    \"(SELECT 1 FROM pedidos p WHERE p.id_cliente = c.id_cliente)\")]"
+  ],
+  [
+   "pigual",
+   "print(\"SQL igual al bucle:\", sql_in == con_in and sql_ex == con_exists and sql_no == sin_pedidos)"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "fnnot",
+   "no_in = lambda: [f[0] for f in con.execute(\"SELECT nombre FROM clientes WHERE id_cliente NOT IN \""
+  ],
+  [
+   "fnnot",
+   "                                          \"(SELECT id_cliente FROM pedidos)\")]"
+  ],
+  [
+   "pnot1",
+   "print(\"NOT IN sin NULL:\", texto(no_in()))"
+  ],
+  [
+   "nulo",
+   "con.execute(\"INSERT INTO pedidos VALUES (5007, NULL)\")      # un pedido sin cliente"
+  ],
+  [
+   "pnot2",
+   "print(\"NOT IN con un NULL:\", texto(no_in()))"
+  ],
+  [
+   "pnot3",
+   "print(\"NOT EXISTS con un NULL:\", texto([f[0] for f in con.execute(\"SELECT nombre FROM clientes c \""
+  ],
+  [
+   "pnot3",
+   "    \"WHERE NOT EXISTS (SELECT 1 FROM pedidos p WHERE p.id_cliente = c.id_cliente)\")]))"
+  ]
+ ],
+ "r": [
+  [
+   "imp",
+   "suppressMessages(library(dplyr))"
+  ],
+  [
+   "con",
+   "# no hace falta conexión: las tablas ya viven en la memoria de R"
+  ],
+  [
+   "crear",
+   "clientes <- data.frame(id_cliente = 1:5, stringsAsFactors = FALSE,"
+  ],
+  [
+   "crear",
+   "  nombre = c(\"Marta Ruiz\", \"Javier Gómez\", \"Laura Sánchez\", \"Diego Torres\", \"Ana Molina\"))"
+  ],
+  [
+   "crear",
+   "pedidos <- data.frame(id_pedido = 5001:5006, id_cliente = c(1, 2, 1, 3, 4, 2))"
+  ],
+  [
+   "crear",
+   "productos <- data.frame(id_producto = 101:106, stringsAsFactors = FALSE,"
+  ],
+  [
+   "crear",
+   "  categoria = c(\"Periféricos\", \"Monitores\", \"Periféricos\", \"Almacenamiento\", \"Periféricos\", \"Redes\"))"
+  ],
+  [
+   "crear",
+   "lineas_pedido <- data.frame("
+  ],
+  [
+   "crear",
+   "  id_pedido = c(5001, 5001, 5002, 5003, 5003, 5004, 5005, 5005, 5006),"
+  ],
+  [
+   "crear",
+   "  id_producto = c(101, 103, 102, 104, 105, 106, 101, 102, 103),"
+  ],
+  [
+   "crear",
+   "  cantidad = c(1, 2, 1, 1, 1, 1, 1, 1, 3),"
+  ],
+  [
+   "crear",
+   "  precio_unitario = c(79.90, 29.90, 349.00, 89.50, 39.90, 129.00, 79.90, 349.00, 29.90))"
+  ],
+  [
+   "vista",
+   "# \"compras\": una línea por producto comprado, con su cliente y su categoría"
+  ],
+  [
+   "vista",
+   "compras <- pedidos %>%"
+  ],
+  [
+   "vista",
+   "  inner_join(lineas_pedido, by = \"id_pedido\") %>%"
+  ],
+  [
+   "vista",
+   "  inner_join(productos, by = \"id_producto\")"
+  ],
+  [
+   "texto",
+   "texto <- function(v) if (length(v) == 0) \"(ninguno)\" else paste(v, collapse = \", \")"
+  ],
+  [
+   "leer",
+   "# clientes ya es un data.frame: no hay nada que leer"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "dep",
+   "lista <- sort(unique(filter(compras, categoria == \"Periféricos\")$id_cliente))"
+  ],
+  [
+   "pdep",
+   "cat(sprintf(\"interna independiente, una vez: [%s]\\n\", paste(lista, collapse = \", \")))"
+  ],
+  [
+   "in0",
+   "con_in <- character(0)"
+  ],
+  [
+   "forin",
+   "for (i in 1:nrow(clientes)) {"
+  ],
+  [
+   "ifin",
+   "  if (clientes$id_cliente[i] %in% lista) {"
+  ],
+  [
+   "appin",
+   "    con_in <- c(con_in, clientes$nombre[i])"
+  ],
+  [
+   null,
+   "  }"
+  ],
+  [
+   null,
+   "}"
+  ],
+  [
+   "pin",
+   "cat(sprintf(\"IN: %s\\n\", texto(con_in)))"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "ej0",
+   "ejecuciones <- 0"
+  ],
+  [
+   "ex0",
+   "con_exists <- character(0)"
+  ],
+  [
+   "forex",
+   "for (i in 1:nrow(clientes)) {"
+  ],
+  [
+   "cuenta",
+   "  ejecuciones <- ejecuciones + 1"
+  ],
+  [
+   "hay",
+   "  hay <- nrow(filter(compras, id_cliente == clientes$id_cliente[i],"
+  ],
+  [
+   "hay",
+   "                     categoria == \"Periféricos\")) > 0"
+  ],
+  [
+   "ifex",
+   "  if (hay) {"
+  ],
+  [
+   "appex",
+   "    con_exists <- c(con_exists, clientes$nombre[i])"
+  ],
+  [
+   null,
+   "  }"
+  ],
+  [
+   null,
+   "}"
+  ],
+  [
+   "pex",
+   "cat(sprintf(\"EXISTS: %s\\n\", texto(con_exists)))"
+  ],
+  [
+   "pej",
+   "cat(sprintf(\"la interna corrió %d veces\\n\", ejecuciones))"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "no0",
+   "sin_pedidos <- character(0)"
+  ],
+  [
+   "forno",
+   "for (i in 1:nrow(clientes)) {"
+  ],
+  [
+   "ifno",
+   "  if (nrow(filter(pedidos, id_cliente == clientes$id_cliente[i])) == 0) {"
+  ],
+  [
+   "appno",
+   "    sin_pedidos <- c(sin_pedidos, clientes$nombre[i])"
+  ],
+  [
+   null,
+   "  }"
+  ],
+  [
+   null,
+   "}"
+  ],
+  [
+   "pno",
+   "cat(sprintf(\"NOT EXISTS: %s\\n\", texto(sin_pedidos)))"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "gasto",
+   "gasto <- lineas_pedido %>%"
+  ],
+  [
+   "gasto",
+   "  mutate(importe = cantidad * precio_unitario) %>%"
+  ],
+  [
+   "gasto",
+   "  inner_join(pedidos, by = \"id_pedido\") %>%"
+  ],
+  [
+   "gasto",
+   "  group_by(id_cliente) %>%"
+  ],
+  [
+   "gasto",
+   "  summarise(total = round(sum(importe), 2)) %>%"
+  ],
+  [
+   "gasto",
+   "  filter(total > 200)"
+  ],
+  [
+   "pgasto",
+   "cat(sprintf(\"gasto > 200: %s\\n\", paste(sprintf(\"%d=%.2f\", gasto$id_cliente, gasto$total), collapse = \", \")))"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "sqlin",
+   "dp_in <- filter(clientes, id_cliente %in% lista)$nombre"
+  ],
+  [
+   "sqlex",
+   "dp_ex <- semi_join(clientes, filter(compras, categoria == \"Periféricos\"), by = \"id_cliente\")$nombre"
+  ],
+  [
+   "sqlno",
+   "dp_no <- anti_join(clientes, pedidos, by = \"id_cliente\")$nombre"
+  ],
+  [
+   "pigual",
+   "cat(sprintf(\"dplyr igual al bucle: %s\\n\","
+  ],
+  [
+   "pigual",
+   "            identical(dp_in, con_in) && identical(dp_ex, con_exists) && identical(dp_no, sin_pedidos)))"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "fnnot",
+   "no_in <- function(ids) clientes$nombre[sapply(clientes$id_cliente, function(i) isTRUE(all(i != ids)))]"
+  ],
+  [
+   "pnot1",
+   "cat(sprintf(\"NOT IN sin NULL: %s\\n\", texto(no_in(pedidos$id_cliente))))"
+  ],
+  [
+   "nulo",
+   "pedidos <- rbind(pedidos, data.frame(id_pedido = 5007, id_cliente = NA))   # un pedido sin cliente"
+  ],
+  [
+   "pnot2",
+   "cat(sprintf(\"NOT IN con un NULL: %s\\n\", texto(no_in(pedidos$id_cliente))))"
+  ],
+  [
+   "pnot3",
+   "cat(sprintf(\"NOT EXISTS con un NULL: %s\\n\", texto(anti_join(clientes, pedidos, by = \"id_cliente\")$nombre)))"
+  ]
+ ]
+};
+    var SAL_PY = "interna independiente, una vez: [1, 2, 4]\nIN: Marta Ruiz, Javier Gómez, Diego Torres\nEXISTS: Marta Ruiz, Javier Gómez, Diego Torres\nla interna corrió 5 veces\nNOT EXISTS: Ana Molina\ngasto > 200: 1=269.10, 2=438.70, 4=428.90\nSQL igual al bucle: True\nNOT IN sin NULL: Ana Molina\nNOT IN con un NULL: (ninguno)\nNOT EXISTS con un NULL: Ana Molina";
+    var SAL_R = "interna independiente, una vez: [1, 2, 4]\nIN: Marta Ruiz, Javier Gómez, Diego Torres\nEXISTS: Marta Ruiz, Javier Gómez, Diego Torres\nla interna corrió 5 veces\nNOT EXISTS: Ana Molina\ngasto > 200: 1=269.10, 2=438.70, 4=428.90\ndplyr igual al bucle: TRUE\nNOT IN sin NULL: Ana Molina\nNOT IN con un NULL: (ninguno)\nNOT EXISTS con un NULL: Ana Molina";
+
+    var NOM = CLI.map(function (c) { return c.n; });
+    var LISTA = [1, 2, 4];
+    var EXI = [true, true, false, true, false];      // el EXISTS de cada cliente (Marta, Javier, Laura, Diego, Ana)
+    var NOP = [false, false, false, false, true];    // NOT EXISTS: sin pedidos
+    // eventos: una foto del estado despues de ejecutar cada linea
+    var EV = [], i;
+    var st = { fase: 1, lista: false, inR: [null, null, null, null, null], exR: [null, null, null, null, null], noR: [null, null, null, null, null],
+               ejIn: 0, ejEx: 0, ejNo: 0, consultas: 0, log: [], gasto: false, igual: false, nulo: false, n1: false, n2: false };
+    function foto(id, extra) {
+      EV.push(Object.assign({ id: id, fase: st.fase, lista: st.lista, inR: st.inR.slice(), exR: st.exR.slice(), noR: st.noR.slice(), ejIn: st.ejIn, ejEx: st.ejEx, ejNo: st.ejNo,
+        consultas: st.consultas, log: st.log.slice(), gasto: st.gasto, igual: st.igual, nulo: st.nulo, n1: st.n1, n2: st.n2, i: null, fin: false }, extra || {}));
+    }
+    foto("imp"); foto("con"); foto("crear"); foto("vista"); foto("texto"); foto("leer");
+    st.fase = 2;
+    st.lista = true; st.ejIn = 1; foto("dep");
+    st.log.push("interna independiente, una vez: [1, 2, 4]"); foto("pdep");
+    foto("in0");
+    for (i = 0; i < 5; i++) {
+      foto("forin", { i: i });
+      st.inR[i] = LISTA.indexOf(i + 1) >= 0; foto("ifin", { i: i });
+      if (st.inR[i]) foto("appin", { i: i });
+    }
+    st.log.push("IN: Marta Ruiz, Javier Gómez, Diego Torres"); foto("pin");
+    st.fase = 3;
+    foto("ej0"); foto("ex0");
+    for (i = 0; i < 5; i++) {
+      foto("forex", { i: i });
+      st.ejEx++; foto("cuenta", { i: i });
+      st.consultas++; foto("hay", { i: i });
+      st.exR[i] = EXI[i]; foto("ifex", { i: i });
+      if (EXI[i]) foto("appex", { i: i });
+    }
+    st.log.push("EXISTS: Marta Ruiz, Javier Gómez, Diego Torres"); foto("pex");
+    st.log.push("la interna corrió 5 veces"); foto("pej");
+    st.fase = 4;
+    foto("no0");
+    for (i = 0; i < 5; i++) {
+      foto("forno", { i: i });
+      st.ejNo++; st.consultas++; st.noR[i] = NOP[i]; foto("ifno", { i: i });
+      if (NOP[i]) foto("appno", { i: i });
+    }
+    st.log.push("NOT EXISTS: Ana Molina"); foto("pno");
+    st.fase = 5;
+    st.gasto = true; foto("gasto");
+    st.log.push("gasto > 200: 1=269.10, 2=438.70, 4=428.90"); foto("pgasto");
+    foto("sqlin"); foto("sqlex"); foto("sqlno");
+    st.igual = true; st.log.push("§igual§"); foto("pigual");
+    st.fase = 6;
+    foto("fnnot");
+    st.n1 = true; st.log.push("NOT IN sin NULL: Ana Molina"); foto("pnot1");
+    st.nulo = true; foto("nulo");
+    st.n2 = true; st.log.push("NOT IN con un NULL: (ninguno)"); foto("pnot2");
+    st.log.push("NOT EXISTS con un NULL: Ana Molina"); foto("pnot3");
+    EV[EV.length - 1].fin = true;
+
+    function narrar(e, ctx) {
+      var py = ctx.lang() === "py", ix = ctx.ix, n = e.i === null ? "" : NOM[e.i];
+      switch (e.id) {
+        case "imp": return py ? "Importa <code>sqlite3</code>, el módulo de la librería estándar con un motor de base de datos completo." : "Carga <code>dplyr</code>, el paquete con <code>filter</code>, <code>inner_join</code>, <code>semi_join</code> y <code>anti_join</code>. R no trae SQLite aquí.";
+        case "con": return py ? "Abre una base de datos <b>en memoria</b>: vive mientras corre el programa." : "Un comentario: no hay conexión. Las tablas son <code>data.frame</code> en la memoria de R.";
+        case "crear": return py ? "Crea las cuatro tablas de la tienda (solo con las columnas que hacen falta) y las llena con los datos del ejercicio de la UD2." : "Crea los cuatro <code>data.frame</code> con los mismos datos: clientes, pedidos, productos y líneas de pedido.";
+        case "vista": return py ? "Crea <code>compras</code>, una consulta guardada con nombre que junta pedidos, líneas y productos. Solo acorta el código de después: las vistas tienen su propia página." : "<code>compras</code> junta pedidos, líneas y productos con dos <code>inner_join</code>: una fila por producto comprado, con su cliente y su categoría.";
+        case "texto": return "Una función corta para imprimir una lista de nombres separados por comas, o «(ninguno)» si está vacía.";
+        case "leer": return py ? "Lee los cinco clientes como una lista de pares (id, nombre) para recorrerlos." : "Un comentario: <code>clientes</code> ya es un <code>data.frame</code>, no hay que leerlo.";
+        case "dep": return "<b>La subconsulta independiente.</b> Pregunta una sola vez qué clientes compraron periféricos: la lista es <b>{1, 2, 4}</b>. No depende de ningún cliente en particular.";
+        case "pdep": return "Imprime la lista: <b>[1, 2, 4]</b>.";
+        case "in0": return "Prepara la lista donde irán los nombres que cumplan el IN.";
+        case "forin": return "Cliente <b>" + (e.i + 1) + "</b> de 5: <b>" + n + "</b>. Índice " + ix(e.i) + " en " + (py ? "Python" : "R") + ".";
+        case "ifin": return "¿El id " + (e.i + 1) + " está en la lista {1, 2, 4}? <b>" + (e.inR[e.i] ? "Sí" : "No") + "</b>. Es solo mirar la lista: <b>la base de datos no se consulta otra vez</b>.";
+        case "appin": return "Guarda a <b>" + n + "</b> en el resultado.";
+        case "pin": return "Imprime el resultado del IN: <b>Marta Ruiz, Javier Gómez, Diego Torres</b>.";
+        case "ej0": return "Un contador de cuántas veces correrá la interna. Empieza en 0.";
+        case "ex0": return "Prepara la lista del resultado del EXISTS.";
+        case "forex": return "Cliente <b>" + (e.i + 1) + "</b> de 5: <b>" + n + "</b>. Índice " + ix(e.i) + " en " + (py ? "Python" : "R") + ".";
+        case "cuenta": return "Va a correr la interna otra vez, para este cliente: el contador sube a <b>" + e.ejEx + "</b>.";
+        case "hay": return py ? "<b>La subconsulta correlacionada.</b> Pregunta a la base de datos por las compras de periféricos del cliente " + (e.i + 1) + " (el <code>?</code> es su id). Es la consulta número <b>" + e.consultas + "</b> dentro de los bucles." : "<b>La subconsulta correlacionada.</b> Busca en <code>compras</code> las filas del cliente " + (e.i + 1) + " en Periféricos y mira si hay alguna. Es la consulta número <b>" + e.consultas + "</b> dentro de los bucles.";
+        case "ifex": return "¿Hubo alguna compra? <b>" + (e.exR[e.i] ? "Sí: EXISTS es verdadero" : "No: EXISTS es falso") + "</b> para " + n + ".";
+        case "appex": return "Guarda a <b>" + n + "</b> en el resultado.";
+        case "pex": return "Imprime el resultado del EXISTS: <b>Marta Ruiz, Javier Gómez, Diego Torres</b>, el mismo que el IN.";
+        case "pej": return "Imprime cuántas veces corrió la interna: <b>5</b>, una por cliente. La del IN corrió <b>1</b>.";
+        case "no0": return "Prepara la lista de los clientes sin pedidos.";
+        case "forno": return "Cliente <b>" + (e.i + 1) + "</b> de 5: <b>" + n + "</b>. Índice " + ix(e.i) + " en " + (py ? "Python" : "R") + ".";
+        case "ifno": return "Pregunta por los pedidos del cliente " + (e.i + 1) + " (consulta número <b>" + e.consultas + "</b> dentro de los bucles). <b>" + (e.noR[e.i] ? "No hay ninguno: NOT EXISTS es verdadero" : "Hay alguno: NOT EXISTS es falso") + "</b>.";
+        case "appno": return "Guarda a <b>" + n + "</b>: es el cliente sin pedidos.";
+        case "pno": return "Imprime el resultado de NOT EXISTS: <b>Ana Molina</b>.";
+        case "gasto": return py ? "La <b>tabla derivada</b>: la subconsulta del <code>FROM</code> calcula el total por cliente y la de fuera se queda con los que superan 200. Salen los clientes 1, 2 y 4." : "El mismo cálculo con una cadena de <code>dplyr</code>: calcular el importe de cada línea, sumar por cliente y filtrar. El <code>summarise</code> hace de tabla derivada y el <code>filter</code> final hace de <code>WHERE</code> de fuera.";
+        case "pgasto": return "Imprime los totales de los tres clientes que superan 200: <b>269.10, 438.70 y 428.90</b>.";
+        case "sqlin": return py ? "Lo mismo que el bucle del IN, pero escrito como una sola consulta SQL: el motor hace el recorrido." : "El equivalente con <code>filter</code> y <code>%in%</code>, sin bucle.";
+        case "sqlex": return py ? "El EXISTS escrito como una sola consulta SQL." : "El equivalente con <code>semi_join</code>: se queda con los clientes que tienen pareja en las compras de periféricos.";
+        case "sqlno": return py ? "El NOT EXISTS escrito como una sola consulta SQL." : "El equivalente con <code>anti_join</code>: se queda con los clientes que no tienen pareja en <code>pedidos</code>.";
+        case "pigual": return py ? "Compara las tres consultas SQL con los tres bucles: <b>True</b>." : "Compara las tres versiones de <code>dplyr</code> con los tres bucles: <b>TRUE</b>.";
+        case "fnnot": return py ? "Guarda la consulta <code>NOT IN</code> en una función para poder repetirla." : "Una función que imita el <code>NOT IN</code> de SQL: un cliente sale solo si <code>i != ids</code> es verdadero con <b>todos</b> los valores. Con un <code>NA</code> en la lista, <code>isTRUE(all(...))</code> da falso, como en SQL.";
+        case "pnot1": return "Sin NULL en la lista, el NOT IN devuelve a <b>Ana Molina</b>, igual que el NOT EXISTS.";
+        case "nulo": return "Agrega el pedido <b>5007 sin cliente</b>: su <code>id_cliente</code> es <code>" + (py ? "NULL" : "NA") + "</code>.";
+        case "pnot2": return "Con un " + (py ? "NULL" : "NA") + " en la lista, el NOT IN devuelve <b>(ninguno)</b>: la comparación de Ana con el " + (py ? "NULL" : "NA") + " es indeterminada.";
+        case "pnot3": return "El NOT EXISTS sigue devolviendo a <b>Ana Molina</b>: busca filas con <code>=</code> y la del " + (py ? "NULL" : "NA") + " no coincide con nadie.";
+      }
+      return "";
+    }
+    function visual(e, anterior, ctx) {
+      var py = ctx.lang() === "py", h = "", r, f = function (v, inv) { return v === null ? "·" : v ? "sí" : "no"; };
+      h = "<thead><tr><th>cliente</th><th>IN</th><th>EXISTS</th><th>NOT EXISTS</th></tr></thead><tbody>";
+      for (r = 0; r < 5; r++) {
+        var act = e && e.i === r && /^(forin|ifin|appin|forex|cuenta|hay|ifex|appex|forno|ifno|appno)$/.test(e.id);
+        h += "<tr>";
+        h += '<td class="' + (act ? "cur" : "") + '">' + (r + 1) + " " + esc(CLI[r].corto) + "</td>";
+        var vals = e ? [e.inR[r], e.exR[r], e.noR[r]] : [null, null, null];
+        vals.forEach(function (v) { h += '<td class="' + (v === null ? "" : v ? "si" : "no") + '">' + f(v) + "</td>"; });
+        h += "</tr>";
+      }
+      h += "</tbody>";
+      $("vrTabla").innerHTML = h;
+      $("vrCuenta").innerHTML = e ? "la interna corrió: IN <b>" + e.ejIn + "</b> · EXISTS <b>" + e.ejEx + "</b> · NOT EXISTS <b>" + e.ejNo + "</b><br>consultas dentro de los bucles: <b>" + e.consultas + "</b>" : "";
+      var x = "";
+      if (e && e.gasto) x += '<div class="sc-caja">tabla derivada «gasto» filtrada con total &gt; 200:<br><b>cliente 1: 269.10 · cliente 2: 438.70 · cliente 4: 428.90</b></div>';
+      if (e && e.fase >= 6 && e.n1) {
+        x += '<div class="sc-caja">lista del NOT IN: <b>{' + (e.nulo ? "1, 2, 3, 4, " + (py ? "NULL" : "NA") : "1, 2, 3, 4") + '}</b><br>' +
+          (e.nulo ? 'para Ana: 5 &lt;&gt; ' + (py ? "NULL" : "NA") + ' es indeterminado, así que NOT IN no devuelve nada.' : 'para Ana: todas las comparaciones son verdaderas, así que sale.') + '</div>';
+      }
+      $("vrExtra").innerHTML = x;
+      $("vrLog").textContent = e && e.log.length ? e.log.map(function (s) { return s === "§igual§" ? (py ? "SQL igual al bucle: True" : "dplyr igual al bucle: TRUE") : s; }).join("\n") : "(aún no se imprimió nada)";
+    }
+    B.vidaReal($("vidareal"), {
+      codigo: CODIGO,
+      eventos: EV,
+      narrar: narrar,
+      vars: function (e, ctx) {
+        var v = [], ix = ctx.ix;
+        if (e && e.i !== null && /^(forin|ifin|appin|forex|cuenta|hay|ifex|appex|forno|ifno|appno)$/.test(e.id)) v.push('<span class="vj">i = <b>' + ix(e.i) + '</b></span>');
+        if (e && e.lista) v.push('<span>lista = <b>{1, 2, 4}</b></span>');
+        if (e && e.ejEx) v.push('<span>ejecuciones = <b>' + e.ejEx + '</b></span>');
+        if (e && e.consultas) v.push('<span class="vk">consultas = <b>' + e.consultas + '</b></span>');
+        return v;
+      },
+      visual: visual,
+      demora: function (e) { return !e ? 600 : /^(forin|forex|forno|cuenta|ifin|appin|appex|appno)$/.test(e.id) ? 380 : /^(hay|ifex|ifno)$/.test(e.id) ? 650 : 900; }
+    });
+
+    $("salidaPy").textContent = SAL_PY;
+    $("salidaR").textContent = SAL_R;
+
+    B.numerico(cuerpo("vrPred"), {
+      pregunta: "El programa tiene tres recorridos sobre los 5 clientes: el del <code>IN</code> (compara contra una lista ya hecha), el del <code>EXISTS</code> (una consulta por cliente) y el del <code>NOT EXISTS</code> (también una consulta por cliente). ¿Cuántas consultas le hace el programa a las tablas <b>dentro de los tres bucles</b>?",
+      respuesta: 10,
+      tolerancia: 0,
+      pistas: [
+        "El bucle del IN no consulta nada: solo mira la lista que ya tiene. Los otros dos consultan una vez por cliente.",
+        "Son 5 clientes en cada uno de los dos bucles que sí consultan."
+      ],
+      diagnostico: function (v) {
+        if (v === 15) return "15 sería si también el bucle del IN consultara por cliente. Ese solo mira una lista que se armó antes, fuera del bucle.";
+        if (v === 5) return "5 es uno de los dos bucles que consultan. Hay otro igual: EXISTS y NOT EXISTS consultan cada uno una vez por cliente.";
+        if (v === 11) return "11 sería contando la consulta de la lista independiente. Esa corre antes de los bucles y no se cuenta aquí.";
+        return null;
+      },
+      explicacion: "Son <b>10</b>: 0 en el bucle del IN (usa la lista ya calculada) más 5 en el del EXISTS más 5 en el del NOT EXISTS. La subconsulta independiente corrió <b>1</b> vez, antes de los bucles. Ahora dale a reproducir y mira cómo suben los contadores.",
+      alResolver: function (ok) { C.reto("codigo1", ok); }
+    });
+    prop("codigo2", {
+      pregunta: "En R escribes <code>clientes$nombre[!(clientes$id_cliente %in% c(1, 2, 1, 3, 4, 2, NA))]</code>, la lista de pedidos con un <code>NA</code> (el equivalente del NULL). ¿Qué devuelve?",
+      opciones: [
+        "Ana Molina: <code>%in%</code> trata el NA como un valor más, y el 5 no está en la lista",
+        "Ningún nombre, igual que el NOT IN de SQL",
+        "Un error por el NA",
+        "Los cinco clientes"
+      ],
+      correcta: 0,
+      pistas: [null, "En SQL sí, pero R no hace la lógica de tres valores con <code>%in%</code>: pregunta si cada valor aparece en la lista, y el NA es solo un valor más.", "R no da error: <code>%in%</code> acepta NA.", "Los clientes con id 1 a 4 sí están en la lista, así que el <code>!</code> los deja fuera."],
+      explicacion: "Devuelve <b>Ana Molina</b>. <code>5 %in% c(..., NA)</code> es <code>FALSE</code>, y el <code>!</code> lo vuelve verdadero. Es una diferencia real con SQL: el <code>NOT IN</code> de SQL con un NULL en la lista no devuelve nada. Por eso el programa de arriba escribe <code>isTRUE(all(i != ids))</code> en R, que sí imita a SQL. <code>anti_join</code> se comporta como NOT EXISTS: devuelve a Ana."
+    });
+    prop("codigo3", {
+      pregunta: "En SQLite escribes <code>WHERE id_cliente = (SELECT id_cliente FROM pedidos)</code>: una subconsulta escalar que devuelve varias filas (los seis pedidos). ¿Qué pasa?",
+      opciones: [
+        "Se queda con la primera fila que devuelve la subconsulta y no avisa: devuelve a Marta Ruiz",
+        "Da un error porque la subconsulta devuelve más de una fila",
+        "Devuelve a los clientes cuyo id aparece en la lista, como si fuera IN",
+        "No devuelve ninguna fila"
+      ],
+      correcta: 0,
+      pistas: [null, "PostgreSQL sí da ese error, pero SQLite no: usa solo la primera fila que devuelve.", "Con = no se comporta como IN: compara con un único valor.", "Sí devuelve una fila: la del primer id de la lista."],
+      explicacion: "SQLite toma <b>la primera fila</b> de la subconsulta escalar y sigue: el id 1 de Marta Ruiz (se comprobó en SQLite 3.45.3). PostgreSQL da el error «more than one row returned by a subquery used as an expression». Si esperas varias filas, usa <code>IN</code>. El material usa <code>=</code> solo con subconsultas que devuelven un valor (Código 9)."
+    });
+  })();
+
+  /* ---------------- tarjetas ---------------- */
+  B.tarjetas($("tarjetas"), [
+    ["¿Qué es una subconsulta?", "Un SELECT dentro de otro, normalmente en el WHERE. Contesta una pregunta de apoyo cuyo resultado usa la consulta de fuera."],
+    ["¿Qué hace que una subconsulta sea independiente?", "No menciona ninguna columna de la consulta de fuera. Se puede ejecutar sola, y se calcula una vez."],
+    ["¿Qué hace que una subconsulta sea correlacionada?", "Referencia una columna de la consulta externa (por ejemplo, <code>c.id_cliente</code>), así que se evalúa de nuevo por cada fila que la externa procesa."],
+    ["¿Cuántas veces corre la interna con IN y con EXISTS correlacionado?", "IN con una independiente: una vez. EXISTS correlacionado: una vez por cada fila de la consulta de fuera, sea verdadero o falso el resultado."],
+    ["¿Qué comprueba EXISTS?", "Si la subconsulta devuelve al menos una fila. No importa el contenido: <code>SELECT 1</code>, <code>SELECT *</code> y <code>SELECT NULL</code> dan lo mismo."],
+    ["¿Cómo se piden los clientes sin pedidos?", "Con <code>NOT EXISTS (SELECT 1 FROM pedidos p WHERE p.id_cliente = c.id_cliente)</code>, o con un LEFT JOIN y filtrando los NULL."],
+    ["¿Qué trampa tiene NOT IN?", "Si la lista de la subconsulta contiene un NULL, la comparación es indeterminada para todos y NOT IN no devuelve ninguna fila. NOT EXISTS no tiene ese problema."],
+    ["¿Qué es una tabla derivada y por qué IN no repite filas como un JOIN?", "Una subconsulta en el FROM, tratada como una tabla temporal (por ejemplo, el gasto por cliente). Y con IN la consulta de fuera recorre sus propias filas: cada cliente sale como mucho una vez; un JOIN repite al cliente por cada coincidencia."]
+  ]);
+
+  /* ---------------- conexiones ---------------- */
+  B.conexiones("subconsultas");
+})();
+</script>
+</body>
+</html>

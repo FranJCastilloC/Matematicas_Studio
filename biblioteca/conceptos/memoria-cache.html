@@ -1,0 +1,1717 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Memoria caché</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+/* colores de los tres trozos de una direccion: etiqueta, indice, offset */
+:root { --c-tag: var(--j); --c-idx: var(--k); --c-off: #a86512; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --c-off: #e0a458; } }
+:root[data-theme="dark"] { --c-off: #e0a458; }
+
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.esc-head .hint { font-size: 12.5px; color: var(--ink-2); flex: 1 1 140px; }
+.esc-head button { margin-left: auto; font-size: 12px; padding: 5px 10px; }
+.aviso-esc { font-size: 12.5px; color: var(--accent); background: var(--accent-soft); border-radius: 7px; padding: 6px 10px; margin: 6px 0; }
+.aviso-esc:empty { display: none; }
+.ctrl { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 6px 0; }
+.ctrl .seg-lab { margin-left: 0; }
+.ctrl .seg button { font-size: 11.5px; padding: 6px 9px; }
+.ctrl input.num { width: 84px; padding: 5px 8px; font-size: 14px; }
+.presets { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.presets button { font-size: 12px; padding: 5px 10px; }
+
+/* memoria principal: cuadricula de bloques */
+.mem { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 3px; margin: 8px 0; }
+.bq { padding: 0; height: 29px; font-family: var(--f-mono); font-size: 11px; border: 1.5px solid var(--line); border-radius: 5px; color: var(--ink); background: var(--surface-2); position: relative; min-width: 0; }
+.bq.dentro { box-shadow: inset 0 0 0 2px var(--ink); font-weight: 600; }
+.bq.ultimo { outline: 2px solid var(--accent); outline-offset: 1px; }
+.bq.apunta { outline: 2px dashed var(--ink); outline-offset: 1px; }
+.bq:disabled { opacity: 1; cursor: default; }
+.mem-leyenda { font-size: 11.5px; color: var(--ink-3); margin: 2px 0 6px; }
+
+/* tira de bytes (paso 2) */
+.bytes { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 3px; margin: 8px 0; }
+.by { padding: 0; height: 36px; font-family: var(--f-mono); font-size: 11.5px; border: 1.5px solid var(--line); border-radius: 5px; color: var(--ink); background: var(--surface-2); min-width: 0; position: relative; }
+.by.a { box-shadow: inset 0 -4px 0 var(--pos); }
+.by.f { box-shadow: inset 0 -4px 0 var(--neg); }
+.by:disabled { opacity: 1; cursor: default; }
+
+/* la cache */
+.cache { margin: 8px 0; }
+.crow { display: grid; grid-template-columns: 74px repeat(var(--v, 1), minmax(0, 1fr)); gap: 4px; margin: 4px 0; align-items: stretch; }
+.crow .lab { font-family: var(--f-mono); font-size: 11px; display: grid; place-items: center; border: 1.5px solid var(--line); border-radius: 5px; text-align: center; color: var(--ink); }
+.crow.destino .lab { box-shadow: 0 0 0 2px var(--ink); font-weight: 600; }
+.cel { min-height: 40px; border: 1px solid var(--line); border-radius: 6px; padding: 3px 4px; font-family: var(--f-mono); font-size: 12px; background: var(--surface-2); display: grid; align-content: center; text-align: center; color: var(--ink); min-width: 0; }
+.cel small { color: var(--ink-3); font-size: 10px; }
+.cel.vacia { color: var(--ink-3); font-size: 11px; }
+.cel.a { box-shadow: 0 0 0 2px var(--pos); }
+.cel.f { box-shadow: 0 0 0 2px var(--neg); }
+.cnota { font-size: 11.5px; color: var(--ink-2); margin: 2px 0 0 78px; min-height: 1em; }
+.cnota b { font-family: var(--f-mono); font-weight: 500; color: var(--ink); }
+
+/* direccion partida */
+.dirbits { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; align-items: flex-start; }
+.dirbits .grp { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.dirbits .bits { display: flex; gap: 2px; }
+.dirbits .bit { width: 22px; height: 30px; display: grid; place-items: center; font-family: var(--f-mono); font-weight: 600; font-size: 14px; border-radius: 4px; border: 1.5px solid currentColor; background: color-mix(in oklab, currentColor 14%, transparent); }
+.dirbits .gl { font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .04em; text-transform: uppercase; }
+.dirbits .gv { font-family: var(--f-mono); font-size: 12.5px; color: var(--ink); }
+.g-tag { color: var(--c-tag); }
+.g-idx { color: var(--c-idx); }
+.g-off { color: var(--c-off); }
+.dirinfo { font-family: var(--f-mono); font-size: 12px; color: var(--ink-2); margin: 2px 0 6px; }
+.esc-vacio { font-size: 12.5px; color: var(--ink-3); margin: 6px 0; }
+
+/* contadores e historial */
+.cuenta-esc { font-family: var(--f-mono); font-size: 13px; color: var(--ink-2); margin: 8px 0 4px; font-variant-numeric: tabular-nums; }
+.cuenta-esc b { color: var(--ink); font-weight: 500; }
+.cuenta-esc .a { color: var(--pos); }
+.cuenta-esc .f { color: var(--neg); }
+.hist { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0; }
+.hist span { font-family: var(--f-mono); font-size: 11px; padding: 2px 6px; border-radius: 4px; border: 1px solid var(--line); color: var(--ink-2); }
+.hist span.a { border-color: var(--pos); color: var(--pos); }
+.hist span.f { border-color: var(--neg); color: var(--neg); }
+
+/* tiempo medio */
+.amat-fila { display: grid; grid-template-columns: minmax(0, 1fr) 54px; gap: 4px 10px; align-items: center; margin: 8px 0; font-size: 13px; color: var(--ink-2); }
+.amat-fila input[type=range] { grid-column: 1 / -1; width: 100%; }
+.amat-fila b { font-family: var(--f-mono); font-weight: 500; text-align: right; color: var(--ink); }
+.amat-res { font-family: var(--f-mono); font-size: 14px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); color: var(--ink-2); font-variant-numeric: tabular-nums; margin: 10px 0; overflow-wrap: anywhere; }
+.amat-res b { color: var(--ink); font-size: 17px; font-weight: 500; }
+.amat-res b.oculto { color: var(--accent); }
+.barras { display: grid; gap: 6px; margin: 8px 0; }
+.barra-fila { display: grid; grid-template-columns: 82px minmax(0, 1fr) 70px; gap: 8px; align-items: center; font-size: 12px; color: var(--ink-2); }
+.barra-fila .bar { height: 11px; background: var(--surface-2); border-radius: 3px; overflow: hidden; }
+.barra-fila .bar i { display: block; height: 100%; border-radius: 3px; }
+.barra-fila .bar i.s { background: var(--neg); }
+.barra-fila .bar i.c { background: var(--pos); }
+.barra-fila b { font-family: var(--f-mono); font-weight: 500; text-align: right; color: var(--ink); }
+
+/* matriz del paso 7 */
+.mat8 { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 3px; margin: 8px 0; }
+.px { height: 34px; font-family: var(--f-mono); font-size: 10.5px; border: 1.5px solid var(--line); border-radius: 5px; display: grid; place-items: center; color: var(--ink); background: var(--surface-2); min-width: 0; }
+.px.a { box-shadow: inset 0 -4px 0 var(--pos); }
+.px.f { box-shadow: inset 0 -4px 0 var(--neg); }
+.px.ahora { outline: 2px solid var(--accent); outline-offset: 1px; }
+.cmp { font-family: var(--f-mono); font-size: 12.5px; color: var(--ink-2); margin: 6px 0; }
+.cmp b { color: var(--ink); font-weight: 500; }
+
+/* destacado y retos */
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.ojo-cache { margin: 10px 0; display: grid; gap: 4px; max-width: 360px; }
+.ojo-fila { display: grid; grid-template-columns: 82px minmax(0, 1fr); gap: 6px; }
+.ojo-fila .lab { font-family: var(--f-mono); font-size: 12px; display: grid; place-items: center; border: 1.5px solid var(--line); border-radius: 6px; padding: 6px 4px; }
+.ojo-fila .cel { min-height: 34px; }
+.ojo-pide { font-size: 15px; color: var(--ink); margin: 8px 0; }
+.ojo-pide .chipb { display: inline-block; font-family: var(--f-mono); font-weight: 600; padding: 2px 10px; border-radius: 6px; border: 1.5px solid var(--line); }
+.ojo-opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin-top: 10px; max-width: 360px; }
+.ojo-opts .opt { text-align: center; }
+.objetivos { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.objetivos li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.objetivos .m { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.objetivos li.hecho { color: var(--ink); }
+.objetivos li.hecho .m { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 3px var(--surface); }
+.constr-lista { font-family: var(--f-mono); font-size: 13px; color: var(--ink-2); margin: 8px 0; min-height: 1.5em; overflow-wrap: anywhere; }
+.constr-res { display: grid; gap: 4px; font-family: var(--f-mono); font-size: 12.5px; color: var(--ink-2); margin: 8px 0; }
+.constr-res b { color: var(--ink); font-weight: 500; }
+.cod-est { margin: 8px 0; padding: 8px 12px; background: var(--surface-2); border-radius: 8px; font-family: var(--f-mono); font-size: 12.5px; line-height: 1.6; overflow-x: auto; white-space: pre; color: var(--ink); }
+.salida-est { margin: 0 0 10px; padding: 6px 12px; border-left: 3px solid var(--ink-3); background: var(--surface); font-family: var(--f-mono); font-size: 12.5px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink-2); }
+
+/* vida real */
+.vr-lin { display: grid; grid-template-columns: 56px minmax(0, 1fr) minmax(0, 1fr); gap: 8px; align-items: center; padding: 6px 10px; border: 1px solid var(--line); border-radius: 7px; margin-bottom: 4px; font-family: var(--f-mono); font-size: 12.5px; color: var(--ink); }
+.vr-lin .n { color: var(--ink-3); }
+.vr-lin .b { color: var(--ink-3); }
+.vr-lin.on { border-color: var(--accent); background: var(--accent-soft); }
+.vr-lin.llega { animation: llega .55s ease-out; }
+.vr-traza { display: flex; flex-wrap: wrap; gap: 5px; margin: 6px 0 4px; }
+.vr-traza span { font-family: var(--f-mono); font-size: 12px; padding: 3px 7px; border-radius: 5px; border: 1px solid var(--line); color: var(--ink-3); }
+.vr-traza span.a { border-color: var(--pos); color: var(--pos); }
+.vr-traza span.f { border-color: var(--neg); color: var(--neg); }
+.vr-traza span.on { box-shadow: 0 0 0 2px var(--accent); }
+.vr-leyenda { font-size: 12px; color: var(--ink-3); margin: 0 0 6px; }
+@media (prefers-reduced-motion: reduce) { .vr-lin.llega { animation: none; } }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ Memoria caché</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Infraestructura y programación · Arquitectura de computadores · UD2</p>
+    <h1>Memoria caché: dónde cae cada bloque</h1>
+    <p class="lede">
+      La caché es una memoria pequeña y rápida que guarda copias de lo que la CPU usó hace poco. La idea es fácil; lo que cuesta es saber
+      <b>dónde va cada dato y qué se tira cuando no cabe</b>. Lo vas a ver con las manos: una dirección de 8 bits se parte en tres trozos
+      (etiqueta, índice y offset) y cada trozo hace un trabajo distinto.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> Tienes un escritorio con 4 huecos para libros y una biblioteca enorme con miles. Cada vez que necesitas un libro, lo buscas primero en el escritorio. ¿Cómo decidirías en qué hueco poner cada libro? ¿Y cuál devolverías a la biblioteca cuando llega uno nuevo y no queda sitio? Escríbelo como te salga, aunque esté mal.</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: pondría cada libro en..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>Construir una caché desde cero</h2>
+      <p>Siete pasos. Cada uno termina con un chequeo: hasta que no lo resuelves, el siguiente queda cerrado y el escenario de la derecha no te da la respuesta. Equivocarte aquí no resta nada, es parte del método.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="La repisa">
+          <span class="etapa">Paso 1</span>
+          <h3>Cuatro huecos y un almacén grande</h3>
+          <p>La CPU pide datos a la memoria principal (la RAM), que es grande pero lenta. Entre las dos se coloca la <b>caché</b>: una repisa pequeña y rápida donde quedan copias de lo que se usó hace poco. Si lo que pides ya está en la repisa, es un <b>acierto</b> y respondes casi al instante. Si no, es un <b>fallo</b>: hay que ir al almacén, traer la caja y dejar una copia en la repisa
+            <cite class="cita" data-fuente="arq2" data-pag="15" data-pimp="12" data-seccion="6 Caché, 6.1 Funcionamiento" data-que="La definición de acierto (hit) y de fallo (miss): cuando falla, el dato se copia a la caché para la próxima vez." data-cuando="Al terminar este paso"></cite>.</p>
+          <p>La memoria se reparte en cajas de 4 bytes seguidos, que llamamos <b>bloques</b>. En el escenario ves 64 bloques numerados y una repisa de 4 huecos. Cada bloque tiene un color, y <b>solo puede ir al hueco de su mismo color</b>.</p>
+          <div class="check" id="chk1">
+            <p class="check-tit">Predice antes de tocar</p>
+            <div class="cuerpo"></div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Líneas">
+          <span class="etapa">Paso 2</span>
+          <h3>No se trae un byte: se trae una línea</h3>
+          <p>En el paso anterior cada caja tenía 4 bytes, y no es casualidad. Cuando un programa lee un byte, casi siempre lee enseguida el siguiente: recorre un arreglo, o avanza por las instrucciones. A esa regularidad se la llama <b>localidad</b>
+            <cite class="cita" data-fuente="arq2" data-pag="14" data-pimp="11" data-seccion="5.2 Principio de localidad" data-que="Localidad temporal (variables de un bucle que se reutilizan) y espacial (elementos consecutivos de un arreglo): la razón por la que una jerarquía de memoria funciona." data-cuando="Al empezar este paso"></cite>.
+            Para aprovecharla, ante un fallo la caché no trae un byte sino <b>una línea</b> completa de bytes contiguos; en las cachés reales son 32 o 64
+            <cite class="cita" data-fuente="arq2" data-pag="16" data-pimp="13" data-seccion="6.2 Líneas o bloques" data-que="Las líneas (o bloques) de 32 o 64 bytes contiguos y por qué aprovechan la localidad espacial." data-cuando="Al terminar este paso"></cite>.</p>
+          <p>Mira la tira de bytes del escenario: cada línea tiene 4. La dirección de un byte se divide entre 4: el cociente (sin decimales) dice <b>en qué bloque está</b>, y el resto dice <b>qué posición ocupa dentro del bloque</b>.</p>
+          <div class="check" id="chk2">
+            <p class="check-tit">Predice antes de tocar</p>
+            <div class="cuerpo"></div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="La dirección">
+          <span class="etapa">Paso 3</span>
+          <h3>Una dirección se parte en tres</h3>
+          <p>Las direcciones de este escenario tienen 8 bits: 256 bytes de memoria (las reales tienen 32 o 64 bits, pero la idea es igual). Para saber dónde va un byte, la caché parte su dirección en tres trozos, de derecha a izquierda:</p>
+          <p><b style="color:var(--c-off)">Offset.</b> Los bits de la derecha dicen <b>qué byte</b> de la línea. Con líneas de 4 bytes bastan 2 bits, porque <span data-tex="2^2=4"></span>.<br>
+             <b style="color:var(--c-idx)">Índice.</b> Los siguientes dicen <b>en qué línea</b> de la caché cae. Con 4 líneas, otros 2 bits.<br>
+             <b style="color:var(--c-tag)">Etiqueta.</b> Los bits que sobran, a la izquierda, identifican <b>de qué bloque se trata</b>.</p>
+          <div class="fbloque">
+            <div data-tex="\text{bits de offset}=\log_2(\text{bytes por línea}) \qquad \text{bits de índice}=\log_2(\text{líneas})" data-display></div>
+            <div data-tex="\text{bits de etiqueta}=8-\text{bits de índice}-\text{bits de offset}" data-display></div>
+            <div class="vivo" id="vivoBits"></div>
+          </div>
+          <p>El material del máster describe estas tres partes solo con palabras y solo para la caché directa
+            <cite class="cita" data-fuente="arq2" data-pag="17" data-pimp="14" data-seccion="6.8 Descomposición de la dirección" data-que="Etiqueta, índice y offset (desplazamiento) en la correspondencia directa: el índice según el número de líneas y el offset según el tamaño de línea. Sin cuentas de bits ni ejemplo." data-cuando="Después de resolver el chequeo"></cite>
+            <cite class="cita" data-fuente="arq2diapo" data-pag="23" data-seccion="Niveles múltiples y descomposición de la dirección" data-que="La descomposición de la dirección en etiqueta, índice y offset, en la misma diapositiva que los niveles múltiples de caché." data-cuando="Después de resolver el chequeo"></cite>.
+            Las cuentas de bits y los ejemplos con números son de esta página, no vienen en el material.</p>
+          <div class="fbloque">
+            <div data-tex="\text{bloque}=\Big\lfloor\dfrac{\text{dirección}}{\text{bytes por línea}}\Big\rfloor \qquad \text{índice}=\text{bloque}\bmod\text{líneas} \qquad \text{etiqueta}=\Big\lfloor\dfrac{\text{bloque}}{\text{líneas}}\Big\rfloor" data-display></div>
+            <div class="vivo" id="vivoDir"></div>
+          </div>
+          <p>Prueba con el byte <b>0110 1101</b> (el 109 del ejemplo de binario) o con cualquier otro. Cambia el tamaño de línea y el número de líneas y mira cómo se mueve la frontera entre los tres trozos.</p>
+          <div class="check" id="chk3">
+            <p class="check-tit">Antes de seguir</p>
+            <div class="cuerpo"></div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Dónde cae">
+          <span class="etapa">Paso 4</span>
+          <h3>Un hueco fijo, uno por grupo o cualquiera</h3>
+          <p>En el paso 1 cada bloque tenía un único hueco posible: es la <b>correspondencia directa</b>. Es barata (miras una sola línea), pero dos bloques con el mismo índice se pelean por el mismo hueco aunque queden otros libres. Hay dos formas de aflojar la regla
+            <cite class="cita" data-fuente="arq2" data-pag="16" data-pimp="13" data-seccion="6.3 Correspondencia" data-que="Las tres correspondencias: directa (una única línea, con una operación de módulo), totalmente asociativa (cualquier línea, comparando con todas) y asociativa por conjuntos (conjuntos de 4 u 8 líneas). Sin fórmulas ni ejemplo." data-cuando="Al terminar este paso"></cite>:</p>
+          <p><b>Asociativa por conjuntos de N vías.</b> Las líneas se agrupan en conjuntos y el bloque puede ir a cualquiera de las N líneas de <b>su</b> conjunto. Con 4 líneas y 2 vías hay 2 conjuntos.<br>
+             <b>Totalmente asociativa.</b> El bloque puede ir a cualquier línea. Es la más flexible y la más cara, porque hay que comparar la etiqueta con todas las líneas a la vez.</p>
+          <div class="fbloque">
+            <div data-tex="\text{conjuntos}=\dfrac{\text{líneas}}{\text{vías}} \qquad \text{bits de índice}=\log_2(\text{conjuntos})" data-display></div>
+            <div class="vivo" id="vivoConj"></div>
+          </div>
+          <p>El índice ahora elige un <b>conjunto</b>, no una línea. Al flexibilizar, el índice pierde bits y la etiqueta los gana.</p>
+          <div class="check" id="chk4">
+            <p class="check-tit">Predice antes de tocar</p>
+            <div class="cuerpo"></div>
+          </div>
+
+          <div class="destacado" id="destacado">
+            <p class="dest-tit">Una confusión muy común</p>
+            <h4>Si el índice ya me dice la línea, ¿para qué guardar la etiqueta?</h4>
+            <p>Porque muchos bloques comparten línea. Las direcciones <b>13</b> y <b>109</b> son el byte 0000 1101 y el byte 0110 1101: tienen el mismo índice (3) y el mismo offset (1). Solo se distinguen en la etiqueta (0 y 6). Sin etiqueta, la caché no podría saber cuál de los dos bloques tiene guardado.</p>
+            <div class="check" id="chk4b"><p class="check-tit">Predice antes de tocar el botón</p><div class="cuerpo"></div></div>
+            <p class="esc-vacio" style="margin-top:10px">Cuando respondas, y después de resolver el chequeo de arriba, usa el botón "Pedir 13 y luego 109" del escenario para comprobarlo.</p>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Quién sale">
+          <span class="etapa">Paso 5</span>
+          <h3>Cuando no cabe, algo tiene que irse</h3>
+          <p>Con varias vías (o con la caché totalmente asociativa) hay más de una candidata para ser expulsada, y la <b>política de reemplazo</b> elige
+            <cite class="cita" data-fuente="arq2" data-pag="16" data-pimp="13" data-seccion="6.4 Reemplazo" data-que="Las tres políticas de reemplazo que nombra el material: LRU, FIFO y aleatoria, sin más detalle." data-cuando="Al terminar este paso"></cite>:</p>
+          <p><b>LRU</b> (menos recientemente usada): sale la que lleva más tiempo sin tocarse. Apuesta a que lo que usaste hace poco lo vas a volver a usar.<br>
+             <b>FIFO</b>: sale la que entró primero, aunque la hayas usado diez veces.<br>
+             <b>Aleatoria</b>: sale una al azar. Es la más simple de construir.</p>
+          <p>La caché directa no necesita política: cada bloque tiene un solo sitio, así que la víctima ya está decidida. El escenario ahora es una caché totalmente asociativa de 4 líneas.</p>
+          <div class="cita" id="citaHipo" hidden></div>
+          <div class="check" id="chk5">
+            <p class="check-tit">Antes de seguir</p>
+            <div class="cuerpo"></div>
+          </div>
+          <details class="profundizar">
+            <summary>¿Y cuando la CPU escribe?</summary>
+            <div>
+              <p>Hasta aquí solo leímos. Si la CPU escribe un dato que está en la caché, hay dos políticas
+                <cite class="cita" data-fuente="arq2" data-pag="16" data-pimp="13" data-seccion="6.5 Escritura" data-que="Write-through (todo a caché y memoria) frente a write-back (un bit dirty marca la línea modificada y se actualiza la memoria al reemplazarla)." data-cuando="Cuando termines el paso 5"></cite>:</p>
+              <p><b>Write-through.</b> Cada escritura va a la caché y a la memoria a la vez. La memoria siempre está al día, pero cada escritura paga el tiempo de la memoria lenta.<br>
+                 <b>Write-back.</b> La escritura va solo a la caché y la línea se marca con un bit <b>dirty</b> (sucia). La memoria se actualiza cuando esa línea se expulsa. Es más rápido, pero la memoria queda desactualizada un rato.</p>
+            </div>
+          </details>
+        </section>
+
+        <section class="paso card" data-titulo="Tiempo medio">
+          <span class="etapa">Paso 6</span>
+          <h3>El tiempo medio de acceso</h3>
+          <p>Un acierto cuesta lo que tarda la caché (digamos 1 ns). Un fallo cuesta eso más el viaje a la RAM, la <b>penalización</b> (digamos 100 ns). La tabla del material pone la caché L1 en torno a 1 ns y la RAM entre 50 y 100 ns
+            <cite class="cita" data-fuente="arq2" data-pag="14" data-pimp="11" data-seccion="5.3 Parámetros, Tabla 6" data-que="La Tabla 6 con tiempos y tamaños de cada nivel: registros bajo 1 ns, L1 cerca de 1 ns, L2 de 3 a 10 ns, L3 de 10 a 20 ns, RAM de 50 a 100 ns, SSD de 10 a 100 microsegundos y HDD de 1 a 10 ms." data-cuando="Al empezar este paso"></cite>.
+            Como siempre se mira primero en la caché, el tiempo medio es:</p>
+          <div class="fbloque">
+            <div data-tex="t_{\text{medio}}=t_{\text{acierto}}+p_{\text{fallo}}\times t_{\text{penalización}}" data-display></div>
+            <div class="vivo" id="vivoAmat"></div>
+          </div>
+          <p>Esa es la fórmula del material
+            <cite class="cita" data-fuente="arq2" data-pag="17" data-pimp="14" data-seccion="6.6 Métricas" data-que="Tasa de aciertos y de fallos (1 menos los aciertos) y el tiempo medio de acceso = tiempo de acierto + tasa de fallos por penalización. Avisa de que incluso un 95 % de aciertos ya mejora mucho; no trae ejemplo numérico." data-cuando="Después de resolver el chequeo"></cite>,
+            y no trae ningún ejemplo numérico: los números de esta página son nuestros. Cuando respondas, mueve la tasa de aciertos y mira qué pasa en los últimos puntos.</p>
+          <div class="check" id="chk6">
+            <p class="check-tit">Antes de seguir</p>
+            <div class="cuerpo"></div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Filas o columnas">
+          <span class="etapa">Paso 7</span>
+          <h3>El mismo recorrido, dos órdenes</h3>
+          <p>Una imagen en gris de 8 por 8 píxeles ocupa 64 bytes (uno por píxel) y se guarda <b>fila tras fila</b>: así guarda NumPy las matrices por defecto, y así lo hace el lenguaje C. Recorrerla por filas visita direcciones seguidas. Recorrerla por columnas salta de 8 en 8. La caché del escenario es la del paso 1: directa, 4 líneas de 4 bytes.</p>
+          <div class="check" id="chk7">
+            <p class="check-tit">Predice antes de tocar</p>
+            <div class="cuerpo"></div>
+          </div>
+          <p style="margin-top:14px">Esto es lo que hace tan distinto, en la práctica, escribir un bucle sobre filas o sobre columnas. El ejercicio de la unidad lo toca de pasada: habla de cómo la jerarquía de caché aprovecha la localidad y de lo que rompe el acceso irregular, y afirma que la caché "sigue acertando" gracias a la precarga (prefetching) incluso con accesos irregulares
+            <cite class="cita" data-fuente="arq2ej" data-pag="7" data-pimp="6" data-seccion="Tarea 6: jerarquía y divergencia" data-que="La tarea sobre cachés L1, L2 y L3 frente a la lectura coalescida de la GPU, y cómo el acceso irregular rompe la localidad. Su afirmación sobre la precarga es discutible: ayuda con patrones regulares, no con punteros." data-cuando="Al terminar este paso"></cite>.
+            Esa precarga ayuda con patrones regulares (como saltar de 8 en 8), pero no con accesos que dependen de punteros.</p>
+          <p>Las cachés reales son mucho más grandes que la del escenario: una L1 guarda de 32 KB a 192 KB según el procesador
+            <cite class="cita" data-fuente="arq2" data-pag="21" data-pimp="18" data-seccion="Conclusiones y comparativa comercial, Tabla 8" data-que="La Tabla 8: L1 de procesadores Intel Core, AMD Ryzen, Apple Silicon y Snapdragon (de 32 KB a 192 KB) y L3 de varios MB." data-cuando="Al terminar este paso"></cite>.
+            El problema no desaparece: aparece con matrices que no caben, y para eso se reordenan los bucles.</p>
+          <details class="profundizar">
+            <summary>Varias cachés y coherencia</summary>
+            <div>
+              <p>Un procesador real tiene varias cachés: la L1 (dividida en instrucciones y datos) es pequeña y rápida, la L2 es más grande y lenta, y la L3 se comparte entre núcleos. Y con varios núcleos aparece un problema nuevo: dos núcleos pueden tener copias distintas del mismo dato. El material lo nombra como <b>coherencia</b> y menciona el protocolo MESI (Modified, Exclusive, Shared, Invalid), solo el nombre
+                <cite class="cita" data-fuente="arq2" data-pag="17" data-pimp="14" data-seccion="6.7 Niveles múltiples y 6.9 Coherencia" data-que="Los niveles múltiples (L1 dividida, L2 mayor y más lenta, L3 compartida) y el problema de las copias obsoletas entre núcleos; MESI solo se nombra." data-cuando="Cuando termines el paso 7"></cite>.</p>
+              <p>Una advertencia: la diapositiva titulada "Coherencia de caché en sistemas multinúcleo" repite el texto de la diapositiva anterior (niveles múltiples) y no dice nada de coherencia
+                <cite class="cita" data-fuente="arq2diapo" data-pag="24" data-seccion="Coherencia de caché en sistemas multinúcleo" data-que="La diapositiva 24: su título habla de coherencia pero el contenido es el de la 23. Para coherencia y MESI hay que ir a la teoría." data-cuando="Si abres las diapositivas"></cite>.</p>
+              <p>Otra nota que no está en el material: R guarda las matrices por columnas, al revés que NumPy y C. En R, el bucle rápido es el de columnas.</p>
+            </div>
+          </details>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+          <button type="button" class="ghost" id="btnVaciar">Vaciar la caché</button>
+        </div>
+        <div class="aviso-esc" id="escAviso"></div>
+        <div id="escCtrl"></div>
+        <div id="escPres"></div>
+        <div id="escMem"></div>
+        <div id="escDir"></div>
+        <div id="escCache"></div>
+        <div id="escCuenta"></div>
+
+        <div id="escAmat" hidden>
+          <div class="amat-fila"><label for="rngP">Tasa de aciertos</label><b id="amP"></b><input type="range" id="rngP" min="0" max="100" step="1" value="90"></div>
+          <div class="amat-fila"><label for="rngA">Tiempo de acierto (ns)</label><b id="amA"></b><input type="range" id="rngA" min="1" max="5" step="1" value="1"></div>
+          <div class="amat-fila"><label for="rngF">Penalización por fallo (ns)</label><b id="amF"></b><input type="range" id="rngF" min="20" max="200" step="10" value="100"></div>
+          <div class="amat-res" id="amRes"></div>
+          <div class="barras" id="amBarras"></div>
+          <div class="presets" id="amPres"></div>
+        </div>
+
+        <div id="escMat" hidden>
+          <div class="mat8" id="mat8" role="img" aria-label="Imagen de 8 por 8 píxeles recorrida en una caché"></div>
+          <div class="cuenta-esc" id="matCuenta"></div>
+          <div class="cmp" id="matCmp"></div>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>El simulador de la caché directa, escrito como lo haría un programa. Elige Python o R, dale a reproducir y mira cómo cada línea mueve el estado de la caché: primero la función, luego las 10 direcciones una por una, después el tiempo medio y al final las dos formas de recorrer la imagen del paso 7.</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir</p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="true">Python</button>
+            <button type="button" data-lang="r" aria-pressed="false">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">1 · la función</span><span data-f="2">2 · la traza</span><span data-f="3">3 · tiempo medio</span><span data-f="4">4 · filas y columnas</span>
+        </div>
+        <h3 class="mini-tit vr-tit">La caché: una etiqueta por línea</h3>
+        <div id="vrCache"></div>
+        <h3 class="mini-tit vr-tit">La dirección en curso, partida</h3>
+        <div id="vrDir"></div>
+        <h3 class="mini-tit vr-tit">La traza de 10 direcciones</h3>
+        <p class="vr-leyenda">Verde: acierto. Coral: fallo. Cada número es una dirección en bytes.</p>
+        <div class="vr-traza" id="vrTraza"></div>
+        <div class="vr-cuenta" id="vrCuenta"></div>
+        <div class="barras" id="vrBarras"></div>
+      </div>
+    </div>
+
+    <p class="vr-nota">No hay una función de librería que simule una caché, así que aquí el programa no se compara contra <code>np.cov</code> o <code>cov</code>: se compara contra la <b>cuenta a mano</b>, la misma que ves en la traza de arriba (5 aciertos y 5 fallos), y la última línea lo comprueba. Es el mismo simulador del escenario, escrito con un bucle para que se vea cada decisión.
+      Con la tasa de fallos sale el tiempo medio del paso 6: 1 + 0,5 × 100 = 51 ns. Y por filas la imagen del paso 7 acierta 48 de 64 veces; por columnas, ninguna.</p>
+
+    <details class="profundizar">
+      <summary>La versión por conjuntos de 2 vías con LRU</summary>
+      <div>
+        <p>El mismo simulador, pero con conjuntos: cada conjunto guarda hasta 2 bloques, el más reciente al final. En un acierto el bloque pasa al final; en un fallo con el conjunto lleno se expulsa el primero (el menos reciente). Se escribe a continuación del programa de arriba, así que usa <code>simular</code> y <code>trazas</code>. Con el ping-pong 12, 28, 12, 28, 12, 28 (los bloques 3 y 7 del paso 4) la directa falla las 6 veces y las 2 vías aciertan 4.</p>
+        <p><b>Python</b></p>
+        <pre class="cod-est">def simular_vias(trazas, conjuntos=2, vias=2, bytes_linea=4):
+    contenido = [[] for _ in range(conjuntos)]   # bloques de cada conjunto; el más reciente, al final
+    aciertos = 0
+    for direccion in trazas:
+        bloque = direccion // bytes_linea
+        conj = bloque % conjuntos
+        if bloque in contenido[conj]:
+            aciertos += 1
+            contenido[conj].remove(bloque)       # LRU: pasa a ser el más reciente
+        elif len(contenido[conj]) == vias:
+            contenido[conj].pop(0)               # se expulsa el menos reciente
+        contenido[conj].append(bloque)
+    return aciertos, len(trazas) - aciertos
+
+pingpong = [12, 28, 12, 28, 12, 28]
+print(simular(pingpong), simular_vias(pingpong))
+print(simular_vias(trazas))</pre>
+        <p class="salida-est">(0, 6) (4, 2)
+(6, 4)</p>
+        <p><b>R</b></p>
+        <pre class="cod-est">simular_vias &lt;- function(trazas, conjuntos = 2, vias = 2, bytes_linea = 4) {
+  contenido &lt;- rep(list(numeric(0)), conjuntos)   # bloques de cada conjunto; el más reciente, al final
+  aciertos &lt;- 0
+  for (direccion in trazas) {
+    bloque &lt;- direccion %/% bytes_linea
+    conj &lt;- bloque %% conjuntos + 1
+    if (bloque %in% contenido[[conj]]) {
+      aciertos &lt;- aciertos + 1
+      contenido[[conj]] &lt;- contenido[[conj]][contenido[[conj]] != bloque]   # LRU: pasa a ser el más reciente
+    } else if (length(contenido[[conj]]) == vias) {
+      contenido[[conj]] &lt;- contenido[[conj]][-1]   # se expulsa el menos reciente
+    }
+    contenido[[conj]] &lt;- c(contenido[[conj]], bloque)
+  }
+  c(aciertos, length(trazas) - aciertos)
+}
+
+pingpong &lt;- c(12, 28, 12, 28, 12, 28)
+print(simular(pingpong)); print(simular_vias(pingpong))
+print(simular_vias(trazas))</pre>
+        <p class="salida-est">[1] 0 6
+[1] 4 2
+[1] 6 4</p>
+        <p>Con las 10 direcciones del programa principal, 2 vías aciertan 6 veces frente a las 5 de la directa: el conflicto entre el 8 y el 40 desaparece.</p>
+      </div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Una barra de más en Python</h3><span class="estado" data-reto="codigo2"></span></div>
+        <div id="codigo2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>El primer índice de R</h3><span class="estado" data-reto="codigo3"></span></div>
+        <div id="codigo3"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: la biblioteca te avisa en el índice cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>¿Acierto o fallo?</h3><span class="estado" data-reto="ojo"></span></div>
+        <p class="desc">Una caché directa de 4 líneas y un bloque que se pide. Decide con los colores, sin cuentas. Apruebas con 4 de 5.</p>
+        <div id="ojo"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Construir</span><h3>Arma la traza</h3><span class="estado" data-reto="construir"></span></div>
+        <p class="desc">Pide 8 bloques tocándolos en la cuadrícula. Debajo se ve qué pasa en tres cachés de 4 líneas con LRU: directa, de 2 vías y totalmente asociativa. Cumple los tres objetivos; se marcan solos.</p>
+        <div id="construir"></div>
+        <ul class="objetivos" id="objetivos"></ul>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>Parte la dirección</h3><span class="estado" data-reto="mano"></span></div>
+        <p class="desc">Una dirección de 8 bits y una caché directa. Toma papel y escribe los bits antes de pedir pistas.</p>
+        <div id="manoDatos"></div>
+        <div id="mano"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Alguien se equivocó</h3><span class="estado" data-reto="error"></span></div>
+        <p class="desc">Una de las líneas tiene un error. Tócala.</p>
+        <div id="error"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Contar los bits de la etiqueta</h3><span class="estado" data-reto="prop1"></span></div>
+        <div id="prop1"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Dos direcciones del mismo bloque</h3><span class="estado" data-reto="prop2"></span></div>
+        <div id="prop2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>La caché directa y el reemplazo</h3><span class="estado" data-reto="prop3"></span></div>
+        <div id="prop3"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>El bit dirty</h3><span class="estado" data-reto="prop4"></span></div>
+        <div id="prop4"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>De 90 % a 99 % de aciertos</h3><span class="estado" data-reto="prop5"></span></div>
+        <div id="prop5"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Contar conjuntos</h3><span class="estado" data-reto="prop6"></span></div>
+        <div id="prop6"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Recordar a la fuerza es lo que fija. Arma las dos fórmulas de memoria y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Fórmula de memoria</span><h3>El tiempo medio de acceso</h3><span class="estado" data-reto="formula"></span></div>
+        <p class="desc">Hay piezas de más que no pertenecen. No mires arriba.</p>
+        <div id="formula"></div>
+      </article>
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Fórmula de memoria</span><h3>A qué línea va una dirección</h3><span class="estado" data-reto="formula2"></span></div>
+        <p class="desc">El índice de una caché directa, a partir de la dirección. Hay piezas de más.</p>
+        <div id="formula2"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el material</h2>
+      <p class="lecturas-intro">Ya construiste la idea con las manos. Ahora ve a la versión técnica y comprueba que la reconoces. Esta unidad no trae libro: la caché se explica en pocas páginas de la teoría de la UD2, con palabras y sin ejemplos numéricos. Cada entrada dice qué vas a encontrar y en qué momento conviene leerla. Si abres la biblioteca con doble clic, el enlace abre el PDF en esa página.</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> Las direcciones de 8 bits, la caché de 4 líneas, la traza de 10 direcciones, la imagen de 8 por 8 píxeles y los tiempos de 1 ns y 100 ns son inventados,
+    elegidos para que las cuentas den limpias (los tiempos están dentro de los rangos de la Tabla 6 del material). El material de la unidad describe la caché solo con palabras:
+    las cuentas de bits, las trazas y los ejemplos numéricos son de esta página. Tu progreso se guarda solo en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+/*
+  Ejemplo comun de la ruta Arquitectura de computadores (para las demas paginas de la ruta):
+  - el byte 0110 1101 (109) y el byte 0000 1101 (13): con lineas de 4 bytes y 4 lineas caen en la misma linea (3),
+    mismo offset (1) y etiquetas distintas (6 y 0);
+  - una cache directa de 4 lineas con direcciones de 8 bits y lineas de 4 bytes (2 bits de offset, 2 de indice, 4 de etiqueta);
+  - la traza de 10 direcciones [8, 9, 10, 12, 13, 40, 8, 9, 44, 8]: 5 aciertos y 5 fallos (50 %), tiempo medio 51 ns con 1 ns y 100 ns;
+  - la imagen de 8 x 8 bytes por filas (48 aciertos, 16 fallos) y por columnas (0 aciertos, 64 fallos) en la directa de 4 lineas.
+*/
+(function () {
+  "use strict";
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var RETOS = ["ojo", "construir", "mano", "error", "prop1", "prop2", "prop3", "prop4", "prop5", "prop6", "formula", "formula2", "codigo1", "codigo2", "codigo3"];
+  var C = B.concepto({ id: "memoria-cache", retos: RETOS, pasos: 7 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  /* ---------------- utilidades ---------------- */
+  var f = B.fmt;
+  function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+  function lg2(n) { return Math.round(Math.log(n) / Math.LN2); }
+  function bin(v, n) { var s = v.toString(2); while (s.length < n) s = "0" + s; return s; }
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+  function aleat(a, b) { return a + Math.floor(Math.random() * (b - a + 1)); }
+  var NB = 8; // bits de una direccion
+  var HUES = [212, 152, 32, 330, 272, 92, 2, 182];
+  function estiloSet(i, sets) {
+    if (sets <= 1) return "";
+    var h = HUES[i % HUES.length];
+    return "background:hsl(" + h + " 62% 54% / .26);border-color:hsl(" + h + " 58% 48% / .8)";
+  }
+
+  /* ---------------- el simulador de cache (motor comun) ---------------- */
+  // g: {bytes, lineas, vias}. Un conjunto es una lista de vias {bloque, tag, uso, carga}.
+  function geom(g) {
+    var sets = g.lineas / g.vias, off = lg2(g.bytes), idx = lg2(sets);
+    return { bytes: g.bytes, lineas: g.lineas, vias: g.vias, sets: sets, off: off, idx: idx, tag: NB - off - idx, nBloques: 256 / g.bytes };
+  }
+  function partir(dir, G) {
+    var bloque = Math.floor(dir / G.bytes);
+    return { dir: dir, off: dir % G.bytes, bloque: bloque, idx: bloque % G.sets, tag: Math.floor(bloque / G.sets) };
+  }
+  function crearCache(G, pol) {
+    var sets = [];
+    for (var i = 0; i < G.sets; i++) sets.push([]);
+    return { G: G, pol: pol || "LRU", sets: sets, reloj: 0, ac: 0, fa: 0, semilla: 7, hist: [] };
+  }
+  function elegir(Ca, set) {
+    var v = 0, k;
+    if (Ca.pol === "LRU") { for (k = 1; k < set.length; k++) if (set[k].uso < set[v].uso) v = k; return v; }
+    if (Ca.pol === "FIFO") { for (k = 1; k < set.length; k++) if (set[k].carga < set[v].carga) v = k; return v; }
+    Ca.semilla = (Ca.semilla * 1103515245 + 12345) % 2147483648;
+    return Math.floor(Ca.semilla / 65536) % set.length;
+  }
+  function acceder(Ca, dir) {
+    var p = partir(dir, Ca.G), set = Ca.sets[p.idx], hit = -1, k;
+    Ca.reloj++;
+    for (k = 0; k < set.length; k++) if (set[k].bloque === p.bloque) hit = k;
+    var r = { dir: dir, bloque: p.bloque, idx: p.idx, tag: p.tag, off: p.off, hit: hit >= 0, via: null, expulsado: null };
+    if (hit >= 0) {
+      set[hit].uso = Ca.reloj; r.via = hit; Ca.ac++;
+    } else {
+      Ca.fa++;
+      var nuevo = { bloque: p.bloque, tag: p.tag, uso: Ca.reloj, carga: Ca.reloj };
+      if (set.length < Ca.G.vias) { set.push(nuevo); r.via = set.length - 1; }
+      else { var v = elegir(Ca, set); r.expulsado = set[v].bloque; set[v] = nuevo; r.via = v; }
+    }
+    Ca.hist.push(r);
+    return r;
+  }
+  function correrBloques(cfg, pol, bloques) {
+    var Ca = crearCache(geom(cfg), pol);
+    bloques.forEach(function (b) { acceder(Ca, b * cfg.bytes); });
+    return Ca;
+  }
+  var CD = { bytes: 4, lineas: 4, vias: 1 };
+
+  /* ---------------- estado del recorrido ---------------- */
+  var est = {
+    paso: 0, cfg: { bytes: 4, lineas: 4, vias: 1 }, pol: "LRU", G: null, Ca: null, ult: null, mapa: {}, apunta: null,
+    dir: 109, libre: {}, timer: null,
+    m: { orden: "filas", tipo: "d4", Ca: null, T: [], pos: 0, res: {}, act: null, fin: {}, timer: null }
+  };
+  var pasos, chk3;
+  nuevaCache();
+  var TIPOS_M = { d4: { bytes: 4, lineas: 4, vias: 1 }, d8: { bytes: 4, lineas: 8, vias: 1 }, a8: { bytes: 4, lineas: 8, vias: 8 } };
+  var NOM_M = { d4: "directa de 4 líneas", d8: "directa de 8 líneas", a8: "asociativa de 8 líneas" };
+
+  var MODOS = [
+    { vista: "bloques", tags: false, hint: "Primero predice. Después podrás pedir bloques.", cfg: { bytes: 4, lineas: 4, vias: 1 } },
+    { vista: "bytes", tags: false, hint: "Primero predice. Después toca los bytes.", cfg: { bytes: 4, lineas: 4, vias: 1 } },
+    { vista: "bloques", tags: true, hint: "Elige una dirección y mira cómo se parte", cfg: { bytes: 4, lineas: 4, vias: 1 }, solo: true },
+    { vista: "bloques", tags: true, hint: "Toca un bloque para ver su destino", cfg: { bytes: 4, lineas: 4, vias: 1 } },
+    { vista: "bloques", tags: true, hint: "Toca bloques y mira quién sale", cfg: { bytes: 4, lineas: 4, vias: 4 } },
+    { vista: "amat", hint: "Mueve los deslizadores" },
+    { vista: "matriz", hint: "Predice y después recorre la imagen" }
+  ];
+
+  function nuevaCache() {
+    est.G = geom(est.cfg);
+    est.Ca = crearCache(est.G, est.pol);
+    est.ult = null; est.mapa = {}; est.apunta = null;
+  }
+  function parar() { if (est.timer) { clearTimeout(est.timer); est.timer = null; } }
+  function pedir(dir) {
+    var r = acceder(est.Ca, dir);
+    est.ult = r; est.mapa[dir] = r.hit ? "a" : "f"; est.apunta = null;
+    return r;
+  }
+  function correr(dirs, ms) {
+    parar(); nuevaCache(); pintarEsc();
+    var k = 0;
+    (function sig() {
+      if (k >= dirs.length) { est.timer = null; return; }
+      pedir(dirs[k++]);
+      pintarEsc();
+      est.timer = setTimeout(sig, ms);
+    })();
+  }
+  function deBloques(bl) { return bl.map(function (b) { return b * est.cfg.bytes; }); }
+  function accesoLibre() { return !!est.libre[est.paso]; }
+
+  /* ---------------- dibujo del escenario ---------------- */
+  var elMem = $("escMem"), elDir = $("escDir"), elCache = $("escCache"), elCuenta = $("escCuenta"), elCtrl = $("escCtrl"), elPres = $("escPres");
+
+  function segHtml(clave, etiqueta, opciones, actual, deshab) {
+    return '<div class="ctrl"><span class="seg-lab">' + etiqueta + '</span><div class="seg" role="group" aria-label="' + etiqueta + '">' +
+      opciones.map(function (o) {
+        return '<button type="button" data-ctrl="' + clave + '" data-v="' + o[0] + '" aria-pressed="' + (String(o[0]) === String(actual)) + '"' + (deshab ? " disabled" : "") + ">" + o[1] + "</button>";
+      }).join("") + "</div></div>";
+  }
+  function presetsHtml(lista, deshab) {
+    return '<div class="presets">' + lista.map(function (p) {
+      return '<button type="button" data-pre="' + p[0] + '"' + (deshab && !p[2] ? " disabled" : "") + ">" + p[1] + "</button>";
+    }).join("") + "</div>";
+  }
+
+  function pintarCtrl() {
+    var i = est.paso, libre = accesoLibre(), h = "", p = "";
+    if (i === 0) p = presetsHtml([["p1", "Pedir 3, 3, 7, 3", false]], !libre);
+    if (i === 1) {
+      h = segHtml("bytes", "Bytes por línea", [[1, "1"], [4, "4"], [8, "8"], [16, "16"]], est.cfg.bytes, !libre);
+      p = presetsHtml([["p2", "Leer del byte 96 al 103", false]], !libre);
+    }
+    if (i === 2) {
+      h = segHtml("bytes", "Bytes por línea", [[4, "4"], [8, "8"], [16, "16"]], est.cfg.bytes) +
+          segHtml("lineas", "Líneas", [[4, "4"], [8, "8"]], est.cfg.lineas) +
+          '<div class="ctrl"><span class="seg-lab">Dirección</span><input class="num" id="inpDir" type="number" min="0" max="255" step="1" value="' + est.dir + '" aria-label="Dirección de 0 a 255"></div>';
+    }
+    if (i === 3) {
+      h = segHtml("vias", "Correspondencia", [[1, "Directa"], [2, "2 vías"], [4, "Asociativa"]], est.cfg.vias, !libre);
+      p = presetsHtml([["p4a", "Pedir 3 7 3 7 3 7", false], ["p4b", "Pedir 13 y luego 109", false], ["p4c", "Las 10 direcciones de la vida real", false]], !libre);
+    }
+    if (i === 4) {
+      h = segHtml("pol", "Política", [["LRU", "LRU"], ["FIFO", "FIFO"], ["ALE", "Aleatoria"]], est.pol, !libre);
+      p = presetsHtml([["p5a", "Cargar 1 2 3 4 1", true], ["p5b", "Correr 1 2 3 4 1 5 1 2", false]], !libre);
+    }
+    if (i === 6) {
+      var libreM = !!est.libre[6];
+      h = segHtml("orden", "Recorrido", [["filas", "Por filas"], ["columnas", "Por columnas"]], est.m.orden, !libreM) +
+          segHtml("tipoM", "Caché", [["d4", "Directa 4"], ["d8", "Directa 8"], ["a8", "Asociativa 8"]], est.m.tipo, !libreM);
+      p = presetsHtml([["m1", "Recorrer", false], ["m2", "Ir al final", false], ["m3", "Reiniciar", false]], !libreM);
+    }
+    elCtrl.innerHTML = h;
+    elPres.innerHTML = p;
+  }
+
+  function htmlGrid() {
+    var G = est.G, n = G.nBloques, dentro = {}, h, b;
+    est.Ca.sets.forEach(function (s) { s.forEach(function (w) { dentro[w.bloque] = true; }); });
+    var prevB = est.apunta, ultB = est.ult ? est.ult.bloque : null;
+    h = '<div class="mem" role="group" aria-label="Memoria principal: bloques">';
+    for (b = 0; b < n; b++) {
+      var cls = "bq" + (dentro[b] ? " dentro" : "") + (ultB === b ? " ultimo" : "") + (prevB === b ? " apunta" : "");
+      h += '<button type="button" class="' + cls + '" data-b="' + b + '" style="' + estiloSet(b % G.sets, G.sets) + '" aria-label="Bloque ' + b + '">' + b + "</button>";
+    }
+    h += "</div>";
+    h += '<p class="mem-leyenda">Cada cuadro es un bloque de ' + G.bytes + ' bytes. ' +
+      (G.sets > 1 ? "El color dice a qué " + (G.vias === 1 ? "línea" : "conjunto") + " va. " : "Todos pueden ir a cualquier línea. ") +
+      "Con borde grueso: ya está en la caché.</p>";
+    return h;
+  }
+  function htmlBytes() {
+    var G = est.G, h = '<div class="bytes" role="group" aria-label="Bytes del 96 al 111">', d;
+    for (d = 96; d < 112; d++) {
+      var p = partir(d, G);
+      h += '<button type="button" class="by' + (est.mapa[d] ? " " + est.mapa[d] : "") + '" data-d="' + d + '" style="' + estiloSet(p.bloque % 4, 4) + '" aria-label="Byte ' + d + '"' + (accesoLibre() ? "" : " disabled") + ">" + d + "</button>";
+    }
+    h += "</div>";
+    h += '<p class="mem-leyenda">Los bytes del mismo color son una misma línea. Raya verde: ese byte fue un acierto. Raya coral: un fallo.</p>';
+    return h;
+  }
+  function htmlCache() {
+    var G = est.G, m = MODOS[est.paso], h = '<div class="cache" role="group" aria-label="La caché">', s, k;
+    var panel = dirPanel(), destino = (est.apunta !== null && panel !== null) ? partir(panel, G).idx : null;
+    for (s = 0; s < G.sets; s++) {
+      var set = est.Ca.sets[s], etq = G.vias === 1 ? "línea " + s : (G.sets === 1 ? "caché" : "conjunto " + s);
+      h += '<div class="crow' + (destino === s ? " destino" : "") + '" style="--v:' + G.vias + '"><span class="lab" style="' + estiloSet(s, G.sets) + '">' + etq + "</span>";
+      for (k = 0; k < G.vias; k++) {
+        var w = set[k], cls = "cel";
+        if (!w) cls += " vacia";
+        else if (est.ult && est.ult.idx === s && est.ult.via === k) cls += est.ult.hit ? " a" : " f";
+        h += '<span class="' + cls + '">' + (w ? "<b>b" + w.bloque + "</b>" + (m.tags ? "<small>etq " + w.tag + "</small>" : "") : "vacía") + "</span>";
+      }
+      h += "</div>";
+    }
+    var nota = "";
+    if (est.ult) {
+      nota = est.ult.hit ? "Acierto: <b>b" + est.ult.bloque + "</b> ya estaba." :
+        "Fallo: se carga <b>b" + est.ult.bloque + "</b>" + (est.ult.expulsado !== null ? " y sale <b>b" + est.ult.expulsado + "</b>." : ".");
+    }
+    h += '<div class="cnota">' + nota + "</div></div>";
+    return h;
+  }
+  function dirPanel() {
+    if (est.paso === 2) return est.dir;
+    if (est.apunta !== null) return est.apunta * est.G.bytes;
+    if (est.ult) return est.ult.dir;
+    return null;
+  }
+  function htmlDir() {
+    var d = dirPanel();
+    if (d === null) return '<p class="esc-vacio">Toca un bloque: aquí verás su dirección partida.</p>';
+    var G = est.G, p = partir(d, G), bits = bin(d, NB);
+    var oculto = est.paso === 2 && !est.libre[2];
+    function grupo(clase, nombre, txt, valor) {
+      if (!txt.length) return '<div class="grp ' + clase + '"><span class="gl">' + nombre + '</span><span class="gv">sin bits</span></div>';
+      return '<div class="grp ' + clase + '"><div class="bits">' + txt.split("").map(function (c) { return '<span class="bit">' + c + "</span>"; }).join("") +
+        '</div><span class="gl">' + nombre + '</span><span class="gv">' + (oculto ? "?" : valor) + "</span></div>";
+    }
+    var h = '<div class="dirinfo">dirección ' + d + " · bloque " + (oculto ? "?" : p.bloque) + "</div>";
+    h += '<div class="dirbits">' +
+      grupo("g-tag", "etiqueta", bits.slice(0, G.tag), p.tag) +
+      grupo("g-idx", G.vias === 1 ? "índice" : "índice (conjunto)", bits.slice(G.tag, G.tag + G.idx), p.idx) +
+      grupo("g-off", "offset", bits.slice(G.tag + G.idx), p.off) + "</div>";
+    return h;
+  }
+  function htmlCuenta() {
+    var Ca = est.Ca, n = Ca.ac + Ca.fa;
+    if (!n) return "";
+    var vista = est.paso === 1;
+    var h = '<div class="cuenta-esc">aciertos <b class="a">' + Ca.ac + '</b> · fallos <b class="f">' + Ca.fa + "</b> · tasa de aciertos <b>" + f(Ca.ac / n * 100, 0) + " %</b></div>";
+    h += '<div class="hist" aria-label="Historial de accesos">' + Ca.hist.slice(-16).map(function (r) {
+      return '<span class="' + (r.hit ? "a" : "f") + '">' + (vista ? r.dir : "b" + r.bloque) + "</span>";
+    }).join("") + "</div>";
+    return h;
+  }
+
+  function pintarAmat() {
+    var libre = !!est.libre[5];
+    var p = +$("rngP").value / 100, ta = +$("rngA").value, pen = +$("rngF").value;
+    $("amP").textContent = f(p * 100, 0) + " %";
+    $("amA").textContent = ta + " ns";
+    $("amF").textContent = pen + " ns";
+    var medio = ta + (1 - p) * pen;
+    var cuenta = ta + " + " + f(1 - p, 2) + " × " + pen;
+    $("amRes").innerHTML = "tiempo medio = " + cuenta + " = " + (libre ? "<b>" + f(medio, 2) + " ns</b>" : '<b class="oculto">?</b>');
+    $("vivoAmat").textContent = "Con tus deslizadores: " + cuenta + " = " + (libre ? f(medio, 2) + " ns" : "?");
+    var barras = "";
+    if (libre) {
+      var tope = Math.max(pen, medio);
+      barras = '<div class="barra-fila"><span>sin caché</span><span class="bar"><i class="s" style="width:' + (pen / tope * 100).toFixed(1) + '%"></i></span><b>' + pen + ' ns</b></div>' +
+        '<div class="barra-fila"><span>con caché</span><span class="bar"><i class="c" style="width:' + (medio / tope * 100).toFixed(1) + '%"></i></span><b>' + f(medio, 1) + ' ns</b></div>' +
+        '<div class="cmp">Ir siempre a la RAM cuesta ' + pen + " ns. Con esta tasa, la caché lo deja " + f(pen / medio, 1) + " veces más rápido.</div>";
+    } else barras = '<div class="cmp">Resuelve el chequeo y aquí se verá cuánto gana la caché.</div>';
+    $("amBarras").innerHTML = barras;
+  }
+
+  /* ---------------- paso 7: la imagen de 8 x 8 ---------------- */
+  function trazaM(orden) {
+    var t = [], a, b;
+    for (a = 0; a < 8; a++) for (b = 0; b < 8; b++) t.push(orden === "filas" ? 8 * a + b : 8 * b + a);
+    return t;
+  }
+  function nuevaM() {
+    var m = est.m;
+    if (m.timer) { clearTimeout(m.timer); m.timer = null; }
+    m.Ca = crearCache(geom(TIPOS_M[m.tipo]), "LRU");
+    m.T = trazaM(m.orden); m.pos = 0; m.res = {}; m.act = null;
+  }
+  function pasoM() {
+    var m = est.m;
+    if (m.pos >= m.T.length) return false;
+    var d = m.T[m.pos++], r = acceder(m.Ca, d);
+    m.res[d] = r.hit ? "a" : "f"; m.act = d;
+    if (m.pos >= m.T.length) {
+      m.fin[m.tipo + "-" + m.orden] = { a: m.Ca.ac, f: m.Ca.fa };
+    }
+    return true;
+  }
+  function recorrerM() {
+    var m = est.m;
+    if (m.timer) return;
+    (function sig() {
+      m.timer = null;
+      if (!pasoM()) { pintarMat(); return; }
+      pintarMat();
+      m.timer = setTimeout(sig, 70);
+    })();
+  }
+  function pintarMat() {
+    var m = est.m, G = m.Ca.G, h = "", d;
+    for (var r = 0; r < 8; r++) for (var c = 0; c < 8; c++) {
+      d = 8 * r + c;
+      var bl = Math.floor(d / G.bytes);
+      h += '<div class="px' + (m.res[d] ? " " + m.res[d] : "") + (m.act === d ? " ahora" : "") + '" style="' + estiloSet(bl % G.sets, G.sets) + '">' + d + "</div>";
+    }
+    $("mat8").innerHTML = h;
+    var n = m.Ca.ac + m.Ca.fa;
+    $("matCuenta").innerHTML = n ? "acceso " + n + " de 64 · aciertos <b class=\"a\">" + m.Ca.ac + "</b> · fallos <b class=\"f\">" + m.Ca.fa + "</b> · tiempo medio <b>" + f(1 + m.Ca.fa / n * 100, 1) + " ns</b>"
+      : "Elige el recorrido y la caché, y dale a Recorrer.";
+    var cmp = [];
+    ["filas", "columnas"].forEach(function (o) {
+      var x = m.fin[m.tipo + "-" + o];
+      if (x) cmp.push("por " + o + ": <b>" + x.a + "</b> aciertos, <b>" + x.f + "</b> fallos, " + f(1 + x.f / 64 * 100, 1) + " ns");
+    });
+    $("matCmp").innerHTML = cmp.length ? "Con la " + NOM_M[m.tipo] + ", " + cmp.join(" · ") + "." : "";
+  }
+
+  function pintarEsc(sinCtrl) {
+    var m = MODOS[est.paso], v = m.vista;
+    $("escHint").textContent = m.hint;
+    $("btnVaciar").hidden = !(v === "bloques" || v === "bytes") || m.solo === true;
+    $("escAmat").hidden = v !== "amat";
+    $("escMat").hidden = v !== "matriz";
+    var aviso = "";
+    if (est.paso === 0 && !est.libre[0]) aviso = "Los bloques están cerrados hasta que respondas el chequeo.";
+    if (est.paso === 1 && !est.libre[1]) aviso = "Los bytes están cerrados hasta que respondas el chequeo.";
+    if (est.paso === 3 && !est.libre[3]) aviso = "Aún no se puede pedir: toca un bloque y verás solo a dónde iría.";
+    if (est.paso === 4 && !est.libre[4]) aviso = "Aún no se puede pedir: solo el botón Cargar 1 2 3 4 1. Responde el chequeo para el resto.";
+    if (est.paso === 6 && !est.libre[6]) aviso = "El recorrido está cerrado hasta que respondas el chequeo.";
+    $("escAviso").textContent = aviso;
+    if (!sinCtrl) pintarCtrl();
+    if (v === "bloques" || v === "bytes") {
+      elMem.innerHTML = v === "bytes" ? htmlBytes() : htmlGrid();
+      elDir.innerHTML = (est.paso === 0 || est.paso === 1) ? "" : htmlDir();
+      elCache.innerHTML = est.paso === 2 ? "" : htmlCache();
+      elCuenta.innerHTML = est.paso === 2 ? "" : htmlCuenta();
+      refrescarVivos();
+    } else {
+      elMem.innerHTML = ""; elDir.innerHTML = ""; elCache.innerHTML = ""; elCuenta.innerHTML = "";
+    }
+    if (v === "amat") pintarAmat();
+    if (v === "matriz") pintarMat();
+  }
+
+  function refrescarVivos() {
+    var G = est.G, oculto = !est.libre[2], p = partir(est.dir, G);
+    $("vivoBits").textContent = "offset: log2(" + G.bytes + ") = " + G.off + " bits · índice: log2(" + G.lineas + ") = " + G.idx + " bits · etiqueta: " + NB + " − " + G.idx + " − " + G.off + " = " + G.tag + " bits";
+    $("vivoDir").innerHTML = est.dir + " ÷ " + G.bytes + " → bloque " + (oculto ? "?" : p.bloque) + " · " + (oculto ? "?" : p.bloque) + " mod " + G.lineas + " → índice " + (oculto ? "?" : p.idx) +
+      " · " + (oculto ? "?" : p.bloque) + " ÷ " + G.lineas + " → etiqueta " + (oculto ? "?" : p.tag) + " · offset " + est.dir + " mod " + G.bytes + " = " + (oculto ? "?" : p.off);
+    var g4 = geom({ bytes: 4, lineas: 4, vias: est.paso === 3 ? est.cfg.vias : 1 });
+    $("vivoConj").textContent = "Ahora: " + g4.lineas + " líneas / " + g4.vias + " " + (g4.vias === 1 ? "vía" : "vías") + " = " + g4.sets + " " + (g4.sets === 1 ? "conjunto" : "conjuntos") +
+      " → " + g4.idx + " " + (g4.idx === 1 ? "bit" : "bits") + " de índice, " + g4.off + " de offset y " + g4.tag + " de etiqueta.";
+    if (chk3) chk3.refrescar();
+  }
+
+  function entrar(i) {
+    parar();
+    if (est.m.timer) { clearTimeout(est.m.timer); est.m.timer = null; }
+    est.paso = i;
+    var m = MODOS[i];
+    if (m.cfg) est.cfg = { bytes: m.cfg.bytes, lineas: m.cfg.lineas, vias: m.cfg.vias };
+    est.pol = "LRU";
+    nuevaCache();
+    if (m.vista === "matriz") nuevaM();
+    pintarEsc();
+  }
+
+  /* ---------------- eventos del escenario ---------------- */
+  $("btnVaciar").addEventListener("click", function () { parar(); nuevaCache(); pintarEsc(); });
+  $("escAmat").addEventListener("input", pintarAmat);
+  (function () {
+    var cont = $("amPres");
+    [50, 90, 95, 99].forEach(function (v) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.textContent = v + " %";
+      b.addEventListener("click", function () { $("rngP").value = v; pintarAmat(); });
+      cont.appendChild(b);
+    });
+  })();
+
+  document.querySelector(".escenario").addEventListener("click", function (e) {
+    var t = e.target, b, i = est.paso;
+    b = t.closest ? t.closest("[data-ctrl]") : null;
+    if (b) {
+      var k = b.getAttribute("data-ctrl"), v = b.getAttribute("data-v");
+      parar();
+      if (k === "bytes") { est.cfg.bytes = +v; nuevaCache(); }
+      else if (k === "lineas") { est.cfg.lineas = +v; nuevaCache(); }
+      else if (k === "vias") { est.cfg.vias = +v; nuevaCache(); }
+      else if (k === "pol") { est.pol = v === "ALE" ? "ALE" : v; nuevaCache(); }
+      else if (k === "orden") { est.m.orden = v; nuevaM(); }
+      else if (k === "tipoM") { est.m.tipo = v; nuevaM(); }
+      pintarEsc();
+      return;
+    }
+    b = t.closest ? t.closest("[data-pre]") : null;
+    if (b) {
+      var p = b.getAttribute("data-pre");
+      if (p === "p1") correr(deBloques([3, 3, 7, 3]), 650);
+      else if (p === "p2") { var d = []; for (var x = 96; x <= 103; x++) d.push(x); correr(d, 450); }
+      else if (p === "p4a") correr(deBloques([3, 7, 3, 7, 3, 7]), 600);
+      else if (p === "p4b") correr([13, 109], 900);
+      else if (p === "p4c") correr([8, 9, 10, 12, 13, 40, 8, 9, 44, 8], 500);
+      else if (p === "p5a") correr(deBloques([1, 2, 3, 4, 1]), 500);
+      else if (p === "p5b") correr(deBloques([1, 2, 3, 4, 1, 5, 1, 2]), 650);
+      else if (p === "m1") recorrerM();
+      else if (p === "m2") { if (est.m.timer) { clearTimeout(est.m.timer); est.m.timer = null; } while (pasoM()) { /* hasta el final */ } pintarMat(); }
+      else if (p === "m3") { nuevaM(); pintarMat(); }
+      return;
+    }
+    b = t.closest ? t.closest("[data-b]") : null;
+    if (b) {
+      var bl = +b.getAttribute("data-b");
+      if (i === 2) { est.dir = bl * est.cfg.bytes + (est.dir % est.cfg.bytes); pintarEsc(); var ii = $("inpDir"); if (ii) ii.value = est.dir; return; }
+      if (accesoLibre()) { parar(); pedir(bl * est.G.bytes); } else { est.apunta = bl; }
+      pintarEsc();
+      return;
+    }
+    b = t.closest ? t.closest("[data-d]") : null;
+    if (b && accesoLibre()) { parar(); pedir(+b.getAttribute("data-d")); pintarEsc(); }
+  });
+  document.querySelector(".escenario").addEventListener("input", function (e) {
+    if (e.target && e.target.id === "inpDir") {
+      var v = parseInt(e.target.value, 10);
+      if (isNaN(v)) return;
+      est.dir = Math.max(0, Math.min(255, v));
+      pintarEsc(true);
+    }
+  });
+
+  /* ---------------- chequeos de cada paso ---------------- */
+  B.numerico(cuerpo("chk1"), {
+    pregunta: "Vas a pedir los bloques <b>3, 3, 7 y 3</b>, en ese orden, con la repisa vacía. Mira los colores del escenario: ¿cuántos <b>fallos</b> tendrás?",
+    respuesta: 3,
+    tolerancia: 0,
+    pistas: ["Apunta qué hay en el hueco del color del 3 después de cada petición.", "El 7 y el 3 tienen el mismo color. ¿Qué le pasa al 3 cuando llega el 7?"],
+    diagnostico: function (v) {
+      if (v === 2) return "Contaste el primer 3 y el 7. Falta el último 3: el 7 lo sacó de su hueco, así que vuelve a fallar.";
+      if (v === 1) return "Con la repisa vacía, la primera petición ya es un fallo.";
+      if (v === 4) return "El segundo 3 acierta: acabas de traerlo y sigue en su hueco.";
+      return null;
+    },
+    explicacion: "El primer 3 falla (repisa vacía). El segundo 3 acierta. El 7 comparte hueco con el 3: lo expulsa y falla. El último 3 ya no está: falla. Son <b>3 fallos y 1 acierto</b>. <b>Ahora pruébalo:</b> toca el botón del escenario o pide los bloques tú.",
+    alResolver: function () { est.libre[0] = true; pintarEsc(); pasos.completar(0); }
+  });
+
+  B.numerico(cuerpo("chk2"), {
+    pregunta: "Un programa lee los bytes <b>96, 97, 98, 99, 100, 101, 102 y 103</b>, en ese orden, con la caché vacía y líneas de 4 bytes. ¿Cuántos <b>fallos</b> habrá?",
+    respuesta: 2,
+    tolerancia: 0,
+    pistas: ["Divide cada dirección entre 4 (sin decimales): ¿a qué bloque pertenece cada byte?", "Del 96 al 99 es un bloque. Del 100 al 103, otro."],
+    diagnostico: function (v) {
+      if (v === 8) return "Eso pasaría si cada byte se trajera solo. Pero se trae la línea entera de 4 bytes.";
+      if (v === 4) return "Cuatro fallos serían líneas de 2 bytes. Aquí son de 4.";
+      if (v === 1) return "Los 8 bytes no caben en una línea de 4. Hacen falta dos líneas distintas.";
+      return null;
+    },
+    explicacion: "El 96 falla y trae la línea de 96 a 99: los tres siguientes aciertan. El 100 falla y trae la línea de 100 a 103: los tres siguientes aciertan. Son <b>2 fallos y 6 aciertos</b>. <b>Ahora cambia el tamaño de línea</b> en el escenario y repite la lectura: con 1 byte son 8 fallos y con 8 o 16 bytes solo 1: toda la lectura cabe en una línea.",
+    alResolver: function () { est.libre[1] = true; pintarEsc(); pasos.completar(1); }
+  });
+
+  chk3 = B.numerico(cuerpo("chk3"), {
+    pregunta: function () {
+      var G = est.G, bits = bin(est.dir, NB);
+      return "La dirección <b>" + est.dir + "</b> (<b>" + bits.slice(0, 4) + " " + bits.slice(4) + "</b>), con líneas de <b>" + G.bytes + " bytes</b> y <b>" + G.lineas + " líneas</b>: ¿en qué línea de la caché cae? Escribe el <b>índice</b> en decimal.";
+    },
+    respuesta: function () { return partir(est.dir, est.G).idx; },
+    tolerancia: 0,
+    pistas: [
+      function () { return "Cuenta los bits: el offset usa " + est.G.off + " bits de la derecha y el índice los " + est.G.idx + " siguientes."; },
+      function () {
+        var G = est.G, bits = bin(est.dir, NB);
+        return "Los bits del índice son <b>" + bits.slice(G.tag, G.tag + G.idx) + "</b>. Pásalos a decimal.";
+      }
+    ],
+    diagnostico: function (v) {
+      var p = partir(est.dir, est.G);
+      if (v === p.off) return "Ese es el offset: los bits de la derecha. El índice son los que vienen justo antes.";
+      if (v === p.tag) return "Esa es la etiqueta: los bits de la izquierda. El índice está entre la etiqueta y el offset.";
+      if (v === p.bloque) return "Ese es el número de bloque entero. El índice es solo la parte baja del bloque: el bloque módulo el número de líneas.";
+      return null;
+    },
+    explicacion: function () {
+      var G = est.G, p = partir(est.dir, G), bits = bin(est.dir, NB);
+      return "Los bits del índice son " + bits.slice(G.tag, G.tag + G.idx) + ", que valen " + p.idx + ". Comprobación: la dirección " + est.dir + " está en el bloque " + p.bloque + " y " + p.bloque + " mod " + G.lineas + " = " + p.idx + ". La etiqueta es " + p.tag + " y el offset " + p.off + ".";
+    },
+    alResolver: function () { est.libre[2] = true; pintarEsc(); pasos.completar(2); }
+  });
+
+  B.numerico(cuerpo("chk4"), {
+    pregunta: "Caché <b>directa</b> de 4 líneas. Pides los bloques <b>3, 7, 3, 7, 3, 7</b> (el 3 y el 7 tienen el mismo color). ¿Cuántos <b>fallos</b>?",
+    respuesta: 6,
+    tolerancia: 0,
+    pistas: ["Cada petición, ¿encuentra en su hueco al bloque que pide o al otro?", "Cuando llega el 7 se lleva al 3, y cuando llega el 3 se lleva al 7."],
+    diagnostico: function (v) {
+      if (v === 2) return "Dos son los bloques distintos, pero cada vez que vuelve uno, el otro ya lo sacó del hueco.";
+      if (v === 3) return "Cada petición expulsa a la anterior: no queda ningún acierto, así que no son 3.";
+      return null;
+    },
+    explicacion: "El 3 falla y se queda en el hueco. El 7 falla y expulsa al 3. El 3 vuelve y expulsa al 7... Cada petición borra justo lo que la siguiente necesita: <b>6 fallos de 6</b>, aunque haya otros 3 huecos libres. <b>Ahora pruébalo</b> y cambia a 2 vías: ahí el 3 y el 7 caben juntos en el mismo conjunto.",
+    alResolver: function () { est.libre[3] = true; pintarEsc(); pasos.completar(3); }
+  });
+
+  B.opcionMultiple(cuerpo("chk4b"), {
+    pregunta: "La línea 3 de la caché guarda el bloque 3 (etiqueta 0). Pides la dirección <b>109</b> (bloque 27, línea 3, etiqueta 6). ¿Qué pasa?",
+    opciones: [
+      "Acierto: es la línea 3, que es la correcta",
+      "Fallo: la línea 3 existe pero guarda otra etiqueta, así que se reemplaza",
+      "Fallo: la dirección 109 no cabe en una caché de 4 líneas",
+      "No se puede saber sin conocer el offset"
+    ],
+    correcta: 1,
+    pistas: ["Estar en la línea correcta no basta. ¿Qué comprueba la caché además?", null,
+      "Cualquier dirección cabe: lo que cambia es qué bloque ocupa la línea.", "El offset solo dice qué byte de la línea se lee, no si el bloque está."],
+    explicacion: "La caché mira la línea que le dice el índice y compara la etiqueta guardada con la de la dirección: 0 contra 6. No coinciden, así que es un fallo y el bloque 27 reemplaza al 3. <b>Ahora pruébalo</b> con el botón del escenario: pide 13 y luego 109.",
+    alResolver: function () { /* es una pausa para pensar: no abre ni cierra pasos */ }
+  });
+
+  B.opcionMultiple(cuerpo("chk5"), {
+    pregunta: "Caché totalmente asociativa de 4 líneas, política <b>LRU</b>, vacía. Pides los bloques <b>1, 2, 3, 4, 1</b> y después el <b>5</b>. ¿Qué bloque sale para hacerle sitio?",
+    opciones: ["El 1", "El 2", "El 3", "El 4"],
+    correcta: 1,
+    pistas: ["El 1 acaba de usarse otra vez. ¿Es el menos reciente?", null,
+      "El 3 entró después del 2, y ninguno se volvió a usar. ¿Cuál lleva más tiempo sin tocarse?", "El 4 es el último que entró."],
+    explicacion: "Después de 1, 2, 3, 4, 1, el orden de uso, del más antiguo al más reciente, es 2, 3, 4, 1. LRU expulsa al que lleva más tiempo sin usarse: el <b>2</b>. FIFO habría sacado el 1, porque entró primero. <b>Ahora pruébalo</b> con el botón Correr y cambia la política para comparar.",
+    alResolver: function () { est.libre[4] = true; pintarEsc(); pasos.completar(4); }
+  });
+
+  B.numerico(cuerpo("chk6"), {
+    pregunta: "Un acierto cuesta <b>1 ns</b>, la penalización por fallo es de <b>100 ns</b> y la tasa de aciertos es del <b>95 %</b>. ¿Cuál es el tiempo medio de acceso, en ns?",
+    respuesta: 6,
+    tolerancia: 0.01,
+    pistas: ["La tasa de fallos es 1 − 0,95. ¿Cuánto vale?", "El fallo pesa 0,05 × 100 ns. Súmale el tiempo de acierto, que se paga siempre."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 5.95) < 0.011) return "Esa es otra forma de contar (0,95 × 1 + 0,05 × 100), donde el fallo cuesta solo la penalización. En la fórmula del material el acierto se paga siempre, porque siempre se mira primero la caché, y la penalización se suma encima.";
+      if (Math.abs(v - 105) < 0.011 || Math.abs(v - 101) < 0.011) return "Sumaste la penalización completa. Solo se paga en el 5 % de los accesos.";
+      if (Math.abs(v - 5) < 0.011) return "Falta el 1 ns del acierto: la caché se consulta siempre.";
+      return null;
+    },
+    explicacion: "t = 1 + 0,05 × 100 = 1 + 5 = <b>6 ns</b>. Con un 95 % de aciertos ya vas más de 16 veces más rápido que ir siempre a la RAM. <b>Ahora mueve la tasa</b> en el escenario: de 90 a 99 % el tiempo baja de 11 a 2 ns.",
+    alResolver: function () { est.libre[5] = true; pintarEsc(); pasos.completar(5); }
+  });
+
+  B.opcionMultiple(cuerpo("chk7"), {
+    pregunta: "Recorres los 64 píxeles <b>por filas</b> y luego <b>por columnas</b>, con la misma caché directa de 4 líneas de 4 bytes. Por columnas, ¿qué pasa con los aciertos?",
+    opciones: [
+      "Igual de buenos que por filas",
+      "Algo peores, alrededor de la mitad",
+      "No hay ni uno: los 64 accesos fallan",
+      "Mejores, porque salta más lejos"
+    ],
+    correcta: 2,
+    pistas: ["Por filas, 3 de cada 4 accesos aciertan porque comparten línea con el anterior. Por columnas, ¿comparten línea con el anterior?",
+      "Salta de 8 en 8 bytes, y cada línea tiene 4: nunca cae dos veces seguidas en la misma línea. ¿Y cuando vuelva a una línea ya usada?",
+      null, "Saltar lejos no ayuda: la localidad espacial se rompe."],
+    explicacion: "Por filas, cada línea de 4 bytes sirve a 4 accesos seguidos: 16 fallos y 48 aciertos. Por columnas, cada acceso cae en una línea nueva, y cuando el recorrido vuelve a un bloque ya lo expulsaron los otros que comparten su hueco: <b>64 fallos</b>. Tiempo medio: 26 ns por filas frente a 101 ns por columnas. <b>Ahora recorre la imagen</b> y prueba también las otras cachés.",
+    alResolver: function () { est.libre[6] = true; pintarEsc(); pasos.completar(6); }
+  });
+
+  pasos = B.pasos($("recorrido"), {
+    concepto: C,
+    alEntrar: entrar,
+    alTerminar: function () { location.hash = "retos"; }
+  });
+  for (var ip = 0; ip < 7; ip++) if (pasos.hecho(ip)) est.libre[ip] = true;
+  entrar(0);
+
+  /* ---------------- hipotesis inicial ---------------- */
+  (function () {
+    var ta = $("hipotesis"), t = null;
+    ta.value = B.nota("memoria-cache", "hipotesis");
+    function cita() {
+      var v = ta.value.trim(), el = $("citaHipo");
+      el.hidden = !v;
+      if (v) { el.textContent = ""; el.appendChild(document.createTextNode("Al principio escribiste: «" + v + "». ¿Se parece a lo que construimos? ¿Qué te faltaba?")); }
+    }
+    cita();
+    ta.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { B.nota("memoria-cache", "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; cita(); }, 500);
+    });
+  })();
+
+  /* ---------------- marcadores de estado de retos ---------------- */
+  function pintarEstados() {
+    [].forEach.call(document.querySelectorAll("[data-reto]"), function (el) {
+      var ok = C.retoOk(el.getAttribute("data-reto"));
+      el.textContent = ok ? "resuelto" : "pendiente";
+      el.classList.toggle("ok", ok);
+    });
+  }
+  C.alCambiar(pintarEstados);
+
+  /* ---------------- reto: ojo clinico ---------------- */
+  (function () {
+    var cont = $("ojo");
+    cont.innerHTML = '<div class="ronda"></div><div class="ojo-cache"></div><p class="ojo-pide"></p>' +
+      '<div class="ojo-opts"><button type="button" class="opt" data-a="a">Acierto</button><button type="button" class="opt" data-a="f">Fallo</button></div>' +
+      '<div class="fb" aria-live="polite"></div><div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    var tipos, ronda, aciertos, respondida, D;
+    function hueChip(b) { return estiloSet(b % 4, 4); }
+    function generar(tipo) {
+      var lin = [], k, libres = [];
+      for (k = 0; k < 4; k++) lin.push(Math.random() < 0.75 ? k + 4 * aleat(0, 7) : null);
+      if (tipo === "vacia") { lin[aleat(0, 3)] = null; }
+      else { k = aleat(0, 3); if (lin[k] === null) lin[k] = k + 4 * aleat(0, 7); }
+      var pedido, linea;
+      if (tipo === "vacia") { libres = lin.map(function (x, i) { return x === null ? i : -1; }).filter(function (i) { return i >= 0; }); linea = libres[aleat(0, libres.length - 1)]; pedido = linea + 4 * aleat(0, 7); }
+      else {
+        var llenas = lin.map(function (x, i) { return x === null ? -1 : i; }).filter(function (i) { return i >= 0; });
+        linea = llenas[aleat(0, llenas.length - 1)];
+        if (tipo === "hit") pedido = lin[linea];
+        else { do { pedido = linea + 4 * aleat(0, 7); } while (pedido === lin[linea]); }
+      }
+      return { lin: lin, pedido: pedido, linea: linea, tipo: tipo };
+    }
+    function nueva() {
+      var extra = Math.random() < 0.5 ? "hit" : "conflicto";
+      tipos = B.mezclar(["hit", "conflicto", "vacia", "hit", extra === "hit" ? "conflicto" : "hit"]);
+      ronda = 0; aciertos = 0;
+      mostrar();
+    }
+    function mostrar() {
+      respondida = false;
+      D = generar(tipos[ronda]);
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 5 · aciertos " + aciertos;
+      cont.querySelector(".ojo-cache").innerHTML = D.lin.map(function (b, i) {
+        return '<div class="ojo-fila"><span class="lab" style="' + hueChip(i) + '">línea ' + i + '</span><span class="cel' + (b === null ? " vacia" : "") + '">' + (b === null ? "vacía" : "bloque " + b) + "</span></div>";
+      }).join("");
+      cont.querySelector(".ojo-pide").innerHTML = 'Pides el bloque <span class="chipb" style="' + hueChip(D.pedido) + '">' + D.pedido + "</span>. El color dice a qué línea va.";
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (b) { b.disabled = false; b.className = "opt"; });
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+    }
+    cont.querySelector(".ojo-opts").addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || respondida) return;
+      respondida = true;
+      var correcta = D.tipo === "hit" ? "a" : "f", ok = b.getAttribute("data-a") === correcta;
+      if (ok) aciertos++;
+      b.classList.add(ok ? "ok" : "mal");
+      if (!ok) cont.querySelector('[data-a="' + correcta + '"]').classList.add("ok");
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (x) { x.disabled = true; });
+      var porque = D.tipo === "hit" ? "El bloque " + D.pedido + " va a la línea " + D.linea + " (" + D.pedido + " mod 4 = " + D.linea + ") y ahí está."
+        : D.tipo === "conflicto" ? "El bloque " + D.pedido + " va a la línea " + D.linea + ", pero ahí está el bloque " + D.lin[D.linea] + ": otro bloque con el mismo color. Es un fallo y lo reemplaza."
+        : "El bloque " + D.pedido + " va a la línea " + D.linea + ", que está vacía: un fallo, pero sin expulsar a nadie.";
+      cont.querySelector(".fb").innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No.</span> ') + porque;
+      var sig = cont.querySelector(".sig");
+      sig.hidden = false;
+      if (ronda === 4) {
+        var aprobo = aciertos >= 4;
+        C.reto("ojo", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertos + " de 5" + (aprobo ? ". Aprobado." : ". Necesitas 4 para aprobar.");
+        sig.textContent = "Otra tanda";
+      } else sig.textContent = "Siguiente ronda";
+    });
+    cont.querySelector(".sig").addEventListener("click", function () {
+      if (ronda === 4) nueva(); else { ronda++; mostrar(); }
+    });
+    nueva();
+  })();
+
+  /* ---------------- reto: construir ---------------- */
+  (function () {
+    var cont = $("construir"), lista = [], logrados = [false, false, false], avisado = false;
+    var CFG3 = [
+      { n: "Directa", cfg: { bytes: 4, lineas: 4, vias: 1 } },
+      { n: "2 vías", cfg: { bytes: 4, lineas: 4, vias: 2 } },
+      { n: "Asociativa", cfg: { bytes: 4, lineas: 4, vias: 4 } }
+    ];
+    var OBJ = [
+      { t: "En la directa, 5 aciertos o más con al menos 3 bloques distintos (la localidad temporal funciona).", ok: function (r, d) { return d >= 3 && r[0].ac >= 5; } },
+      { t: "La directa no acierta ni una vez (0 aciertos) y la de 2 vías acierta 6 o más: el mismo tren, resuelto con vías.", ok: function (r) { return r[0].ac === 0 && r[1].ac >= 6; } },
+      { t: "La asociativa con LRU no acierta ni una vez (0 aciertos) usando solo 5 bloques distintos.", ok: function (r, d) { return d === 5 && r[2].ac === 0; } }
+    ];
+    var ul = $("objetivos");
+    OBJ.forEach(function (o) { var li = document.createElement("li"); li.innerHTML = '<span class="m"></span><span>' + o.t + "</span>"; ul.appendChild(li); });
+    var h = '<div class="constr-lista" id="cLista"></div><div class="mem" id="cGrid" style="max-width:360px;grid-template-columns:repeat(8,minmax(0,1fr))"></div>' +
+      '<div class="btn-row"><button type="button" id="cBorrar">Borrar el último</button><button type="button" id="cVaciar">Vaciar la lista</button></div>' +
+      '<div class="constr-res" id="cRes"></div>';
+    cont.innerHTML = h;
+    var grid = $("cGrid"), i;
+    for (i = 0; i < 16; i++) grid.insertAdjacentHTML("beforeend", '<button type="button" class="bq" data-cb="' + i + '" style="' + estiloSet(i % 4, 4) + '" aria-label="Pedir el bloque ' + i + '">' + i + "</button>");
+    function pintar() {
+      $("cLista").textContent = lista.length ? "Pedidos (" + lista.length + " de 8): " + lista.join(", ") : "Toca bloques de la cuadrícula para pedirlos (hasta 8). Los colores de la directa: bloque mod 4.";
+      var res = CFG3.map(function (c) { return correrBloques(c.cfg, "LRU", lista); });
+      $("cRes").innerHTML = CFG3.map(function (c, k) { return c.n + ": aciertos <b>" + res[k].ac + "</b>, fallos <b>" + res[k].fa + "</b>"; }).join("<br>");
+      var dist = {}; lista.forEach(function (b) { dist[b] = true; });
+      var d = Object.keys(dist).length;
+      if (lista.length === 8) OBJ.forEach(function (o, k) { if (!logrados[k] && o.ok(res, d)) logrados[k] = true; });
+      OBJ.forEach(function (o, k) { ul.children[k].classList.toggle("hecho", logrados[k]); });
+      if (!avisado && logrados.every(Boolean)) { avisado = true; C.reto("construir", true); }
+    }
+    cont.addEventListener("click", function (e) {
+      var b = e.target.closest("[data-cb]");
+      if (b && lista.length < 8) { lista.push(+b.getAttribute("data-cb")); pintar(); return; }
+      if (e.target.id === "cBorrar") { lista.pop(); pintar(); }
+      if (e.target.id === "cVaciar") { lista = []; pintar(); }
+    });
+    pintar();
+  })();
+
+  /* ---------------- reto: a mano ---------------- */
+  (function () {
+    var D;
+    function generar() {
+      var bytes = [2, 4, 8, 16][aleat(0, 3)], lineas = [2, 4, 8][aleat(0, 2)];
+      var G = geom({ bytes: bytes, lineas: lineas, vias: 1 });
+      while (G.tag < 1) { lineas = lineas / 2; G = geom({ bytes: bytes, lineas: lineas, vias: 1 }); }
+      var dir = aleat(16, 255), p = partir(dir, G), que = ["etiqueta", "índice", "offset"][aleat(0, 2)];
+      D = { G: G, dir: dir, p: p, que: que, bits: bin(dir, NB) };
+      $("manoDatos").innerHTML = '<table class="datos-mano" style="border-collapse:collapse;font-family:var(--f-mono);font-size:14px;margin:4px 0 12px"><tr><th style="padding:4px 12px;border:1px solid var(--line)">dirección</th><th style="padding:4px 12px;border:1px solid var(--line)">bytes por línea</th><th style="padding:4px 12px;border:1px solid var(--line)">líneas</th></tr>' +
+        '<tr><td style="padding:4px 12px;border:1px solid var(--line);text-align:center">' + dir + '</td><td style="padding:4px 12px;border:1px solid var(--line);text-align:center">' + bytes + '</td><td style="padding:4px 12px;border:1px solid var(--line);text-align:center">' + lineas + "</td></tr></table>";
+    }
+    function valor() { return D.que === "etiqueta" ? D.p.tag : D.que === "índice" ? D.p.idx : D.p.off; }
+    var cfg = {
+      pregunta: function () { return "Caché directa y direcciones de 8 bits. Parte la dirección <b>" + D.dir + "</b>: ¿cuánto vale la <b>" + D.que + "</b>, en decimal?"; },
+      respuesta: function () { return valor(); },
+      tolerancia: 0,
+      pistas: [
+        function () { return "Bits de offset = " + D.G.off + " (log2 de " + D.G.bytes + "), de índice = " + D.G.idx + " (log2 de " + D.G.lineas + ") y de etiqueta = " + D.G.tag + "."; },
+        function () { return "La dirección en binario es <b>" + D.bits + "</b>. Etiqueta: " + D.bits.slice(0, D.G.tag) + ". Índice: " + (D.bits.slice(D.G.tag, D.G.tag + D.G.idx) || "(sin bits)") + ". Offset: " + (D.bits.slice(D.G.tag + D.G.idx) || "(sin bits)") + "."; }
+      ],
+      diagnostico: function (v) {
+        if (v === D.p.bloque && D.que !== "etiqueta") return "Ese es el bloque entero. La " + D.que + " es solo una parte de sus bits.";
+        var otros = [D.p.tag, D.p.idx, D.p.off];
+        if (otros.indexOf(v) >= 0 && v !== valor()) return "Ese valor es de otro trozo de la dirección. Revisa cuál te piden.";
+        return null;
+      },
+      explicacion: function () { return D.dir + " = " + D.bits + ". Etiqueta " + D.p.tag + ", índice " + D.p.idx + ", offset " + D.p.off + ". Comprobación: bloque = " + D.dir + " ÷ " + D.G.bytes + " = " + D.p.bloque + ", y " + D.p.bloque + " mod " + D.G.lineas + " = " + D.p.idx + "."; },
+      reintentable: true,
+      textoReintentar: "Otro ejercicio",
+      antesDeReintentar: generar,
+      alResolver: function (ok) { C.reto("mano", ok); }
+    };
+    generar();
+    B.numerico($("mano"), cfg);
+  })();
+
+  /* ---------------- reto: cazar el error ---------------- */
+  B.cazarError($("error"), {
+    variantes: [
+      {
+        intro: "Dirección 182, líneas de 4 bytes, 4 líneas, caché directa. Alguien la partió así:",
+        lineas: ["182 = 1011\\,0110_2", "\\text{offset} = \\text{los 2 bits de la derecha} = 10_2 = 2", "\\text{índice} = \\text{los 2 bits siguientes} = 01_2 = 1",
+          "\\text{etiqueta} = \\text{los 2 bits que quedan} = 10_2 = 2", "\\text{bloque} = \\lfloor 182/4 \\rfloor = 45"],
+        erronea: 3,
+        explicacion: "La etiqueta usa <b>todos</b> los bits que sobran: $8 - 2 - 2 = 4$ bits, es decir $1011_2 = 11$. Se comprueba con el bloque: $45 = 4 \\cdot 11 + 1$, etiqueta 11 e índice 1."
+      },
+      {
+        intro: "Tasa de aciertos 90 %, tiempo de acierto 2 ns, penalización 100 ns. Alguien calculó el tiempo medio así:",
+        lineas: ["p_{\\text{fallo}} = 100\\% - 90\\% = 10\\% = 0.10", "t_{\\text{medio}} = t_{\\text{acierto}} + p_{\\text{fallo}} \\times t_{\\text{penalización}}",
+          "t_{\\text{medio}} = 2 + 0.90 \\times 100", "t_{\\text{medio}} = 2 + 90 = 92\\text{ ns}"],
+        erronea: 2,
+        explicacion: "Multiplicó por la tasa de <b>aciertos</b> (0.90) en vez de por la tasa de fallos (0.10). Lo correcto es $2 + 0.10 \\times 100 = 12$ ns."
+      },
+      {
+        intro: "Caché totalmente asociativa de 2 líneas con política LRU. Alguien siguió los accesos 1, 2, 1, 3, 2 así:",
+        lineas: ["1:\\ \\text{fallo, caché } \\{1\\}", "2:\\ \\text{fallo, caché } \\{1, 2\\}", "1:\\ \\text{acierto; ahora el menos reciente es el 2}",
+          "3:\\ \\text{fallo; sale el 1 porque llegó primero, caché } \\{2, 3\\}", "2:\\ \\text{acierto}"],
+        erronea: 3,
+        explicacion: "Con LRU sale el menos <b>recientemente usado</b>, no el que llegó primero (eso es FIFO). El 1 se usó en el tercer acceso, así que sale el 2: la caché queda $\\{1, 3\\}$ y el último acceso, el 2, es un fallo."
+      }
+    ],
+    alResolver: function (ok) { C.reto("error", ok); }
+  });
+
+  /* ---------------- retos: propiedades ---------------- */
+  function prop(id, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple($(id), cfg);
+  }
+  prop("prop1", {
+    pregunta: "Direcciones de 8 bits, líneas de 16 bytes y caché directa de 8 líneas. ¿Cuántos bits tiene la <b>etiqueta</b>?",
+    opciones: ["1 bit", "4 bits", "3 bits", "5 bits"],
+    correcta: 0,
+    pistas: [null, "Esos 4 son los bits de offset (log2 de 16). Todavía falta restar también el índice.", "Esos 3 son los bits de índice (log2 de 8). Falta restar el offset.", "Restaste solo el índice (8 − 3 = 5). El offset también ocupa bits."],
+    explicacion: "Offset: log2(16) = 4 bits. Índice: log2(8) = 3 bits. Etiqueta: 8 − 4 − 3 = <b>1 bit</b>. Con direcciones de 8 bits la caché apenas necesita etiqueta."
+  });
+  prop("prop2", {
+    pregunta: "Dos direcciones distintas están en el <b>mismo bloque</b>. ¿Qué tienen igual?",
+    opciones: [
+      "La etiqueta y el índice; solo cambia el offset",
+      "El offset; cambian la etiqueta y el índice",
+      "Solo la etiqueta; cambian el índice y el offset",
+      "Nada: cada dirección es un bloque distinto"
+    ],
+    correcta: 0,
+    pistas: [null, "El offset es lo que distingue un byte de otro dentro del bloque, así que es justo lo que cambia.", "Si cambia el índice, caen en líneas distintas: no son el mismo bloque.", "Un bloque contiene varios bytes consecutivos: por eso se trae una línea entera."],
+    explicacion: "El bloque lo identifican etiqueta e índice juntos. Dentro del bloque, el offset dice qué byte es: por eso 96, 97, 98 y 99 comparten todo menos el offset."
+  });
+  prop("prop3", {
+    pregunta: "En una caché de correspondencia <b>directa</b>, llega un bloque nuevo y su línea está ocupada. ¿Qué política de reemplazo decide quién sale?",
+    opciones: [
+      "Ninguna: el bloque solo puede ir a una línea, así que esa es la víctima",
+      "LRU, mirando la línea menos usada de toda la caché",
+      "FIFO, mirando la línea que entró primero",
+      "Aleatoria, eligiendo cualquier línea"
+    ],
+    correcta: 0,
+    pistas: [null, "LRU compara varias candidatas. ¿Cuántas candidatas hay en una caché directa?", "FIFO también necesita varias candidatas.", "Elegir al azar supone que el bloque podría ir a cualquier línea. En la directa solo tiene una."],
+    explicacion: "La política solo importa cuando hay más de una candidata, es decir, con varias vías o con asociativa total. En la directa, el hueco ya está decidido por el índice."
+  });
+  prop("prop4", {
+    pregunta: "En una caché <b>write-back</b>, una línea tiene el bit <b>dirty</b> activado. ¿Qué significa?",
+    opciones: [
+      "Que la línea se modificó en la caché y la memoria aún tiene el dato viejo: hay que escribirla al expulsarla",
+      "Que la línea es la menos recientemente usada",
+      "Que la línea está vacía o es inválida",
+      "Que la línea es de solo lectura"
+    ],
+    correcta: 0,
+    pistas: [null, "El bit dirty no sirve para elegir víctima por antigüedad: eso lo hace la política de reemplazo.", "Para vacía o inválida existe otro bit, el de válido.", "Los permisos de lectura y escritura son de la memoria virtual, no de este bit."],
+    explicacion: "Write-back escribe solo en la caché y marca la línea como sucia (dirty). Al reemplazarla hay que copiarla a la memoria. Write-through, en cambio, escribe en los dos sitios a la vez y no necesita ese bit."
+  });
+  prop("prop5", {
+    pregunta: "Con 1 ns de acierto y 100 ns de penalización, subes la tasa de aciertos de <b>90 %</b> a <b>99 %</b>. El tiempo medio pasa de...",
+    opciones: ["11 ns a 2 ns", "11 ns a 10 ns", "10 ns a 1 ns", "91 ns a 2 ns"],
+    correcta: 0,
+    pistas: [null, "La tasa de fallos baja de 10 % a 1 %, y cada punto de fallos pesa 1 ns (1 % de 100). Son 9 ns menos, no 1.", "Al 90 % el tiempo es 1 + 0,10 × 100. No olvides el 1 ns del acierto.", "Con 90 % de aciertos el tiempo no puede acercarse a 91: solo el 10 % de los accesos paga 100 ns."],
+    explicacion: "Al 90 %: 1 + 0,10 × 100 = 11 ns. Al 99 %: 1 + 0,01 × 100 = 2 ns. Nueve puntos de aciertos recortan el tiempo casi seis veces: los últimos puntos son los que más valen."
+  });
+  prop("prop6", {
+    pregunta: "Una caché de <b>4 líneas</b> con <b>2 vías</b>: ¿cuántos conjuntos tiene y cuántos bits de índice?",
+    opciones: ["2 conjuntos, 1 bit de índice", "4 conjuntos, 2 bits de índice", "1 conjunto, 0 bits de índice", "2 conjuntos, 2 bits de índice"],
+    correcta: 0,
+    pistas: [null, "Con 4 conjuntos tendrías una caché directa (1 línea por conjunto). Aquí cada conjunto tiene 2 líneas.", "Un solo conjunto con todas las líneas es la caché totalmente asociativa (4 vías).", "2 conjuntos se distinguen con 1 bit, no con 2: log2(2) = 1."],
+    explicacion: "Conjuntos = líneas ÷ vías = 4 ÷ 2 = 2. Bits de índice = log2(2) = 1. Esos 2 bits que ya no usa el índice los gana la etiqueta."
+  });
+
+  /* ---------------- formulas de memoria ---------------- */
+  B.ordenar($("formula"), {
+    piezas: ["t_{\\text{medio}}", "=", "t_{\\text{acierto}}", "+", "p_{\\text{fallo}}", "\\times", "t_{\\text{penalización}}"],
+    distractores: ["p_{\\text{acierto}}", "-", "\\div"],
+    soluciones: [[0, 1, 2, 3, 4, 5, 6], [0, 1, 2, 3, 6, 5, 4]],
+    explicacion: "Siempre se paga el tiempo de la caché, y encima, en la fracción de accesos que fallan, el viaje a la memoria.",
+    alResolver: function (ok) { C.reto("formula", ok); }
+  });
+  B.ordenar($("formula2"), {
+    piezas: ["\\text{índice}", "=", "\\Big\\lfloor\\dfrac{\\text{dirección}}{\\text{bytes por línea}}\\Big\\rfloor", "\\bmod", "\\text{líneas}"],
+    distractores: ["\\text{etiqueta}", "\\times"],
+    soluciones: [[0, 1, 2, 3, 4]],
+    explicacion: "Primero la dirección se divide entre el tamaño de línea para obtener el bloque; el resto de esa división entre el número de líneas es la línea donde cae.",
+    alResolver: function (ok) { C.reto("formula2", ok); }
+  });
+
+  /* ---------------- vida real: el algoritmo en codigo ---------------- */
+  (function () {
+    var CODIGO = {
+      py: [
+        ["def", "def simular(trazas, lineas=4, bytes_linea=4):"],
+        ["vacias", "    etiquetas = [-1] * lineas            # -1: la línea está vacía"],
+        ["ac0", "    aciertos = 0"],
+        ["fa0", "    fallos = 0"],
+        ["forx", "    for direccion in trazas:"],
+        ["bloque", "        bloque = direccion // bytes_linea"],
+        ["indice", "        indice = bloque % lineas"],
+        ["etiqueta", "        etiqueta = bloque // lineas"],
+        ["si", "        if etiquetas[indice] == etiqueta:"],
+        ["acierto", "            aciertos += 1                # acierto: el bloque ya estaba"],
+        [null, "        else:"],
+        ["fallo", "            fallos += 1                  # fallo: se carga el bloque"],
+        ["carga", "            etiquetas[indice] = etiqueta"],
+        ["ret", "    return aciertos, fallos"],
+        [null, ""],
+        ["trazas", "trazas = [8, 9, 10, 12, 13, 40, 8, 9, 44, 8]"],
+        ["llamar", "aciertos, fallos = simular(trazas)"],
+        ["imp1", "print(aciertos, fallos)"],
+        ["tmedio", "tmedio = 1 + fallos / len(trazas) * 100"],
+        ["imp2", "print(tmedio)"],
+        ["matriz", "filas = []"],
+        ["matriz", "columnas = []"],
+        ["matriz", "for a in range(8):"],
+        ["matriz", "    for b in range(8):"],
+        ["matriz", "        filas.append(8 * a + b)"],
+        ["matriz", "        columnas.append(8 * b + a)"],
+        ["imp3", "print(simular(filas), simular(columnas))"],
+        ["verificar", "print(aciertos == 5 and fallos == 5)   # True"]
+      ],
+      r: [
+        ["def", "simular <- function(trazas, lineas = 4, bytes_linea = 4) {"],
+        ["vacias", "  etiquetas <- rep(-1, lineas)         # -1: la línea está vacía"],
+        ["ac0", "  aciertos <- 0"],
+        ["fa0", "  fallos <- 0"],
+        ["forx", "  for (direccion in trazas) {"],
+        ["bloque", "    bloque <- direccion %/% bytes_linea"],
+        ["indice", "    indice <- bloque %% lineas + 1     # R cuenta desde 1"],
+        ["etiqueta", "    etiqueta <- bloque %/% lineas"],
+        ["si", "    if (etiquetas[indice] == etiqueta) {"],
+        ["acierto", "      aciertos <- aciertos + 1         # acierto: el bloque ya estaba"],
+        [null, "    } else {"],
+        ["fallo", "      fallos <- fallos + 1             # fallo: se carga el bloque"],
+        ["carga", "      etiquetas[indice] <- etiqueta"],
+        [null, "    }"],
+        [null, "  }"],
+        ["ret", "  c(aciertos, fallos)"],
+        [null, "}"],
+        [null, ""],
+        ["trazas", "trazas <- c(8, 9, 10, 12, 13, 40, 8, 9, 44, 8)"],
+        ["llamar", "res <- simular(trazas)"],
+        ["llamar", "aciertos <- res[1]; fallos <- res[2]"],
+        ["imp1", "print(c(aciertos, fallos))"],
+        ["tmedio", "tmedio <- 1 + fallos / length(trazas) * 100"],
+        ["imp2", "print(tmedio)"],
+        ["matriz", "filas <- numeric(0)"],
+        ["matriz", "columnas <- numeric(0)"],
+        ["matriz", "for (a in 0:7) {"],
+        ["matriz", "  for (b in 0:7) {"],
+        ["matriz", "    filas <- c(filas, 8 * a + b)"],
+        ["matriz", "    columnas <- c(columnas, 8 * b + a)"],
+        ["matriz", "  }"],
+        ["matriz", "}"],
+        ["imp3", "print(simular(filas)); print(simular(columnas))"],
+        ["verificar", "print(aciertos == 5 && fallos == 5)   # TRUE"]
+      ]
+    };
+    var TRAZA = [8, 9, 10, 12, 13, 40, 8, 9, 44, 8], LIN = 4, BL = 4;
+    var SALIDA = {
+      py: { imp1: "5 5", imp2: "51.0", imp3: "(48, 16) (0, 64)", verificar: "True" },
+      r: { imp1: "[1] 5 5", imp2: "[1] 51", imp3: "[1] 48 16 y [1]  0 64", verificar: "[1] TRUE" }
+    };
+
+    /* eventos: una foto del estado despues de ejecutar cada linea */
+    var EV = [];
+    (function () {
+      var tags = [-1, -1, -1, -1], ac = 0, fa = 0, res = [], fase = 1;
+      function foto(id, extra) {
+        EV.push(Object.assign({ id: id, fase: fase, tags: tags.slice(), ac: ac, fa: fa, res: res.slice(), i: null, dir: null, bloque: null, indice: null, etiqueta: null }, extra || {}));
+      }
+      foto("def");
+      foto("trazas");
+      foto("llamar");
+      foto("vacias"); foto("ac0"); foto("fa0");
+      fase = 2;
+      for (var k = 0; k < TRAZA.length; k++) {
+        var d = TRAZA[k], b = Math.floor(d / BL), ind = b % LIN, et = Math.floor(b / LIN), base = { i: k, dir: d };
+        foto("forx", base);
+        base.bloque = b; foto("bloque", base);
+        base.indice = ind; foto("indice", base);
+        base.etiqueta = et; foto("etiqueta", base);
+        var guarda = tags[ind], hit = guarda === et;
+        foto("si", Object.assign({}, base, { guarda: guarda, hit: hit }));
+        if (hit) { ac++; res.push("a"); foto("acierto", base); }
+        else { fa++; res.push("f"); foto("fallo", base); tags[ind] = et; foto("carga", Object.assign({}, base, { anterior: guarda })); }
+      }
+      foto("ret", { fin1: true });
+      fase = 3;
+      foto("llamar", { vuelta: true });
+      foto("imp1"); foto("tmedio"); foto("imp2");
+      fase = 4;
+      foto("matriz"); foto("imp3");
+      foto("verificar", { fin: true });
+    })();
+
+    function narrar(e, ctx) {
+      var py = ctx.lang() === "py", ix = ctx.ix, S = SALIDA[py ? "py" : "r"];
+      switch (e.id) {
+        case "def": return "Define la función <b>simular</b>. Todavía no la ejecuta: solo la deja lista. Recibe la lista de direcciones, el número de líneas (4) y los bytes por línea (4).";
+        case "trazas": return "La traza: <b>10 direcciones</b> en bytes, las que va a pedir la CPU. Los números son enteros porque una dirección es un entero.";
+        case "llamar": return e.vuelta
+          ? "La función termina y devuelve los dos contadores: <b>aciertos = " + e.ac + "</b> y <b>fallos = " + e.fa + "</b>."
+          : "Llama a la función con las 10 direcciones. El programa salta al interior de <b>simular</b>.";
+        case "vacias": return "Crea la caché: <b>4 etiquetas</b>, todas en -1. En este programa -1 significa que la línea está vacía.";
+        case "ac0": return "El contador de aciertos empieza en cero.";
+        case "fa0": return "El contador de fallos empieza en cero.";
+        case "forx": return "Toma la dirección número <b>" + (e.i + 1) + "</b> de la traza: <b>" + e.dir + "</b>.";
+        case "bloque": return "El bloque es la dirección entre los bytes por línea, sin decimales: " + e.dir + (py ? " // " : " %/% ") + "4 = <b>" + e.bloque + "</b>.";
+        case "indice": return py
+          ? "La línea de la caché: " + e.bloque + " % 4 = <b>" + e.indice + "</b>."
+          : "La línea de la caché: " + e.bloque + " %% 4 = " + e.indice + ", y se suma 1 porque R cuenta desde 1. Queda <b>" + ix(e.indice) + "</b>: es la línea " + e.indice + " de la caché.";
+        case "etiqueta": return "La etiqueta es lo que sobra al calcular la línea: " + e.bloque + (py ? " // " : " %/% ") + "4 = <b>" + e.etiqueta + "</b>.";
+        case "si": return "¿La línea " + e.indice + " guarda la etiqueta " + e.etiqueta + "? " + (e.guarda < 0 ? "Está vacía (-1)" : "Guarda la etiqueta " + e.guarda) + ": <b>" + (e.hit ? "sí" : "no") + "</b>.";
+        case "acierto": return "<b>Acierto</b>: el bloque " + e.bloque + " ya estaba. Aciertos: <b>" + e.ac + "</b>.";
+        case "fallo": return "<b>Fallo</b>: el bloque " + e.bloque + " no está. Fallos: <b>" + e.fa + "</b>.";
+        case "carga": return "Se carga el bloque: la línea " + e.indice + " ahora guarda la etiqueta <b>" + e.etiqueta + "</b>" + (e.anterior >= 0 ? " (sale el bloque de etiqueta " + e.anterior + ")." : ".");
+        case "ret": return "Fin del bucle: 10 direcciones recorridas, <b>" + e.ac + " aciertos y " + e.fa + " fallos</b>. La función los devuelve.";
+        case "imp1": return "Imprime los contadores. Salida real: <b>" + S.imp1 + "</b>. La cuenta a mano da lo mismo (mira la traza).";
+        case "tmedio": return "El tiempo medio del paso 6, con 1 ns de acierto y 100 ns de penalización: 1 + " + e.fa + " / 10 × 100 = <b>51</b> ns.";
+        case "imp2": return "Imprime el tiempo medio. Salida real: <b>" + S.imp2 + "</b>.";
+        case "matriz": return "Arma las dos listas de 64 direcciones de la imagen del paso 7: <b>filas</b> (0, 1, 2, ..., 63) y <b>columnas</b> (0, 8, 16, ..., 1, 9, ...). Los seis bucles se resumen en este paso.";
+        case "imp3": return "Llama a <b>simular</b> dos veces; cada una repite el mismo bucle 64 veces (aquí solo ves el resultado). Por filas: <b>48 aciertos y 16 fallos</b>. Por columnas: <b>0 aciertos y 64 fallos</b>. Salida real: <b>" + S.imp3 + "</b>.";
+        case "verificar": return "No hay una función de librería que simule una caché, así que se compara contra la <b>cuenta a mano</b> (5 aciertos y 5 fallos, la de la traza). Da <b>" + S.verificar + "</b>.";
+      }
+      return "";
+    }
+
+    function visual(e, anterior, ctx) {
+      var ix = ctx.ix, tags = e ? e.tags : [-1, -1, -1, -1], k, h = "";
+      for (k = 0; k < LIN; k++) {
+        var activo = !!e && e.fase === 2 && e.indice === k, t = tags[k];
+        h += '<div class="vr-lin' + (activo ? " on" : "") + (activo && e.id === "carga" ? " llega" : "") + '"><span class="n">línea ' + ix(k) + '</span><span class="t">' + (t < 0 ? "vacía" : "etiqueta " + t) + '</span><span class="b">' + (t < 0 ? "" : "bloque " + (t * LIN + k)) + "</span></div>";
+      }
+      $("vrCache").innerHTML = h;
+      var dir = "";
+      if (e && e.dir !== null && e.fase === 2) {
+        var bits = bin(e.dir, 8);
+        dir = '<div class="dirinfo">dirección ' + e.dir + (e.bloque !== null ? " · bloque " + e.bloque : "") + '</div><div class="dirbits">' +
+          '<div class="grp g-tag"><div class="bits">' + bits.slice(0, 4).split("").map(function (c) { return '<span class="bit">' + c + "</span>"; }).join("") + '</div><span class="gl">etiqueta</span><span class="gv">' + (e.etiqueta !== null ? e.etiqueta : "") + "</span></div>" +
+          '<div class="grp g-idx"><div class="bits">' + bits.slice(4, 6).split("").map(function (c) { return '<span class="bit">' + c + "</span>"; }).join("") + '</div><span class="gl">índice</span><span class="gv">' + (e.indice !== null ? ix(e.indice) : "") + "</span></div>" +
+          '<div class="grp g-off"><div class="bits">' + bits.slice(6).split("").map(function (c) { return '<span class="bit">' + c + "</span>"; }).join("") + '</div><span class="gl">offset</span><span class="gv">' + (e.dir % BL) + "</span></div></div>";
+      } else dir = '<p class="esc-vacio">Aquí se parte la dirección que se está procesando.</p>';
+      $("vrDir").innerHTML = dir;
+      $("vrTraza").innerHTML = TRAZA.map(function (d, i) {
+        var r = e ? e.res[i] : null;
+        return '<span class="' + (r || "") + (e && e.i === i && e.fase === 2 ? " on" : "") + '">' + d + "</span>";
+      }).join("");
+      var n = e ? e.ac + e.fa : 0, cu = "";
+      if (e && n) cu = "aciertos <b>" + e.ac + "</b> · fallos <b>" + e.fa + "</b>";
+      if (e && (e.id === "tmedio" || e.id === "imp2")) cu += " · tiempo medio = 1 + " + e.fa + " / 10 × 100 = <b>51 ns</b>";
+      if (e && e.fase === 3 && e.id === "imp2") cu = "tiempo medio = 1 + " + e.fa + " / 10 × 100 = <b>51 ns</b>";
+      $("vrCuenta").innerHTML = cu;
+      var bar = "";
+      if (e && (e.id === "imp3" || e.id === "verificar")) {
+        bar = '<div class="barra-fila"><span>por filas</span><span class="bar"><i class="c" style="width:75%"></i></span><b>48 de 64</b></div>' +
+          '<div class="barra-fila"><span>por columnas</span><span class="bar"><i class="c" style="width:0%"></i></span><b>0 de 64</b></div>' +
+          '<div class="cmp">Aciertos al recorrer la imagen 8 por 8 con la misma caché: 26 ns de tiempo medio por filas y 101 ns por columnas.</div>';
+      }
+      $("vrBarras").innerHTML = bar;
+    }
+
+    B.vidaReal($("vidareal"), {
+      codigo: CODIGO,
+      eventos: EV,
+      narrar: narrar,
+      vars: function (e, ctx) {
+        var v = [], ix = ctx.ix;
+        if (e && e.dir !== null && e.fase === 2) v.push('<span>direccion = <b>' + e.dir + "</b></span>");
+        if (e && e.bloque !== null) v.push('<span>bloque = <b>' + e.bloque + "</b></span>");
+        if (e && e.indice !== null) v.push('<span class="vk">indice = <b>' + ix(e.indice) + "</b></span>");
+        if (e && e.etiqueta !== null) v.push('<span class="vj">etiqueta = <b>' + e.etiqueta + "</b></span>");
+        v.push("<span>aciertos = <b>" + (e ? e.ac : 0) + "</b></span>");
+        v.push("<span>fallos = <b>" + (e ? e.fa : 0) + "</b></span>");
+        return v;
+      },
+      visual: visual,
+      demora: function (e) { return !e ? 600 : e.id === "forx" ? 700 : e.id === "carga" || e.id === "acierto" || e.id === "fallo" ? 800 : e.id === "si" ? 750 : e.id === "imp3" || e.id === "matriz" ? 1300 : 650; }
+    });
+
+    /* chequeo de prediccion y trampas reales */
+    B.numerico(cuerpo("vrPred"), {
+      pregunta: "Con la traza de 10 direcciones, ¿cuántas veces se va a ejecutar la línea que <b>carga</b> el bloque en la caché, <code>etiquetas[indice] = etiqueta</code>?",
+      respuesta: 5,
+      tolerancia: 0,
+      pistas: ["Esa línea solo se ejecuta cuando hay un fallo. ¿Cuántas direcciones fallan?", "Repasa la traza: 8 falla, 9 y 10 aciertan (misma línea de 8 a 11), 12 falla, 13 acierta, y así sigue."],
+      diagnostico: function (v) {
+        if (v === 10) return "Eso sería si fallaran todas. Pero 9, 10 y 13 caen en bloques que acaban de traerse.";
+        if (v === 4 || v === 6) return "Casi. Cuenta con calma: el 40 expulsa al 8, y por eso el 8 vuelve a fallar.";
+        return null;
+      },
+      explicacion: "Fallan el 8, el 12, el 40, el segundo 8 (porque el 40 le quitó su línea) y el 44: <b>5 fallos</b>, así que la carga se ejecuta 5 veces. Los otros 5 accesos son aciertos. Ahora dale a reproducir y mira el contador.",
+      alResolver: function (ok) { C.reto("codigo1", ok); }
+    });
+    prop("codigo2", {
+      pregunta: "En Python escribes <code>bloque = direccion / bytes_linea</code> (una barra) en vez de <code>//</code>. ¿Qué pasa?",
+      opciones: [
+        "Falla con un TypeError: la división da un número decimal y una lista no se puede indexar con decimales",
+        "Funciona igual: Python redondea solo",
+        "Da resultados distintos sin avisar, porque Python trunca el decimal",
+        "Falla solo con la primera dirección, la 8"
+      ],
+      correcta: 0,
+      pistas: [null, "En Python 3, / siempre devuelve un decimal, aunque la división sea exacta (8 / 4 es 2.0).", "Una lista no acepta índices decimales: no los trunca, lanza un error.", "El error aparece en la primera línea que usa el índice, y se repite en todas."],
+      explicacion: "En Python 3 <code>/</code> siempre da un decimal (8 / 4 = 2.0), y <code>etiquetas[2.0]</code> lanza <code>TypeError: list indices must be integers or slices, not float</code>. Por eso se usa <code>//</code>. En R el mismo cambio (<code>/</code> en vez de <code>%/%</code>) no da error: R acepta un índice decimal y lo trunca, y en esta traza sale lo mismo por casualidad. No te fíes de eso."
+    });
+    prop("codigo3", {
+      pregunta: "Pasas el programa de Python a R pero te olvidas del <code>+ 1</code> en <code>indice &lt;- bloque %% lineas</code>. ¿Qué pasa cuando el bloque cae en la línea 0?",
+      opciones: [
+        "Error: etiquetas[0] en R es un vector vacío y la comparación del if no tiene valor",
+        "Funciona: R toma el 0 como la primera línea",
+        "Toma la última línea, como hace Python con el índice -1",
+        "Devuelve NA y sigue sin avisar"
+      ],
+      correcta: 0,
+      pistas: [null, "En R los vectores empiezan en 1: el índice 0 no es la primera posición.", "Eso es lo que hace Python con índices negativos. R se porta distinto con el 0.", "NA aparece al pasarse del final, no con el 0."],
+      explicacion: "En R, <code>etiquetas[0]</code> devuelve un vector vacío (<code>numeric(0)</code>), la comparación da un vector vacío y el <code>if</code> falla con <code>argument is of length zero</code>. En la traza del programa el error no sale porque ningún bloque cae en la línea 0 (los bloques son 2, 3, 10 y 11), pero con la dirección 0 sí. En Python pasa lo contrario: sumar 1 por costumbre da un <code>IndexError</code> con el bloque que cae en la línea 3."
+    });
+  })();
+
+  /* ---------------- tarjetas ---------------- */
+  B.tarjetas($("tarjetas"), [
+    ["¿Qué es un <b>acierto</b> y qué es un <b>fallo</b>?", "Acierto: el dato pedido ya está en la caché. Fallo: no está, se trae de la memoria y se copia a la caché."],
+    ["¿Qué son la localidad <b>temporal</b> y la <b>espacial</b>?", "Temporal: lo usado hace poco se vuelve a usar. Espacial: tras un byte se usa el siguiente. Por eso la caché guarda líneas enteras."],
+    ["¿Cómo se parte una dirección en la caché?", "De derecha a izquierda: offset (qué byte de la línea), índice (qué línea o conjunto) y etiqueta (qué bloque es)."],
+    ["¿Para qué sirve la <b>etiqueta</b> si ya hay un índice?", "Muchos bloques comparten el mismo índice. La etiqueta guardada dice cuál de ellos ocupa la línea ahora."],
+    ["¿En qué se diferencian directa, por conjuntos y asociativa?", "Directa: el bloque tiene una sola línea posible. Por conjuntos: cualquier línea de su conjunto de N vías. Asociativa: cualquier línea de la caché."],
+    ["¿Qué hacen <b>LRU</b> y <b>FIFO</b>?", "LRU expulsa la línea que lleva más tiempo sin usarse. FIFO, la que entró primero. La directa no necesita política."],
+    ["¿Cómo se calcula el tiempo medio de acceso?", "$t_{\\text{medio}} = t_{\\text{acierto}} + p_{\\text{fallo}} \\times t_{\\text{penalización}}$. El acierto se paga siempre."],
+    ["¿Por qué recorrer una matriz por columnas puede ser mucho más lento?", "Si se guarda por filas, saltar de columna en columna rompe la localidad espacial: cada acceso cae en una línea nueva y los fallos se disparan."]
+  ]);
+
+  /* ---------------- conexiones ---------------- */
+  B.conexiones("memoria-cache");
+})();
+</script>
+</body>
+</html>

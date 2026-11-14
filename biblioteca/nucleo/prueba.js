@@ -62,7 +62,7 @@
   if (!out.tarjetas) out.avisos.push("sin tarjetas de memoria");
   // 8. voseo
   var t = document.body.innerText;
-  var ok = new Set("qué está más así sí después revés ahí esté además inglés irá demás estás aquí allí allá cuál quién cómo dónde también según tú él mí dé jamás atrás detrás sé través interés café cafés compás estés verás seguirá llegará tendrá té tés comité encontrará elegirá porqué bufé país raíz aún será habrás dibujé tracé corrí hará dirá acercará podrás necesitará vendrá comités valdrá marqué tendrás aparecerá habrá".split(" "));
+  var ok = new Set("qué está más así sí después revés ahí esté además inglés irá demás estás aquí allí allá cuál quién cómo dónde también según tú él mí dé jamás atrás detrás sé través interés café cafés compás estés verás seguirá llegará tendrá té tés comité encontrará elegirá porqué bufé país raíz aún será habrá caché estará cachés tomará entrenará abrirá pasará comprobé ejecuté verá estudiará mostrará añadí preguntará razoné quizá verifiqué instalés dibujé tracé corrí hará dirá acercará podrás necesitará vendrá comités valdrá marqué tendrás aparecerá habrá".split(" "));
   var raros = [...new Set((t.match(/[A-Za-zñ]+(?:á|é|í)s?(?![a-záéíóúñ])/g) || []).filter(function (w) { return !ok.has(w.toLowerCase()); }))];
   var rio = t.match(/\b(acá|vos|dar vuelta|darlas vuelta|fijate|pensalo|agarr[aá])\b/gi) || [];
   if (raros.length) out.avisos.push("posible voseo: " + raros.slice(0, 12).join(", "));

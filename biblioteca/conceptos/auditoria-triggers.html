@@ -1,0 +1,1547 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Auditoría con triggers</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.esc-head .hint { font-size: 12.5px; color: var(--ink-2); }
+.esc-head button { margin-left: auto; font-size: 12px; padding: 5px 10px; }
+.rolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 2px 0 10px; }
+.rolbar .seg button { font-family: var(--f-mono); font-size: 12px; padding: 5px 9px; }
+.esc-tit { display: flex; align-items: baseline; gap: 8px; margin: 12px 0 4px; }
+.esc-tit small { font-family: var(--f-mono); font-size: 11.5px; color: var(--ink-3); }
+
+/* ---------- tablas del escenario ---------- */
+.tabla { width: 100%; border-collapse: collapse; font-family: var(--f-mono); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.tabla th { font-weight: 500; color: var(--ink-3); font-size: 10.5px; text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.tabla td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--line-soft); color: var(--ink-2); vertical-align: top; }
+.tabla td.n, .tabla th.n { text-align: right; white-space: nowrap; }
+.tabla.bd tbody tr { cursor: pointer; }
+.tabla.bd tbody tr:hover td { background: var(--surface-2); }
+.tabla.bd tbody tr.sel td { background: var(--accent-soft); color: var(--ink); }
+.tabla.bd tbody tr:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.tabla td.cambio { animation: parpadeo .6s ease; color: var(--ink); font-weight: 600; }
+.tabla td.vacio-fila { text-align: center; color: var(--ink-3); font-style: italic; padding: 10px; }
+.tabla .antes { color: var(--neg); }
+.tabla .despues { color: var(--pos); }
+.tabla .nulo { color: var(--ink-3); font-style: italic; }
+.tabla td.cambio-col { min-width: 150px; }
+.scroll-aud { max-height: 230px; overflow: auto; }
+.nohay { padding: 14px; text-align: center; color: var(--ink-3); font-size: 13px; border: 1px dashed var(--line); border-radius: 8px; }
+.acciones { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 6px; }
+.acciones button { font-size: 12.5px; padding: 5px 10px; }
+.sqlline { font-family: var(--f-mono); font-size: 12px; color: var(--ink-2); min-height: 2.8em; overflow-wrap: anywhere; word-break: break-word; margin-top: 6px; }
+.sqlline .res { display: block; margin-top: 2px; color: var(--pos); }
+.sqlline .res.err { color: var(--bad); }
+.json2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
+.json2 h4 { margin: 0 0 3px; font-family: var(--f-mono); font-size: 11px; font-weight: 500; color: var(--ink-3); }
+.json2 pre { margin: 0; padding: 7px 8px; background: var(--surface-2); border-radius: 8px; font: 11px/1.55 var(--f-mono); white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink-2); }
+.json2 .dif { background: var(--accent-soft); color: var(--ink); border-radius: 3px; }
+.json2 .nul { color: var(--ink-3); font-style: italic; }
+@media (max-width: 520px) { .json2 { grid-template-columns: minmax(0, 1fr); } }
+.cod-bloque { margin-top: 14px; }
+.chips-col { display: flex; flex-wrap: wrap; gap: 5px; margin: 8px 0; }
+.chips-col button { font-family: var(--f-mono); font-size: 11px; padding: 3px 8px; }
+.codpg { margin: 0; font: 11.5px/1.65 var(--f-mono); background: var(--surface-2); border-radius: 8px; padding: 10px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 330px; overflow: auto; color: var(--ink-2); }
+.codpg .t.on { background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent); color: var(--ink); border-radius: 3px; }
+.cod-expl { font-size: 13px; color: var(--ink-2); min-height: 3.2em; margin-top: 8px; }
+.cod-expl b { color: var(--ink); font-weight: 500; }
+.permiso td, .permiso th { font-family: var(--f-mono); font-size: 12px; padding: 4px 9px; border: 1px solid var(--line); text-align: center; }
+.permiso th { color: var(--ink-3); font-weight: 500; }
+.permiso td.si { color: var(--ok); }
+.permiso td.no { color: var(--ink-3); }
+.vivo-linea { font-family: var(--f-mono); font-size: 13px; color: var(--ink-2); margin-top: 6px; }
+.vivo-linea b { color: var(--ink); font-weight: 500; }
+
+/* ---------- retos propios ---------- */
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+pre.sentencia { margin: 10px 0; padding: 10px 12px; background: var(--surface-2); border-radius: 8px; font: 13px/1.5 var(--f-mono); white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); }
+.ojo-opts { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
+.ojo-opts .opt { text-align: center; }
+.objetivos { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.objetivos li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.objetivos .m { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.objetivos li.hecho { color: var(--ink); }
+.objetivos li.hecho .m { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 3px var(--surface); }
+.mini-bd { margin-top: 6px; }
+
+/* ---------- vida real ---------- */
+.vr-mini { width: 100%; border-collapse: collapse; font-family: var(--f-mono); font-size: 12px; font-variant-numeric: tabular-nums; }
+.vr-mini th { font-weight: 500; color: var(--ink-3); font-size: 11px; text-align: left; padding: 3px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.vr-mini td { padding: 3px 8px; border-bottom: 1px solid var(--line-soft); color: var(--ink-2); white-space: nowrap; }
+.vr-mini td.n, .vr-mini th.n { text-align: right; }
+.vr-mini td.cambio { animation: parpadeo .6s ease; color: var(--ink); font-weight: 600; }
+.vr-mini tr.llega td { animation: parpadeo .6s ease; color: var(--ink); }
+.vr-mini td.vacio { color: var(--ink-3); font-style: italic; text-align: center; }
+.estado-trig { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }
+.estado-trig span { font-family: var(--f-mono); font-size: 11.5px; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink-3); }
+.estado-trig span.on { color: var(--ink); border-color: var(--accent); background: var(--accent-soft); }
+.estado-trig span.ok { color: var(--ok); border-color: var(--ok); }
+pre.salida { margin: 6px 0 0; padding: 8px 10px; background: var(--surface-2); border-radius: 8px; font: 12px/1.5 var(--f-mono); white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink-2); min-height: 2.2em; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ Auditoría con triggers</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Infraestructura y programación · Transacciones, seguridad y datos para IA · UD6 (Base de datos, SM142051)</p>
+    <h1>Auditoría con triggers: quién cambió qué, sin que nadie lo pida</h1>
+    <p class="lede">
+      Un <b>trigger</b> es un disparador: código que la base de datos ejecuta sola cuando alguien cambia una tabla.
+      Lo vas a usar para llenar una segunda tabla con <b>una fila por cada cambio</b>: qué se tocó, el antes, el después y con qué rol.
+      Y vas a ver por qué ese registro solo vale si nadie puede borrarlo.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> En la tienda en línea alguien dejó el precio de un teclado en 0.01 y nadie sabe quién fue. Si tuvieras que diseñar un registro que permitiera averiguarlo, ¿qué anotarías en cada cambio y quién tendría que anotarlo? Escríbelo como te salga, aunque esté mal.</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: cada vez que alguien cambie algo, guardaría..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>Construir un registro de auditoría</h2>
+      <p>Siete pasos. Cada uno termina con un chequeo: hasta que no lo resuelves, el siguiente queda cerrado y los botones del escenario que revelarían la respuesta siguen apagados. Equivocarte aquí no resta nada.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="Sin memoria">
+          <span class="etapa">Paso 1</span>
+          <h3>Una tabla que solo conoce el presente</h3>
+          <p>A la derecha está la tabla <b>productos</b> de la tienda en línea. Durante el día varias personas y programas la modifican. Mañana el director preguntará: «¿quién cambió el precio del teclado, cuándo, y cuánto valía antes?».</p>
+          <p>Auditar es justo contestar eso: registrar de forma sistemática quién hizo cada operación relevante, sobre qué datos y cuándo
+            <cite class="cita" data-fuente="bd6" data-pag="14" data-pimp="11" data-seccion="5.1 Qué es auditar y por qué es necesario" data-que="La definición de auditar (quién, sobre qué datos, cuándo) y la advertencia de que ni los roles ni el cifrado impiden por completo el mal uso de quien tiene privilegios." data-cuando="Al terminar este paso"></cite>
+            <cite class="cita" data-fuente="bd6diapo" data-pag="31" data-seccion="Auditoría: qué es auditar y por qué es necesario" data-que="La definición en una diapositiva, con la idea clave: no previene el mal uso, lo hace detectable e investigable." data-cuando="Al terminar este paso"></cite>.
+            Antes de tocar nada, piensa qué podría contestar la tabla por sí sola.</p>
+          <div class="check" id="chk1"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="El registro">
+          <span class="etapa">Paso 2</span>
+          <h3>Una segunda tabla y un disparador</h3>
+          <p>La solución es una segunda tabla, <b>auditoria</b>, donde cada cambio entra como una fila nueva. Pero si dependiera de que cada programa se acuerde de anotar, tarde o temprano alguien se olvidaría.</p>
+          <p>Por eso lo hace el propio motor: un <b>trigger</b> (disparador) es código que la base de datos ejecuta sola cuando ocurre un evento en una tabla. Aquí el evento es «después de cada UPDATE sobre productos». El programa que cambia el precio no sabe que el trigger existe
+            <cite class="cita" data-fuente="bd6" data-pag="15" data-pimp="12" data-seccion="5.2 Registro de auditoría: tablas y triggers" data-que="La idea de combinar una tabla de auditoría con triggers que se ejecutan automáticamente ante INSERT, UPDATE o DELETE y escriben qué tabla, qué operación, qué usuario y los valores anterior y posterior." data-cuando="Al terminar este paso"></cite>.</p>
+          <p>En el escenario ya apareció <b>auditoria</b> con tres columnas: qué operación fue, a qué producto se refiere (<code>id_registro</code>) y cuándo se registró.</p>
+          <div class="check" id="chk2"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Antes y después">
+          <span class="etapa">Paso 3</span>
+          <h3>Guardar cómo era la fila y cómo quedó</h3>
+          <p>«Alguien cambió el producto 101» sirve de poco. Lo útil es guardar la fila <b>antes</b> y la fila <b>después</b>. El trigger tiene a mano las dos versiones, con dos nombres que son parte del lenguaje de los triggers:</p>
+          <div class="fbloque">
+            <div data-tex="\text{OLD} = \text{la fila antes del cambio} \qquad \text{NEW} = \text{la fila después del cambio}" data-display></div>
+          </div>
+          <p>Se guardan en dos columnas, <code>datos_previos</code> (OLD) y <code>datos_nuevos</code> (NEW), como JSON. Ahora el trigger escucha las tres operaciones: INSERT, UPDATE y DELETE. Toca una fila de <b>auditoria</b> para ver sus dos JSON, con lo que cambió resaltado.</p>
+          <div class="check" id="chk3"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Una por fila">
+          <span class="etapa">Paso 4</span>
+          <h3>El trigger corre una vez por cada fila</h3>
+          <p>Un solo UPDATE puede cambiar muchas filas a la vez: «bajar 5 euros todos los periféricos». El trigger del material se declara <b>FOR EACH ROW</b>: se dispara <b>una vez por cada fila afectada</b>, no una vez por sentencia.</p>
+          <div class="fbloque">
+            <div data-tex="\text{filas nuevas en auditoria} = \text{filas afectadas por la sentencia}" data-display></div>
+            <div class="vivo" id="vivoFilas"></div>
+          </div>
+          <p>Eso incluye un caso borde: si el UPDATE no encuentra ninguna fila, el trigger no se dispara nunca y no queda nada anotado.</p>
+          <details class="profundizar">
+            <summary>Una trampa: el UPDATE que no cambia nada</summary>
+            <div>
+              <p>El trigger de la Figura 7 no compara OLD con NEW. Si ejecutas <code>UPDATE productos SET stock = stock WHERE id_producto = 101</code>, la fila queda igual, pero el UPDATE sí la tocó y el trigger se dispara: auditoria recibe una fila con el antes idéntico al después. Lo comprobé con SQLite (da una fila) y lo razoné para PostgreSQL, donde un trigger por fila se dispara por cada fila que la sentencia procesa; el material no lo menciona.</p>
+            </div>
+          </details>
+          <div class="check" id="chk4"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Quién">
+          <span class="etapa">Paso 5</span>
+          <h3>Atar cada cambio a un rol</h3>
+          <p>La columna <code>usuario_bd</code> guarda <code>current_user</code>: el rol de base de datos con el que se conectó quien hizo la operación. Por eso el material pide que <b>cada aplicación se conecte con su propio rol</b>: una auditoría que solo dice «lo hizo alguna aplicación» vale mucho menos que una que dice qué rol fue
+            <cite class="cita" data-fuente="bd6" data-pag="16" data-pimp="13" data-seccion="5.2 Registro de auditoría: tablas y triggers" data-que="El párrafo bajo la Figura 7 sobre current_user: ata el evento al rol y justifica un rol propio por aplicación." data-cuando="Al terminar este paso"></cite>.</p>
+          <p>Los tres roles de la tienda y lo que pueden hacer sobre <b>productos</b>, tal como los resume la Tabla 1 de la unidad
+            <cite class="cita" data-fuente="bd6" data-pag="5" data-pimp="2" data-seccion="Esquema de referencia, Tabla 1" data-que="La matriz de permisos por rol sobre clientes, productos, pedidos y la tabla nueva auditoria." data-cuando="Después de resolver el chequeo"></cite>:</p>
+          <table class="tabla permiso" aria-label="Permisos por rol sobre productos">
+            <thead><tr><th>rol</th><th>SELECT</th><th>INSERT</th><th>UPDATE</th><th>DELETE</th></tr></thead>
+            <tbody>
+              <tr><th>admin_bd</th><td class="si">sí</td><td class="si">sí</td><td class="si">sí</td><td class="si">sí</td></tr>
+              <tr><th>app_backend</th><td class="si">sí</td><td class="no">no</td><td class="si">sí</td><td class="no">no</td></tr>
+              <tr><th>analista_ventas</th><td class="si">sí</td><td class="no">no</td><td class="no">no</td><td class="no">no</td></tr>
+            </tbody>
+          </table>
+          <p>Ojo: la Figura 1 de la misma unidad concede cosas distintas (incluso retira UPDATE a app_backend), así que esta tabla sigue la Tabla 1, que es la que describe los tres roles. Elige un rol en el escenario y haz cambios: la columna <code>usuario_bd</code> ahora se llena.</p>
+          <div class="check" id="chk5"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+
+          <div class="destacado" id="destacado">
+            <p class="dest-tit">Una confusión muy común</p>
+            <h4>Si todo queda anotado, ¿nadie puede hacer un cambio malo?</h4>
+            <p>La auditoría <b>no previene</b> el mal uso de quien ya tiene permisos legítimos: lo hace <b>detectable e investigable después</b>. Quien puede hacer UPDATE puede hacerlo, bien o mal. Lo único que cambia es que ya no es anónimo
+              <cite class="cita" data-fuente="bd6diapo" data-pag="31" data-seccion="Auditoría: qué es auditar y por qué es necesario" data-que="La frase central: no previene el mal uso de quien tiene privilegios legítimos, lo hace detectable e investigable a posteriori." data-cuando="Después de resolver la predicción"></cite>.</p>
+            <div class="check" id="chk5b"><p class="check-tit">Predice antes de tocar el botón</p><div class="cuerpo"></div></div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Proteger">
+          <span class="etapa">Paso 6</span>
+          <h3>Un registro que se puede borrar no prueba nada</h3>
+          <p>Hay un botón peligroso en el escenario: «Borrar todo de auditoria». Según la Tabla 1, <b>app_backend</b> solo tiene INSERT en esa tabla (el trigger necesita insertar). Pero el material avisa de que si alguien con privilegios puede modificar o borrar sus propias entradas, el registro deja de ser evidencia
+            <cite class="cita" data-fuente="bd6" data-pag="16" data-pimp="13" data-seccion="5.3 Consulta, retención y protección del propio registro" data-que="Las tres medidas: quitar modificación y borrado a las cuentas operativas, una política de retención y replicar el registro a un sistema externo de solo escritura." data-cuando="Al terminar este paso"></cite>
+            <cite class="cita" data-fuente="bd6diapo" data-pag="33" data-seccion="Auditoría: consulta, retención y protección del registro" data-que="Las mismas tres medidas en tres cajas: rol distinto, retención y réplica externa de solo escritura." data-cuando="Al terminar este paso"></cite>.</p>
+          <p>En SQL esos privilegios se conceden con <b>GRANT</b> y se retiran con <b>REVOKE</b>
+            <cite class="cita" data-fuente="bd6" data-pag="9" data-pimp="6" data-seccion="2.1 GRANT y REVOKE: el modelo de privilegios de SQL" data-que="Los privilegios SELECT, INSERT, UPDATE y DELETE y la Figura 1 con GRANT y REVOKE." data-cuando="Si el GRANT del escenario te resulta nuevo"></cite>.
+            En el escenario puedes cometer el error de conceder DELETE y también retirarlo.</p>
+          <div class="check" id="chk6"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+          <details class="profundizar">
+            <summary>¿Y quien administra la base de datos?</summary>
+            <div>
+              <p>Según la Tabla 1, <b>admin_bd</b> tiene todos los privilegios, también sobre auditoria. Quitar DELETE a las cuentas operativas protege contra la aplicación, no contra quien tiene el control de todo. Para eso existen las otras dos medidas del material: la política de retención y la <b>réplica a un sistema externo de solo escritura</b>, que conserva la evidencia aunque la tabla original se borre.</p>
+            </div>
+          </details>
+        </section>
+
+        <section class="paso card" data-titulo="El código">
+          <span class="etapa">Paso 7</span>
+          <h3>La Figura 7: el trigger de verdad</h3>
+          <p>Lo que has estado usando es este código de la unidad, escrito para PostgreSQL (lenguaje <b>plpgsql</b>). Aquí <b>no se ejecuta</b>: no hay PostgreSQL en la biblioteca. En la parte 2 verás un equivalente real con SQLite. Toca cada columna de <b>auditoria</b> en el escenario para ver qué parte del código la llena
+            <cite class="cita" data-fuente="bd6" data-pag="15" data-pimp="12" data-seccion="Figura 7: Tabla de auditoría y trigger sobre productos" data-que="El CREATE TABLE auditoria, la función fn_auditar_productos() en plpgsql y el CREATE TRIGGER. Ojo: la primera línea del CREATE TABLE está comentada (errata)." data-cuando="Al terminar este paso"></cite>
+            <cite class="cita" data-fuente="bd6" data-pag="16" data-pimp="13" data-seccion="Figura 7 (continuación)" data-que="El CREATE TRIGGER con AFTER INSERT OR UPDATE OR DELETE, FOR EACH ROW y EXECUTE FUNCTION." data-cuando="Al terminar este paso"></cite>
+            <cite class="cita" data-fuente="bd6diapo" data-pag="32" data-seccion="Auditoría: registro de auditoría, tablas y triggers" data-que="Todo el código en una sola diapositiva, sin la línea comentada (omite los NOT NULL)." data-cuando="Para comparar con la Figura 7"></cite>.</p>
+          <p><b>Dos erratas del material.</b> En la Figura 7 la primera línea del CREATE TABLE está comentada (<code>-- CREATE TABLE auditoria (</code>): si copias el código tal cual, el resto queda como sintaxis suelta. La diapositiva 32 sí lo trae bien. En el escenario está corregida. Y la tabla de roles da INSERT sobre auditoria a app_backend, pero ningún GRANT del material lo concede.</p>
+          <div class="cita" id="citaHipo" hidden></div>
+          <div class="check" id="chk7"><p class="check-tit">Antes de seguir</p><div class="cuerpo"></div></div>
+          <details class="profundizar">
+            <summary>¿Por qué <code>RETURN NEW</code> si es un trigger AFTER?</summary>
+            <div>
+              <p>En un trigger por fila que corre <b>después</b> del cambio, PostgreSQL ignora el valor que devuelve la función; el <code>RETURN NEW</code> de la Figura 7 es por costumbre y, en un DELETE, devuelve NULL sin que importe. Es un dato de la documentación de PostgreSQL, no del material de la unidad.</p>
+            </div>
+          </details>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+          <button type="button" class="ghost" id="btnRestaurar">Reiniciar tablas</button>
+        </div>
+        <div class="rolbar" id="rolBar" hidden>
+          <span class="seg-lab">Conectado como</span>
+          <div class="seg" id="rolSeg" role="group" aria-label="Rol de conexión"></div>
+        </div>
+        <div class="esc-tit"><h3 class="mini-tit">productos</h3><small id="prodN"></small></div>
+        <div class="tabla-wrap"><table class="tabla bd" id="tProd" aria-label="Tabla productos"></table></div>
+        <div class="acciones" id="acciones"></div>
+        <div class="sqlline" id="sqlLinea" aria-live="polite"></div>
+        <div id="audBloque">
+          <div class="esc-tit"><h3 class="mini-tit">auditoria</h3><small id="audN"></small></div>
+          <div class="tabla-wrap scroll-aud"><table class="tabla bd" id="tAud" aria-label="Tabla auditoria"></table></div>
+          <div class="json2" id="audDetalle"></div>
+        </div>
+        <div class="cod-bloque" id="codBloque" hidden>
+          <h3 class="mini-tit">Figura 7 (PostgreSQL, no ejecutado)</h3>
+          <div class="chips-col" id="codChips"></div>
+          <pre class="codpg" id="codPg" tabindex="0"></pre>
+          <div class="cod-expl" id="codExpl" aria-live="polite"></div>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>El mismo registro, hecho de verdad. En Python con <b>sqlite3</b>: un trigger <code>AFTER UPDATE</code> que el motor dispara solo. En R no hay triggers ni SQLite en esta máquina, así que se <b>simula</b> con una función que compara el antes y el después, y tú tienes que llamarla. Dale a reproducir y mira cómo el código solo hace UPDATE y auditoria se llena sola.</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir</p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="true">Python</button>
+            <button type="button" data-lang="r" aria-pressed="false">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">1 · armar</span><span data-f="2">2 · cambiar</span><span data-f="3">3 · proteger y comprobar</span>
+        </div>
+        <div class="estado-trig" id="vrEstado"></div>
+        <h3 class="mini-tit vr-tit">productos</h3>
+        <div class="tabla-wrap"><table class="vr-mini" id="vrProd"></table></div>
+        <h3 class="mini-tit vr-tit" style="margin-top:12px">auditoria</h3>
+        <div class="tabla-wrap"><table class="vr-mini" id="vrAud"></table></div>
+        <div class="vr-cuenta" id="vrCuenta"></div>
+        <h3 class="mini-tit vr-tit">Lo que imprime el programa</h3>
+        <pre class="salida" id="vrSalida"></pre>
+      </div>
+    </div>
+
+    <p class="vr-nota">No hay una función de librería que «audite» por ti, así que aquí el programa se comprueba a sí mismo: el último valor auditado de cada producto tiene que ser el que hay hoy en la tabla (la última línea imprime <code>True</code> en Python y <code>TRUE</code> en R). Los triggers de SQLite no son los de PostgreSQL: no tiene <code>current_user</code> (por eso se registra <code>usuario_actual</code> con <code>create_function</code>) ni <code>plpgsql</code>, y solo existe <code>FOR EACH ROW</code>. El trigger <code>BEFORE DELETE</code> con <code>RAISE(ABORT, ...)</code> hace en SQLite lo que en PostgreSQL haría un <code>REVOKE</code>, porque SQLite no tiene privilegios por rol. Nada de esto viene en el material de la unidad, que solo muestra la versión de PostgreSQL
+      <cite class="cita" data-fuente="bdpf" data-pag="3" data-pimp="2" data-seccion="Enunciado: mínimos del proyecto" data-que="El sexto mínimo del proyecto final: roles con mínimo privilegio, cifrado justificado, auditoría (tabla + trigger) y plan de backup." data-cuando="Cuando prepares el proyecto final"></cite>.</p>
+
+    <details class="profundizar">
+      <summary>¿Y si el trigger falla, o la transacción se revierte?</summary>
+      <div>
+        <p>El trigger corre <b>dentro de la misma sentencia</b>. Lo comprobé con SQLite: si el trigger falla (por ejemplo porque <code>usuario_actual</code> no está registrada, error <code>no such function: usuario_actual</code>), el UPDATE entero se deshace y el precio no cambia. Y si abres una transacción, haces el UPDATE (auditoria muestra 1 fila) y haces ROLLBACK, auditoria vuelve a 0 filas: el registro se deshace junto con el cambio. Es lo que se espera de una transacción
+          <cite class="cita" data-fuente="bd5" data-pag="7" data-pimp="5" data-seccion="6. Conexiones y transacciones, Tabla 4" data-que="Qué es una transacción (atómica, ACID), commit y rollback, con el ejemplo de la transferencia entre cuentas." data-cuando="Si la palabra ROLLBACK te resulta nueva"></cite>;
+          el material de la unidad 6 no lo dice de la auditoría.</p>
+      </div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Falta una función en SQLite</h3><span class="estado" data-reto="codigo2"></span></div>
+        <div id="codigo2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>En R nadie dispara nada solo</h3><span class="estado" data-reto="codigo3"></span></div>
+        <div id="codigo3"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: la biblioteca te avisa en el índice cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>¿Cuántas filas deja en auditoria?</h3><span class="estado" data-reto="ojo"></span></div>
+        <p class="desc">Una sentencia sobre la tabla productos original, con el trigger de INSERT, UPDATE y DELETE por fila. Decide sin calcular mucho cuántas filas nuevas aparecen en auditoria. Apruebas con 4 de 5.</p>
+        <div id="ojo"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Construir</span><h3>Arma un registro con tres rasgos</h3><span class="estado" data-reto="construir"></span></div>
+        <p class="desc">Usa las sentencias hasta cumplir cada objetivo. Los permisos son los de la Tabla 1: ojo con qué rol puede hacer qué. Se marcan solos.</p>
+        <div id="construirBox" class="mini-bd"></div>
+        <ul class="objetivos" id="objetivos"></ul>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>Cuánto sumó la auditoría</h3><span class="estado" data-reto="mano"></span></div>
+        <p class="desc">Con papel. Los precios son los de la tabla original: 79.90, 349.00, 29.90, 89.50, 39.90 y 129.00.</p>
+        <div id="mano"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Alguien razonó mal</h3><span class="estado" data-reto="error"></span></div>
+        <p class="desc">Una de las líneas tiene un error. Tócala.</p>
+        <div id="error"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Qué dispara el trigger</h3><span class="estado" data-reto="prop1"></span></div>
+        <div id="prop1"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Una cuenta compartida</h3><span class="estado" data-reto="prop2"></span></div>
+        <div id="prop2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Proteger la evidencia</h3><span class="estado" data-reto="prop3"></span></div>
+        <div id="prop3"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Un UPDATE que no encuentra nada</h3><span class="estado" data-reto="prop4"></span></div>
+        <div id="prop4"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Recordar a la fuerza es lo que fija. Arma la sentencia del trigger de memoria y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Sentencia de memoria</span><h3>Arma el CREATE TRIGGER pieza por pieza</h3><span class="estado" data-reto="formula"></span></div>
+        <p class="desc">Hay piezas de más que no pertenecen. No mires arriba.</p>
+        <div id="formula"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el material</h2>
+      <p class="lecturas-intro">Ya construiste la idea con las manos. Ahora ve a la versión técnica y comprueba que la reconoces. Cada entrada dice qué vas a encontrar y en qué momento conviene leerla. Si abres la biblioteca con doble clic, el enlace abre el PDF en esa página.</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> Los productos son los seis de la tienda en línea del ejercicio de la UD2; los cambios, las horas y los roles de los ejemplos son inventados aquí para que las cuentas sean limpias. Los mensajes de permiso denegado son los de PostgreSQL, razonados y no ejecutados. Tu progreso se guarda solo en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+/*
+  EJEMPLOS COMUNES DE LA RUTA "Bases de datos" (los reutilizan las demas paginas de la ruta):
+  La tienda en linea del ejercicio de la UD2 (bd2ej PDF 3, Codigo 1 y 2). Esquema:
+    clientes(id_cliente PK, nombre, email, ciudad, fecha_alta)
+    productos(id_producto PK, nombre, categoria, precio, stock)
+    pedidos(id_pedido PK, id_cliente FK, fecha_pedido, estado)
+    lineas_pedido(id_pedido, id_producto, cantidad, precio_unitario; PK (id_pedido, id_producto))
+  productos (los de esta pagina):
+    (101, 'Teclado mecánico', 'Periféricos', 79.90, 120)   (102, 'Monitor 27" 4K', 'Monitores', 349.00, 45)
+    (103, 'Ratón inalámbrico', 'Periféricos', 29.90, 200)  (104, 'Disco SSD 1TB', 'Almacenamiento', 89.50, 80)
+    (105, 'Webcam HD', 'Periféricos', 39.90, 60)           (106, 'Router Wi-Fi 6', 'Redes', 129.00, 30)
+  Roles de la UD6 (bd6 Tabla 1): admin_bd (todos), analista_ventas (SELECT), app_backend (SELECT, UPDATE en productos; INSERT en auditoria).
+  Python: sqlite3 con ":memory:" (SQLite 3.45.3 en esta maquina). R: sin RSQLite ni sqldf; usa data.frame y bucles.
+*/
+(function () {
+  "use strict";
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var RETOS = ["ojo", "construir", "mano", "error", "formula", "prop1", "prop2", "prop3", "prop4", "codigo1", "codigo2", "codigo3"];
+  var C = B.concepto({ id: "auditoria-triggers", retos: RETOS, pasos: 7 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+  function copiaFila(r) { return r ? Object.assign({}, r) : null; }
+  function r2(v) { return Math.round(v * 100) / 100; }
+  function f2(v) { return B.fmt(v, 2); }
+  function pad(n) { return (n < 10 ? "0" : "") + n; }
+  function T(s) { return "\\text{" + s.replace(/_/g, "\\_") + "}"; }
+
+  /* ---------------- el motor de juguete: productos, auditoria, roles ---------------- */
+  var INICIAL = [
+    { id_producto: 101, nombre: "Teclado mecánico", categoria: "Periféricos", precio: 79.90, stock: 120 },
+    { id_producto: 102, nombre: 'Monitor 27" 4K', categoria: "Monitores", precio: 349.00, stock: 45 },
+    { id_producto: 103, nombre: "Ratón inalámbrico", categoria: "Periféricos", precio: 29.90, stock: 200 },
+    { id_producto: 104, nombre: "Disco SSD 1TB", categoria: "Almacenamiento", precio: 89.50, stock: 80 },
+    { id_producto: 105, nombre: "Webcam HD", categoria: "Periféricos", precio: 39.90, stock: 60 },
+    { id_producto: 106, nombre: "Router Wi-Fi 6", categoria: "Redes", precio: 129.00, stock: 30 }
+  ];
+  var HDMI = { id_producto: 107, nombre: "Cable HDMI", categoria: "Periféricos", precio: 9.90, stock: 90 };
+  var ROLES = ["app_backend", "analista_ventas", "admin_bd"];
+  var PERMISO = {
+    admin_bd: { UPDATE: true, INSERT: true, DELETE: true },
+    app_backend: { UPDATE: true, INSERT: false, DELETE: false },
+    analista_ventas: { UPDATE: false, INSERT: false, DELETE: false }
+  };
+  function nuevaBD() {
+    return { prod: INICIAL.map(copiaFila), aud: [], rol: "app_backend", min: 0, sig: 1,
+      delAud: { admin_bd: true, app_backend: false, analista_ventas: false } };
+  }
+  function hora(bd) { bd.min++; var t = 9 * 60 + bd.min; return pad(Math.floor(t / 60)) + ":" + pad(t % 60); }
+  function porId(bd, id) { return bd.prod.filter(function (r) { return r.id_producto === id; })[0]; }
+
+  // s: { tipo, donde(r), set(r), fila, sql }. o: { permisos, trig: [tipos que dispara el trigger] }
+  function correr(bd, s, o) {
+    if (o.permisos && !PERMISO[bd.rol][s.tipo]) return { ok: false, n: 0, msg: "ERROR: permission denied for table productos" };
+    var cambios = [];
+    if (s.tipo === "UPDATE") {
+      bd.prod.forEach(function (r) {
+        if (s.donde(r)) { var a = copiaFila(r); s.set(r); cambios.push({ id: r.id_producto, prev: a, nue: copiaFila(r) }); }
+      });
+    } else if (s.tipo === "INSERT") {
+      if (porId(bd, s.fila.id_producto)) return { ok: false, n: 0, msg: "ERROR: llave duplicada, el producto " + s.fila.id_producto + " ya existe" };
+      bd.prod.push(copiaFila(s.fila));
+      cambios.push({ id: s.fila.id_producto, prev: null, nue: copiaFila(s.fila) });
+    } else {
+      bd.prod = bd.prod.filter(function (r) {
+        if (s.donde(r)) { cambios.push({ id: r.id_producto, prev: copiaFila(r), nue: null }); return false; }
+        return true;
+      });
+    }
+    if (cambios.length && o.trig.indexOf(s.tipo) >= 0) {
+      var h = hora(bd);
+      cambios.forEach(function (c) { bd.aud.push({ id: bd.sig++, op: s.tipo, reg: c.id, usu: bd.rol, prev: c.prev, nue: c.nue, hora: h }); });
+    }
+    return { ok: true, n: cambios.length, cambios: cambios };
+  }
+  function fijarPrecio(id, precio) {
+    return { tipo: "UPDATE", donde: function (r) { return r.id_producto === id; }, set: function (r) { r.precio = precio; },
+      sql: "UPDATE productos SET precio = " + precio.toFixed(2) + " WHERE id_producto = " + id + ";" };
+  }
+  function movPrecio(bd, id, d) {
+    var r = porId(bd, id);
+    return fijarPrecio(id, r ? Math.max(0.01, r2(r.precio + d)) : 0);
+  }
+  function movStock(bd, id, d) {
+    var r = porId(bd, id), nuevo = r ? Math.max(0, r.stock + d) : 0;
+    return { tipo: "UPDATE", donde: function (x) { return x.id_producto === id; }, set: function (x) { x.stock = nuevo; },
+      sql: "UPDATE productos SET stock = " + nuevo + " WHERE id_producto = " + id + ";" };
+  }
+  function masivo(delta) {
+    return { tipo: "UPDATE", donde: function (r) { return r.categoria === "Periféricos"; },
+      set: function (r) { r.precio = Math.max(0.01, r2(r.precio + delta)); },
+      sql: "UPDATE productos SET precio = ROUND(precio - " + Math.abs(delta) + ", 2) WHERE categoria = 'Periféricos';" };
+  }
+  function insertar() {
+    return { tipo: "INSERT", fila: HDMI, sql: "INSERT INTO productos VALUES (107, 'Cable HDMI', 'Periféricos', 9.90, 90);" };
+  }
+  function borrar(id) {
+    return { tipo: "DELETE", donde: function (r) { return r.id_producto === id; }, sql: "DELETE FROM productos WHERE id_producto = " + id + ";" };
+  }
+  function resumen(a) {
+    if (!a.prev) return '<span class="nulo">(vacío)</span> → <span class="despues">fila nueva ' + a.reg + '</span>';
+    if (!a.nue) return '<span class="antes">fila ' + a.reg + ' borrada</span> → <span class="nulo">(vacío)</span>';
+    var d = [];
+    ["nombre", "categoria", "precio", "stock"].forEach(function (k) {
+      if (a.prev[k] !== a.nue[k]) {
+        var p = k === "precio" ? f2(a.prev[k]) : a.prev[k], n = k === "precio" ? f2(a.nue[k]) : a.nue[k];
+        d.push(k + ' <span class="antes">' + esc(p) + '</span> → <span class="despues">' + esc(n) + '</span>');
+      }
+    });
+    return d.length ? d.join("; ") : '<span class="nulo">sin diferencias (el UPDATE no cambió nada)</span>';
+  }
+  var COLN = { id: "id_auditoria", op: "operacion", reg: "id_registro", usu: "usuario_bd", cambio: "antes → después", hora: "registrado_en" };
+  function htmlAud(bd, cols, sel) {
+    var h = "<thead><tr>" + cols.map(function (c) { return "<th" + (c === "id" || c === "reg" ? ' class="n"' : "") + ">" + COLN[c] + "</th>"; }).join("") + "</tr></thead><tbody>";
+    if (!bd.aud.length) h += '<tr><td class="vacio-fila" colspan="' + cols.length + '">auditoria está vacía</td></tr>';
+    bd.aud.forEach(function (a, i) {
+      h += '<tr data-i="' + i + '" tabindex="0"' + (sel === i ? ' class="sel"' : "") + ">";
+      cols.forEach(function (c) {
+        if (c === "id") h += '<td class="n">' + a.id + "</td>";
+        else if (c === "op") h += "<td>" + a.op + "</td>";
+        else if (c === "reg") h += '<td class="n">' + a.reg + "</td>";
+        else if (c === "usu") h += "<td>" + a.usu + "</td>";
+        else if (c === "cambio") h += '<td class="cambio-col">' + resumen(a) + "</td>";
+        else h += "<td>" + a.hora + "</td>";
+      });
+      h += "</tr>";
+    });
+    return h + "</tbody>";
+  }
+  function jsonHtml(o, otro) {
+    if (!o) return '<span class="nul">NULL</span>';
+    var claves = ["id_producto", "nombre", "categoria", "precio", "stock"];
+    return "{\n" + claves.map(function (k) {
+      var v = k === "precio" ? o[k].toFixed(2) : typeof o[k] === "string" ? '"' + esc(o[k]) + '"' : o[k];
+      var dif = otro && otro[k] !== o[k];
+      return '  <span class="' + (dif ? "dif" : "") + '">"' + k + '": ' + v + "</span>";
+    }).join(",\n") + "\n}";
+  }
+
+  /* ---------------- estado del recorrido ---------------- */
+  var CHK = [false, false, false, false, false, false, false];
+  var est = { paso: 0, bd: nuevaBD(), sel: 101, selAud: null, sql: "", msg: "", err: false, flash: {}, cod: null, chk5b: false };
+  var pasos;
+
+  var MODOS = [
+    { aud: false, trig: [], permisos: false, hint: "Toca una fila y cambia su precio", acc: ["bajar", "subir"] },
+    { aud: true, trig: ["UPDATE"], permisos: false, cols: ["id", "op", "reg", "hora"], hint: "Cambia precios y mira crecer auditoria", acc: ["bajar", "subir"] },
+    { aud: true, trig: ["INSERT", "UPDATE", "DELETE"], permisos: false, cols: ["id", "op", "reg", "cambio", "hora"], detalle: true,
+      hint: "Prueba UPDATE, INSERT y DELETE y toca una fila de auditoria", acc: ["bajar", "subir", "stock", "insertar", "borrar"] },
+    { aud: true, trig: ["INSERT", "UPDATE", "DELETE"], permisos: false, cols: ["id", "op", "reg", "cambio", "hora"], detalle: true,
+      hint: "Una sentencia puede cambiar varias filas", acc: ["bajar", "subir", "masivo", "insertar", "borrar"] },
+    { aud: true, trig: ["INSERT", "UPDATE", "DELETE"], permisos: true, roles: true, cols: ["id", "op", "reg", "usu", "cambio", "hora"], detalle: true,
+      hint: "Cambia de rol y haz cambios", acc: ["bajar", "subir", "stock", "insertar", "borrar", "masivo", "malo"] },
+    { aud: true, trig: ["INSERT", "UPDATE", "DELETE"], permisos: true, roles: true, cols: ["id", "op", "reg", "usu", "cambio", "hora"], detalle: true,
+      hint: "Intenta borrar la evidencia con cada rol", acc: ["bajar", "borrarAud", "conceder", "revocar"] },
+    { aud: true, trig: ["INSERT", "UPDATE", "DELETE"], permisos: true, roles: true, cols: ["id", "op", "reg", "usu", "cambio", "hora"], detalle: true, codigo: true,
+      hint: "Toca una columna: te muestro qué línea la llena", acc: ["bajar", "insertar", "borrar"] }
+  ];
+  var ETIQ = {
+    bajar: "Precio −5", subir: "Precio +5", stock: "Stock −10", insertar: "Agregar producto 107", borrar: "Borrar el seleccionado",
+    masivo: "Descuento de 5 a Periféricos", malo: "Dejar el teclado en 0.01", borrarAud: "Borrar todo de auditoria",
+    conceder: "GRANT DELETE a app_backend", revocar: "REVOKE DELETE a todos"
+  };
+  function habilitado(k) {
+    var i = est.paso;
+    if (k === "bajar" || k === "subir") return i > 1 || CHK[i];
+    if (k === "stock") return true;
+    if (k === "insertar" || k === "borrar") return i > 2 || CHK[2];
+    if (k === "masivo") return i > 3 || CHK[3];
+    if (k === "malo") return est.chk5b;
+    return CHK[5];
+  }
+
+  function pintarProd() {
+    var bd = est.bd;
+    var h = "<thead><tr><th class=\"n\">id_producto</th><th>nombre</th><th>categoria</th><th class=\"n\">precio</th><th class=\"n\">stock</th></tr></thead><tbody>";
+    bd.prod.forEach(function (r) {
+      var fl = function (k) { return est.flash[r.id_producto + ":" + k] ? " cambio" : ""; };
+      h += '<tr data-id="' + r.id_producto + '" tabindex="0"' + (est.sel === r.id_producto ? ' class="sel"' : "") + ">" +
+        '<td class="n">' + r.id_producto + "</td><td>" + esc(r.nombre) + "</td><td>" + esc(r.categoria) + "</td>" +
+        '<td class="n' + fl("precio") + '">' + f2(r.precio) + '</td><td class="n' + fl("stock") + '">' + r.stock + "</td></tr>";
+    });
+    if (!bd.prod.length) h += '<tr><td class="vacio-fila" colspan="5">la tabla está vacía</td></tr>';
+    $("tProd").innerHTML = h + "</tbody>";
+    $("prodN").textContent = bd.prod.length + " filas";
+  }
+  function pintarAud() {
+    var m = MODOS[est.paso], bd = est.bd;
+    $("audBloque").hidden = !m.aud;
+    if (!m.aud) return;
+    if (est.selAud === null || est.selAud >= bd.aud.length) est.selAud = bd.aud.length ? bd.aud.length - 1 : null;
+    $("tAud").innerHTML = htmlAud(bd, m.cols, est.selAud);
+    $("audN").textContent = bd.aud.length + " filas";
+    var d = $("audDetalle");
+    if (m.detalle && est.selAud !== null) {
+      var a = bd.aud[est.selAud];
+      d.innerHTML = '<div><h4>datos_previos (OLD)</h4><pre>' + jsonHtml(a.prev, a.nue) + '</pre></div><div><h4>datos_nuevos (NEW)</h4><pre>' + jsonHtml(a.nue, a.prev) + "</pre></div>";
+    } else d.innerHTML = "";
+  }
+  function pintarAcciones() {
+    var m = MODOS[est.paso], h = "";
+    m.acc.forEach(function (k) {
+      var dis = !habilitado(k);
+      if (k === "insertar" && porId(est.bd, 107)) dis = true;
+      h += '<button type="button" data-k="' + k + '"' + (dis ? " disabled" : "") + (k === "borrarAud" || k === "conceder" ? ' class="ghost"' : "") + ">" + esc(ETIQ[k]) + "</button>";
+    });
+    $("acciones").innerHTML = h;
+    $("rolBar").hidden = !m.roles;
+    if (m.roles) {
+      var bloq = est.paso === 4 && !CHK[4];
+      $("rolSeg").innerHTML = ROLES.map(function (r) {
+        return '<button type="button" data-rol="' + r + '" aria-pressed="' + (est.bd.rol === r) + '"' + (bloq ? " disabled" : "") + ">" + r + "</button>";
+      }).join("");
+    }
+  }
+  function pintarLinea() {
+    $("sqlLinea").innerHTML = est.sql ? esc(est.sql) + '<span class="res' + (est.err ? " err" : "") + '">' + esc(est.msg) + "</span>" : (est.msg ? '<span class="res' + (est.err ? " err" : "") + '">' + esc(est.msg) + "</span>" : "");
+  }
+  function pintarVivos() {
+    var el = $("vivoFilas");
+    if (!el) return;
+    var u = est.ultimaN;
+    el.innerHTML = u === undefined ? "Última sentencia: todavía ninguna." : "Última sentencia: <b>" + u + "</b> fila(s) afectada(s) → <b>" + u + "</b> fila(s) nueva(s) en auditoria.";
+  }
+  function pintarHint() {
+    var i = est.paso;
+    $("escHint").textContent = MODOS[i].hint + (i <= 5 && !CHK[i] ? " (los botones se activan al resolver el chequeo)" : "");
+  }
+  function pintarTodo() {
+    pintarHint(); pintarProd(); pintarAud(); pintarAcciones(); pintarLinea(); pintarVivos();
+    if (chk4) chk4.refrescar();
+  }
+
+  function hacer(k) {
+    var bd = est.bd, m = MODOS[est.paso], s, res;
+    est.flash = {}; est.err = false; est.sql = ""; est.msg = "";
+    if (k === "conceder") { bd.delAud.app_backend = true; est.sql = "GRANT DELETE ON auditoria TO app_backend;"; est.msg = "app_backend ahora puede borrar de auditoria (el error que estamos viendo)."; pintarTodo(); return; }
+    if (k === "revocar") { ROLES.forEach(function (r) { bd.delAud[r] = false; }); est.sql = "REVOKE DELETE ON auditoria FROM app_backend, admin_bd;"; est.msg = "Ningún rol puede borrar de auditoria."; pintarTodo(); return; }
+    if (k === "borrarAud") {
+      est.sql = "DELETE FROM auditoria;";
+      if (!bd.delAud[bd.rol]) { est.err = true; est.msg = "ERROR: permission denied for table auditoria (mensaje de PostgreSQL). El registro sigue intacto."; }
+      else { var n = bd.aud.length; bd.aud = []; est.selAud = null; est.msg = n + " fila(s) borrada(s). Nadie sabrá ya quién cambió los precios."; }
+      pintarTodo(); return;
+    }
+    if (est.sel === null && (k === "bajar" || k === "subir" || k === "stock" || k === "borrar")) { est.err = true; est.msg = "Toca primero una fila de productos."; pintarTodo(); return; }
+    if (k === "bajar") s = movPrecio(bd, est.sel, -5);
+    else if (k === "subir") s = movPrecio(bd, est.sel, 5);
+    else if (k === "stock") s = movStock(bd, est.sel, -10);
+    else if (k === "insertar") s = insertar();
+    else if (k === "borrar") s = borrar(est.sel);
+    else if (k === "masivo") s = masivo(-5);
+    else { est.sel = 101; s = fijarPrecio(101, 0.01); }
+    res = correr(bd, s, { permisos: m.permisos, trig: m.trig });
+    est.sql = s.sql;
+    if (!res.ok) { est.err = true; est.msg = res.msg; est.ultimaN = undefined; }
+    else {
+      est.ultimaN = res.n;
+      est.msg = res.n + " fila(s) afectada(s)" + (m.aud && m.trig.indexOf(s.tipo) >= 0 && res.n ? "; auditoria recibió " + res.n + "." : ".");
+      res.cambios.forEach(function (c) {
+        if (c.prev && c.nue) ["precio", "stock"].forEach(function (key) { if (c.prev[key] !== c.nue[key]) est.flash[c.id + ":" + key] = true; });
+      });
+      if (s.tipo === "DELETE" && porId(bd, est.sel) === undefined) est.sel = null;
+      if (s.tipo === "INSERT") est.sel = 107;
+      if (m.aud && bd.aud.length) est.selAud = bd.aud.length - 1;
+    }
+    pintarTodo();
+  }
+
+  $("acciones").addEventListener("click", function (e) {
+    var b = e.target.closest("button");
+    if (b && !b.disabled) hacer(b.getAttribute("data-k"));
+  });
+  $("rolSeg").addEventListener("click", function (e) {
+    var b = e.target.closest("button");
+    if (!b || b.disabled) return;
+    est.bd.rol = b.getAttribute("data-rol");
+    est.sql = ""; est.msg = ""; est.err = false;
+    pintarTodo();
+  });
+  function selFila(e) {
+    var tr = e.target.closest("tr[data-id]");
+    if (!tr) return;
+    est.sel = +tr.getAttribute("data-id");
+    pintarProd();
+  }
+  $("tProd").addEventListener("click", selFila);
+  $("tProd").addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selFila(e); } });
+  function selAud(e) {
+    var tr = e.target.closest("tr[data-i]");
+    if (!tr) return;
+    est.selAud = +tr.getAttribute("data-i");
+    pintarAud();
+  }
+  $("tAud").addEventListener("click", selAud);
+  $("tAud").addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selAud(e); } });
+  $("btnRestaurar").addEventListener("click", function () {
+    var rol = est.bd.rol;
+    est.bd = nuevaBD(); est.bd.rol = rol; est.sel = 101; est.selAud = null; est.flash = {}; est.sql = ""; est.msg = ""; est.err = false; est.ultimaN = undefined;
+    pintarTodo();
+  });
+
+  /* ---------------- Figura 7 (PostgreSQL) con trozos marcados ---------------- */
+  function tk(c, t) { return '<span class="t" data-c="' + c + '">' + esc(t) + "</span>"; }
+  var PG = [
+    "CREATE TABLE auditoria (",
+    "  " + tk("id_auditoria", "id_auditoria   SERIAL PRIMARY KEY") + ",",
+    "  " + tk("tabla_col", "tabla          VARCHAR(40) NOT NULL") + ",",
+    "  operacion      VARCHAR(10) NOT NULL,",
+    "  id_registro    INT,",
+    "  usuario_bd     VARCHAR(60) NOT NULL,",
+    "  datos_previos  JSONB,",
+    "  datos_nuevos   JSONB,",
+    "  " + tk("registrado_en", "registrado_en  TIMESTAMP DEFAULT now()"),
+    ");",
+    "",
+    "CREATE OR REPLACE FUNCTION fn_auditar_productos() RETURNS TRIGGER AS $$",
+    "BEGIN",
+    "  INSERT INTO auditoria (tabla, operacion, id_registro, usuario_bd, datos_previos, datos_nuevos)",
+    "  VALUES (" + tk("tabla", "'productos'") + ", " + tk("operacion", "TG_OP") + ", " + tk("id_registro", "COALESCE(NEW.id_producto, OLD.id_producto)") + ",",
+    "          " + tk("usuario_bd", "current_user") + ", " + tk("datos_previos", "to_jsonb(OLD)") + ", " + tk("datos_nuevos", "to_jsonb(NEW)") + ");",
+    "  RETURN NEW;",
+    "END;",
+    "$$ LANGUAGE plpgsql;",
+    "",
+    "CREATE TRIGGER trg_auditoria_productos",
+    "  " + tk("cuando", "AFTER INSERT OR UPDATE OR DELETE ON productos"),
+    "  " + tk("porfila", "FOR EACH ROW") + " " + tk("funcion", "EXECUTE FUNCTION fn_auditar_productos()") + ";"
+  ];
+  var CHIPS = [
+    ["id_auditoria", "id_auditoria"], ["tabla", "tabla"], ["operacion", "operacion"], ["id_registro", "id_registro"], ["usuario_bd", "usuario_bd"],
+    ["datos_previos", "datos_previos"], ["datos_nuevos", "datos_nuevos"], ["registrado_en", "registrado_en"], ["cuando", "cuándo"], ["porfila", "por fila"], ["funcion", "función"]
+  ];
+  var EXPL = {
+    id_auditoria: "<b>SERIAL PRIMARY KEY</b>: un contador automático. El trigger no lo escribe: lo pone la tabla.",
+    tabla: "<b>'productos'</b>: un texto fijo. Como la función se llama fn_auditar_productos, sabe de qué tabla viene.",
+    operacion: "<b>TG_OP</b>: una variable que PostgreSQL llena sola con 'INSERT', 'UPDATE' o 'DELETE' según lo que disparó el trigger.",
+    id_registro: "<b>COALESCE(NEW.id_producto, OLD.id_producto)</b>: devuelve el primero que no sea NULL. Así siempre sale el id de la fila, sea cual sea la operación.",
+    usuario_bd: "<b>current_user</b>: el rol con el que se conectó quien hizo la operación. Es lo que ata el evento a un rol.",
+    datos_previos: "<b>to_jsonb(OLD)</b>: la fila antes del cambio, convertida a JSON. Es NULL cuando no hay fila previa.",
+    datos_nuevos: "<b>to_jsonb(NEW)</b>: la fila después del cambio, convertida a JSON. Es NULL cuando la fila ya no existe.",
+    registrado_en: "<b>DEFAULT now()</b>: la hora la rellena la propia tabla. El trigger ni la menciona.",
+    cuando: "<b>AFTER INSERT OR UPDATE OR DELETE ON productos</b>: el trigger corre después de cada una de las tres operaciones sobre productos.",
+    porfila: "<b>FOR EACH ROW</b>: una vez por cada fila afectada, como viste en el paso 4.",
+    funcion: "<b>EXECUTE FUNCTION fn_auditar_productos()</b>: la función de arriba, la que hace el INSERT en auditoria."
+  };
+  function pintarCodigo() {
+    var m = MODOS[est.paso];
+    $("codBloque").hidden = !m.codigo;
+    if (!m.codigo) return;
+    $("codPg").innerHTML = PG.join("\n");
+    $("codChips").innerHTML = CHIPS.map(function (c) {
+      return '<button type="button" data-c="' + c[0] + '" aria-pressed="' + (est.cod === c[0]) + '">' + c[1] + "</button>";
+    }).join("");
+    [].forEach.call($("codPg").querySelectorAll(".t"), function (t) {
+      var c = t.getAttribute("data-c");
+      t.classList.toggle("on", est.cod === c || (est.cod === "tabla" && c === "tabla") || (est.cod === "tabla" && c === "tabla_col"));
+    });
+    $("codExpl").innerHTML = est.cod === null ? "Toca una columna para ver qué línea la llena."
+      : est.cod === "id_registro" && !CHK[6] ? "Resuelve primero el chequeo del paso para ver esta explicación."
+      : EXPL[est.cod];
+  }
+  $("codChips").addEventListener("click", function (e) {
+    var b = e.target.closest("button");
+    if (!b) return;
+    est.cod = est.cod === b.getAttribute("data-c") ? null : b.getAttribute("data-c");
+    pintarCodigo();
+  });
+
+  function entrar(i) {
+    est.paso = i;
+    pintarTodo();
+    pintarCodigo();
+  }
+
+  /* ---------------- chequeos de cada paso ---------------- */
+  B.opcionMultiple(cuerpo("chk1"), {
+    pregunta: "El director pregunta quién cambió ayer el precio del teclado, cuándo y cuánto valía antes. Mirando <b>solo la tabla productos</b> de hoy, ¿qué puedes contestar?",
+    opciones: [
+      "Las tres cosas: la tabla guarda el historial de cada fila",
+      "Solo el cuándo, porque la fila guarda su última modificación",
+      "Ninguna: la tabla solo guarda el valor actual de cada celda",
+      "Las tres, si entras con una cuenta de administrador"
+    ],
+    correcta: 2,
+    pistas: ["Una celda de la tabla guarda un valor, no una lista de valores. ¿Dónde estaría el precio viejo?",
+      "La tabla de la tienda tiene id, nombre, categoría, precio y stock. ¿Hay alguna columna de fecha de modificación?", null,
+      "Ser administrador da permisos, no memoria: el dato que se sobrescribió no está en ninguna parte de la tabla."],
+    explicacion: "Un UPDATE <b>sobrescribe</b>: el precio viejo desaparece y nada anota quién ni cuándo. <b>Ahora pruébalo:</b> cambia un precio con los botones y mira que la tabla solo muestra el valor de hoy. Hace falta una segunda tabla donde se escriba la historia.",
+    alResolver: function () { CHK[0] = true; pintarTodo(); pasos.completar(0); }
+  });
+
+  B.opcionMultiple(cuerpo("chk2"), {
+    pregunta: "Con el trigger activo, cambias el precio del teclado dos veces seguidas (por ejemplo de 79.90 a 74.90 y luego a 69.90). Al final, ¿cuántas filas tendrá auditoria?",
+    opciones: ["Ninguna: el trigger solo se activa al final del día", "1, con solo el último cambio", "2, una por cada UPDATE", "3, una por cada precio distinto"],
+    correcta: 2,
+    pistas: ["El trigger se dispara con cada evento, no al final del día.",
+      "El trigger corre después de cada UPDATE. ¿Se acuerda del anterior o ya lo escribió?", null,
+      "Hay tres precios, pero solo dos cambios entre ellos: cada cambio es un UPDATE."],
+    explicacion: "Una fila <b>por cada UPDATE</b>: la primera dice 79.90 y 74.90, la segunda 74.90 y 69.90. Así el registro cuenta toda la historia, no solo el final. <b>Ahora hazlo tú</b> con los botones de precio y mira auditoria.",
+    alResolver: function () { CHK[1] = true; pintarTodo(); pasos.completar(1); }
+  });
+
+  B.opcionMultiple(cuerpo("chk3"), {
+    pregunta: "Borras un producto con un DELETE. En la fila que el trigger escribe en auditoria, ¿qué quedan <code>datos_previos</code> y <code>datos_nuevos</code>?",
+    opciones: [
+      "datos_previos con la fila borrada y datos_nuevos vacío (NULL)",
+      "datos_previos vacío y datos_nuevos con la fila borrada",
+      "Los dos con la fila borrada",
+      "Los dos vacíos, porque la fila ya no existe"
+    ],
+    correcta: 0,
+    pistas: [null, "OLD es la fila antes del cambio. Antes del DELETE, ¿existía la fila?",
+      "NEW es la fila después del cambio. Después del DELETE, ¿sigue existiendo?",
+      "La fila existía antes del DELETE, y eso es precisamente lo que interesa guardar."],
+    explicacion: "Antes del DELETE la fila existía (OLD la tiene) y después no (NEW está vacío). En un INSERT pasa al revés: OLD vacío y NEW con la fila nueva. Solo el UPDATE llena las dos. <b>Ahora pruébalo:</b> ya están encendidos Agregar y Borrar; toca una fila de auditoria para ver los JSON.",
+    alResolver: function () { CHK[2] = true; pintarTodo(); pasos.completar(2); }
+  });
+
+  var chk4 = B.numerico(cuerpo("chk4"), {
+    pregunta: "Con un solo UPDATE, el botón «Descuento de 5 a Periféricos» ejecuta <code>... WHERE categoria = 'Periféricos'</code>. Mira la columna <b>categoria</b> de la tabla productos. ¿Cuántas filas nuevas aparecerán en auditoria?",
+    respuesta: function () { return est.bd.prod.filter(function (r) { return r.categoria === "Periféricos"; }).length; },
+    tolerancia: 0,
+    pistas: ["El trigger es FOR EACH ROW: cuenta filas, no sentencias.", "Cuenta cuántas filas de productos dicen Periféricos en la columna categoria."],
+    diagnostico: function (v) { if (v === 1) return "Eso sería si el trigger corriera una vez por sentencia. Es FOR EACH ROW: una vez por fila afectada."; return null; },
+    explicacion: function () {
+      var n = est.bd.prod.filter(function (r) { return r.categoria === "Periféricos"; }).length;
+      return "Hay " + n + " periféricos: un solo UPDATE afecta " + n + " filas y el trigger corre " + n + " veces. <b>Ahora pruébalo</b> con el botón del escenario.";
+    },
+    alResolver: function () { CHK[3] = true; pintarTodo(); pasos.completar(3); }
+  });
+
+  function cerrarPaso5() { if (CHK[4] && est.chk5b) pasos.completar(4); }
+  B.opcionMultiple(cuerpo("chk5"), {
+    pregunta: "<b>analista_ventas</b> intenta subir un precio, pero solo tiene SELECT. El motor rechaza el UPDATE. ¿Cuántas filas nuevas aparecen en auditoria?",
+    opciones: [
+      "Una, con usuario_bd = analista_ventas y datos_nuevos vacío",
+      "Una, marcada como intento rechazado",
+      "Ninguna: el UPDATE ni siquiera se ejecuta, así que el trigger no se dispara",
+      "Una, igual que si el UPDATE hubiera funcionado"
+    ],
+    correcta: 2,
+    pistas: ["El trigger se dispara por cada fila que el UPDATE cambia. Si el UPDATE no se ejecuta, ¿qué fila cambió?",
+      "El trigger de la Figura 7 no tiene ninguna lógica para marcar intentos: solo escribe cambios reales.", null,
+      "Si el UPDATE no funciona, no hay fila afectada ni antes ni después."],
+    explicacion: "El motor comprueba los permisos <b>antes</b> de tocar ninguna fila. Sin filas afectadas no hay disparos. Lo razoné para PostgreSQL: el material no habla de los intentos rechazados, y el trigger de la Figura 7 solo anota los cambios que sí ocurrieron. <b>Ahora pruébalo:</b> ya puedes cambiar de rol en el escenario.",
+    alResolver: function () { CHK[4] = true; pintarTodo(); cerrarPaso5(); }
+  });
+  B.opcionMultiple(cuerpo("chk5b"), {
+    pregunta: "<b>app_backend</b>, con su permiso legítimo de UPDATE, deja el teclado en 0.01. ¿Qué hace la auditoría?",
+    opciones: [
+      "Lo impide: el UPDATE se rechaza porque el precio es absurdo",
+      "Lo permite y anota: app_backend, 79.90 → 0.01",
+      "Lo permite y no anota nada, porque app_backend es el rol de la propia aplicación",
+      "Lo permite y anota solo la hora, sin el antes ni el después"
+    ],
+    correcta: 1,
+    pistas: ["El trigger no tiene ninguna condición que rechace precios: solo escribe en auditoria.", null,
+      "El trigger se dispara con cualquier rol que haga el UPDATE. No distingue a quién anota.",
+      "datos_previos y datos_nuevos guardan toda la fila, precio incluido."],
+    explicacion: "Lo permite y lo anota con el antes y el después. La auditoría no impide: <b>hace detectable</b>. Al día siguiente sabrás que fue app_backend y cuánto valía antes. <b>Ahora pruébalo</b> con el botón «Dejar el teclado en 0.01» (con el rol que prefieras con permiso de UPDATE).",
+    alResolver: function () { est.chk5b = true; pintarTodo(); cerrarPaso5(); }
+  });
+
+  B.opcionMultiple(cuerpo("chk6"), {
+    pregunta: "Si la cuenta <b>app_backend</b> tuviera privilegio de DELETE sobre la propia tabla <code>auditoria</code>, ¿qué problema se introduciría?",
+    opciones: [
+      "Ninguno: el registro es solo de lectura para quien lo consulta",
+      "La cuenta auditada podría destruir la evidencia de su propio uso indebido",
+      "El trigger dejaría de dispararse en los UPDATE",
+      "La tabla productos se quedaría sin permisos de UPDATE"
+    ],
+    correcta: 1,
+    pistas: ["Un privilegio de DELETE es justo el de borrar filas.", null,
+      "El trigger se dispara por el UPDATE sobre productos: no depende de quién tenga DELETE en auditoria.",
+      "Los privilegios sobre auditoria y sobre productos son independientes."],
+    explicacion: "Es la pregunta de repaso del material: si app_backend pudiera borrar de auditoria, la cuenta auditada podría borrar la evidencia de su propio uso indebido y el registro dejaría de valer como prueba. <b>Ahora pruébalo:</b> los botones del escenario ya están activos.",
+    alResolver: function () { CHK[5] = true; pintarTodo(); pasos.completar(5); }
+  });
+
+  B.opcionMultiple(cuerpo("chk7"), {
+    pregunta: "En la Figura 7, <code>id_registro</code> se llena con <code>COALESCE(NEW.id_producto, OLD.id_producto)</code>. ¿Por qué no basta con escribir <code>NEW.id_producto</code>?",
+    opciones: [
+      "Porque en un DELETE no hay fila nueva y NEW.id_producto sería NULL",
+      "Porque COALESCE convierte el id en texto",
+      "Porque en un UPDATE el id cambia siempre",
+      "Porque NEW solo existe en las tablas con SERIAL"
+    ],
+    correcta: 0,
+    pistas: [null, "COALESCE no cambia el tipo: devuelve el primer valor que no es NULL.",
+      "El id es la clave primaria y casi nunca cambia; el UPDATE de este paso no lo toca.",
+      "NEW y OLD existen en cualquier trigger por fila, tenga la tabla SERIAL o no."],
+    explicacion: "En un DELETE, NEW está vacío (como viste en el paso 3), y entonces <code>NEW.id_producto</code> sería NULL. COALESCE toma el primero que no es NULL: NEW si existe, OLD si no. Así el id sale siempre. Ahora la columna <b>id_registro</b> ya muestra su explicación en el escenario.",
+    alResolver: function () { CHK[6] = true; pintarCodigo(); pasos.completar(6); }
+  });
+
+  pasos = B.pasos($("recorrido"), {
+    concepto: C,
+    alEntrar: entrar,
+    alTerminar: function () { location.hash = "retos"; }
+  });
+  CHK = CHK.map(function (_, i) { return pasos.hecho(i); });
+  est.chk5b = pasos.hecho(4);
+  entrar(0);
+
+  /* ---------------- hipotesis inicial ---------------- */
+  (function () {
+    var ta = $("hipotesis"), t = null;
+    ta.value = B.nota("auditoria-triggers", "hipotesis");
+    function cita() {
+      var v = ta.value.trim(), el = $("citaHipo");
+      if (!el) return;
+      el.hidden = !v;
+      if (v) { el.textContent = ""; el.appendChild(document.createTextNode("Al principio escribiste: «" + v + "». ¿Se parece a lo que construimos? ¿Anotabas el antes y el después, y quién?")); }
+    }
+    cita();
+    ta.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { B.nota("auditoria-triggers", "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; cita(); }, 500);
+    });
+  })();
+
+  /* ---------------- marcadores de estado de retos ---------------- */
+  function pintarEstados() {
+    [].forEach.call(document.querySelectorAll("[data-reto]"), function (el) {
+      var ok = C.retoOk(el.getAttribute("data-reto"));
+      el.textContent = ok ? "resuelto" : "pendiente";
+      el.classList.toggle("ok", ok);
+    });
+  }
+  C.alCambiar(pintarEstados);
+
+  /* ---------------- reto: ojo clinico ---------------- */
+  var POOL = [
+    { sql: "SELECT * FROM productos\nWHERE categoria = 'Periféricos';", n: 0, why: "Un SELECT no cambia ninguna fila: ningún trigger se dispara." },
+    { sql: "UPDATE productos SET precio = precio - 5\nWHERE categoria = 'Periféricos';", n: 3, why: "Hay tres periféricos (101, 103 y 105): el trigger corre una vez por fila." },
+    { sql: "UPDATE productos SET stock = stock - 10\nWHERE stock < 50;", n: 2, why: "Con menos de 50 de stock hay dos productos (102 con 45 y 106 con 30)." },
+    { sql: "DELETE FROM productos\nWHERE id_producto = 106;", n: 1, why: "Un DELETE de una fila: una fila en auditoria, con datos_nuevos vacío." },
+    { sql: "UPDATE productos SET precio = 9.90\nWHERE id_producto = 999;", n: 0, why: "No existe el producto 999: el UPDATE no encuentra filas y el trigger no se dispara." },
+    { sql: "INSERT INTO productos\nVALUES (107, 'Cable HDMI', 'Periféricos', 9.90, 90);", n: 1, why: "Un INSERT de una fila: una fila en auditoria, con datos_previos vacío." },
+    { sql: "UPDATE productos SET precio = precio * 2;", n: 6, why: "Sin WHERE afecta a las seis filas: seis disparos." },
+    { sql: "DELETE FROM productos\nWHERE precio > 100;", n: 2, why: "Cuestan más de 100 el monitor (349.00) y el router (129.00): dos filas." },
+    { sql: "UPDATE productos SET stock = stock + 1\nWHERE categoria = 'Almacenamiento';", n: 1, why: "Solo el disco SSD es de Almacenamiento: una fila." },
+    { sql: "DELETE FROM productos;", n: 6, why: "Un DELETE sin WHERE borra las seis filas: seis filas en auditoria." }
+  ];
+  (function () {
+    var cont = $("ojo");
+    cont.innerHTML = '<div class="ronda"></div><pre class="sentencia"></pre>' +
+      '<div class="ojo-opts">' + [0, 1, 2, 3, 6].map(function (n) { return '<button type="button" class="opt" data-a="' + n + '">' + n + "</button>"; }).join("") + "</div>" +
+      '<div class="fb" aria-live="polite"></div><div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    var rondas, ronda, aciertos, respondida;
+    function nueva() { rondas = B.mezclar(POOL.slice()).slice(0, 5); ronda = 0; aciertos = 0; mostrar(); }
+    function mostrar() {
+      respondida = false;
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 5 · aciertos " + aciertos;
+      cont.querySelector(".sentencia").textContent = rondas[ronda].sql;
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (b) { b.disabled = false; b.className = "opt"; });
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+    }
+    cont.querySelector(".ojo-opts").addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || respondida) return;
+      respondida = true;
+      var r = rondas[ronda], ok = +b.getAttribute("data-a") === r.n;
+      if (ok) aciertos++;
+      b.classList.add(ok ? "ok" : "mal");
+      if (!ok) cont.querySelector('[data-a="' + r.n + '"]').classList.add("ok");
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (x) { x.disabled = true; });
+      cont.querySelector(".fb").innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No.</span> ') + "Son " + r.n + " fila(s) nuevas en auditoria. " + r.why;
+      var sig = cont.querySelector(".sig");
+      sig.hidden = false;
+      if (ronda === 4) {
+        var aprobo = aciertos >= 4;
+        C.reto("ojo", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertos + " de 5" + (aprobo ? ". Aprobado." : ". Necesitas 4 para aprobar.");
+        sig.textContent = "Otra tanda";
+      } else sig.textContent = "Siguiente ronda";
+    });
+    cont.querySelector(".sig").addEventListener("click", function () { if (ronda === 4) nueva(); else { ronda++; mostrar(); } });
+    nueva();
+  })();
+
+  /* ---------------- reto: construir ---------------- */
+  (function () {
+    var OBJ = [
+      { t: "Deja una fila en auditoria con <code>datos_previos</code> vacío (un INSERT).", ok: function (bd) { return bd.aud.some(function (a) { return a.prev === null; }); } },
+      { t: "Deja una fila en auditoria con <code>datos_nuevos</code> vacío (un DELETE).", ok: function (bd) { return bd.aud.some(function (a) { return a.nue === null; }); } },
+      { t: "Consigue que <b>app_backend</b> tenga exactamente 4 filas en auditoria.", ok: function (bd) { return bd.aud.filter(function (a) { return a.usu === "app_backend"; }).length === 4; } }
+    ];
+    var logrados = [false, false, false], avisado = false, bd = nuevaBD(), msg = "", err = false;
+    var ul = $("objetivos");
+    OBJ.forEach(function (o) { var li = document.createElement("li"); li.innerHTML = '<span class="m"></span><span>' + o.t + "</span>"; ul.appendChild(li); });
+    var box = $("construirBox");
+    box.innerHTML = '<div class="rolbar"><span class="seg-lab">Conectado como</span><div class="seg" id="cRol" role="group" aria-label="Rol"></div></div>' +
+      '<div class="acciones" id="cAcc"></div><div class="sqlline" id="cMsg" aria-live="polite"></div>' +
+      '<div class="tabla-wrap scroll-aud"><table class="tabla" id="cAud" aria-label="auditoria del reto"></table></div>';
+    var SENT = [
+      ["UPDATE precio del 101", function () { return movPrecio(bd, 101, -5); }],
+      ["UPDATE a los Periféricos", function () { return masivo(-5); }],
+      ["INSERT producto 107", function () { return insertar(); }],
+      ["DELETE producto 106", function () { return borrar(106); }]
+    ];
+    function pintar() {
+      $("cRol").innerHTML = ROLES.map(function (r) { return '<button type="button" data-rol="' + r + '" aria-pressed="' + (bd.rol === r) + '">' + r + "</button>"; }).join("");
+      $("cAcc").innerHTML = SENT.map(function (s, i) { return '<button type="button" data-i="' + i + '">' + s[0] + "</button>"; }).join("") + '<button type="button" class="ghost" data-i="r">Reiniciar</button>';
+      $("cMsg").innerHTML = msg ? '<span class="res' + (err ? " err" : "") + '">' + esc(msg) + "</span>" : "";
+      $("cAud").innerHTML = htmlAud(bd, ["id", "op", "reg", "usu", "cambio"], null);
+      OBJ.forEach(function (o, i) {
+        if (!logrados[i] && o.ok(bd)) logrados[i] = true;
+        ul.children[i].classList.toggle("hecho", logrados[i]);
+      });
+      if (!avisado && logrados.every(Boolean)) { avisado = true; C.reto("construir", true); }
+    }
+    box.addEventListener("click", function (e) {
+      var b = e.target.closest("button");
+      if (!b) return;
+      if (b.hasAttribute("data-rol")) { bd.rol = b.getAttribute("data-rol"); msg = ""; err = false; pintar(); return; }
+      var i = b.getAttribute("data-i");
+      if (i === "r") { var rol = bd.rol; bd = nuevaBD(); bd.rol = rol; msg = ""; err = false; pintar(); return; }
+      var s = SENT[+i][1](), res = correr(bd, s, { permisos: true, trig: ["INSERT", "UPDATE", "DELETE"] });
+      err = !res.ok;
+      msg = s.sql + "  " + (res.ok ? "→ " + res.n + " fila(s); auditoria recibió " + res.n + "." : "→ " + res.msg);
+      pintar();
+    });
+    pintar();
+  })();
+
+  /* ---------------- reto: a mano ---------------- */
+  (function () {
+    var PRECIOS = [79.90, 349.00, 29.90, 89.50, 39.90, 129.00], D;
+    function generar() {
+      var T = [50, 80, 100, 200][Math.floor(Math.random() * 4)], K = [5, 10, 20][Math.floor(Math.random() * 3)];
+      var n = PRECIOS.filter(function (p) { return p > T; }).length;
+      D = { T: T, K: K, n: n, total: n * K };
+    }
+    function ref() { $("manoSql").textContent = "UPDATE productos SET precio = precio - " + D.K + "\nWHERE precio > " + D.T + ";"; }
+    $("mano").innerHTML = '<pre class="sentencia" id="manoSql"></pre><div id="manoPreg"></div>';
+    var cfg = {
+      pregunta: function () { return "El trigger es FOR EACH ROW. Después de esta sentencia sumas, en todas las filas nuevas de auditoria, el <code>precio</code> de datos_previos menos el de datos_nuevos. ¿Cuánto da en euros?"; },
+      respuesta: function () { return D.total; },
+      tolerancia: 0.011,
+      pistas: [
+        function () { return "Primero, qué productos tienen precio mayor que " + D.T + ". Revisa los seis precios de arriba."; },
+        function () { return "Cumplen " + D.n + " producto(s): el trigger se dispara " + D.n + " vez/veces, y cada fila baja " + D.K + " euros."; }
+      ],
+      diagnostico: function (v) {
+        if (Math.abs(v - D.n) < 0.011 && D.K !== 1) return "Esa es la cantidad de filas que entran en auditoria. Se pide la suma de lo que bajó cada precio.";
+        if (Math.abs(v - 6 * D.K) < 0.011 && D.n !== 6) return "Contaste las seis filas de la tabla. Solo entran las que cumplen el WHERE.";
+        if (Math.abs(v - D.K) < 0.011 && D.n !== 1) return "Esa es la bajada de una sola fila. El trigger corre por cada fila afectada.";
+        return null;
+      },
+      explicacion: function () { return D.n + " fila(s) afectada(s) × " + D.K + " euros = " + D.total + "."; },
+      reintentable: true,
+      textoReintentar: "Otro ejercicio",
+      antesDeReintentar: function () { generar(); ref(); },
+      alResolver: function (ok) { C.reto("mano", ok); }
+    };
+    generar(); ref();
+    B.numerico($("manoPreg"), cfg);
+  })();
+
+  /* ---------------- reto: cazar el error ---------------- */
+  B.cazarError($("error"), {
+    variantes: [
+      {
+        intro: "Se ejecuta <code>UPDATE productos SET precio = precio - 5 WHERE categoria = 'Periféricos'</code> con un trigger FOR EACH ROW. Alguien razonó así:",
+        lineas: [T("Los periféricos son 101, 103 y 105: 3 filas afectadas"),
+          T("El trigger es FOR EACH ROW: se dispara una vez por cada fila afectada"),
+          T("Cada disparo escribe su propia fila con el antes y el después de esa fila"),
+          T("La sentencia es una sola, así que auditoria recibe una sola fila"),
+          T("Entonces auditoria tiene 3 filas nuevas")],
+        erronea: 3,
+        explicacion: "Con FOR EACH ROW lo que cuenta son las <b>filas afectadas</b>, no las sentencias. La línea 4 contradice la 2 y la 5: son 3 disparos y 3 filas."
+      },
+      {
+        intro: "Se ejecuta <code>DELETE FROM productos WHERE id_producto = 106</code> con el trigger de la Figura 7. Alguien razonó así:",
+        lineas: [T("En un DELETE no hay fila nueva: NEW vale NULL"),
+          T("Entonces datos_nuevos queda vacío (NULL)"),
+          T("OLD guarda el router, así que datos_previos tiene la fila borrada"),
+          T("COALESCE(NEW.id_producto, OLD.id_producto) toma el primero que no es NULL"),
+          T("Como NEW es NULL, id_registro queda NULL")],
+        erronea: 4,
+        explicacion: "COALESCE salta los NULL: como NEW es NULL, toma <b>OLD.id_producto</b>, que es 106. Por eso id_registro es 106 y no NULL. Para eso sirve el COALESCE."
+      },
+      {
+        intro: "El rol <b>app_backend</b> solo tiene INSERT sobre auditoria (Tabla 1). Alguien razonó así sobre proteger el registro:",
+        lineas: [T("app_backend puede cambiar precios en productos"),
+          T("Cada cambio dispara el trigger, que escribe en auditoria con INSERT"),
+          T("app_backend no tiene DELETE sobre auditoria"),
+          T("Si intenta borrar sus propias filas, el motor se lo rechaza"),
+          T("Si además se le concede DELETE sobre auditoria, el registro queda mejor protegido")],
+        erronea: 4,
+        explicacion: "Es al revés: conceder DELETE a la cuenta auditada le permite <b>destruir la evidencia</b> de su propio uso indebido, y el registro deja de valer como prueba."
+      }
+    ],
+    alResolver: function (ok) { C.reto("error", ok); }
+  });
+
+  /* ---------------- retos: propiedades ---------------- */
+  function prop(id, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple($(id), cfg);
+  }
+  prop("prop1", {
+    pregunta: "El trigger de la Figura 7 está declarado <code>AFTER INSERT OR UPDATE OR DELETE</code>, sin más condiciones. ¿Cuál de estas sentencias <b>no</b> deja ninguna fila en auditoria?",
+    opciones: [
+      "<code>SELECT * FROM productos</code>",
+      "<code>UPDATE productos SET stock = stock WHERE id_producto = 101</code>",
+      "<code>INSERT INTO productos VALUES (107, ...)</code>",
+      "<code>DELETE FROM productos WHERE id_producto = 101</code>"
+    ],
+    correcta: 0,
+    pistas: [null, "Aunque el stock queda igual, el UPDATE sí tocó la fila: el trigger no compara OLD con NEW y se dispara (en SQLite lo comprobé).",
+      "Un INSERT es uno de los tres eventos de la declaración.", "Un DELETE también está en la lista de eventos."],
+    explicacion: "Un SELECT no cambia filas, así que no dispara nada. El UPDATE que deja el valor igual sí dispara el trigger, porque el trigger no compara el antes con el después."
+  });
+  prop("prop2", {
+    pregunta: "Las tres aplicaciones de la tienda se conectan con la misma cuenta compartida <code>tienda</code>. Alguien cambia un precio. En <code>usuario_bd</code>, la auditoría...",
+    opciones: [
+      "Siempre dice tienda: no se sabe cuál de las tres aplicaciones fue",
+      "Dice el nombre de la aplicación, porque el trigger lo averigua",
+      "Dice el nombre de la persona que está sentada frente al ordenador",
+      "Queda vacía, porque current_user solo funciona con roles de administrador"
+    ],
+    correcta: 0,
+    pistas: [null, "current_user da el rol de base de datos de la conexión, no el nombre de un programa.",
+      "La base de datos solo ve el rol con el que se conecta, no a las personas.", "current_user vale algo para cualquier conexión, no solo para administradores."],
+    explicacion: "<code>current_user</code> es el rol de la conexión. Con una cuenta compartida la auditoría solo puede decir «lo hizo alguna aplicación». Por eso el material pide un rol propio por aplicación."
+  });
+  prop("prop3", {
+    pregunta: "En un entorno exigente quieres que la evidencia sobreviva incluso si <b>alguien con todos los privilegios</b> borra la tabla auditoria. ¿Qué medida del material ayuda?",
+    opciones: [
+      "Replicar el registro a un sistema externo de solo escritura",
+      "Cifrar la columna precio de productos",
+      "Darle a app_backend DELETE sobre auditoria para que pueda limpiarla",
+      "Auditar la tabla auditoria con otro trigger del mismo rol"
+    ],
+    correcta: 0,
+    pistas: [null, "El cifrado por columna protege de un SELECT, no de que alguien borre otra tabla.",
+      "Es justo lo que debes evitar: dar DELETE a una cuenta operativa.", "Quien tiene todos los privilegios también podría borrar lo que ese segundo trigger escribiera en la misma base de datos."],
+    explicacion: "La réplica a un sistema externo de solo escritura conserva la evidencia aunque la tabla original se borre. Las otras dos medidas del material son quitar modificación y borrado a las cuentas operativas y una política de retención."
+  });
+  prop("prop4", {
+    pregunta: "Ejecutas <code>UPDATE productos SET precio = 5.00 WHERE id_producto = 999</code>, un id que no existe. Con el trigger FOR EACH ROW, auditoria...",
+    opciones: [
+      "No recibe ninguna fila: no hubo filas afectadas, no hubo disparos",
+      "Recibe una fila con datos_previos y datos_nuevos vacíos",
+      "Recibe una fila con la operación UPDATE y un aviso de error",
+      "Recibe una fila por cada fila de la tabla productos"
+    ],
+    correcta: 0,
+    pistas: [null, "El trigger corre por cada fila afectada. Con cero filas afectadas, ¿cuántas veces corre?",
+      "El trigger no sabe de errores: solo se dispara por filas que cambian.", "El WHERE limita las filas afectadas a las que cumplen la condición."],
+    explicacion: "FOR EACH ROW cuenta filas afectadas, y aquí son cero: el trigger no se dispara y no queda nada. (En SQLite lo comprobé: la sentencia termina bien y auditoria sigue vacía.)"
+  });
+
+  /* ---------------- sentencia de memoria ---------------- */
+  B.ordenar($("formula"), {
+    piezas: [T("CREATE TRIGGER trg_auditoria_productos"), T("AFTER INSERT OR UPDATE OR DELETE"), T("ON productos"), T("FOR EACH ROW"), T("EXECUTE FUNCTION fn_auditar_productos()")],
+    distractores: [T("BEFORE SELECT"), T("ON auditoria"), T("FOR EACH STATEMENT"), T("EXECUTE DELETE")],
+    soluciones: [[0, 1, 2, 3, 4]],
+    explicacion: "Nombre del trigger, cuándo (después de INSERT, UPDATE o DELETE), sobre qué tabla (productos, no auditoria), con qué frecuencia (por fila) y qué función ejecuta.",
+    alResolver: function (ok) { C.reto("formula", ok); }
+  });
+
+  /* ---------------- vida real: el algoritmo en codigo ---------------- */
+  (function () {
+    // cada linea: [id semantico, texto]. El id une la misma instruccion en los dos lenguajes.
+    var CODIGO = {
+      py: [
+        ["import", "import sqlite3"],
+        [null, ""],
+        ["rol", "rol = \"app_backend\""],
+        ["conectar", "con = sqlite3.connect(\":memory:\")"],
+        ["usuario", "con.create_function(\"usuario_actual\", 0, lambda: rol)"],
+        [null, ""],
+        [null, "# 1. las dos tablas: productos y auditoria (vacía)"],
+        ["productos", "con.executescript(\"\"\""],
+        ["productos", "CREATE TABLE productos (id_producto INTEGER PRIMARY KEY, nombre TEXT,"],
+        ["productos", "    categoria TEXT, precio REAL, stock INTEGER);"],
+        ["productos", "INSERT INTO productos VALUES"],
+        ["productos", "    (101, 'Teclado mecánico', 'Periféricos', 79.90, 120),"],
+        ["productos", "    (102, 'Monitor 27\" 4K', 'Monitores', 349.00, 45),"],
+        ["productos", "    (103, 'Ratón inalámbrico', 'Periféricos', 29.90, 200),"],
+        ["productos", "    (104, 'Disco SSD 1TB', 'Almacenamiento', 89.50, 80),"],
+        ["productos", "    (105, 'Webcam HD', 'Periféricos', 39.90, 60),"],
+        ["productos", "    (106, 'Router Wi-Fi 6', 'Redes', 129.00, 30);"],
+        ["productos", "\"\"\")"],
+        ["auditoria", "con.executescript(\"\"\""],
+        ["auditoria", "CREATE TABLE auditoria (id_auditoria INTEGER PRIMARY KEY AUTOINCREMENT,"],
+        ["auditoria", "    operacion TEXT NOT NULL, id_registro INTEGER, usuario_bd TEXT NOT NULL,"],
+        ["auditoria", "    datos_previos TEXT, datos_nuevos TEXT);"],
+        ["auditoria", "\"\"\")"],
+        [null, ""],
+        [null, "# 2. el trigger: el motor lo ejecuta solo después de cada fila cambiada"],
+        ["trigger", "con.executescript(\"\"\""],
+        ["trigger", "CREATE TRIGGER trg_auditoria_productos AFTER UPDATE ON productos"],
+        ["trigger", "FOR EACH ROW"],
+        ["trigger", "BEGIN"],
+        ["trigger", "    INSERT INTO auditoria (operacion, id_registro, usuario_bd, datos_previos, datos_nuevos)"],
+        ["trigger", "    VALUES ('UPDATE', NEW.id_producto, usuario_actual(),"],
+        ["trigger", "        json_object('id_producto', OLD.id_producto, 'nombre', OLD.nombre,"],
+        ["trigger", "            'categoria', OLD.categoria, 'precio', OLD.precio, 'stock', OLD.stock),"],
+        ["trigger", "        json_object('id_producto', NEW.id_producto, 'nombre', NEW.nombre,"],
+        ["trigger", "            'categoria', NEW.categoria, 'precio', NEW.precio, 'stock', NEW.stock));"],
+        ["trigger", "END;"],
+        ["trigger", "\"\"\")"],
+        [null, ""],
+        [null, "# 3. el código solo hace UPDATE: no sabe que existe la auditoría"],
+        ["update1", "con.execute(\"UPDATE productos SET precio = 69.90 WHERE id_producto = 101\")"],
+        ["update2", "con.execute(\"UPDATE productos SET precio = ROUND(precio - 5, 2) WHERE categoria = 'Periféricos'\")"],
+        ["rol2", "rol = \"admin_bd\""],
+        ["update3", "con.execute(\"UPDATE productos SET precio = 319.00 WHERE id_producto = 102\")"],
+        [null, ""],
+        [null, "# 4. proteger el registro: nadie borra de auditoria"],
+        ["proteger", "con.executescript(\"\"\""],
+        ["proteger", "CREATE TRIGGER trg_proteger_auditoria BEFORE DELETE ON auditoria"],
+        ["proteger", "BEGIN"],
+        ["proteger", "    SELECT RAISE(ABORT, 'auditoria es de solo escritura');"],
+        ["proteger", "END;"],
+        ["proteger", "\"\"\")"],
+        ["intento", "try:"],
+        ["intento", "    con.execute(\"DELETE FROM auditoria\")"],
+        ["intento", "except sqlite3.DatabaseError as e:"],
+        ["intento", "    print(\"rechazado:\", e)"],
+        [null, ""],
+        [null, "# 5. leer el registro"],
+        ["mostrar", "for fila in con.execute(\"\"\"SELECT id_auditoria, id_registro, usuario_bd,"],
+        ["mostrar", "        json_extract(datos_previos, '$.precio'), json_extract(datos_nuevos, '$.precio')"],
+        ["mostrar", "        FROM auditoria ORDER BY id_auditoria\"\"\"):"],
+        ["mostrar", "    print(fila)"],
+        [null, ""],
+        [null, "# 6. comprobar: el último valor auditado de cada producto es el que hay en la tabla"],
+        ["verificar", "ultimo = {}"],
+        ["verificar", "for fila in con.execute(\"SELECT id_registro, json_extract(datos_nuevos, '$.precio') FROM auditoria ORDER BY id_auditoria\"):"],
+        ["verificar", "    ultimo[fila[0]] = fila[1]"],
+        ["verificar", "coincide = True"],
+        ["verificar", "for id_p, nuevo in ultimo.items():"],
+        ["verificar", "    precio = con.execute(\"SELECT precio FROM productos WHERE id_producto = ?\", (id_p,)).fetchone()[0]"],
+        ["verificar", "    if precio != nuevo:"],
+        ["verificar", "        coincide = False"],
+        ["verificar", "print(coincide)   # True"]
+      ],
+      r: [
+        ["rol", "rol <- \"app_backend\""],
+        [null, ""],
+        [null, "# 1. las dos tablas: productos y auditoria (vacía)"],
+        ["productos", "productos <- data.frame("],
+        ["productos", "  id_producto = c(101, 102, 103, 104, 105, 106),"],
+        ["productos", "  nombre = c(\"Teclado mecánico\", \"Monitor 27\\\" 4K\", \"Ratón inalámbrico\","],
+        ["productos", "             \"Disco SSD 1TB\", \"Webcam HD\", \"Router Wi-Fi 6\"),"],
+        ["productos", "  categoria = c(\"Periféricos\", \"Monitores\", \"Periféricos\","],
+        ["productos", "                \"Almacenamiento\", \"Periféricos\", \"Redes\"),"],
+        ["productos", "  precio = c(79.90, 349.00, 29.90, 89.50, 39.90, 129.00),"],
+        ["productos", "  stock = c(120, 45, 200, 80, 60, 30))"],
+        ["auditoria", "auditoria <- data.frame(id_auditoria = numeric(0), id_registro = numeric(0),"],
+        ["auditoria", "                        usuario_bd = character(0), previo = numeric(0), nuevo = numeric(0))"],
+        [null, ""],
+        [null, "# 2. el \"trigger\": R no lo dispara solo, hay que llamarlo después de cada cambio"],
+        ["trigger", "auditar <- function(aud, antes, despues, usuario) {"],
+        ["trigger", "  for (i in seq_len(nrow(antes))) {"],
+        ["trigger", "    if (antes$precio[i] != despues$precio[i]) {"],
+        ["trigger", "      aud <- rbind(aud, data.frame(id_auditoria = nrow(aud) + 1,"],
+        ["trigger", "                                   id_registro = antes$id_producto[i],"],
+        ["trigger", "                                   usuario_bd = usuario,"],
+        ["trigger", "                                   previo = antes$precio[i], nuevo = despues$precio[i]))"],
+        ["trigger", "    }"],
+        ["trigger", "  }"],
+        ["trigger", "  aud"],
+        ["trigger", "}"],
+        [null, ""],
+        [null, "# 3. cada cambio: guardar el antes, cambiar y llamar a auditar()"],
+        ["update1", "antes <- productos"],
+        ["update1", "productos$precio[productos$id_producto == 101] <- 69.90"],
+        ["update1", "auditoria <- auditar(auditoria, antes, productos, rol)"],
+        [null, ""],
+        ["update2", "antes <- productos"],
+        ["update2", "sel <- productos$categoria == \"Periféricos\""],
+        ["update2", "productos$precio[sel] <- round(productos$precio[sel] - 5, 2)"],
+        ["update2", "auditoria <- auditar(auditoria, antes, productos, rol)"],
+        [null, ""],
+        ["rol2", "rol <- \"admin_bd\""],
+        ["update3", "antes <- productos"],
+        ["update3", "productos$precio[productos$id_producto == 102] <- 319.00"],
+        ["update3", "auditoria <- auditar(auditoria, antes, productos, rol)"],
+        [null, ""],
+        [null, "# 4. proteger el registro: nadie borra de auditoria"],
+        ["proteger", "borrar_auditoria <- function() stop(\"auditoria es de solo escritura\")"],
+        ["intento", "tryCatch(borrar_auditoria(),"],
+        ["intento", "         error = function(e) cat(\"rechazado: \", conditionMessage(e), \"\\n\", sep = \"\"))"],
+        [null, ""],
+        [null, "# 5. leer el registro"],
+        ["mostrar", "print(auditoria)"],
+        [null, ""],
+        [null, "# 6. comprobar: el último valor auditado de cada producto es el que hay en la tabla"],
+        ["verificar", "coincide <- TRUE"],
+        ["verificar", "for (id_p in unique(auditoria$id_registro)) {"],
+        ["verificar", "  filas <- auditoria[auditoria$id_registro == id_p, ]"],
+        ["verificar", "  nuevo <- filas$nuevo[nrow(filas)]"],
+        ["verificar", "  precio <- productos$precio[productos$id_producto == id_p]"],
+        ["verificar", "  if (precio != nuevo) {"],
+        ["verificar", "    coincide <- FALSE"],
+        ["verificar", "  }"],
+        ["verificar", "}"],
+        ["verificar", "print(coincide)   # TRUE"]
+      ]
+    };
+    var SALIDA = {
+      py: ["rechazado: auditoria es de solo escritura", "(1, 101, 'app_backend', 79.9, 69.9)", "(2, 101, 'app_backend', 69.9, 64.9)", "(3, 103, 'app_backend', 29.9, 24.9)", "(4, 105, 'app_backend', 39.9, 34.9)", "(5, 102, 'admin_bd', 349.0, 319.0)", "True"],
+      r: ["rechazado: auditoria es de solo escritura", "  id_auditoria id_registro  usuario_bd previo nuevo", "1            1         101 app_backend   79.9  69.9", "2            2         101 app_backend   69.9  64.9", "3            3         103 app_backend   29.9  24.9", "4            4         105 app_backend   39.9  34.9", "5            5         102    admin_bd  349.0 319.0", "[1] TRUE"]
+    };
+    var CUM = { py: [0, 1, 6, 7], r: [0, 1, 7, 8] };
+    var EV = [];
+    (function () {
+      var prod = null, aud = null, rol = null, tP = false, tA = false, trg = false, prot = false, fase = 1, disp = 0, sal = 0;
+      function foto(id, extra) {
+        EV.push(Object.assign({ id: id, fase: fase, rol: rol, tP: tP, tA: tA, trg: trg, prot: prot, disp: disp, sal: sal,
+          prod: prod ? prod.map(copiaFila) : null, aud: aud ? aud.map(function (a) { return Object.assign({}, a); }) : null,
+          ids: [], fila: null }, extra || {}));
+      }
+      foto("import");
+      rol = "app_backend"; foto("rol");
+      foto("conectar");
+      foto("usuario");
+      prod = INICIAL.map(copiaFila); tP = true; foto("productos");
+      aud = []; tA = true; foto("auditoria");
+      trg = true; foto("trigger", { def: true });
+      fase = 2;
+      function cambiar(id, donde, nuevo) {
+        var ids = [];
+        prod.forEach(function (r) { if (donde(r)) { r._antes = r.precio; r.precio = nuevo(r); ids.push(r.id_producto); } });
+        foto(id, { ids: ids });
+        ids.forEach(function (i) {
+          var r = prod.filter(function (x) { return x.id_producto === i; })[0];
+          var fila = { id: aud.length + 1, reg: i, usu: rol, previo: r._antes, nuevo: r.precio };
+          aud.push(fila); disp++;
+          foto("trigger", { ids: [i], fila: fila, nueva: fila.id });
+        });
+        prod.forEach(function (r) { delete r._antes; });
+      }
+      cambiar("update1", function (r) { return r.id_producto === 101; }, function () { return 69.90; });
+      cambiar("update2", function (r) { return r.categoria === "Periféricos"; }, function (r) { return r2(r.precio - 5); });
+      rol = "admin_bd"; foto("rol2");
+      cambiar("update3", function (r) { return r.id_producto === 102; }, function () { return 319.00; });
+      fase = 3;
+      prot = true; foto("proteger");
+      sal = 1; foto("intento");
+      sal = 2; foto("mostrar");
+      sal = 3; foto("verificar", { fin: true });
+    })();
+
+    function p2(v) { return f2(v); }
+    function narrar(e, ctx) {
+      var py = ctx.lang() === "py", f = e.fila;
+      switch (e.id) {
+        case "import": return py ? "Carga <b>sqlite3</b>, el módulo de la librería estándar de Python para hablar con SQLite." : "R no necesita importar nada para este ejemplo: se usan solo data.frames.";
+        case "rol": return py ? "Una variable con el rol que está «conectado»: <b>app_backend</b>. SQLite no tiene roles, así que lo simulamos." : "Una variable con el rol que está «conectado»: <b>app_backend</b>. R tampoco tiene roles de base de datos: es solo un texto.";
+        case "conectar": return py ? "Abre una base de datos <b>en memoria</b>: vive solo mientras corre el programa." : "En R no hay conexión: en esta máquina no hay RSQLite, así que los datos viven en data.frames.";
+        case "usuario": return py ? "SQLite no tiene <code>current_user</code>. Se registra una función de Python, <b>usuario_actual()</b>, que el trigger podrá llamar y que devuelve el valor de <code>rol</code>." : "En R no hace falta: el rol viaja como argumento de auditar().";
+        case "productos": return py ? "Crea la tabla <b>productos</b> con las seis filas de la tienda." : "Crea el <b>data.frame</b> productos con las seis filas de la tienda.";
+        case "auditoria": return py ? "Crea la tabla <b>auditoria</b>, vacía: operación, producto, rol y el antes y el después como JSON." : "Crea el data.frame <b>auditoria</b>, vacío, con las columnas que se van a anotar.";
+        case "trigger":
+          if (e.def) return py ? "<b>CREATE TRIGGER</b>: le dice al motor «después de cada UPDATE sobre productos, y por cada fila cambiada, inserta esto en auditoria». Todavía no se ejecuta: queda registrado." : "Define la función <b>auditar()</b>: recorre las filas y anota las que cambiaron. R no tiene triggers: esta función solo corre cuando <b>tú</b> la llamas.";
+          return py ? "El motor dispara el trigger <b>solo</b>, para la fila " + e.ids[0] + ": inserta la fila " + f.id + " en auditoria (rol " + f.usu + ", " + p2(f.previo) + " → " + p2(f.nuevo) + "). Tu código no lo llamó."
+            : "<b>auditar()</b> encuentra la fila " + e.ids[0] + " distinta (" + p2(f.previo) + " → " + p2(f.nuevo) + ") y anota la fila " + f.id + " con el rol " + f.usu + ". (En R la llamada es la última línea del bloque anterior.)";
+        case "update1": return py ? "Un UPDATE sobre una fila: el teclado (101) baja de 79.90 a <b>69.90</b>. El código solo hizo UPDATE; no menciona auditoria." : "Se guarda el antes, se cambia el precio del teclado (101) de 79.90 a <b>69.90</b> y se llama a auditar() a mano.";
+        case "update2": return py ? "<b>Un solo UPDATE</b> que afecta a 3 filas (los periféricos 101, 103 y 105): cada precio baja 5." : "Se guarda el antes, se bajan 5 los tres periféricos (101, 103 y 105) y se llama a auditar().";
+        case "rol2": return py ? "Cambia el «rol conectado» a <b>admin_bd</b>: la función usuario_actual() ahora devolverá otro valor." : "Cambia el «rol conectado» a <b>admin_bd</b>.";
+        case "update3": return "Con el rol admin_bd, el monitor (102) baja de 349.00 a <b>319.00</b>." + (py ? "" : " Se vuelve a llamar a auditar().");
+        case "proteger": return py ? "SQLite no tiene privilegios. Se crea un trigger <b>BEFORE DELETE</b> sobre auditoria que lanza un error: nadie puede borrar de ella." : "R tampoco tiene privilegios. Se simula con una función que siempre lanza un error.";
+        case "intento": return py ? "Intenta <code>DELETE FROM auditoria</code>. El trigger de protección aborta con su mensaje y Python lo atrapa. La auditoría sigue con sus " + e.aud.length + " filas." : "Intenta borrar llamando a la función. Falla con su mensaje y <b>tryCatch</b> lo atrapa. La auditoría sigue con sus " + e.aud.length + " filas.";
+        case "mostrar": return "Imprime el registro: quién cambió qué producto y de cuánto a cuánto. Son " + e.aud.length + " filas para 5 filas cambiadas en total.";
+        case "verificar": return "Comprueba que el <b>último valor auditado</b> de cada producto coincide con el de la tabla: la auditoría cuenta la misma historia. Da <b>" + (py ? "True" : "TRUE") + "</b>.";
+      }
+      return "";
+    }
+    function visual(e, anterior, ctx) {
+      var py = ctx.lang() === "py";
+      var h = '<thead><tr><th class="n">id_producto</th><th>nombre</th><th class="n">precio</th></tr></thead><tbody>';
+      if (!e || !e.tP) h += '<tr><td class="vacio" colspan="3">todavía no existe</td></tr>';
+      else e.prod.forEach(function (r) {
+        var cambia = e.ids.indexOf(r.id_producto) >= 0 && (e.id === "update1" || e.id === "update2" || e.id === "update3");
+        h += "<tr><td class=\"n\">" + r.id_producto + "</td><td>" + esc(r.nombre) + '</td><td class="n' + (cambia ? " cambio" : "") + '">' + p2(r.precio) + "</td></tr>";
+      });
+      $("vrProd").innerHTML = h + "</tbody>";
+      var a = '<thead><tr><th class="n">id_auditoria</th><th class="n">id_registro</th><th>usuario_bd</th><th class="n">previo</th><th class="n">nuevo</th></tr></thead><tbody>';
+      if (!e || !e.tA) a += '<tr><td class="vacio" colspan="5">todavía no existe</td></tr>';
+      else if (!e.aud.length) a += '<tr><td class="vacio" colspan="5">vacía</td></tr>';
+      else e.aud.forEach(function (r) {
+        a += '<tr' + (e.nueva === r.id ? ' class="llega"' : "") + '><td class="n">' + r.id + '</td><td class="n">' + r.reg + "</td><td>" + r.usu + '</td><td class="n">' + p2(r.previo) + '</td><td class="n">' + p2(r.nuevo) + "</td></tr>";
+      });
+      $("vrAud").innerHTML = a + "</tbody>";
+      $("vrEstado").innerHTML =
+        '<span class="' + (e && e.trg ? "ok" : "") + '">' + (py ? "trigger AFTER UPDATE" : "función auditar()") + (e && e.trg ? " listo" : " sin crear") + "</span>" +
+        '<span class="' + (e && e.prot ? "ok" : "") + '">' + (e && e.prot ? "protegida contra DELETE" : "sin proteger") + "</span>" +
+        '<span class="' + (e && e.id === "trigger" && !e.def ? "on" : "") + '">' + (e && e.id === "trigger" && !e.def ? (py ? "el motor dispara el trigger" : "auditar() anota una fila") : "en reposo") + "</span>";
+      $("vrCuenta").innerHTML = e && e.id === "trigger" && !e.def
+        ? "disparos hasta ahora: <b>" + e.disp + "</b> &nbsp;·&nbsp; filas en auditoria: <b>" + e.aud.length + "</b>"
+        : e && e.fin ? "5 filas cambiadas en total, 5 filas auditadas: <b>una por fila</b>." : "";
+      var lineas = SALIDA[ctx.lang()].slice(0, CUM[ctx.lang()][e ? e.sal : 0]);
+      $("vrSalida").textContent = lineas.join("\n");
+    }
+    B.vidaReal($("vidareal"), {
+      codigo: CODIGO,
+      eventos: EV,
+      narrar: narrar,
+      vars: function (e, ctx) {
+        var v = [];
+        if (e && e.rol) v.push("<span>rol = <b>" + e.rol + "</b></span>");
+        v.push("<span>disparos del trigger <b>" + (e ? e.disp : 0) + "</b></span>");
+        v.push("<span>filas en auditoria <b>" + (e && e.aud ? e.aud.length : 0) + "</b></span>");
+        return v;
+      },
+      visual: visual,
+      demora: function (e) { return !e ? 600 : e.id === "trigger" && !e.def ? 1100 : e.id === "update1" || e.id === "update2" || e.id === "update3" ? 1000 : 800; }
+    });
+
+    /* chequeo de prediccion y trampas reales */
+    B.numerico(cuerpo("vrPred"), {
+      pregunta: "El programa hace solo tres UPDATE: uno sobre una fila, otro sobre tres periféricos y otro sobre una fila. ¿Cuántas filas tendrá <code>auditoria</code> al final?",
+      respuesta: 5,
+      tolerancia: 0,
+      pistas: ["El trigger es FOR EACH ROW: cuenta filas afectadas, no sentencias.", "Suma las filas que cambia cada UPDATE: 1, 3 y 1."],
+      diagnostico: function (v) {
+        if (v === 3) return "Esas son las sentencias. El trigger corre por cada fila afectada, no por cada sentencia.";
+        if (v === 4) return "Te falta una fila: la del UPDATE que hace admin_bd sobre el monitor.";
+        return null;
+      },
+      explicacion: "1 + 3 + 1 = <b>5</b>. El código solo escribió tres UPDATE, y auditoria se llenó con cinco filas sin que el código la nombrara. Ahora dale a reproducir y mira el contador de disparos.",
+      alResolver: function (ok) { C.reto("codigo1", ok); }
+    });
+    prop("codigo2", {
+      pregunta: "En Python, si te olvidas de la línea <code>con.create_function(\"usuario_actual\", 0, lambda: rol)</code> y haces el UPDATE del teclado, ¿qué pasa?",
+      opciones: [
+        "El UPDATE falla con <code>no such function: usuario_actual</code> y el precio no cambia",
+        "El UPDATE funciona y usuario_bd queda vacío (NULL)",
+        "El UPDATE funciona, pero no se audita nada",
+        "SQLite usa el usuario del sistema operativo"
+      ],
+      correcta: 0,
+      pistas: [null, "Un trigger que llama a una función que no existe no devuelve NULL: da error cuando se dispara.",
+        "El trigger sí se dispara; es lo que hace dentro lo que falla.", "SQLite no tiene usuarios: por eso hubo que registrar la función."],
+      explicacion: "Lo comprobé: el trigger se dispara, <code>usuario_actual()</code> no existe y SQLite lanza <code>OperationalError: no such function: usuario_actual</code>. Como el trigger corre dentro del UPDATE, el cambio entero se deshace: el precio sigue en 79.9 y auditoria en 0 filas."
+    });
+    prop("codigo3", {
+      pregunta: "En R cambias <code>productos$precio[productos$id_producto == 101] &lt;- 10</code> pero <b>no</b> llamas a <code>auditar()</code>. ¿Qué queda en auditoria?",
+      opciones: [
+        "Nada: en R nadie dispara la función solo, hay que llamarla a mano",
+        "Una fila, porque R detecta que productos cambió",
+        "Un error, porque falta llamar a auditar()",
+        "Una fila, pero con usuario_bd vacío"
+      ],
+      correcta: 0,
+      pistas: [null, "R no vigila las variables: una asignación es solo una asignación.",
+        "R no se queja si no llamas a una función: simplemente no se ejecuta.", "Si auditar() no corre, no se escribe ninguna fila."],
+      explicacion: "R no tiene triggers: el cambio queda sin rastro. Esta es la gran diferencia con un trigger de verdad, que corre solo aunque el programa que cambia la tabla no sepa que existe, y por eso la auditoría no depende de que cada programa se acuerde."
+    });
+  })();
+
+  /* ---------------- tarjetas ---------------- */
+  B.tarjetas($("tarjetas"), [
+    ["¿Qué es un <b>trigger</b>?", "Código que la base de datos ejecuta sola cuando ocurre un evento (INSERT, UPDATE o DELETE) en una tabla. El programa que cambia la tabla no lo llama."],
+    ["¿Qué guarda cada fila de la tabla de <b>auditoria</b>?", "Qué tabla, qué operación, a qué fila se refiere, qué rol la hizo (usuario_bd), la fila antes y después como JSON y cuándo."],
+    ["¿Qué valen OLD y NEW en un INSERT, un UPDATE y un DELETE?", "INSERT: OLD vacío y NEW con la fila nueva. UPDATE: las dos. DELETE: OLD con la fila borrada y NEW vacío."],
+    ["¿Qué significa <b>FOR EACH ROW</b>?", "El trigger corre una vez por cada fila afectada. Un UPDATE de 3 filas deja 3 filas en auditoria; uno que no encuentra nada, ninguna."],
+    ["¿Para qué sirve <code>current_user</code> en el trigger?", "Guarda el rol con el que se hizo la operación. Por eso cada aplicación debe tener su propio rol, no una cuenta compartida."],
+    ["¿La auditoría <b>previene</b> el mal uso?", "No: no impide que quien tiene permisos cambie un dato. Lo hace detectable e investigable después."],
+    ["¿Cómo se protege el registro de auditoría?", "Quitar modificación y borrado a las cuentas operativas, política de retención y réplica a un sistema externo de solo escritura."],
+    ["¿Y en SQLite y en R?", "SQLite: <code>CREATE TRIGGER ... AFTER UPDATE</code>, con el usuario registrado con <code>create_function</code>. R no tiene triggers: una función que compara el antes y el después, y la llamas tú."]
+  ]);
+
+  /* ---------------- conexiones ---------------- */
+  B.conexiones("auditoria-triggers");
+})();
+</script>
+</body>
+</html>

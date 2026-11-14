@@ -1384,5 +1384,245 @@ window.FUENTES = {
     autor: "William F. Trench",
     archivo: "/Users/franciscocastillo/brain/03-Matematicas/13-Ecuaciones-diferenciales/Unidad 06 - Applications of Linear Second Order Equations.pdf",
     nota: "Resortes, oscilaciones amortiguadas, circuitos y resonancia. Página impresa = página del archivo + 266."
+  },
+  arq2diapo: {
+    corto: "Arquitectura UD2 diapositivas",
+    titulo: "UD2. CPU, memoria y organización (diapositivas)",
+    autor: "Máster en IA, UAX. Arquitectura de computadores y redes de comunicación",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142052 - Arquitectura de computadores y redes/UD2. CPU, memoria y organizacion/MUIA_SM142052_UD2_Presentacion.pdf",
+    nota: "Diapositivas en PDF: citar por página del PDF (PDF = impresa)."
+  },
+  arq2ej: {
+    corto: "Arquitectura UD2 ejercicio",
+    titulo: "UD2. Ejercicio con solución (roofline CPU y GPU)",
+    autor: "Máster en IA, UAX. Arquitectura de computadores y redes de comunicación",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142052 - Arquitectura de computadores y redes/UD2. CPU, memoria y organizacion/MUIA_SM142052_UD2_Ejercicio_con_solucion.pdf",
+    nota: "Página impresa = página del PDF - 1. Tiene erratas en el cálculo del pico de la CPU y en el roofline: el mapa las lista."
+  },
+  arq2enun: {
+    corto: "Arquitectura UD2 enunciado",
+    titulo: "UD2. Ejercicio (enunciado)",
+    autor: "Máster en IA, UAX. Arquitectura de computadores y redes de comunicación",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142052 - Arquitectura de computadores y redes/UD1. Arquitectura de computadores/MUIA_SM142052_UD2_Ejercicio.pdf",
+    nota: "Enunciado suelto en la carpeta de la UD1. Página impresa = página del PDF - 2."
+  },
+  arq3: {
+    corto: "Arquitectura UD3 teoría",
+    titulo: "UD3. E/S y periféricos. Contenido teórico",
+    autor: "Máster en IA, UAX. Arquitectura de computadores y redes de comunicación",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142052 - Arquitectura de computadores y redes/UD3. E-S y perifericos/MUIA_SM142052_UD3_Contenido_teórico.pdf",
+    nota: "Entrada y salida, interrupciones, DMA, discos y RAID. Página PDF = impresa + 3."
+  },
+  arq3diapo: {
+    corto: "Arquitectura UD3 diapositivas",
+    titulo: "UD3. E/S y periféricos (diapositivas)",
+    autor: "Máster en IA, UAX. Arquitectura de computadores y redes de comunicación",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142052 - Arquitectura de computadores y redes/UD3. E-S y perifericos/MUIA_SM142052_UD3_Presentación.pdf",
+    nota: "Diapositivas en PDF: citar por página del PDF (PDF = impresa)."
+  },
+  red4: {
+    corto: "Redes UD4 teoría",
+    titulo: "UD4. Fundamentos de redes. Contenido teórico",
+    autor: "Máster en IA, UAX. Arquitectura de computadores y redes de comunicación",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142052 - Arquitectura de computadores y redes/UD4. Fundamentos de redes/MUIA_SM142052_UD4_Contenido_teorico.pdf",
+    nota: "Modelo OSI, direccionamiento IP, máscaras y CIDR. Página impresa = página del PDF - 2."
+  },
+  red4diapo: {
+    corto: "Redes UD4 diapositivas",
+    titulo: "UD4. Fundamentos de redes (diapositivas)",
+    autor: "Máster en IA, UAX. Arquitectura de computadores y redes de comunicación",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142052 - Arquitectura de computadores y redes/UD4. Fundamentos de redes/MUIA_SM142052_UD4_Presentación.pdf",
+    nota: "Diapositivas en PDF: citar por página del PDF (PDF = impresa)."
+  },
+  red5: {
+    corto: "Redes UD5 teoría",
+    titulo: "UD5. Tecnologías y protocolos. Contenido teórico",
+    autor: "Máster en IA, UAX. Arquitectura de computadores y redes de comunicación",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142052 - Arquitectura de computadores y redes/UD5. Tecnologias y protocolos/MUIA_SM142052_UD5_Contenido_teórico.pdf",
+    nota: "Switch, VLAN, routing, TCP, DNS y HTTP. Página impresa = página del PDF - 3."
+  },
+  red5diapo: {
+    corto: "Redes UD5 diapositivas",
+    titulo: "UD5. Tecnologías y protocolos (diapositivas)",
+    autor: "Máster en IA, UAX. Arquitectura de computadores y redes de comunicación",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142052 - Arquitectura de computadores y redes/UD5. Tecnologias y protocolos/MUIA_SM142052_UD5_Presentación.pdf",
+    nota: "Diapositivas en PDF: citar por página del PDF (PDF = impresa)."
+  },
+  red6: {
+    corto: "Redes UD6 teoría",
+    titulo: "UD6. Seguridad en redes. Contenido teórico",
+    autor: "Máster en IA, UAX. Arquitectura de computadores y redes de comunicación",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142052 - Arquitectura de computadores y redes/UD6. Seguridad en redes/MUIA_SM142052_UD6_Contenido_teorico.pdf",
+    nota: "Cortafuegos, VPN, cifrado, TLS y buenas prácticas. Página impresa = página del PDF - 3."
+  },
+  red6diapo: {
+    corto: "Redes UD6 diapositivas",
+    titulo: "UD6. Seguridad en redes (diapositivas)",
+    autor: "Máster en IA, UAX. Arquitectura de computadores y redes de comunicación",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142052 - Arquitectura de computadores y redes/UD6. Seguridad en redes/MUIA_SM142052_UD6_Presentación.pdf",
+    nota: "Diapositivas en PDF: citar por página del PDF (PDF = impresa)."
+  },
+  red5ej: {
+    corto: "Redes UD5 ejercicio",
+    titulo: "UD5. Ejercicio con solución (subredes y VLAN)",
+    autor: "Máster en IA, UAX. Arquitectura de computadores y redes de comunicación",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142052 - Arquitectura de computadores y redes/UD5. Tecnologias y protocolos/MUIA_SM142052_UD5_Ejercicio_con_solucion.pdf",
+    nota: "Página impresa = página del PDF - 1."
+  },
+  bd1: {
+    corto: "BD UD1 teoría",
+    titulo: "UD1. Fundamentos de BD. Contenido teórico",
+    autor: "Máster en IA, UAX. Bases de datos",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142051 - Base de Datos/UD1. Fundamentos de BD/MUIA_SM142051_UD1_Contenido_teorico.pdf",
+    nota: "Modelo relacional, claves y SGBD. Página impresa = página del PDF - 2."
+  },
+  bd1diapo: {
+    corto: "BD UD1 diapositivas",
+    titulo: "UD1. Fundamentos de BD (diapositivas)",
+    autor: "Máster en IA, UAX. Bases de datos",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142051 - Base de Datos/UD1. Fundamentos de BD/MUIA_SM142051_UD1_Presentacion.pdf",
+    nota: "Diapositivas en PDF: citar por página del PDF (PDF = impresa)."
+  },
+  bd2: {
+    corto: "BD UD2 teoría",
+    titulo: "UD2. SQL. Contenido teórico",
+    autor: "Máster en IA, UAX. Bases de datos",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142051 - Base de Datos/UD2. SQL/MUIA_SM142051_UD2_Contenido_teórico.pdf",
+    nota: "SQL: SELECT, JOIN, GROUP BY y subconsultas. Página impresa = página del PDF - 3."
+  },
+  bd2diapo: {
+    corto: "BD UD2 diapositivas",
+    titulo: "UD2. SQL (diapositivas)",
+    autor: "Máster en IA, UAX. Bases de datos",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142051 - Base de Datos/UD2. SQL/MUIA_SM142051_UD2_Presentacion.pdf",
+    nota: "Diapositivas en PDF: citar por página del PDF (PDF = impresa)."
+  },
+  bd3: {
+    corto: "BD UD3 teoría",
+    titulo: "UD3. Modelado conceptual. Contenido teórico",
+    autor: "Máster en IA, UAX. Bases de datos",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142051 - Base de Datos/UD3. Modelado conceptual/MUIA_SM142051_UD3_Contenido_teorico.pdf",
+    nota: "Modelo entidad-relación y cardinalidad. Página impresa = página del PDF - 2."
+  },
+  bd3diapo: {
+    corto: "BD UD3 diapositivas",
+    titulo: "UD3. Modelado conceptual (diapositivas)",
+    autor: "Máster en IA, UAX. Bases de datos",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142051 - Base de Datos/UD3. Modelado conceptual/MUIA_SM142051_UD3_Presentación.pdf",
+    nota: "Diapositivas en PDF: citar por página del PDF (PDF = impresa)."
+  },
+  bd4: {
+    corto: "BD UD4 teoría",
+    titulo: "UD4. Diseño e implementación. Contenido teórico",
+    autor: "Máster en IA, UAX. Bases de datos",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142051 - Base de Datos/UD4. Diseno e implementacion/MUIA_SM142051_UD4_Contenido_teórico.pdf",
+    nota: "E-R a tablas, normalización, índices y vectores. Página impresa = página del PDF - 3."
+  },
+  bd4diapo: {
+    corto: "BD UD4 diapositivas",
+    titulo: "UD4. Diseño e implementación (diapositivas)",
+    autor: "Máster en IA, UAX. Bases de datos",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142051 - Base de Datos/UD4. Diseno e implementacion/MUIA_SM142051_UD4_Presentacion.pdf",
+    nota: "Diapositivas en PDF: citar por página del PDF (PDF = impresa)."
+  },
+  bd5: {
+    corto: "BD UD5 teoría",
+    titulo: "UD5. Integración programación-BD. Contenido teórico",
+    autor: "Máster en IA, UAX. Bases de datos",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142051 - Base de Datos/UD5. Integracion programacion-BD/MUIA_SM142051_UD5_Contenido_teorico.pdf",
+    nota: "ORM, conexión desde código, transacciones e inyección SQL. Página impresa = página del PDF - 2."
+  },
+  bd5diapo: {
+    corto: "BD UD5 diapositivas",
+    titulo: "UD5. Integración programación-BD (diapositivas)",
+    autor: "Máster en IA, UAX. Bases de datos",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142051 - Base de Datos/UD5. Integracion programacion-BD/MUIA_SM142051_UD5_Presentacion.pdf",
+    nota: "Diapositivas en PDF: citar por página del PDF (PDF = impresa)."
+  },
+  bd6: {
+    corto: "BD UD6 teoría",
+    titulo: "UD6. Seguridad en BD. Contenido teórico",
+    autor: "Máster en IA, UAX. Bases de datos",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142051 - Base de Datos/UD6. Seguridad en BD/MUIA_SM142051_UD6_Contenido_teórico.pdf",
+    nota: "Roles, cifrado, auditoría y copias de seguridad. Página impresa = página del PDF - 3 (solo la primera página lleva número)."
+  },
+  bd6diapo: {
+    corto: "BD UD6 diapositivas",
+    titulo: "UD6. Seguridad en BD (diapositivas)",
+    autor: "Máster en IA, UAX. Bases de datos",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142051 - Base de Datos/UD6. Seguridad en BD/MUIA_SM142051_UD6_Presentacion.pdf",
+    nota: "Diapositivas en PDF: citar por página del PDF (PDF = impresa)."
+  },
+  bd1cuest: {
+    corto: "BD UD1 cuestionario",
+    titulo: "UD1. Cuestionario de autoevaluación (revisión del intento)",
+    autor: "Máster en IA, UAX. Bases de datos",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142051 - Base de Datos/UD1. Fundamentos de BD/Cuestionario de autoevaluación UD1: Revisión del intento | UAX.pdf",
+    nota: "Cinco páginas sin numeración impresa."
+  },
+  bd2ej: {
+    corto: "BD UD2 ejercicio",
+    titulo: "UD2. Ejercicio con solución (tienda en línea)",
+    autor: "Máster en IA, UAX. Bases de datos",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142051 - Base de Datos/UD2. SQL/MUIA_SM142051_UD2_Ejercicio_con_solucion.pdf",
+    nota: "Página impresa = página del PDF - 1. La solución tiene erratas: el mapa las lista."
+  },
+  bd2enun: {
+    corto: "BD UD2 enunciado",
+    titulo: "UD2. Ejercicio (enunciado)",
+    autor: "Máster en IA, UAX. Bases de datos",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142051 - Base de Datos/UD2. SQL/MUIA_SM142051_UD2_Ejercicio.pdf",
+    nota: "Página impresa = página del PDF - 1."
+  },
+  bd5ej: {
+    corto: "BD UD5 ejercicio",
+    titulo: "UD5. Ejercicio con solución",
+    autor: "Máster en IA, UAX. Bases de datos",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142051 - Base de Datos/UD5. Integracion programacion-BD/MUIA_SM142051_UD5_Ejercicio_con_solucion.pdf",
+    nota: "Página impresa = página del PDF - 1."
+  },
+  bdpf: {
+    corto: "BD proyecto final",
+    titulo: "Proyecto final de Base de datos",
+    autor: "Máster en IA, UAX. Bases de datos",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142051 - Base de Datos/07 Proyecto final/MUIA_SM142051_Proyecto Final.pdf",
+    nota: "Página impresa = página del PDF - 1."
+  },
+  bdguia: {
+    corto: "BD guía",
+    titulo: "Guía de aprendizaje de Base de datos",
+    autor: "Máster en IA, UAX. Bases de datos",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142051 - Base de Datos/00 Bienvenida - guia y cronograma/MUIA_SM142051_Guia de aprendizaje BBDD.pdf",
+    nota: "Página impresa = página del PDF - 1."
+  },
+  prog1: {
+    corto: "Programación UD1 teoría",
+    titulo: "UD1. Python, IDEs y SQL. Contenido teórico",
+    autor: "Máster en IA, UAX. Programación y entorno de trabajo para la IA",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142002 - Programacion y entorno de trabajo para la IA/UD1. Python, IDEs y SQL/SM142002_MUIA_UD1_CONTENIDO TEÓRICO.pdf",
+    nota: "Python, NumPy, pandas, entornos y SQL. Página PDF = impresa."
+  },
+  prog4: {
+    corto: "Programación UD4 teoría",
+    titulo: "UD4. R. Contenido teórico",
+    autor: "Máster en IA, UAX. Programación y entorno de trabajo para la IA",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142002 - Programacion y entorno de trabajo para la IA/UD4. R/SM142002_MUIA_UD4_CONTENIDO TEÓRICO.pdf",
+    nota: "Vectores, matrices, data frames y listas en R. Página PDF = impresa."
+  },
+  prog4html: {
+    corto: "Programación UD4 clase",
+    titulo: "UD4. Módulo 1 - Programación en R (documento de clase)",
+    autor: "Máster en IA, UAX. Programación y entorno de trabajo para la IA",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142002 - Programacion y entorno de trabajo para la IA/UD4. R/Módulo 1 - Programación en R.html",
+    nota: "Documento Quarto de clase: citar con data-ancla (id de sección sin #).",
+    tipo: "documento"
+  },
+  eda5doc: {
+    corto: "Programación UD5 EDA I",
+    titulo: "Unidad 5. EDA I (documento de clase)",
+    autor: "Máster en IA, UAX. Programación y entorno de trabajo para la IA",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142002 - Programacion y entorno de trabajo para la IA/UD5. R/Unidad 5 - EDA I.html",
+    nota: "tidyverse, dplyr, el pipe y ggplot2. Citar con data-ancla (id de sección sin #).",
+    tipo: "documento"
   }
 };

@@ -83,7 +83,7 @@ for c in CAT:
             avisos.append("%s pide '%s', pero ese no lo lista en siguientes" % (c["id"], t))
 
 for m in MAT:
-    if not m.get("matematica"):
+    if not (m.get("matematica") or m.get("cubierta")):
         continue
     for ud, nombre in m.get("unidades", []):
         if not any(a.get("materia") == m["codigo"] and a.get("ud") == ud for c in CAT for a in c.get("aparece", [])):

@@ -1,0 +1,1662 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Vistas y los tres niveles ANSI/SPARC</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+/* ---------- tablas del escenario ---------- */
+.tabla-wrap { overflow-x: auto; margin-top: 8px; }
+.tabla { width: 100%; border-collapse: collapse; font-family: var(--f-mono); font-size: 12px; font-variant-numeric: tabular-nums; }
+.tabla th { font-weight: 500; color: var(--ink-3); font-size: 11px; text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.tabla td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--line-soft); color: var(--ink); white-space: nowrap; }
+.tabla td.num, .tabla th.num { text-align: right; }
+.tabla td.cambio { background: var(--accent-soft); color: var(--ink); font-weight: 600; }
+.tabla tr.nueva td { background: color-mix(in oklab, var(--ok) 20%, var(--surface)); }
+.tabla tr.fuera td { opacity: .35; }
+.tabla td.vacio { text-align: center; color: var(--ink-3); font-style: italic; white-space: normal; }
+.tabla td.cur { box-shadow: inset 0 0 0 2px var(--accent); font-weight: 600; }
+.vs-ctl { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+.vs-ctl:empty { display: none; }
+.vs-ctl .hint, .esc-head .hint { font-size: 12.5px; color: var(--ink-2); }
+.vs-ctl button:disabled { opacity: .45; cursor: not-allowed; }
+.vs-ctl button.on { border-color: var(--accent); color: var(--accent); }
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.vs-caja { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; margin-bottom: 8px; background: var(--surface); }
+.vs-caja.viva { border-color: var(--j); }
+.vs-caja.copia { border-color: var(--k); }
+.vs-caja.mala { border-color: var(--bad); }
+.vs-tit { font-family: var(--f-mono); font-size: 11.5px; color: var(--ink-3); margin: 0 0 2px; letter-spacing: .02em; }
+.vs-tit b { color: var(--ink); font-weight: 500; }
+.vs-sql { font-family: var(--f-mono); font-size: 11.5px; color: var(--ink-2); background: var(--surface-2); border-radius: 6px; padding: 5px 8px; margin: 4px 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+.vs-err { font-family: var(--f-mono); font-size: 12px; color: var(--bad); padding: 6px 8px; border-radius: 6px; background: color-mix(in oklab, var(--bad) 10%, var(--surface)); overflow-wrap: anywhere; }
+.vs-kv { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 3px 12px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); font-family: var(--f-mono); font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.vs-kv dt { color: var(--ink-3); }
+.vs-kv dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
+.vs-kv dd.q { color: var(--accent); font-weight: 600; }
+.vs-nota { margin-top: 8px; font-size: 13px; color: var(--ink-2); min-height: 2.6em; overflow-wrap: anywhere; }
+.vs-nota b { color: var(--ink); font-weight: 500; }
+.vs-nota .mal { color: var(--bad); }
+.vs-nota .bien { color: var(--ok); }
+
+/* ---------- la pila de tres capas ---------- */
+.vs-capa { border: 1.5px solid var(--line); border-radius: 12px; padding: 8px 10px 10px; margin-bottom: 4px; background: var(--surface); cursor: pointer; }
+.vs-capa:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.vs-capa.sel { border-color: var(--accent); background: color-mix(in oklab, var(--accent-soft) 45%, var(--surface)); }
+.vs-capa.cambia { border-color: var(--k); }
+.vs-capa .vs-et { font-family: var(--f-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.vs-capa .vs-et em { font-style: normal; text-transform: none; letter-spacing: 0; color: var(--ink-3); }
+.vs-capa .vs-et em.mod { color: var(--k); font-weight: 600; }
+.vs-capa .vs-et em.igual { color: var(--ok); }
+.vs-enlace { text-align: center; font-family: var(--f-mono); font-size: 10.5px; color: var(--ink-3); margin: 0 0 4px; }
+.vs-dos { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; }
+.vs-mini { border: 1px solid var(--line-soft); border-radius: 8px; padding: 6px 8px; background: var(--surface); }
+.vs-mini .tabla { font-size: 11.5px; }
+.vs-esq { font-family: var(--f-mono); font-size: 12px; color: var(--ink); margin: 3px 0; overflow-wrap: anywhere; }
+.vs-esq span { color: var(--accent); }
+.vs-prog { font-family: var(--f-mono); font-size: 11.5px; color: var(--ink-2); background: var(--surface-2); border-radius: 6px; padding: 5px 8px; margin-top: 6px; overflow-wrap: anywhere; }
+
+/* ---------- retos propios ---------- */
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.ctx-ojo { font-size: 13.5px; color: var(--ink-2); margin: 6px 0; }
+.prog-pre { font-family: var(--f-mono); font-size: 13px; background: var(--surface-2); border-radius: 8px; padding: 10px 14px; margin: 8px 0; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ojo-opts3 { display: grid; grid-template-columns: 1fr; gap: 6px; margin-top: 10px; }
+.ojo-opts3 .opt { text-align: left; }
+.objetivos { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.objetivos li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.objetivos .m { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.objetivos li.hecho { color: var(--ink); }
+.objetivos li.hecho .m { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 3px var(--surface); }
+.grande { font-family: var(--f-mono); font-size: 14px; color: var(--ink-2); margin: 6px 0 12px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.grande b { font-size: 16px; color: var(--ink); font-weight: 500; }
+.lab-ctl { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.lab-ctl button.on { border-color: var(--accent); color: var(--accent); }
+.salida { font-family: var(--f-mono); font-size: 12.5px; background: var(--surface-2); border-radius: 8px; padding: 8px 12px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); margin: 8px 0; }
+.vr-tabla th, .vr-tabla td { text-align: left; white-space: nowrap; }
+.vr-trio { display: grid; grid-template-columns: 1fr; gap: 8px; }
+@media (max-width: 480px) {
+  .tabla { font-size: 11px; }
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ Vistas y los tres niveles ANSI/SPARC</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Infraestructura y programación · Bases de datos relacionales y SQL · Base de datos (SM142051) · UD1 y UD2</p>
+    <h1>Vistas y los tres niveles ANSI/SPARC</h1>
+    <p class="lede">
+      Una <b>vista</b> es una consulta guardada con un nombre: se lee como una tabla, pero no guarda filas. Con ella entiendes una idea de 1975 que sigue viva en toda base de datos:
+      la base se mira en <b>tres niveles</b> (lo que ve cada usuario, lo lógico y lo físico), y cambiar uno no debería romper los de arriba.
+      Vas a cambiar precios, dividir una tabla y mover archivos, y vas a ver qué se entera de cada cambio.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> La tienda en línea tiene una tabla de productos con precios y existencias. El equipo de ventas solo debe ver el nombre y el precio de los periféricos, y no debes copiar esos datos a otra tabla. ¿Cómo lo harías? Y si mañana cambia un precio, ¿qué crees que verá ventas? Escríbelo como te salga, aunque esté mal.</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: le daría a ventas una especie de ventana a la tabla que solo muestra..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>De una consulta guardada a tres niveles</h2>
+      <p>Siete pasos. Cada uno termina con un chequeo: hasta que no lo resuelves, el siguiente queda cerrado. Equivocarte aquí no resta nada, es parte del método.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="Consulta con nombre">
+          <span class="etapa">Paso 1</span>
+          <h3>Una vista es una consulta guardada con nombre</h3>
+          <p>Una tabla guarda <b>filas</b>. Una <b>vista</b> guarda otra cosa: una <b>consulta</b> a la que le pones nombre. Cuando la lees, el SGBD (el programa que maneja la base de datos) ejecuta esa consulta sobre las tablas y te devuelve el resultado como si fuera una tabla
+            <cite class="cita" data-fuente="bd2" data-pag="14" data-pimp="11" data-seccion="5.1 Vistas" data-que="La definición de vista: una consulta almacenada que se comporta como una tabla virtual y no guarda datos (salvo la vista materializada), con el CREATE VIEW del Código 12." data-cuando="Al terminar este paso"></cite>.</p>
+          <p>A la derecha está la tabla <b>productos</b> de la tienda y, debajo, la vista <code>vista_perifericos</code>: solo deja ver el nombre y el precio de los periféricos. Después de tu predicción podrás cambiar un precio en la tabla.</p>
+          <details class="profundizar">
+            <summary>¿Para qué sirve guardar una consulta?</summary>
+            <div>
+              <p>El material da tres razones: <b>simplifica</b> (una consulta larga con varios JOIN se escribe una vez y se lee con un nombre), da <b>seguridad</b> (puedes dejar ver solo ciertas columnas o filas) y <b>estabiliza los nombres</b> que usan los programas
+                <cite class="cita" data-fuente="bd2" data-pag="15" data-pimp="12" data-seccion="5.2 Ventajas y limitaciones" data-que="Las ventajas de las vistas (simplificar, seguridad, estabilizar la terminología) y su limitación de rendimiento, y la vista materializada con refresco periódico." data-cuando="Después de este paso"></cite>.
+                La limitación es el rendimiento: como la consulta se ejecuta cada vez, una vista complicada puede tardar.</p>
+            </div>
+          </details>
+          <div class="check" id="chk1"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="No guarda filas">
+          <span class="etapa">Paso 2</span>
+          <h3>La vista no guarda filas: guarda la pregunta</h3>
+          <p>Lo único que se guarda de <code>vista_perifericos</code> es su <b>texto</b>: el <code>SELECT</code> con su filtro. Las filas que ves se calculan <b>cada vez que la lees</b>, así que siempre reflejan la tabla de ese momento. La diapositiva del tema lo muestra con el mismo <code>CREATE VIEW</code>
+            <cite class="cita" data-fuente="bd2diapo" data-pag="39" data-seccion="Vistas" data-que="El Código 12 en una diapositiva: CREATE VIEW con sus JOIN y el SELECT que la consulta después." data-cuando="Después de este paso"></cite>.</p>
+          <p>La escena ahora tiene tres cambios posibles sobre la tabla: agregar un <b>Hub USB</b> (periférico), agregar un <b>Cable HDMI</b> (periférico) y pasar la <b>Webcam</b> a la categoría Redes. Después de tu cálculo podrás aplicarlos y ver la vista recalcularse sola.</p>
+          <div class="check" id="chk2"><p class="check-tit">Calcula con los datos en vivo</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Copia que envejece">
+          <span class="etapa">Paso 3</span>
+          <h3>Una copia guardada es otra cosa: se queda vieja</h3>
+          <p>Si calcular la consulta cada vez es lento, se puede guardar su <b>resultado</b> en una tabla de verdad. El material lo llama <b>vista materializada</b> y dice que se <b>refresca</b> cada cierto tiempo
+            <cite class="cita" data-fuente="bd2diapo" data-pag="40" data-seccion="Vistas: ventajas y limitación" data-que="Las ventajas de las vistas, la limitación de rendimiento y la vista materializada con su refresco periódico." data-cuando="Al terminar este paso"></cite>.
+            Mientras no se refresque, la copia muestra el pasado. Aquí la copia es la tabla <code>copia_perifericos</code>, tomada al inicio.</p>
+          <div class="fbloque">
+            <div data-tex="\text{copia}_{t_0} = V(\text{productos}_{t_0}) \qquad V(\text{productos}_t) \neq \text{copia}_{t_0} \ \text{ si la tabla cambió después de } t_0" data-display></div>
+            <div class="vivo" id="vivo3"></div>
+          </div>
+          <p>Aquí $V$ es la consulta de la vista y $t_0$ el momento en que se guardó la copia. La vista siempre es $V(\text{productos}_t)$ con la tabla de ahora; la copia se queda con la de $t_0$.</p>
+          <details class="profundizar">
+            <summary>¿Existe la vista materializada en SQLite?</summary>
+            <div>
+              <p>No como tal. PostgreSQL sí tiene <code>CREATE MATERIALIZED VIEW</code> y <code>REFRESH MATERIALIZED VIEW</code>, pero esta página no los ejecuta. En SQLite se imita con <code>CREATE TABLE ... AS SELECT</code> y se refresca borrando y volviendo a crear la tabla, que es lo que hace el programa de la parte 2. El material nombra la vista materializada, pero no trae su sintaxis: eso es de esta página.</p>
+            </div>
+          </details>
+          <div class="check" id="chk3"><p class="check-tit">Calcula con los datos en vivo</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Tres niveles">
+          <span class="etapa">Paso 4</span>
+          <h3>Tres niveles: lo que ve cada usuario, lo lógico y lo físico</h3>
+          <p>En 1975 el estándar <b>ANSI/SPARC</b> propuso mirar una base de datos en tres niveles
+            <cite class="cita" data-fuente="bd1" data-pag="7" data-pimp="5" data-seccion="3. Arquitectura ANSI/SPARC" data-que="El estándar de tres niveles de 1975 y las dos independencias (física y lógica); además, que los diseñadores desarrollan vistas por grupo de usuarios." data-cuando="Al terminar este paso"></cite>
+            <cite class="cita" data-fuente="bd1" data-pag="8" data-pimp="6" data-seccion="3.1 a 3.3 Niveles interno, conceptual y externo" data-que="Qué describe cada nivel: el interno (disco, ficheros, índices), el conceptual (qué datos y relaciones) y el externo (vistas por usuario o aplicación)." data-cuando="Después de este paso"></cite>:</p>
+          <ul>
+            <li>El nivel <b>externo</b> es lo que ve cada usuario o programa: sus <b>vistas</b>.</li>
+            <li>El nivel <b>conceptual</b> es qué datos hay y cómo se relacionan: las <b>tablas</b>. Aquí trabaja quien diseña la base.</li>
+            <li>El nivel <b>interno</b> es cómo se guardan en el disco: archivos, índices y métodos de acceso.</li>
+          </ul>
+          <p>El material lo cuenta en un párrafo y la diapositiva lo resume sin dibujo
+            <cite class="cita" data-fuente="bd1diapo" data-pag="13" data-seccion="ANSI/SPARC" data-que="Los tres niveles y las independencias física y lógica en una sola diapositiva, sin figura." data-cuando="Después de este paso"></cite>:
+            la <b>pila de tres capas</b> de la derecha es de esta página. Toca cada capa. Una vista es justo lo que vive en el nivel externo.</p>
+          <div class="check" id="chk4"><p class="check-tit">Elige y explica</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Independencia física">
+          <span class="etapa">Paso 5</span>
+          <h3>Independencia física: cambiar el disco no toca nada de arriba</h3>
+          <p>La <b>independencia física</b> es poder cambiar cómo se guardan los datos <b>sin afectar</b> al nivel conceptual
+            <cite class="cita" data-fuente="bd1" data-pag="7" data-pimp="5" data-seccion="3. Arquitectura ANSI/SPARC" data-que="La definición de independencia física: cambiar el almacenamiento sin afectar al nivel conceptual." data-cuando="Al terminar este paso"></cite>.
+            En la escena puedes <b>agregar un índice</b> por categoría (una estructura que acelera las búsquedas) o <b>mover el archivo a otro disco</b>. Mira qué capas cambian y qué dice la vista después.</p>
+          <div class="fbloque">
+            <div data-tex="V(\text{productos}_{\text{disco A}}) = V(\text{productos}_{\text{disco B}}) \qquad \text{cambia solo el nivel interno}" data-display></div>
+            <div class="vivo" id="vivo5"></div>
+          </div>
+          <p>Una advertencia honesta: el material de la unidad <b>nombra</b> los índices dentro del nivel interno, pero no los explica ni trae un ejemplo con ellos. Este experimento es de esta página.</p>
+          <div class="check" id="chk5"><p class="check-tit">Calcula con los datos en vivo</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Independencia lógica">
+          <span class="etapa">Paso 6</span>
+          <h3>Independencia lógica: dividir una tabla sin que ventas se entere</h3>
+          <p>La <b>independencia lógica</b> es poder cambiar el esquema conceptual <b>sin afectar necesariamente</b> a las vistas ni a las aplicaciones
+            <cite class="cita" data-fuente="bd1" data-pag="7" data-pimp="5" data-seccion="3. Arquitectura ANSI/SPARC" data-que="La independencia lógica: modificar el esquema conceptual sin afectar necesariamente a vistas ni aplicaciones." data-cuando="Al terminar este paso"></cite>.
+            Fíjate en la palabra <b>necesariamente</b>: no es magia, alguien tiene que reescribir la definición de la vista. En la escena divides <code>productos</code> en dos tablas (<code>productos</code> y <code>precios</code>) y reescribes la vista con un JOIN; el programa de ventas queda intacto.</p>
+          <div class="fbloque">
+            <div data-tex="V'(\text{productos} \bowtie \text{precios}) = V(\text{productos}_{\text{antes}}) \qquad \text{el programa de ventas no cambia}" data-display></div>
+            <div class="vivo" id="vivo6"></div>
+          </div>
+          <div class="check" id="chk6"><p class="check-tit">Calcula con los datos en vivo</p><div class="cuerpo"></div></div>
+
+          <div class="destacado" id="destacado">
+            <p class="dest-tit">Una confusión muy común</p>
+            <h4>Si la independencia lógica protege a la vista, ¿qué pasa si divido la tabla y no toco la vista?</h4>
+            <p>La palabra «independencia» suena a que todo se arregla solo. Pero la vista guarda el texto de su consulta, que apunta a la tabla <code>productos</code> y a su columna <code>precio</code>. Lo puedes comprobar en la escena (botón <b>Dividir</b> sin <b>Reescribir</b>) y en la parte de vida real.</p>
+            <div class="check" id="chk6b"><p class="check-tit">Predice</p><div class="cuerpo"></div></div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Con el material">
+          <span class="etapa">Paso 7</span>
+          <h3>La vista del ejercicio, con el material</h3>
+          <p>El ejercicio de la unidad pide crear <code>vista_pedidos_detalle</code>: junta cuatro tablas con tres JOIN y calcula <code>importe_linea = cantidad * precio_unitario</code>
+            <cite class="cita" data-fuente="bd2ej" data-pag="7" data-pimp="6" data-seccion="Solución 9: vista" data-que="El CREATE VIEW vista_pedidos_detalle con tres JOIN y la consulta de los importes mayores de 100 ordenados de mayor a menor." data-cuando="Al terminar este paso"></cite>.
+            Con los datos del ejercicio, la vista tiene una fila por cada línea de pedido. Después de tu cálculo podrás cambiar el umbral y ver cuántas filas pasan.</p>
+          <div class="fbloque">
+            <div data-tex="\text{filas}(u) = \bigl|\{\, t \in V : \text{importe\_linea}(t) > u \,\}\bigr|" data-display></div>
+            <div class="vivo" id="vivo7"></div>
+          </div>
+          <p>Fíjate también en lo que el material dice de las vistas <b>actualizables</b>: solo lo son si salen de <b>una tabla base</b> sin agregaciones ni <code>DISTINCT</code>; con un JOIN o un <code>GROUP BY</code> dejan de serlo
+            <cite class="cita" data-fuente="bd2" data-pag="15" data-pimp="12" data-seccion="5.3 Vistas actualizables" data-que="Cuándo se puede actualizar una vista: solo sobre una tabla base, sin agregaciones ni DISTINCT; con JOIN o GROUP BY ya no." data-cuando="Después de este paso"></cite>.
+            Esta vista tiene tres JOIN: no es actualizable.</p>
+          <p>Si al principio escribiste una hipótesis, vuelve a leerla ahora.</p>
+          <div class="cita" id="citaHipo" hidden></div>
+          <details class="profundizar">
+            <summary>Una errata del Código 12: la vista que no muestra a Ana Molina</summary>
+            <div>
+              <p>La vista del Código 12 (<code>vista_ventas_cliente</code>) usa JOIN internos, así que Ana Molina, que no tiene pedidos, <b>no aparece</b>. La consulta <code>SELECT * FROM vista_ventas_cliente WHERE total_gastado &gt; 100</code> devuelve entonces las 4 filas que hay (269.10, 438.70, 129.00 y 428.90): el filtro no deja fuera a nadie, y el material no lo dice
+                <cite class="cita" data-fuente="bd2" data-pag="15" data-pimp="12" data-seccion="5.1 Vistas; Código 12" data-que="La vista vista_ventas_cliente con tres JOIN, COUNT(DISTINCT) y SUM, y la consulta con total_gastado mayor de 100 (devuelve las 4 filas; Ana Molina no aparece)." data-cuando="Después de este paso"></cite>.
+                Con un LEFT JOIN aparecería con 0.00. Es un buen ejemplo de que una vista esconde la consulta, pero no sus decisiones.</p>
+            </div>
+          </details>
+          <div class="check" id="chk7"><p class="check-tit">Calcula con los datos en vivo</p><div class="cuerpo"></div></div>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+        </div>
+        <div class="vs-ctl" id="vsCtl"></div>
+        <div id="vsMain"></div>
+        <div id="vsKv"></div>
+        <div class="vs-nota" id="vsNota" aria-live="polite"></div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>La misma tabla de productos, con una vista y una copia guardada. En Python se usa <code>sqlite3</code>, el motor que trae el lenguaje, con una base en memoria: la vista es un <code>CREATE VIEW</code> de verdad. En R esta máquina no tiene SQLite, así que una vista se escribe como una <b>función</b> (con <code>dplyr</code>) que se calcula al llamarla, y la copia guardada es una <b>variable</b>. Elige un lenguaje, dale a reproducir y mira quién se entera del cambio.</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir</p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="true">Python</button>
+            <button type="button" data-lang="r" aria-pressed="false">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">1 · crear y cargar</span><span data-f="2">2 · vista y copia</span><span data-f="3">3 · leer</span><span data-f="4">4 · cambiar la tabla</span><span data-f="5">5 · leer otra vez</span><span data-f="6">6 · refrescar</span><span data-f="7">7 · comprobar a mano</span>
+        </div>
+        <div class="vr-trio">
+          <div>
+            <h3 class="mini-tit vr-tit">la tabla productos</h3>
+            <div class="tabla-wrap"><table class="tabla vr-tabla" id="vrBase"></table></div>
+          </div>
+          <div>
+            <h3 class="mini-tit vr-tit">la vista (se calcula al leerla)</h3>
+            <div class="tabla-wrap"><table class="tabla vr-tabla" id="vrVista"></table></div>
+          </div>
+          <div>
+            <h3 class="mini-tit vr-tit">la copia guardada</h3>
+            <div class="tabla-wrap"><table class="tabla vr-tabla" id="vrCopia"></table></div>
+          </div>
+        </div>
+        <h3 class="mini-tit vr-tit" style="margin-top:12px">lo que el programa lleva impreso</h3>
+        <div class="salida" id="vrLog"></div>
+      </div>
+    </div>
+
+    <h3 class="mini-tit" style="margin:20px 0 6px">Lo que imprime cada lenguaje</h3>
+    <div class="vr-grid">
+      <div class="card"><p class="mini-tit">Python</p><div class="salida" id="salidaPy"></div></div>
+      <div class="card"><p class="mini-tit">R</p><div class="salida" id="salidaR"></div></div>
+    </div>
+
+    <p class="vr-nota">Los dos programas imprimen exactamente lo mismo, salvo la última línea (<code>True</code> en Python y <code>[1] TRUE</code> en R). La línea de <code>resumen</code> cuenta las filas y suma los precios para que el cambio se vea sin leer cada fila. En Python se corrió con SQLite 3.45.3; en R 4.6.1 con <code>dplyr</code> 1.2.1. Nada de esto viene en el material de la unidad: la UD2 trae el <code>CREATE VIEW</code>, pero no un programa que cambie la tabla base y vuelva a leer.</p>
+
+    <details class="profundizar">
+      <summary>Las tres vistas de la unidad en una línea cada una</summary>
+      <div>
+        <p>En Python, la lectura de una vista es una consulta como cualquier otra, y la copia se recrea de una vez:</p>
+        <pre class="prog-pre">con.execute("DROP TABLE IF EXISTS copia_perifericos")
+con.execute("CREATE TABLE copia_perifericos AS SELECT * FROM vista_perifericos")</pre>
+        <p>En R, la vista y su refresco son una llamada a la función:</p>
+        <pre class="prog-pre">vista_perifericos(productos)
+copia_perifericos &lt;- vista_perifericos(productos)</pre>
+        <p>La vista siempre está al día porque <b>no guarda nada</b>. La copia está al día solo cuando alguien la refresca: es el precio de no volver a calcular.</p>
+      </div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Actualizar a través de una vista</h3><span class="estado" data-reto="codigo2"></span></div>
+        <div id="codigo2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Renombrar una columna</h3><span class="estado" data-reto="codigo3"></span></div>
+        <div id="codigo3"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: la biblioteca te avisa en el índice cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>¿Qué ves al leer?</h3><span class="estado" data-reto="ojo"></span></div>
+        <p class="desc">Cinco cambios sobre la tienda. Decide sin escribir nada qué pasa al leer. Apruebas con 4 de 5.</p>
+        <div id="ojo"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Construir</span><h3>El laboratorio de la tienda</h3><span class="estado" data-reto="construir"></span></div>
+        <p class="desc">Pulsa los botones hasta cumplir los cuatro objetivos. Se dan por logrados una vez que los alcanzas.</p>
+        <div class="lab-ctl" id="labCtl"></div>
+        <div id="labVista"></div>
+        <ul class="objetivos" id="objetivos"></ul>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>Filas de la vista y de la copia</h3><span class="estado" data-reto="mano"></span></div>
+        <p class="desc">Datos al azar. Haz la cuenta con papel antes de pedir pistas.</p>
+        <div id="mano"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Alguien se equivocó</h3><span class="estado" data-reto="error"></span></div>
+        <p class="desc">Una de las líneas tiene un error. Tócala.</p>
+        <div id="error"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Qué nivel es</h3><span class="estado" data-reto="prop1"></span></div>
+        <div id="prop1"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Vista y copia guardada</h3><span class="estado" data-reto="prop2"></span></div>
+        <div id="prop2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Qué independencia es</h3><span class="estado" data-reto="prop3"></span></div>
+        <div id="prop3"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Recordar a la fuerza es lo que fija. Arma la sentencia de memoria y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Sentencia de memoria</span><h3>Crear una vista</h3><span class="estado" data-reto="formula"></span></div>
+        <p class="desc">La vista de periféricos que usa la escena. Hay piezas de más que no pertenecen. No mires arriba.</p>
+        <div id="formula"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el material</h2>
+      <p class="lecturas-intro">Ya construiste la idea con las manos. Ahora ve a la versión del máster y comprueba que la reconoces. Los tres niveles y las dos independencias están en la UD1 (teoría, diapositivas y el cuestionario), y las vistas, las materializadas y las actualizables en la UD2. Lo que el material <b>no</b> trae: una figura de los tres niveles, un ejemplo con datos de cada independencia, la sintaxis de una vista materializada ni qué pasa al actualizar a través de una vista en SQLite. Cada entrada dice qué vas a encontrar y en qué momento conviene leerla. Si abres la biblioteca con doble clic, el enlace abre el PDF en esa página.</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> Los seis productos son los del ejercicio de la UD2 (tienda en línea); el Hub USB y el Cable HDMI son inventados aquí, igual que la tabla <code>precios</code> del paso 6 y las filas al azar de los retos. Las nueve líneas de pedido del paso 7 son las del ejercicio.
+    La pila de tres capas, los experimentos de independencia, la copia guardada con <code>CREATE TABLE ... AS SELECT</code> y los programas en Python y R no vienen en el material de la unidad: son de esta página. Tu progreso se guarda solo en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+(function () {
+  "use strict";
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var RETOS = ["ojo", "construir", "mano", "error", "formula", "prop1", "prop2", "prop3", "codigo1", "codigo2", "codigo3"];
+  var C = B.concepto({ id: "vistas-ansi-sparc", retos: RETOS, pasos: 7 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+  function azar(a) { return a[Math.floor(Math.random() * a.length)]; }
+  function azarN(a, b) { return a + Math.floor(Math.random() * (b - a + 1)); }
+  function f2(v) { return B.fmt(v, 2); }
+
+  /* ---------------- los datos: la tienda en linea (productos) ---------------- */
+  // [id_producto, nombre, categoria, precio, stock]
+  var PROD0 = [
+    [101, "Teclado mecánico", "Periféricos", 79.90, 120],
+    [102, 'Monitor 27" 4K', "Monitores", 349.00, 45],
+    [103, "Ratón inalámbrico", "Periféricos", 29.90, 200],
+    [104, "Disco SSD 1TB", "Almacenamiento", 89.50, 80],
+    [105, "Webcam HD", "Periféricos", 39.90, 60],
+    [106, "Router Wi-Fi 6", "Redes", 129.00, 30]
+  ];
+  var SQL_V1 = "CREATE VIEW vista_perifericos AS\nSELECT nombre, precio\nFROM productos\nWHERE categoria = 'Periféricos'";
+  var SQL_V2 = "CREATE VIEW vista_perifericos AS\nSELECT p.nombre, r.precio\nFROM productos p JOIN precios r\n  ON p.id_producto = r.id_producto\nWHERE p.categoria = 'Periféricos'";
+  var PROG = "SELECT nombre, precio FROM vista_perifericos";
+  var LINEAS = [  // vista_pedidos_detalle: id_pedido, cliente, producto, cantidad, importe_linea
+    [5001, "Marta Ruiz", "Teclado mecánico", 1, 79.90],
+    [5001, "Marta Ruiz", "Ratón inalámbrico", 2, 59.80],
+    [5002, "Javier Gómez", 'Monitor 27" 4K', 1, 349.00],
+    [5003, "Marta Ruiz", "Disco SSD 1TB", 1, 89.50],
+    [5003, "Marta Ruiz", "Webcam HD", 1, 39.90],
+    [5004, "Laura Sánchez", "Router Wi-Fi 6", 1, 129.00],
+    [5005, "Diego Torres", "Teclado mecánico", 1, 79.90],
+    [5005, "Diego Torres", 'Monitor 27" 4K', 1, 349.00],
+    [5006, "Javier Gómez", "Ratón inalámbrico", 3, 89.70]
+  ];
+
+  var est = { paso: 0, ok: [false, false, false, false, false, false, false], ed: { tec: false, hub: false, cab: false, cam: false },
+    copia: null, capa: null, idx: false, disco: false, div: false, rew: false, umbral: 0, msg: "" };
+  var pasos;
+
+  // la tabla productos con los cambios que el usuario aplico (la 6ta casilla marca las filas tocadas)
+  function prods() {
+    var P = PROD0.map(function (r) { return r.concat([0]); });
+    if (est.ed.tec) { P[0][3] = 69.90; P[0][5] = 1; }
+    if (est.ed.cam) { P[4][2] = "Redes"; P[4][5] = 1; }
+    if (est.ed.hub) P.push([107, "Hub USB", "Periféricos", 19.90, 90, 2]);
+    if (est.ed.cab) P.push([108, "Cable HDMI", "Periféricos", 9.90, 150, 2]);
+    return P;
+  }
+  function vistaFilas(P) {
+    return P.filter(function (r) { return r[2] === "Periféricos"; }).map(function (r) { return [r[1], r[3]]; });
+  }
+  function suma(F) { var s = 0; F.forEach(function (r) { s += r[1]; }); return s; }
+
+  function tablaHtml(cols, filas, opts) {
+    opts = opts || {};
+    var h = '<div class="tabla-wrap"><table class="tabla"><thead><tr>' + cols.map(function (c) { return "<th" + (c.n ? ' class="num"' : "") + ">" + c.t + "</th>"; }).join("") + "</tr></thead><tbody>";
+    if (!filas.length) h += '<tr><td class="vacio" colspan="' + cols.length + '">sin filas</td></tr>';
+    filas.forEach(function (r) {
+      h += '<tr class="' + (r.marca === 2 ? "nueva" : "") + '">';
+      cols.forEach(function (c, i) {
+        var v = r.v[i], cls = (c.n ? "num" : "") + (r.marca === 1 && c.cambia ? " cambio" : "");
+        h += '<td class="' + cls + '">' + esc(c.f ? c.f(v) : v) + "</td>";
+      });
+      h += "</tr>";
+    });
+    return h + "</tbody></table></div>";
+  }
+  function tablaProd(P, soloVista) {
+    var cols = [{ t: "nombre" }, { t: "categoria" }, { t: "precio", n: true, f: f2, cambia: true }, { t: "stock", n: true }];
+    var filas = P.map(function (r) { return { v: [r[1], r[2], r[3], r[4]], marca: r[5] }; });
+    return tablaHtml(cols, filas);
+  }
+  function tablaV(F, extra) {
+    return tablaHtml([{ t: "nombre" }, { t: "precio", n: true, f: f2 }], F.map(function (r) { return { v: r }; }));
+  }
+  function kv(pares) {
+    return '<dl class="vs-kv">' + pares.map(function (p) { return "<dt>" + p[0] + "</dt><dd" + (p[2] ? ' class="q"' : "") + ">" + p[1] + "</dd>"; }).join("") + "</dl>";
+  }
+
+  /* ---------------- controles por paso ---------------- */
+  var MODOS = [
+    { hint: "Predice y después cambia un precio" },
+    { hint: "Cambia la tabla y mira la vista" },
+    { hint: "Compara la vista con la copia" },
+    { hint: "Toca cada capa" },
+    { hint: "Cambia solo el nivel interno" },
+    { hint: "Cambia el nivel conceptual" },
+    { hint: "Cambia el umbral del filtro" }
+  ];
+  function boton(a, txt, on, dis) {
+    return '<button type="button" data-a="' + a + '"' + (on ? ' class="on"' : "") + (dis ? " disabled" : "") + ">" + txt + "</button>";
+  }
+  function controles() {
+    var i = est.paso, h = "", ok = est.ok[i], e = est.ed;
+    if (i === 0) {
+      h = ok ? boton("tec", e.tec ? "Dejar el teclado en 79.90" : "Bajar el teclado a 69.90", e.tec) : '<span class="hint">Responde la predicción para cambiar el precio.</span>';
+    } else if (i === 1) {
+      h = ok ? boton("hub", "Agregar Hub USB", e.hub) + boton("cab", "Agregar Cable HDMI", e.cab) + boton("cam", "Webcam a Redes", e.cam) + boton("quitar", "Deshacer todo") : '<span class="hint">Resuelve el cálculo para aplicar los cambios.</span>';
+    } else if (i === 2) {
+      h = ok ? boton("tec", "Bajar el teclado a 69.90", e.tec) + boton("hub", "Agregar Hub USB", e.hub) + boton("refrescar", "Refrescar la copia") + boton("quitar", "Reiniciar") : '<span class="hint">Resuelve el cálculo para cambiar la tabla.</span>';
+    } else if (i === 4) {
+      h = ok ? boton("idx", "Agregar índice por categoría", est.idx) + boton("disco", "Mover a otro disco", est.disco) + boton("quitar", "Deshacer") : '<span class="hint">Resuelve el cálculo para cambiar el nivel interno.</span>';
+    } else if (i === 5) {
+      h = ok ? boton("div", "Dividir productos en dos tablas", est.div, est.div) + boton("rew", "Reescribir la vista", est.rew, !est.div || est.rew) + boton("quitar", "Deshacer") : '<span class="hint">Resuelve el cálculo para dividir la tabla.</span>';
+    } else if (i === 6) {
+      h = ok ? [0, 50, 100, 200].map(function (u) { return boton("u" + u, "importe > " + u, est.umbral === u); }).join("") : '<span class="hint">Resuelve el cálculo para cambiar el umbral.</span>';
+    }
+    $("vsCtl").innerHTML = h;
+  }
+  $("vsCtl").addEventListener("click", function (ev) {
+    var b = ev.target.closest ? ev.target.closest("button[data-a]") : null;
+    if (!b || b.disabled) return;
+    var a = b.getAttribute("data-a");
+    if (a === "tec" || a === "hub" || a === "cab" || a === "cam") est.ed[a] = !est.ed[a];
+    else if (a === "quitar") { est.ed = { tec: false, hub: false, cab: false, cam: false }; est.idx = false; est.disco = false; est.div = false; est.rew = false; if (est.paso === 2) est.copia = vistaFilas(prods()); }
+    else if (a === "refrescar") est.copia = vistaFilas(prods());
+    else if (a === "idx") est.idx = !est.idx;
+    else if (a === "disco") est.disco = !est.disco;
+    else if (a === "div") { est.div = true; est.rew = false; }
+    else if (a === "rew") est.rew = true;
+    else if (a.charAt(0) === "u") est.umbral = +a.slice(1);
+    est.msg = "";
+    controles();
+    pintar();
+  });
+
+  /* ---------------- la pila de tres capas ---------------- */
+  var DESC_CAPA = {
+    ext: "<b>Nivel externo.</b> Lo que ve cada usuario o programa: sus <b>vistas</b>. Ventas ve nombre y precio de los periféricos; almacén ve nombre y existencias. Ninguno ve las demás columnas ni cómo se guardan.",
+    con: "<b>Nivel conceptual.</b> Qué datos hay y cómo se relacionan: las <b>tablas</b> y sus reglas. Es donde trabaja quien diseña la base. Aquí vive <code>productos</code> con sus cinco atributos.",
+    int: "<b>Nivel interno.</b> Cómo se guardan los datos en el disco: archivos, índices y métodos de acceso. Quien usa la base casi nunca lo ve."
+  };
+  function pintarPila(modo) {
+    // modo: 3 = explorar, 4 = fisica, 5 = logica
+    var P = prods(), V = vistaFilas(PROD0.map(function (r) { return r.concat([0]); }));
+    var cam = modo === 4 && (est.idx || est.disco), div = modo === 5 && est.div, rew = modo === 5 && est.rew;
+    var h = "";
+    // externo
+    var errVista = div && !rew;
+    h += '<div class="vs-capa' + (est.capa === "ext" ? " sel" : "") + (modo === 5 && div ? " cambia" : "") + '" data-capa="ext" tabindex="0" role="button" aria-label="Capa externa"><div class="vs-et"><span>Nivel externo · vistas</span>' +
+      (modo >= 4 ? (div && modo === 5 ? "<em class=\"" + (rew ? "mod" : "mod") + "\">" + (rew ? "vista reescrita" : "la vista se rompió") + "</em>" : '<em class="igual">sin cambios</em>') : "") + "</div>";
+    h += '<div class="vs-dos"><div class="vs-mini"><p class="vs-tit"><b>Ventas</b> · vista_perifericos</p>';
+    if (errVista) h += '<div class="vs-err">Error: no such table: main.productos</div>';
+    else h += tablaV(V);
+    h += '<div class="vs-sql">' + esc(div && rew ? SQL_V2 : SQL_V1) + "</div>";
+    if (modo === 5) h += '<div class="vs-prog">programa de ventas: ' + esc(PROG) + (est.ok[5] ? " (sin cambios)" : "") + "</div>";
+    h += '</div><div class="vs-mini"><p class="vs-tit"><b>Almacén</b> · vista_stock</p>' +
+      tablaHtml([{ t: "nombre" }, { t: "stock", n: true }], PROD0.map(function (r) { return { v: [r[1], r[4]] }; })) +
+      '<div class="vs-sql">CREATE VIEW vista_stock AS\nSELECT nombre, stock\nFROM productos</div></div></div></div>';
+    h += '<p class="vs-enlace">se calcula a partir de las tablas</p>';
+    // conceptual
+    h += '<div class="vs-capa' + (est.capa === "con" ? " sel" : "") + (div ? " cambia" : "") + '" data-capa="con" tabindex="0" role="button" aria-label="Capa conceptual"><div class="vs-et"><span>Nivel conceptual · tablas</span>' +
+      (modo >= 4 ? (div ? '<em class="mod">esquema cambiado</em>' : '<em class="igual">sin cambios</em>') : "") + "</div>";
+    if (!div) {
+      h += '<div class="vs-esq"><span>productos</span>(id_producto, nombre, categoria, precio, stock)</div>' + (modo === 3 ? tablaProd(PROD0.map(function (r) { return r.concat([0]); })) : "");
+    } else {
+      h += '<div class="vs-esq"><span>productos</span>(id_producto, nombre, categoria)</div><div class="vs-esq"><span>precios</span>(id_producto, precio, stock)</div>';
+    }
+    h += "</div>";
+    h += '<p class="vs-enlace">se guarda en</p>';
+    // interno
+    h += '<div class="vs-capa' + (est.capa === "int" ? " sel" : "") + (cam ? " cambia" : "") + '" data-capa="int" tabindex="0" role="button" aria-label="Capa interna"><div class="vs-et"><span>Nivel interno · disco</span>' +
+      (modo === 4 ? (cam ? '<em class="mod">cambió</em>' : "") : "") + "</div>";
+    h += '<div class="vs-esq">archivo <span>' + (div ? "productos.dat y precios.dat" : "productos.dat") + "</span> en <span>" + (modo === 4 && est.disco ? "disco B" : "disco A") + "</span></div>";
+    h += '<div class="vs-esq">índices: <span>id_producto</span>' + (modo === 4 && est.idx ? ", <span>categoria</span>" : "") + "</div></div>";
+    $("vsMain").innerHTML = h;
+  }
+  $("vsMain").addEventListener("click", function (ev) { capaTocada(ev.target.closest ? ev.target.closest("[data-capa]") : null); });
+  $("vsMain").addEventListener("keydown", function (ev) {
+    if (ev.key === "Enter" || ev.key === " ") { var c = ev.target.closest ? ev.target.closest("[data-capa]") : null; if (c) { ev.preventDefault(); capaTocada(c); } }
+  });
+  function capaTocada(el) {
+    if (!el || est.paso < 3 || est.paso > 5) return;
+    est.capa = el.getAttribute("data-capa");
+    pintar();
+  }
+
+  /* ---------------- pintar el escenario ---------------- */
+  function pintar() {
+    var i = est.paso, ok = est.ok, P = prods(), V = vistaFilas(P), pares = [], nota = est.msg, h = "";
+    if (i <= 2) {
+      h = '<div class="vs-caja"><p class="vs-tit">tabla <b>productos</b> · se guarda en el disco</p>' + tablaProd(P) + "</div>";
+      h += '<div class="vs-caja viva"><p class="vs-tit">vista <b>vista_perifericos</b> · filas guardadas: <b>0</b></p>' + tablaV(V) + '<div class="vs-sql">' + esc(SQL_V1) + "</div></div>";
+      if (i === 2) h += '<div class="vs-caja copia"><p class="vs-tit">tabla <b>copia_perifericos</b> · guardada en <b>t0</b></p>' + tablaV(est.copia) + "</div>";
+      $("vsMain").innerHTML = h;
+    } else if (i <= 5) pintarPila(i);
+    else {
+      var u = est.umbral, pasan = LINEAS.filter(function (r) { return r[4] > u; }).length;
+      h = '<div class="vs-caja viva"><p class="vs-tit">vista <b>vista_pedidos_detalle</b> · tres JOIN</p><div class="vs-sql">CREATE VIEW vista_pedidos_detalle AS\nSELECT p.id_pedido, c.nombre AS cliente, pr.nombre AS producto,\n       l.cantidad, l.cantidad * l.precio_unitario AS importe_linea\nFROM lineas_pedido l\nJOIN pedidos p ON l.id_pedido = p.id_pedido\nJOIN clientes c ON p.id_cliente = c.id_cliente\nJOIN productos pr ON l.id_producto = pr.id_producto</div>';
+      h += tablaHtml([{ t: "pedido" }, { t: "cliente" }, { t: "producto" }, { t: "cant.", n: true }, { t: "importe_linea", n: true, f: f2 }],
+        LINEAS.map(function (r) { return { v: r, marca: r[4] > u ? 0 : 0 }; }).map(function (r, k) { r.fuera = LINEAS[k][4] <= u; return r; }));
+      h += "</div>";
+      $("vsMain").innerHTML = h;
+      [].forEach.call($("vsMain").querySelectorAll("tbody tr"), function (tr, k) { if (LINEAS[k][4] <= u) tr.classList.add("fuera"); });
+    }
+    // datos de apoyo por paso
+    if (i === 0) {
+      pares = [["tabla productos", PROD0.length + " filas"], ["filas guardadas por la vista", "0"], ["filas que muestra la vista", V.length]];
+      if (!nota) nota = ok[0] ? (est.ed.tec ? "Cambiaste el precio en la <b>tabla</b>. La vista se recalculó al leerla." : "Pulsa «Bajar el teclado a 69.90» y mira la vista.") : "Responde la predicción para poder cambiar el precio.";
+    } else if (i === 1) {
+      pares = [["filas de la tabla", P.length], ["filas guardadas por la vista", "0"], ["filas que muestra la vista", V.length]];
+      if (!nota) nota = ok[1] ? "La vista siempre muestra la tabla de este momento." : "Resuelve el cálculo para aplicar los cambios.";
+    } else if (i === 2) {
+      var sv = suma(V), sc = suma(est.copia);
+      pares = [["vista hoy", V.length + " filas · suma " + f2(sv)], ["copia en t0", est.copia.length + " filas · suma " + f2(sc)], ["desfase (vista − copia)", f2(sv - sc), !ok[2]]];
+      if (!nota) nota = ok[2] ? (Math.abs(sv - sc) < 0.005 ? "La copia y la vista coinciden." : "La copia está <b>vieja</b>: no se enteró de los cambios.") : "Resuelve el cálculo para cambiar la tabla.";
+    } else if (i === 3) {
+      pares = [["niveles", "3 (externo, conceptual, interno)"], ["lo que cambia entre ellos", "nada, por ahora"]];
+      nota = est.capa ? DESC_CAPA[est.capa] : "Toca una capa para ver qué vive ahí. Una vista es del nivel externo.";
+    } else if (i === 4) {
+      var mod = est.idx || est.disco ? 1 : 0;
+      pares = [["niveles modificados", ok[4] ? mod : "?", !ok[4]], ["filas que muestra la vista", V.length], ["¿cambió la vista?", "no"]];
+      if (!nota) nota = ok[4] ? (mod ? "Cambió <b>solo</b> el nivel interno: la vista y la tabla ni se enteran." : "Agrega un índice o mueve el archivo y mira qué capas cambian.") : "Resuelve el cálculo para cambiar el nivel interno.";
+    } else if (i === 5) {
+      var rota = est.div && !est.rew;
+      pares = [["tablas en el nivel conceptual", est.div ? 2 : 1], ["la vista de ventas", rota ? "error" : V.length + " filas"], ["líneas del programa de ventas que cambian", ok[5] ? "0" : "?", !ok[5]]];
+      if (!nota) nota = !ok[5] ? "Resuelve el cálculo para dividir la tabla." : rota ? '<span class="mal">La vista se rompió.</span> Apunta a una tabla que ya no existe: alguien tiene que reescribirla.' : est.div ? '<span class="bien">Reescribida.</span> Ahora hace un JOIN y devuelve las mismas filas; el programa de ventas sigue igual.' : "Pulsa «Dividir» para cambiar el nivel conceptual.";
+    } else if (i === 6) {
+      var u2 = est.umbral, n2 = LINEAS.filter(function (r) { return r[4] > u2; }).length;
+      pares = [["filas de la vista", LINEAS.length], ["filas con importe_linea > " + u2, ok[6] ? n2 : "?", !ok[6]]];
+      if (!nota) nota = ok[6] ? "Son las líneas que pasan el filtro; las demás quedan atenuadas." : "Resuelve el cálculo para cambiar el umbral.";
+    }
+    $("vsKv").innerHTML = pares.length ? kv(pares) : "";
+    $("vsNota").innerHTML = nota;
+    $("escHint").textContent = MODOS[i].hint;
+    vivos(P, V);
+  }
+  function vivos(P, V) {
+    var el;
+    if ((el = $("vivo3")) && est.copia) { var sv = suma(V), sc = suma(est.copia); el.innerHTML = "vista hoy: " + V.length + " filas, suma " + f2(sv) + "<br>copia en t0: " + est.copia.length + " filas, suma " + f2(sc) + "<br>desfase = <b>" + f2(sv - sc) + "</b>"; }
+    if ((el = $("vivo5"))) el.innerHTML = "niveles modificados: <b>" + (est.ok[4] ? (est.idx || est.disco ? 1 : 0) : "?") + "</b> de 3<br>filas de la vista: <b>" + vistaFilas(PROD0.map(function (r) { return r.concat([0]); })).length + "</b> (las mismas)";
+    if ((el = $("vivo6"))) el.innerHTML = "vista " + (est.div && !est.rew ? "<b>rota</b> (apunta a una tabla que ya no existe)" : "<b>" + vistaFilas(PROD0.map(function (r) { return r.concat([0]); })).length + "</b> filas, las mismas de antes");
+    if ((el = $("vivo7"))) { var u = est.umbral; el.innerHTML = "u = <b>" + u + "</b> → filas = <b>" + (est.ok[6] ? LINEAS.filter(function (r) { return r[4] > u; }).length : "?") + "</b> de " + LINEAS.length; }
+  }
+  function entrar(i) {
+    est.paso = i;
+    est.ed = { tec: false, hub: false, cab: false, cam: false };
+    est.idx = false; est.disco = false; est.div = false; est.rew = false; est.umbral = 0; est.capa = null; est.msg = "";
+    est.copia = vistaFilas(prods());
+    controles();
+    pintar();
+  }
+
+  /* ---------------- chequeos de cada paso ---------------- */
+  B.opcionMultiple(cuerpo("chk1"), {
+    pregunta: "Cambio el precio del Teclado mecánico de 79.90 a 69.90 en la tabla <code>productos</code>. Después abro la vista <code>vista_perifericos</code>. ¿Qué precio ve el teclado ahí?",
+    opciones: [
+      "69.90: la vista lee la tabla cada vez que la abro",
+      "79.90: la vista guardó el precio del día en que la creé",
+      "Un error, porque no se puede cambiar una tabla que tiene una vista",
+      "Los dos precios, el viejo y el nuevo"
+    ],
+    correcta: 0,
+    mezclar: true,
+    pistas: [
+      null,
+      "Piensa en qué guarda la vista: ¿filas, o la pregunta que las produce? Si guardara las filas, sería una copia de la tabla.",
+      "Una tabla se puede cambiar siempre; la vista no la bloquea. Es solo una consulta con nombre.",
+      "Una consulta devuelve una fila por producto: no mezcla versiones."
+    ],
+    explicacion: "Muestra <b>69.90</b>. La vista no guardó el precio: guardó la consulta, y la ejecuta sobre la tabla <b>de ahora</b> cada vez que la lees. <b>Ahora el botón de la escena está abierto</b>: baja el precio del teclado y mira cómo la vista se actualiza sola.",
+    alResolver: function () { est.ok[0] = true; controles(); pintar(); pasos.completar(0); }
+  });
+
+  B.numerico(cuerpo("chk2"), {
+    pregunta: "La vista <code>vista_perifericos</code> muestra hoy 3 filas. Agregas a la tabla el Hub USB y el Cable HDMI, los dos de categoría Periféricos, y cambias la categoría de la Webcam a Redes. ¿Cuántas filas muestra la vista?",
+    respuesta: 4,
+    tolerancia: 0,
+    pistas: [
+      "Cuenta qué productos son Periféricos <b>después</b> de los cambios: la vista filtra por la categoría.",
+      "Eran Teclado, Ratón y Webcam. La Webcam sale, y entran el Hub y el Cable."
+    ],
+    diagnostico: function (v) {
+      if (v === 3) return "3 es la cuenta de antes. La vista se recalcula sola con la tabla nueva: entran dos filas y sale una.";
+      if (v === 5) return "5 sería sin descontar la Webcam: al cambiar su categoría ya no cumple el filtro y sale de la vista.";
+      if (v === 6) return "6 es el número de productos de la tabla original. La vista solo muestra los Periféricos.";
+      return null;
+    },
+    explicacion: "$3 + 2 - 1 = 4$: entran el Hub y el Cable, sale la Webcam. La vista <b>no guarda</b> ninguna fila, así que no hay nada que actualizar a mano. <b>Ahora los botones están abiertos</b>: aplícalos y mira la vista.",
+    alResolver: function () { est.ok[1] = true; controles(); pintar(); pasos.completar(1); }
+  });
+
+  B.numerico(cuerpo("chk3"), {
+    pregunta: "La copia se guardó cuando la vista sumaba 149.70 (79.90 + 29.90 + 39.90). Después bajas el teclado a 69.90 y agregas el Hub USB a 19.90. Sin refrescar, ¿cuánto se diferencian la suma de la vista y la suma de la copia?",
+    respuesta: 9.9,
+    tolerancia: 0.005,
+    pistas: [
+      "La vista de ahora suma el teclado nuevo, el ratón, la webcam y el Hub. La copia sigue en 149.70.",
+      "La vista suma 69.90 + 29.90 + 39.90 + 19.90."
+    ],
+    diagnostico: function (v) {
+      if (Math.abs(v - 10) < 0.005) return "10 es solo el cambio del teclado. Falta sumar el Hub USB, que entró a la vista pero no a la copia.";
+      if (Math.abs(v - 19.9) < 0.005) return "19.90 es solo el Hub. Falta restar los 10 que bajó el teclado.";
+      if (Math.abs(v - 159.6) < 0.005) return "159.60 es la suma de la vista. Te piden la diferencia con la copia (149.70).";
+      return null;
+    },
+    explicacion: "La vista suma $69.90 + 29.90 + 39.90 + 19.90 = 159.60$ y la copia sigue en $149.70$: el desfase es $159.60 - 149.70 = 9.90$. <b>Ahora los botones están abiertos</b>: aplica los cambios, mira el desfase y pulsa «Refrescar la copia».",
+    alResolver: function () { est.ok[2] = true; controles(); pintar(); pasos.completar(2); }
+  });
+
+  B.opcionMultiple(cuerpo("chk4"), {
+    pregunta: "El equipo de ventas debe ver solo el nombre y el precio de los periféricos, y el de almacén solo el nombre y las existencias. ¿En qué nivel de la arquitectura defines qué ve cada grupo?",
+    opciones: [
+      "En el nivel externo, con una vista para cada grupo",
+      "En el nivel conceptual, quitando columnas a la tabla productos",
+      "En el nivel interno, guardando cada columna en un archivo distinto",
+      "En ninguno: lo decide cada programa por su cuenta"
+    ],
+    correcta: 0,
+    mezclar: true,
+    pistas: [
+      null,
+      "Si quitas columnas a la tabla, nadie las vería, ni siquiera quien sí las necesita. Lo que cambia por grupo es la <b>vista</b>.",
+      "El nivel interno es del disco (archivos, índices): no sabe quién es ventas ni quién es almacén.",
+      "Si lo decide cada programa, cada programa vería todos los datos. La gracia es que el SGBD ofrece solo lo permitido."
+    ],
+    explicacion: "En el nivel <b>externo</b>: cada usuario o aplicación tiene sus vistas. La tabla completa (nivel conceptual) es la misma para todos, y el disco (nivel interno) ni se entera. <b>Ahora puedes tocar cada capa</b> de la escena y leer qué vive en ella.",
+    alResolver: function () { est.ok[3] = true; pintar(); pasos.completar(3); }
+  });
+
+  B.numerico(cuerpo("chk5"), {
+    pregunta: "Agregas un índice por categoría y además mueves el archivo de la tabla a otro disco. De los tres niveles (externo, conceptual e interno), ¿cuántos tuviste que modificar?",
+    respuesta: 1,
+    tolerancia: 0,
+    pistas: [
+      "Un índice y un disco son cosas del almacenamiento: ¿de qué nivel?",
+      "Solo el nivel interno. Las vistas y las tablas se definen con los mismos nombres y columnas de antes."
+    ],
+    diagnostico: function (v) {
+      if (v === 2) return "2 sería si la tabla o la vista también hubieran cambiado. Un índice y un disco no cambian las columnas ni las vistas.";
+      if (v === 3) return "3 son todos. Si hubiera que tocarlos todos, no habría independencia física.";
+      if (v === 0) return "0 no: el índice y el archivo en otro disco sí son un cambio, pero del nivel interno.";
+      return null;
+    },
+    explicacion: "Solo <b>1</b>: el nivel interno. Esa es la independencia física: el almacenamiento cambia y el conceptual y el externo siguen iguales. <b>Ahora los botones están abiertos</b>: prueba cada uno y mira que la vista no cambia.",
+    alResolver: function () { est.ok[4] = true; controles(); pintar(); pasos.completar(4); }
+  });
+
+  B.numerico(cuerpo("chk6"), {
+    pregunta: "Divides <code>productos</code> en dos tablas y reescribes la definición de la vista con un JOIN. El programa de ventas ejecuta <code>SELECT nombre, precio FROM vista_perifericos</code>. ¿Cuántas líneas de ese programa hay que cambiar?",
+    respuesta: 0,
+    tolerancia: 0,
+    pistas: [
+      "El programa le pide los datos a la vista por su nombre y sus columnas. ¿Cambió alguna de las dos cosas?",
+      "La vista se reescribe por dentro, pero por fuera se llama igual y devuelve las mismas columnas."
+    ],
+    diagnostico: function (v) {
+      if (v === 1) return "1 sería si el programa tuviera que escribir el JOIN. Esa es justo la gracia: el JOIN está dentro de la vista.";
+      if (v === 5) return "5 es el número de columnas de la tabla original. El programa solo usa dos columnas de la vista.";
+      return null;
+    },
+    explicacion: "<b>Cero</b>. El cambio lo absorbió la definición de la vista: por fuera sigue llamándose <code>vista_perifericos</code> y devuelve <code>nombre</code> y <code>precio</code>. Esa es la independencia lógica. <b>Ahora los botones están abiertos</b>: divide la tabla y reescribe la vista.",
+    alResolver: function () { est.ok[5] = true; controles(); pintar(); pasos.completar(5); }
+  });
+
+  B.opcionMultiple(cuerpo("chk6b"), {
+    pregunta: "Divides <code>productos</code> en <code>productos</code> y <code>precios</code> (borrando la tabla original) y <b>no</b> reescribes <code>vista_perifericos</code>. Luego alguien lee la vista. ¿Qué pasa?",
+    opciones: [
+      "Da un error: la vista guarda el texto de su consulta y apunta a una tabla que ya no existe",
+      "Sigue funcionando sola: para eso existe la independencia lógica",
+      "Muestra las filas de antes, guardadas en la vista",
+      "La vista se reescribe sola con el JOIN correcto"
+    ],
+    correcta: 0,
+    mezclar: true,
+    pistas: [
+      null,
+      "La independencia lógica dice «sin afectar necesariamente»: no promete que se arregle sola, promete que la <b>vista puede absorber</b> el cambio si alguien la reescribe.",
+      "Una vista no guarda filas: no hay filas de antes en ninguna parte.",
+      "El SGBD no adivina cómo juntar dos tablas: eso lo decide quien diseña."
+    ],
+    explicacion: "Da un error. En SQLite sale <code>no such table: main.productos</code>. La independencia lógica es una <b>propiedad que el diseño hace posible</b>, no un arreglo automático: la vista absorbe el cambio solo si alguien la reescribe. El material la enuncia con cautela («sin afectar necesariamente»), y esa palabra es la que importa.",
+    alResolver: function () { /* sin candado: es una confusion, no un paso */ }
+  });
+
+  B.numerico(cuerpo("chk7"), {
+    pregunta: "La vista <code>vista_pedidos_detalle</code> tiene una fila por cada línea de pedido (9 en total): importes 79.90, 59.80, 349.00, 89.50, 39.90, 129.00, 79.90, 349.00 y 89.70. ¿Cuántas filas devuelve <code>WHERE importe_linea &gt; 100</code>?",
+    respuesta: 3,
+    tolerancia: 0,
+    pistas: [
+      "Mira cuáles de los nueve importes pasan de 100.",
+      "Son dos de 349.00 y uno de 129.00."
+    ],
+    diagnostico: function (v) {
+      if (v === 9) return "9 son todas las filas de la vista. El filtro deja fuera las que no pasan de 100.";
+      if (v === 2) return "2 son los dos monitores de 349.00. Falta el router de 129.00.";
+      if (v === 4) return "4 contaría un importe que no pasa de 100. Revisa el 89.70 y el 89.50.";
+      return null;
+    },
+    explicacion: "Son <b>3</b>: los dos monitores (5002 y 5005, a 349.00) y el router (5004, a 129.00). Coincide con el resultado del ejercicio de la unidad. <b>Ahora los botones están abiertos</b>: cambia el umbral y mira cuántas filas pasan. Ya puedes ir a la vida real y a los retos.",
+    alResolver: function () { est.ok[6] = true; controles(); pintar(); pasos.completar(6); }
+  });
+
+  pasos = B.pasos($("recorrido"), {
+    concepto: C,
+    alEntrar: entrar,
+    alTerminar: function () { location.hash = "retos"; }
+  });
+  (function () { var q; for (q = 0; q < 7; q++) est.ok[q] = pasos.hecho(q); })();
+  entrar(0);
+
+  /* ---------------- hipotesis inicial ---------------- */
+  (function () {
+    var ta = $("hipotesis"), t = null;
+    ta.value = B.nota("vistas-ansi-sparc", "hipotesis");
+    function cita() {
+      var v = ta.value.trim(), el = $("citaHipo");
+      if (!el) return;
+      el.hidden = !v;
+      if (v) { el.textContent = ""; el.appendChild(document.createTextNode("Al principio escribiste: «" + v + "». ¿Se parece a lo que construimos? ¿Qué te faltaba?")); }
+    }
+    cita();
+    ta.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { B.nota("vistas-ansi-sparc", "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; cita(); }, 500);
+    });
+  })();
+
+  /* ---------------- marcadores de estado de retos ---------------- */
+  function pintarEstados() {
+    [].forEach.call(document.querySelectorAll("[data-reto]"), function (el) {
+      var ok = C.retoOk(el.getAttribute("data-reto"));
+      el.textContent = ok ? "resuelto" : "pendiente";
+      el.classList.toggle("ok", ok);
+    });
+  }
+  C.alCambiar(pintarEstados);
+
+  /* ---------------- reto: ojo clinico ---------------- */
+  var NOMBRES = { viva: "La vista muestra el cambio", vieja: "La copia sigue vieja", rota: "La vista da error", intacta: "Nada de arriba cambia" };
+  var PERIF = ["Teclado mecánico", "Ratón inalámbrico", "Webcam HD", "Hub USB", "Auriculares"];
+  function generarOjo(tipo) {
+    var p = azar(PERIF), n = azarN(2, 12) * 10 + 9.9 - 0 * 1, txt, why;
+    n = (azarN(2, 12) * 10 + 9) + 0.9;
+    if (tipo === "viva") {
+      txt = "Cambias el precio de «" + p + "» a " + f2(n) + " en la tabla <code>productos</code>. Después lees la vista <code>vista_perifericos</code>, que filtra por categoría Periféricos.";
+      why = "La vista no guarda filas: ejecuta su consulta sobre la tabla de ahora, así que ya muestra " + f2(n) + ".";
+    } else if (tipo === "vieja") {
+      txt = "Hace una semana alguien guardó <code>CREATE TABLE copia_perifericos AS SELECT nombre, precio FROM productos WHERE categoria = 'Periféricos'</code>. Hoy cambias el precio de «" + p + "» a " + f2(n) + " en <code>productos</code> y lees <code>copia_perifericos</code>.";
+      why = "La copia es una tabla de verdad con las filas de hace una semana: no se entera del cambio hasta que alguien la refresque.";
+    } else if (tipo === "rota") {
+      txt = "Divides <code>productos</code> en dos tablas y borras la original. Nadie toca la definición de <code>vista_perifericos</code>. Lees la vista.";
+      why = "La vista guarda el texto de su consulta, que apunta a <code>productos</code>, una tabla que ya no existe. La independencia lógica pide que alguien la reescriba.";
+    } else {
+      txt = azar(["Agregas un índice sobre la columna <code>categoria</code> y no tocas nada más. Lees la vista.", "Mueves el archivo de la tabla a otro disco y no tocas nada más. Lees la vista.", "Agregas un índice sobre <code>categoria</code> y mueves el archivo a otro disco. Lees la vista."]);
+      why = "Un índice o un disco distinto son cambios del nivel interno. Es la independencia física: el conceptual y el externo no se enteran.";
+    }
+    return { txt: txt, tipo: tipo, why: why };
+  }
+  (function () {
+    var cont = $("ojo");
+    cont.innerHTML = '<div class="ronda"></div><p class="ctx-ojo">La tienda tiene la tabla <code>productos</code>, la vista <code>vista_perifericos</code> (nombre y precio de los periféricos) y, en algunos casos, una copia guardada con <code>CREATE TABLE ... AS SELECT</code>.</p>' +
+      '<p class="ctx-ojo">Pasa esto:</p><div class="prog-pre"></div><p class="ctx-ojo">¿Qué ves al leer?</p>' +
+      '<div class="ojo-opts3"><button type="button" class="opt" data-a="viva">Ves el cambio: la vista se calcula al leerla</button><button type="button" class="opt" data-a="vieja">Ves el valor viejo: es una copia guardada que nadie refrescó</button>' +
+      '<button type="button" class="opt" data-a="rota">Da un error: la vista apunta a algo que ya no existe</button><button type="button" class="opt" data-a="intacta">No cambia nada de lo que ve el usuario: es un cambio del nivel interno</button></div>' +
+      '<div class="fb" aria-live="polite"></div><div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    var tipos, ronda, aciertos, respondida, actual;
+    function nueva() {
+      tipos = B.mezclar(["viva", "vieja", "rota", "intacta", azar(["viva", "vieja", "rota", "intacta"])]);
+      ronda = 0; aciertos = 0;
+      mostrar();
+    }
+    function mostrar() {
+      respondida = false;
+      actual = generarOjo(tipos[ronda]);
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 5 · aciertos " + aciertos;
+      cont.querySelector(".prog-pre").innerHTML = actual.txt;
+      [].forEach.call(cont.querySelectorAll(".ojo-opts3 .opt"), function (x) { x.disabled = false; x.className = "opt"; });
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+    }
+    cont.querySelector(".ojo-opts3").addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || respondida) return;
+      respondida = true;
+      var ok = b.getAttribute("data-a") === actual.tipo;
+      if (ok) aciertos++;
+      b.classList.add(ok ? "ok" : "mal");
+      if (!ok) cont.querySelector('[data-a="' + actual.tipo + '"]').classList.add("ok");
+      [].forEach.call(cont.querySelectorAll(".ojo-opts3 .opt"), function (x) { x.disabled = true; });
+      cont.querySelector(".fb").innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No.</span> ') + "Era: " + NOMBRES[actual.tipo].toLowerCase() + ". " + actual.why;
+      var sig = cont.querySelector(".sig");
+      sig.hidden = false;
+      if (ronda === 4) {
+        var aprobo = aciertos >= 4;
+        C.reto("ojo", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertos + " de 5" + (aprobo ? ". Aprobado." : ". Necesitas 4 para aprobar.");
+        sig.textContent = "Otra tanda";
+      } else sig.textContent = "Siguiente ronda";
+    });
+    cont.querySelector(".sig").addEventListener("click", function () {
+      if (ronda === 4) nueva(); else { ronda++; mostrar(); }
+    });
+    nueva();
+  })();
+
+  /* ---------------- reto: construir (laboratorio) ---------------- */
+  (function () {
+    var lab, logrados = [false, false, false, false], avisado = false, ul = $("objetivos");
+    function reinicia() { lab = { tec: false, copia: 79.90, div: false, rew: false, idx: false }; }
+    reinicia();
+    var OBJ = [
+      { t: "Deja la vista y la copia con precios distintos para el teclado (la copia vieja).", f: function () { return lab.tec && !lab.div && lab.copia !== 69.90; } },
+      { t: "Refresca la copia para que vuelva a coincidir con la vista, con el teclado ya cambiado.", f: function () { return logrados[0] && lab.tec && lab.copia === 69.90; } },
+      { t: "Divide la tabla en dos y reescribe la vista para que ventas siga viendo sus filas.", f: function () { return lab.div && lab.rew; } },
+      { t: "Agrega un índice sin dividir la tabla: la vista sigue mostrando las mismas tres filas.", f: function () { return lab.idx && !lab.div; } }
+    ];
+    OBJ.forEach(function (o) { var li = document.createElement("li"); li.innerHTML = '<span class="m"></span><span>' + o.t + "</span>"; ul.appendChild(li); });
+    function render() {
+      var precio = lab.tec ? 69.90 : 79.90, roto = lab.div && !lab.rew;
+      $("labCtl").innerHTML = ['<button type="button" data-l="tec" class="' + (lab.tec ? "on" : "") + '">' + (lab.tec ? "Dejar el teclado en 79.90" : "Bajar el teclado a 69.90") + "</button>",
+        '<button type="button" data-l="refrescar">Refrescar la copia</button>',
+        '<button type="button" data-l="div"' + (lab.div ? " disabled" : "") + ">Dividir la tabla</button>",
+        '<button type="button" data-l="rew"' + (!lab.div || lab.rew ? " disabled" : "") + ">Reescribir la vista</button>",
+        '<button type="button" data-l="idx" class="' + (lab.idx ? "on" : "") + '">Agregar índice</button>',
+        '<button type="button" class="ghost" data-l="reset">Reiniciar</button>'].join("");
+      var vf = [["Teclado mecánico", precio], ["Ratón inalámbrico", 29.90], ["Webcam HD", 39.90]];
+      var cf = [["Teclado mecánico", lab.copia], ["Ratón inalámbrico", 29.90], ["Webcam HD", 39.90]];
+      $("labVista").innerHTML = '<div class="vs-caja viva"><p class="vs-tit">vista <b>vista_perifericos</b>' + (lab.idx ? " · hay un índice en el nivel interno" : "") + "</p>" + (roto ? '<div class="vs-err">Error: no such table: main.productos</div>' : tablaV(vf)) + "</div>" +
+        '<div class="vs-caja copia"><p class="vs-tit">tabla <b>copia_perifericos</b></p>' + tablaV(cf) + "</div>";
+      OBJ.forEach(function (o, i) { if (!logrados[i] && o.f()) logrados[i] = true; ul.children[i].classList.toggle("hecho", logrados[i]); });
+      if (!avisado && logrados.every(Boolean)) { avisado = true; C.reto("construir", true); }
+    }
+    $("labCtl").addEventListener("click", function (e) {
+      var b = e.target.closest ? e.target.closest("button[data-l]") : null;
+      if (!b || b.disabled) return;
+      var a = b.getAttribute("data-l");
+      if (a === "tec") lab.tec = !lab.tec;
+      else if (a === "refrescar") { if (!(lab.div && !lab.rew)) lab.copia = lab.tec ? 69.90 : 79.90; }
+      else if (a === "div") { lab.div = true; lab.rew = false; }
+      else if (a === "rew") lab.rew = true;
+      else if (a === "idx") lab.idx = !lab.idx;
+      else if (a === "reset") reinicia();
+      render();
+    });
+    render();
+  })();
+
+  /* ---------------- reto: a mano ---------------- */
+  (function () {
+    var D;
+    var NOMS = ["Teclado", "Ratón", "Webcam", "Hub USB", "Cable HDMI", "Altavoz", "Micrófono", "Auriculares", "Router", "Cámara"];
+    function generar() {
+      var tipo = azar(["filas", "copia"]), n, i, T, rows = [], k, nuevo, c, nm, per = 0;
+      if (tipo === "filas") {
+        nm = B.mezclar(NOMS).slice(0, 6);
+        while (per < 2 || per > 5) {
+          rows = []; per = 0;
+          for (i = 0; i < 6; i++) { c = Math.random() < 0.65 ? "Periféricos" : "Redes"; if (c === "Periféricos") per++; rows.push([nm[i], c, azarN(1, 12) * 10]); }
+        }
+        T = azarN(3, 8) * 10;
+        k = azarN(0, 5);
+        do { nuevo = azarN(1, 12) * 10; } while (nuevo === rows[k][2]);
+        var res = rows.map(function (r, j) { return [r[0], r[1], j === k ? nuevo : r[2]]; });
+        D = { tipo: tipo, rows: rows, T: T, k: k, nuevo: nuevo, ans: res.filter(function (r) { return r[1] === "Periféricos" && r[2] > T; }).length };
+      } else {
+        var n0 = azarN(3, 8), m = azarN(1, 4), d = azarN(1, Math.min(3, n0));
+        D = { tipo: tipo, n0: n0, m: m, d: d, ans: m + d };
+      }
+    }
+    generar();
+    B.numerico($("mano"), {
+      pregunta: function () {
+        if (D.tipo === "filas") {
+          var t = D.rows.map(function (r) { return r[0] + " · " + r[1] + " · " + r[2]; }).join("<br>");
+          return "La tabla <code>productos</code> (nombre · categoría · precio):<br><span style=\"font-family:var(--f-mono);font-size:12.5px\">" + t + "</span><br>La vista es <code>SELECT * FROM productos WHERE categoria = 'Periféricos' AND precio &gt; " + D.T + "</code>. Cambias el precio de «" + D.rows[D.k][0] + "» a " + D.nuevo + ". ¿Cuántas filas muestra la vista al leerla ahora?";
+        }
+        return "Una copia guardada se tomó cuando la vista tenía " + D.n0 + " filas. Después se insertaron " + D.m + " filas que cumplen el filtro y se borraron " + D.d + " filas que lo cumplían (estaban en la copia). ¿En cuántas filas se diferencian ahora la vista y la copia (filas que están en una y no en la otra)?";
+      },
+      respuesta: function () { return D.ans; },
+      tolerancia: 0,
+      pistas: [
+        function () {
+          if (D.tipo === "filas") return "La vista se recalcula con el precio nuevo: aplica el filtro a la tabla ya cambiada, fila por fila.";
+          return "Las filas insertadas están en la vista y no en la copia. Las borradas están en la copia y no en la vista.";
+        },
+        function () {
+          if (D.tipo === "filas") return "Cuenta las filas que son Periféricos y tienen precio mayor que " + D.T + " después del cambio.";
+          return "Son dos grupos distintos de filas que no se solapan: suma sus tamaños.";
+        }
+      ],
+      diagnostico: function (v) {
+        if (D.tipo === "copia" && v === D.m - D.d) return "Esa es la diferencia de <b>tamaños</b>, no de contenido. Las insertadas y las borradas son filas distintas: se suman, no se restan.";
+        if (D.tipo === "copia" && v === D.m) return "Solo contaste las insertadas. Las borradas siguen en la copia y ya no están en la vista.";
+        if (D.tipo === "copia" && v === D.d) return "Solo contaste las borradas. Las insertadas están en la vista y no en la copia.";
+        return null;
+      },
+      explicacion: function () {
+        if (D.tipo === "filas") return "Aplicas el filtro (Periféricos y precio mayor que " + D.T + ") a la tabla con el precio nuevo y cuentas: " + D.ans + " filas. La vista no guardó nada: se calcula al leerla.";
+        return "Insertadas: " + D.m + " (solo en la vista). Borradas: " + D.d + " (solo en la copia). Diferencia: $" + D.m + " + " + D.d + " = " + D.ans + "$ filas, aunque el tamaño cambió en $" + (D.m - D.d) + "$.";
+      },
+      reintentable: true,
+      textoReintentar: "Otro ejercicio",
+      antesDeReintentar: generar,
+      alResolver: function (ok) { C.reto("mano", ok); }
+    });
+  })();
+
+  /* ---------------- reto: cazar el error ---------------- */
+  B.cazarError($("error"), {
+    variantes: [
+      {
+        intro: "La vista <code>vista_perifericos</code> muestra el teclado a 79.90. Alguien razona qué pasa al cambiar el precio en la tabla:",
+        lineas: ["\\text{la vista guarda la consulta, no las filas}",
+          "\\text{cambio el precio del teclado a 69.90 en la tabla productos}",
+          "\\text{la vista seguirá mostrando 79.90 hasta que la actualice a mano}",
+          "\\text{al leerla, el SGBD ejecuta la consulta sobre la tabla de ahora}"],
+        erronea: 2,
+        explicacion: "Si la vista guarda la consulta y no las filas, no hay nada que actualizar a mano: al leerla, ejecuta la consulta sobre la tabla de ahora y muestra <b>69.90</b>. Lo que se queda viejo es una <b>copia guardada</b>, no una vista."
+      },
+      {
+        intro: "Divides <code>productos</code> en dos tablas y reescribes la definición de la vista con un JOIN. Alguien razona qué independencia está en juego:",
+        lineas: ["\\text{dividir una tabla cambia el esquema, es decir, el nivel conceptual}",
+          "\\text{el cambio protege a los programas gracias a la independencia física}",
+          "\\text{la vista se reescribe por dentro y sigue devolviendo nombre y precio}",
+          "\\text{el programa de ventas no cambia ninguna línea}"],
+        erronea: 1,
+        explicacion: "Cambiar el esquema conceptual sin afectar a las vistas ni a los programas es la independencia <b>lógica</b>. La <b>física</b> es la de cambiar el almacenamiento (un índice, un disco) sin afectar al nivel conceptual."
+      },
+      {
+        intro: "La vista <code>vista_pedidos_detalle</code> junta pedidos, clientes y productos con tres JOIN. Alguien razona si se puede actualizar a través de ella:",
+        lineas: ["\\text{una vista solo es actualizable si sale de una tabla base}",
+          "\\text{vista\\_pedidos\\_detalle usa tres JOIN}",
+          "\\text{con JOIN, agregaciones o DISTINCT la vista sigue siendo actualizable}",
+          "\\text{luego no conviene actualizar a través de esta vista}"],
+        erronea: 2,
+        explicacion: "El material dice lo contrario: con un JOIN, una agregación o un <code>DISTINCT</code>, la vista <b>deja de ser actualizable</b>. De ahí que la conclusión de la última línea sí sea correcta."
+      }
+    ],
+    alResolver: function (ok) { C.reto("error", ok); }
+  });
+
+  /* ---------------- retos: propiedades ---------------- */
+  function prop(id, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple($(id), cfg);
+  }
+  prop("prop1", {
+    pregunta: "¿En qué nivel de la arquitectura ANSI/SPARC se describe cómo se guardan los datos en el disco: archivos, índices y métodos de acceso?",
+    opciones: ["En el nivel interno", "En el nivel externo", "En el nivel conceptual", "En el nivel de presentación"],
+    correcta: 0,
+    pistas: [null, "El externo es lo que ve cada usuario: sus vistas. No habla del disco.", "El conceptual dice qué datos hay y cómo se relacionan, no cómo se guardan.", "No existe un nivel de presentación en el estándar: son tres niveles, y ese nombre es un distractor."],
+    explicacion: "El nivel <b>interno</b> describe el almacenamiento físico. Es la misma pregunta que trae el cuestionario de la unidad (pregunta 3)."
+  });
+  prop("prop2", {
+    pregunta: "¿Cuál de estas afirmaciones sobre una vista y una copia guardada de su resultado (vista materializada) es verdadera?",
+    opciones: [
+      "La vista siempre está al día y la copia guardada solo lo está cuando se refresca",
+      "La copia guardada siempre está al día porque es una tabla de verdad",
+      "La vista guarda las filas para leerlas más rápido",
+      "Las dos están siempre al día, y la única diferencia es el nombre"
+    ],
+    correcta: 0,
+    pistas: [null, "Una tabla de verdad guarda las filas de un momento y se queda ahí hasta que alguien las cambia.", "Eso describe la copia, no la vista. La vista guarda solo el texto de la consulta.", "Hay una diferencia de fondo: una se calcula al leer y la otra guarda el resultado."],
+    explicacion: "La vista <b>no guarda filas</b>, así que refleja la tabla de ahora. La copia guardada <b>sí</b> guarda filas, y a cambio de leer rápido se queda vieja hasta que se refresca (es el precio de no volver a calcular)."
+  });
+  prop("prop3", {
+    pregunta: "¿Cómo se llama la independencia que permite modificar el esquema conceptual sin afectar necesariamente a las vistas ni a las aplicaciones?",
+    opciones: ["Independencia lógica", "Independencia física", "Independencia semántica", "Independencia de red"],
+    correcta: 0,
+    pistas: [null, "La física es la de cambiar el almacenamiento sin tocar el nivel conceptual: va un nivel más abajo.", "No es un término de la arquitectura de tres niveles: es un distractor.", "Tampoco: la red no forma parte de los tres niveles."],
+    explicacion: "Es la independencia <b>lógica</b> (pregunta 6 del cuestionario de la unidad). Las dos del estándar son la lógica (cambia el esquema conceptual) y la física (cambia el almacenamiento)."
+  });
+
+  /* ---------------- sentencia de memoria ---------------- */
+  B.ordenar($("formula"), {
+    piezas: ["\\texttt{CREATE VIEW}", "\\texttt{vista\\_perifericos}", "\\texttt{AS}", "\\texttt{SELECT nombre, precio}", "\\texttt{FROM productos}", "\\texttt{WHERE categoria = 'Periféricos'}"],
+    distractores: ["\\texttt{CREATE TABLE}", "\\texttt{SELECT *}", "\\texttt{GROUP BY categoria}"],
+    soluciones: [[0, 1, 2, 3, 4, 5]],
+    explicacion: "Primero se nombra la vista (<code>CREATE VIEW nombre AS</code>) y después va la consulta que guarda: <code>SELECT ... FROM ... WHERE ...</code>. <code>CREATE TABLE</code> crearía una tabla con filas guardadas, que es otra cosa.",
+    alResolver: function (ok) { C.reto("formula", ok); }
+  });
+
+  /* ---------------- vida real: el algoritmo en codigo ---------------- */
+  (function () {
+    var CODIGO = {
+ "py": [
+  [
+   "imp",
+   "import sqlite3"
+  ],
+  [
+   "con",
+   "con = sqlite3.connect(\":memory:\")                       # una base en memoria"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "crear",
+   "con.execute(\"CREATE TABLE productos (id_producto INTEGER PRIMARY KEY, nombre TEXT, categoria TEXT, precio REAL, stock INTEGER)\")"
+  ],
+  [
+   "datos",
+   "datos = ["
+  ],
+  [
+   "datos",
+   "    (101, \"Teclado mecánico\", \"Periféricos\", 79.90, 120),"
+  ],
+  [
+   "datos",
+   "    (102, 'Monitor 27\" 4K', \"Monitores\", 349.00, 45),"
+  ],
+  [
+   "datos",
+   "    (103, \"Ratón inalámbrico\", \"Periféricos\", 29.90, 200),"
+  ],
+  [
+   "datos",
+   "    (104, \"Disco SSD 1TB\", \"Almacenamiento\", 89.50, 80),"
+  ],
+  [
+   "datos",
+   "    (105, \"Webcam HD\", \"Periféricos\", 39.90, 60),"
+  ],
+  [
+   "datos",
+   "    (106, \"Router Wi-Fi 6\", \"Redes\", 129.00, 30)]"
+  ],
+  [
+   "forf",
+   "for fila in datos:                                   # una fila por vuelta"
+  ],
+  [
+   "ins",
+   "    con.execute(\"INSERT INTO productos VALUES (?, ?, ?, ?, ?)\", fila)"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "vista",
+   "con.execute(\"CREATE VIEW vista_perifericos AS SELECT nombre, precio FROM productos WHERE categoria = 'Periféricos'\")"
+  ],
+  [
+   "copia",
+   "con.execute(\"CREATE TABLE copia_perifericos AS SELECT nombre, precio FROM productos WHERE categoria = 'Periféricos'\")"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "fres",
+   "def resumen(titulo, tabla):"
+  ],
+  [
+   "res",
+   "    filas = con.execute(\"SELECT nombre, precio FROM \" + tabla).fetchall()"
+  ],
+  [
+   "res",
+   "    print(\"%s %d filas, suma %.2f\" % (titulo, len(filas), sum(p for n, p in filas)))"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "v0",
+   "resumen(\"vista\", \"vista_perifericos\")"
+  ],
+  [
+   "c0",
+   "resumen(\"copia\", \"copia_perifericos\")"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "upd",
+   "con.execute(\"UPDATE productos SET precio = 69.90 WHERE id_producto = 101\")"
+  ],
+  [
+   "ins2",
+   "con.execute(\"INSERT INTO productos VALUES (107, 'Hub USB', 'Periféricos', 19.90, 90)\")"
+  ],
+  [
+   "v1",
+   "resumen(\"vista\", \"vista_perifericos\")"
+  ],
+  [
+   "c1",
+   "resumen(\"copia\", \"copia_perifericos\")"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "refr",
+   "con.execute(\"DROP TABLE copia_perifericos\")"
+  ],
+  [
+   "refr",
+   "con.execute(\"CREATE TABLE copia_perifericos AS SELECT nombre, precio FROM vista_perifericos\")"
+  ],
+  [
+   "c2",
+   "resumen(\"copia\", \"copia_perifericos\")"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "mano",
+   "a_mano = []"
+  ],
+  [
+   "forp",
+   "for fila in con.execute(\"SELECT * FROM productos\"):"
+  ],
+  [
+   "if",
+   "    if fila[2] == \"Periféricos\":"
+  ],
+  [
+   "add",
+   "        a_mano.append((fila[1], fila[3]))"
+  ],
+  [
+   "cmp",
+   "print(a_mano == con.execute(\"SELECT nombre, precio FROM vista_perifericos\").fetchall())"
+  ]
+ ],
+ "r": [
+  [
+   "imp",
+   "suppressPackageStartupMessages(library(dplyr))      # R no trae SQLite aquí: la vista será una función"
+  ],
+  [
+   "con",
+   "# no hay conexión: la tabla vive en la memoria de R, igual que \":memory:\""
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "crear",
+   "productos <- data.frame(id_producto = integer(), nombre = character(), categoria = character(),"
+  ],
+  [
+   "crear",
+   "                       precio = numeric(), stock = integer(), stringsAsFactors = FALSE)"
+  ],
+  [
+   "datos",
+   "datos <- list("
+  ],
+  [
+   "datos",
+   "  list(101L, \"Teclado mecánico\", \"Periféricos\", 79.90, 120L),"
+  ],
+  [
+   "datos",
+   "  list(102L, \"Monitor 27\\\" 4K\", \"Monitores\", 349.00, 45L),"
+  ],
+  [
+   "datos",
+   "  list(103L, \"Ratón inalámbrico\", \"Periféricos\", 29.90, 200L),"
+  ],
+  [
+   "datos",
+   "  list(104L, \"Disco SSD 1TB\", \"Almacenamiento\", 89.50, 80L),"
+  ],
+  [
+   "datos",
+   "  list(105L, \"Webcam HD\", \"Periféricos\", 39.90, 60L),"
+  ],
+  [
+   "datos",
+   "  list(106L, \"Router Wi-Fi 6\", \"Redes\", 129.00, 30L))"
+  ],
+  [
+   "forf",
+   "for (fila in datos) {                                # una fila por vuelta"
+  ],
+  [
+   "ins",
+   "  productos[nrow(productos) + 1, ] <- fila"
+  ],
+  [
+   null,
+   "}"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "vista",
+   "vista_perifericos <- function(tabla) {               # la vista es una función: se calcula al llamarla"
+  ],
+  [
+   "vista",
+   "  tabla |> filter(categoria == \"Periféricos\") |> select(nombre, precio)"
+  ],
+  [
+   null,
+   "}"
+  ],
+  [
+   "copia",
+   "copia_perifericos <- vista_perifericos(productos)      # la copia es una variable guardada"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "fres",
+   "resumen <- function(titulo, t) {"
+  ],
+  [
+   "res",
+   "  cat(sprintf(\"%s %d filas, suma %.2f\\n\", titulo, nrow(t), sum(t$precio)))"
+  ],
+  [
+   null,
+   "}"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "v0",
+   "resumen(\"vista\", vista_perifericos(productos))"
+  ],
+  [
+   "c0",
+   "resumen(\"copia\", copia_perifericos)"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "upd",
+   "productos$precio[productos$id_producto == 101] <- 69.90"
+  ],
+  [
+   "ins2",
+   "productos[nrow(productos) + 1, ] <- list(107L, \"Hub USB\", \"Periféricos\", 19.90, 90L)"
+  ],
+  [
+   "v1",
+   "resumen(\"vista\", vista_perifericos(productos))"
+  ],
+  [
+   "c1",
+   "resumen(\"copia\", copia_perifericos)"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "refr",
+   "copia_perifericos <- vista_perifericos(productos)      # refrescar: volver a guardar el resultado"
+  ],
+  [
+   "c2",
+   "resumen(\"copia\", copia_perifericos)"
+  ],
+  [
+   null,
+   ""
+  ],
+  [
+   "mano",
+   "a_mano <- data.frame(nombre = character(), precio = numeric(), stringsAsFactors = FALSE)"
+  ],
+  [
+   "forp",
+   "for (i in 1:nrow(productos)) {"
+  ],
+  [
+   "if",
+   "  if (productos$categoria[i] == \"Periféricos\") {"
+  ],
+  [
+   "add",
+   "    a_mano[nrow(a_mano) + 1, ] <- list(productos$nombre[i], productos$precio[i])"
+  ],
+  [
+   null,
+   "  }"
+  ],
+  [
+   null,
+   "}"
+  ],
+  [
+   "cmp",
+   "v <- vista_perifericos(productos)"
+  ],
+  [
+   "cmp",
+   "print(identical(a_mano$nombre, v$nombre) && identical(a_mano$precio, v$precio))"
+  ]
+ ]
+};
+    var SAL_PY = "vista 3 filas, suma 149.70\ncopia 3 filas, suma 149.70\nvista 4 filas, suma 159.60\ncopia 3 filas, suma 149.70\ncopia 4 filas, suma 159.60\nTrue";
+    var SAL_R = "vista 3 filas, suma 149.70\ncopia 3 filas, suma 149.70\nvista 4 filas, suma 159.60\ncopia 3 filas, suma 149.70\ncopia 4 filas, suma 159.60\n[1] TRUE";
+    // eventos: una foto del estado despues de ejecutar cada linea
+    var EV = [], i, j;
+    var st = { fase: 1, tab: false, prods: [], vista: false, copia: null, log: [] };
+    var DATOS = PROD0.map(function (r) { return [r[1], r[2], r[3]]; });
+    function vistaDe(P) { return P.filter(function (r) { return r[1] === "Periféricos"; }).map(function (r) { return [r[0], r[2]]; }); }
+    function resumen(titulo, F) { return titulo + " " + F.length + " filas, suma " + f2(suma(F)); }
+    function foto(id, extra) {
+      EV.push(Object.assign({ id: id, fase: st.fase, tab: st.tab, prods: st.prods.map(function (r) { return r.slice(); }), vista: st.vista, copia: st.copia ? st.copia.map(function (r) { return r.slice(); }) : null,
+        log: st.log.slice(), i: null, nueva: -1, fin: false }, extra || {}));
+    }
+    foto("imp"); foto("con");
+    st.tab = true; foto("crear");
+    foto("datos");
+    for (i = 0; i < 6; i++) {
+      foto("forf", { i: i });
+      st.prods.push(DATOS[i].slice()); foto("ins", { i: i, nueva: st.prods.length - 1 });
+    }
+    st.fase = 2;
+    st.vista = true; foto("vista");
+    st.copia = vistaDe(st.prods); foto("copia");
+    st.fase = 3;
+    foto("fres");
+    foto("v0", { que: "vista" });
+    st.log.push(resumen("vista", vistaDe(st.prods))); foto("res", { de: "v0", que: "vista", n: vistaDe(st.prods).length });
+    foto("c0", { que: "copia" });
+    st.log.push(resumen("copia", st.copia)); foto("res", { de: "c0", que: "copia", n: st.copia.length });
+    st.fase = 4;
+    st.prods[0][2] = 69.90; foto("upd", { nueva: 0 });
+    st.prods.push(["Hub USB", "Periféricos", 19.90]); foto("ins2", { nueva: st.prods.length - 1 });
+    st.fase = 5;
+    foto("v1", { que: "vista" });
+    st.log.push(resumen("vista", vistaDe(st.prods))); foto("res", { de: "v1", que: "vista", n: vistaDe(st.prods).length });
+    foto("c1", { que: "copia" });
+    st.log.push(resumen("copia", st.copia)); foto("res", { de: "c1", que: "copia", n: st.copia.length });
+    st.fase = 6;
+    st.copia = vistaDe(st.prods); foto("refr");
+    foto("c2", { que: "copia" });
+    st.log.push(resumen("copia", st.copia)); foto("res", { de: "c2", que: "copia", n: st.copia.length });
+    st.fase = 7;
+    foto("mano");
+    var cont = 0;
+    for (i = 0; i < st.prods.length; i++) {
+      foto("forp", { i: i });
+      foto("if", { i: i });
+      if (st.prods[i][1] === "Periféricos") { cont++; foto("add", { i: i, cont: cont }); }
+    }
+    st.log.push("True"); foto("cmp");
+    EV[EV.length - 1].fin = true;
+
+    function narrar(e, ctx) {
+      var py = ctx.lang() === "py", ix = ctx.ix;
+      switch (e.id) {
+        case "imp": return py ? "Importa <code>sqlite3</code>, el módulo de la librería estándar que trae un motor de base de datos completo." : "Carga <code>dplyr</code>, la librería que da <code>filter</code> y <code>select</code>. R no trae SQLite en esta máquina: la vista será una <b>función</b>.";
+        case "con": return py ? "Abre una base de datos <b>en memoria</b>: vive mientras corre el programa y desaparece al terminar." : "Un comentario: no hay conexión, la tabla vive en la memoria de R.";
+        case "crear": return py ? "Crea la tabla <b>productos</b> con sus cinco atributos. Es el nivel conceptual: nace vacía." : "Crea un <code>data.frame</code> vacío con los cinco atributos: la tabla <b>productos</b>, sin filas.";
+        case "datos": return "Prepara los seis productos de la tienda, tal como están en el ejercicio de la UD2.";
+        case "forf": return "Producto <b>" + (e.i + 1) + "</b> de 6: <b>" + esc(DATOS[e.i][0]) + "</b>. Índice " + ix(e.i) + " en " + (py ? "Python" : "R") + ".";
+        case "ins": return "Inserta «" + esc(DATOS[e.i][0]) + "». La tabla tiene ahora <b>" + (e.i + 1) + "</b> fila" + (e.i ? "s" : "") + ".";
+        case "vista": return py ? "<code>CREATE VIEW</code> guarda <b>el texto de la consulta</b> con el nombre <code>vista_perifericos</code>. No copia ninguna fila: filas guardadas por la vista, <b>cero</b>." : "La vista es una <b>función</b>: guarda la consulta (filtrar Periféricos, quedarse con nombre y precio) y la ejecuta cuando la llamas. Tampoco guarda filas.";
+        case "copia": return py ? "<code>CREATE TABLE ... AS SELECT</code> sí guarda el <b>resultado</b> en una tabla de verdad: es la copia, tomada ahora. Tiene 3 filas." : "Llama a la función una vez y guarda el resultado en una <b>variable</b>: es la copia, tomada ahora. Tiene 3 filas.";
+        case "fres": return "Define <code>resumen</code>, que cuenta las filas de una tabla y suma sus precios, para ver los cambios sin leer cada fila.";
+        case "v0": return py ? "Pide el resumen de la <b>vista</b>: el SGBD ejecuta la consulta sobre la tabla de ahora." : "Pide el resumen de la vista: <b>llama a la función</b> con la tabla de ahora.";
+        case "c0": return "Pide el resumen de la <b>copia</b>: lee la tabla guardada, sin recalcular nada.";
+        case "res": return "Imprime <b>" + esc(e.log[e.log.length - 1]) + "</b>.";
+        case "upd": return "Cambia el precio del teclado a 69.90 <b>en la tabla productos</b>. La vista y la copia no se tocan.";
+        case "ins2": return "Agrega el Hub USB (Periféricos, 19.90) a la tabla. La vista no se toca: ahora hay <b>7 productos</b>.";
+        case "v1": return "Vuelve a pedir el resumen de la <b>vista</b>: se calcula otra vez con la tabla ya cambiada.";
+        case "c1": return "Vuelve a pedir el resumen de la <b>copia</b>: sigue con lo de $t_0$, no se enteró.";
+        case "refr": return py ? "<b>Refresca</b> la copia: borra la tabla vieja y la crea de nuevo a partir de la vista." : "<b>Refresca</b> la copia: vuelve a llamar a la función y guarda el resultado nuevo en la variable.";
+        case "c2": return "Resumen de la copia refrescada: otra vez coincide con la vista.";
+        case "mano": return "Prepara una lista vacía para recalcular la vista <b>a mano</b>, con un bucle, y compararla con la de la librería.";
+        case "forp": return "Producto <b>" + (e.i + 1) + "</b> de " + st.prods.length + ". Índice " + ix(e.i) + " en " + (py ? "Python" : "R") + ".";
+        case "if": return "¿«" + esc(st.prods[e.i][0]) + "» es de categoría Periféricos? " + (st.prods[e.i][1] === "Periféricos" ? "<b>Sí</b>." : "<b>No</b>: se salta.");
+        case "add": return "Lo agrega a la lista. Van <b>" + e.cont + "</b> periférico" + (e.cont > 1 ? "s" : "") + ".";
+        case "cmp": return "Compara la lista hecha a mano con lo que devuelve la vista: <b>" + (py ? "True" : "TRUE") + "</b>. Es la misma consulta, escrita de dos formas.";
+      }
+      return "";
+    }
+    function filasHtml(cols, filas, marca, numCol) {
+      var h = "<thead><tr>" + cols.map(function (c, k) { return "<th" + (k === numCol ? ' class="num"' : "") + ">" + c + "</th>"; }).join("") + "</tr></thead><tbody>";
+      if (!filas.length) h += '<tr><td class="vacio" colspan="' + cols.length + '">sin filas</td></tr>';
+      filas.forEach(function (r, k) {
+        h += '<tr class="' + (k === marca ? "nueva" : "") + '">' + r.map(function (v, c) { return '<td class="' + (c === numCol ? "num" : "") + '">' + esc(typeof v === "number" ? f2(v) : v) + "</td>"; }).join("") + "</tr>";
+      });
+      return h + "</tbody>";
+    }
+    function visual(e, anterior, ctx) {
+      var vf = e && e.vista ? vistaDe(e.prods) : null;
+      $("vrBase").innerHTML = e && e.tab ? filasHtml(["nombre", "categoria", "precio"], e.prods, e.nueva, 2) : '<tbody><tr><td class="vacio">la tabla todavía no existe</td></tr></tbody>';
+      $("vrVista").innerHTML = vf ? filasHtml(["nombre", "precio"], vf, -1, 1) : '<tbody><tr><td class="vacio">la vista todavía no existe</td></tr></tbody>';
+      $("vrCopia").innerHTML = e && e.copia ? filasHtml(["nombre", "precio"], e.copia, -1, 1) : '<tbody><tr><td class="vacio">la copia todavía no existe</td></tr></tbody>';
+      $("vrLog").textContent = e && e.log.length ? e.log.join("\n") : "(aún no se imprimió nada)";
+    }
+    B.vidaReal($("vidareal"), {
+      codigo: CODIGO,
+      eventos: EV,
+      narrar: narrar,
+      vars: function (e, ctx) {
+        var v = [], ix = ctx.ix;
+        if (e && (e.id === "forf" || e.id === "forp")) v.push('<span class="vj">i = <b>' + ix(e.i) + "</b></span>");
+        if (e && e.tab) v.push('<span>productos = <b>' + e.prods.length + "</b> filas</span>");
+        if (e && e.vista) v.push('<span class="vk">vista = <b>' + vistaDe(e.prods).length + "</b> filas</span>");
+        if (e && e.copia) v.push('<span>copia = <b>' + e.copia.length + "</b> filas</span>");
+        return v;
+      },
+      visual: visual,
+      demora: function (e) { return !e ? 600 : e.id === "ins" || e.id === "forf" || e.id === "forp" || e.id === "if" || e.id === "add" ? 420 : e.id === "res" || e.id === "upd" || e.id === "ins2" ? 800 : 900; }
+    });
+
+    $("salidaPy").textContent = SAL_PY;
+    $("salidaR").textContent = SAL_R;
+
+    B.numerico(cuerpo("vrPred"), {
+      pregunta: "El programa baja el teclado a 69.90 y agrega el Hub USB (19.90, Periféricos) a la tabla, sin tocar ni la vista ni la copia. Antes sumaban 149.70. ¿Cuánto suma la <b>vista</b> al leerla después de los cambios?",
+      respuesta: 159.6,
+      tolerancia: 0.005,
+      pistas: [
+        "La vista se calcula con la tabla de ahora: tres periféricos de antes (con el teclado nuevo) más el Hub.",
+        "Suma 69.90 + 29.90 + 39.90 + 19.90."
+      ],
+      diagnostico: function (v) {
+        if (Math.abs(v - 149.7) < 0.005) return "149.70 es lo que suma la <b>copia</b>, que no se enteró. La vista se recalcula con la tabla nueva.";
+        if (Math.abs(v - 139.7) < 0.005) return "139.70 sería con el teclado cambiado pero sin el Hub. La vista también ve el producto nuevo.";
+        if (Math.abs(v - 169.6) < 0.005) return "169.60 usa el precio viejo del teclado (79.90). Ya lo bajaste a 69.90.";
+        return null;
+      },
+      explicacion: "La vista suma $69.90 + 29.90 + 39.90 + 19.90 = 159.60$ y la copia sigue en $149.70$. Ahora dale a reproducir y mira cómo cada lectura da lo que dice la tabla en ese momento.",
+      alResolver: function (ok) { C.reto("codigo1", ok); }
+    });
+    prop("codigo2", {
+      pregunta: "En SQLite ejecutas <code>UPDATE vista_perifericos SET precio = 1 WHERE nombre = 'Webcam HD'</code>. La vista sale de una sola tabla, sin agregaciones. ¿Qué pasa?",
+      opciones: [
+        "Da un error: <code>cannot modify vista_perifericos because it is a view</code>",
+        "Cambia el precio en la tabla productos, porque la vista sale de una sola tabla",
+        "Cambia el precio solo en la vista y deja la tabla como estaba",
+        "Lo ignora sin avisar y no cambia nada"
+      ],
+      correcta: 0,
+      pistas: [null, "El material dice que una vista de una sola tabla <b>puede</b> ser actualizable, pero eso depende del motor. En SQLite no lo es por defecto.", "La vista no guarda filas: no hay dónde cambiar un precio solo en la vista.", "SQLite no calla: avisa con un error."],
+      explicacion: "SQLite da el error <code>cannot modify vista_perifericos because it is a view</code> (comprobado con SQLite 3.45.3): sus vistas son de solo lectura, salvo que se definan <code>INSTEAD OF</code> triggers. El material explica cuándo una vista <b>puede</b> ser actualizable, pero no que cada motor decide. Para cambiar el precio se hace el <code>UPDATE</code> sobre <code>productos</code>, como en el programa."
+    });
+    prop("codigo3", {
+      pregunta: "Con la vista ya creada ejecutas <code>ALTER TABLE productos RENAME COLUMN precio TO precio_eur</code>. SQLite reescribe sola la definición de la vista. Después, un programa ejecuta <code>SELECT nombre, precio FROM vista_perifericos</code>. ¿Qué pasa?",
+      opciones: [
+        "Da un error <code>no such column: precio</code>: la vista ahora muestra la columna <code>precio_eur</code>",
+        "Funciona igual que antes: la independencia lógica lo arregla todo",
+        "Devuelve el nombre y un precio vacío (NULL)",
+        "Da un error <code>no such table</code>"
+      ],
+      correcta: 0,
+      pistas: [null, "SQLite reescribe la <b>definición</b> de la vista, pero la columna de la vista toma el nombre nuevo. ¿Qué nombre busca el programa?", "Un nombre de columna que no existe no devuelve NULL: da error.", "La tabla productos sigue existiendo: lo que cambió es el nombre de una columna."],
+      explicacion: "Da <code>no such column: precio</code> (comprobado con SQLite 3.45.3). SQLite actualiza el texto de la vista, pero la columna que expone pasó a llamarse <code>precio_eur</code>. Para conservar la interfaz hay que reescribir la vista con <code>precio_eur AS precio</code>. Es la misma lección del paso 6: la independencia lógica la <b>logra</b> quien mantiene la vista, no sucede sola."
+    });
+  })();
+
+  /* ---------------- tarjetas ---------------- */
+  B.tarjetas($("tarjetas"), [
+    ["¿Qué es una vista?", "Una consulta almacenada con un nombre que se comporta como una tabla. No guarda datos: ejecuta su consulta cada vez que la lees."],
+    ["¿Qué diferencia hay entre una vista y una vista materializada?", "La vista se calcula al leerla y siempre está al día; la materializada guarda el resultado y solo se actualiza al refrescarla."],
+    ["¿Para qué sirven las vistas?", "Para simplificar consultas largas, dar seguridad (mostrar solo ciertas columnas o filas) y estabilizar los nombres que usan los programas. Su límite es el rendimiento."],
+    ["¿Cuáles son los tres niveles de ANSI/SPARC (1975)?", "Externo (las vistas de cada usuario), conceptual (qué datos y relaciones: las tablas) e interno (disco, archivos e índices)."],
+    ["¿Qué es la independencia física?", "Cambiar el almacenamiento (índices, discos, archivos) sin afectar al nivel conceptual."],
+    ["¿Qué es la independencia lógica?", "Cambiar el esquema conceptual sin afectar necesariamente a las vistas ni a las aplicaciones, porque alguien reescribe la definición de la vista."],
+    ["¿Cuándo es actualizable una vista, según el material?", "Cuando sale de una sola tabla base, sin agregaciones ni DISTINCT. Con un JOIN o un GROUP BY deja de serlo (y cada motor decide: SQLite no las actualiza)."],
+    ["Dividiste una tabla y la vista dio error: ¿falló la independencia lógica?", "No: la vista apuntaba a la tabla vieja. La independencia lógica es posible, no automática: la vista se reescribe con un JOIN y por fuera sigue igual."]
+  ]);
+
+  /* ---------------- conexiones ---------------- */
+  B.conexiones("vistas-ansi-sparc");
+})();
+</script>
+</body>
+</html>

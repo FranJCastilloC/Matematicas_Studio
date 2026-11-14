@@ -1,0 +1,1366 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TCP y UDP: puertos y el apretón de manos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+:root { --amb: #a8661a; --amb-soft: #f7ecd9; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --amb: #e0a64a; --amb-soft: #33281a; } }
+:root[data-theme="dark"] { --amb: #e0a64a; --amb-soft: #33281a; }
+
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.esc-head .hint { font-size: 12.5px; color: var(--ink-2); }
+.info { font-size: 13.5px; color: var(--ink); min-height: 4.6em; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; margin: 8px 0; overflow-wrap: anywhere; }
+.info b { font-weight: 500; font-family: var(--f-mono); }
+.vivo2 { font-family: var(--f-mono); font-size: 13px; color: var(--ink-2); margin-top: 6px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.vivo2 b { color: var(--ink); font-weight: 500; }
+.ctl { margin-top: 6px; }
+.ctl button { font-size: 13px; }
+.ctl-lab { font: 500 11px var(--f-mono); color: var(--ink-3); text-transform: uppercase; letter-spacing: .04em; margin: 10px 0 4px; }
+
+/* puertos */
+.mesa { display: grid; grid-template-columns: minmax(0, 1fr) 34px minmax(0, 1fr); gap: 6px; align-items: start; }
+.mesa h4 { font: 500 11px var(--f-mono); text-align: center; color: var(--ink-3); margin: 0 0 6px; }
+.prog { display: block; width: 100%; text-align: left; font-size: 12.5px; padding: 7px 8px; margin-bottom: 4px; border-radius: 7px; border: 1px solid var(--line); background: var(--surface); font-weight: 400; }
+.prog small { display: block; font: 11px var(--f-mono); color: var(--ink-3); margin-top: 1px; }
+.prog.sel { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1.5px var(--accent); }
+.serv { border: 1px solid var(--line); border-radius: 7px; padding: 7px 8px; margin-bottom: 4px; background: var(--surface); font-size: 12.5px; }
+.serv small { display: block; font: 11px var(--f-mono); color: var(--ink-3); margin-top: 1px; }
+.serv.aqui { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1.5px var(--accent); }
+.medio { display: grid; place-content: center; padding-top: 24px; font: 11px var(--f-mono); color: var(--ink-3); text-align: center; }
+.medio.on { color: var(--accent); }
+.sock { width: 100%; border-collapse: collapse; font-family: var(--f-mono); font-size: 11.5px; display: table !important; margin-top: 8px; }
+.sock th { text-align: left; color: var(--ink-3); font-weight: 500; padding: 3px 5px; border-bottom: 1px solid var(--line); }
+.sock td { padding: 3px 5px; border-bottom: 1px solid var(--line-soft); color: var(--ink); overflow-wrap: anywhere; }
+.sock td.dif { background: var(--amb-soft); color: var(--amb); font-weight: 500; }
+.sock tr.nueva td { animation: entra .45s ease-out; }
+@keyframes entra { from { opacity: .2; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .sock tr.nueva td { animation: none; } }
+
+/* diagrama de secuencia */
+.sq { border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px 6px; background: var(--surface); }
+.sq-cab { display: grid; grid-template-columns: 1fr 1fr; font: 500 12px var(--f-body); padding: 0 4px 6px; border-bottom: 1px solid var(--line-soft); }
+.sq-cab span:last-child { text-align: right; }
+.sq-cab small { display: block; font: 10.5px var(--f-mono); color: var(--ink-3); }
+.sq.con-t .sq-cab { margin-left: 54px; }
+.sq-f { display: grid; grid-template-columns: minmax(0, 1fr); align-items: stretch; }
+.sq.con-t .sq-f { grid-template-columns: 54px minmax(0, 1fr); }
+.sq-t { font: 10.5px var(--f-mono); color: var(--ink-3); align-self: center; }
+.sq-c { border-left: 2px solid var(--line); border-right: 2px solid var(--line); padding: 5px 14px 3px; text-align: center; }
+.sq-l { display: block; font: 11.5px/1.25 var(--f-mono); color: var(--ink); overflow-wrap: anywhere; }
+.sq-l small { color: var(--ink-3); font-size: 10.5px; }
+.sq-a { display: block; position: relative; height: 2px; background: var(--c); margin: 5px 0 6px; }
+.sq-a.c::after { content: ""; position: absolute; right: -1px; top: -4px; border-left: 8px solid var(--c); border-top: 5px solid transparent; border-bottom: 5px solid transparent; }
+.sq-a.s::after { content: ""; position: absolute; left: -1px; top: -4px; border-right: 8px solid var(--c); border-top: 5px solid transparent; border-bottom: 5px solid transparent; }
+.sq-a.perd { background: repeating-linear-gradient(90deg, var(--c) 0 6px, transparent 6px 10px); width: 55%; }
+.sq-a.perd::after { display: none; }
+.sq-a.perd.s { margin-left: auto; }
+.sq-f.m-syn { --c: var(--j); }
+.sq-f.m-synack { --c: var(--k); }
+.sq-f.m-ack { --c: var(--ok); }
+.sq-f.m-dato { --c: var(--accent); }
+.sq-f.m-perd { --c: var(--bad); }
+.sq-f.m-perd .sq-l { color: var(--bad); }
+.sq-f.m-reenvio { --c: var(--amb); }
+.sq-f.m-timer { --c: var(--amb); }
+.sq-f.m-timer .sq-l { color: var(--amb); }
+.sq-f.m-timer .sq-c { padding: 3px 14px; }
+.sq-f.m-timer .sq-a { display: none; }
+.sq-f.nueva .sq-l { font-weight: 500; }
+.estados { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
+.estados div { border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; font-size: 12.5px; }
+.estados small { display: block; font: 10.5px var(--f-mono); color: var(--ink-3); }
+.estados b { font-weight: 500; }
+.estados .on { border-color: var(--ok); background: color-mix(in oklab, var(--ok) 12%, var(--surface)); }
+.cuenta-t { font-family: var(--f-mono); font-size: 13px; color: var(--ink-2); margin-top: 8px; font-variant-numeric: tabular-nums; }
+.cuenta-t b { color: var(--ink); font-weight: 500; }
+
+/* fotogramas */
+.rango { display: flex; align-items: center; gap: 10px; margin: 6px 0 4px; font-size: 13px; color: var(--ink-2); }
+.rango input[type=range] { flex: 1; min-width: 0; accent-color: var(--accent); }
+.rango b { font-family: var(--f-mono); font-weight: 500; color: var(--ink); min-width: 5ch; text-align: right; }
+.film { margin: 10px 0 2px; }
+.film h4 { margin: 0 0 4px; font: 500 12px var(--f-body); }
+.film h4 small { font: 10.5px var(--f-mono); color: var(--ink-3); margin-left: 6px; }
+.frames { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+.fr { border: 1.5px dashed var(--line); border-radius: 6px; min-height: 46px; display: grid; place-content: center; text-align: center; font: 500 11px var(--f-mono); color: var(--ink-3); padding: 3px 2px; }
+.fr small { display: block; font: 10px var(--f-mono); font-weight: 400; }
+.fr.ya { border-style: solid; border-color: var(--ok); background: color-mix(in oklab, var(--ok) 14%, var(--surface)); color: var(--ink); }
+.fr.hueco { border-style: solid; border-color: var(--bad); background: repeating-linear-gradient(45deg, var(--surface-2), var(--surface-2) 4px, var(--surface) 4px, var(--surface) 8px); color: var(--bad); }
+.film p { font-size: 12.5px; color: var(--ink-2); margin: 4px 0 0; min-height: 2.6em; }
+.film p b { color: var(--ink); font-weight: 500; }
+
+/* SYN flood */
+.slots { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; margin: 8px 0; }
+.slot { border: 1.5px dashed var(--line); border-radius: 7px; min-height: 48px; display: grid; place-content: center; text-align: center; font: 500 11px var(--f-mono); color: var(--ink-3); padding: 3px 2px; }
+.slot small { display: block; font: 10px var(--f-mono); font-weight: 400; }
+.slot.falso { border-style: solid; border-color: var(--bad); background: color-mix(in oklab, var(--bad) 12%, var(--surface)); color: var(--ink); }
+.cont-f { display: flex; flex-wrap: wrap; gap: 6px 16px; font: 13px var(--f-mono); color: var(--ink-2); margin: 6px 0; }
+.cont-f b { color: var(--ink); font-weight: 500; }
+
+/* retos propios */
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.afirm { font-size: 15px; margin: 10px 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); }
+.capa-opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 6px; margin-top: 10px; }
+.capa-opts .opt { text-align: center; }
+.objetivos { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.objetivos li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.objetivos .m { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.objetivos li.hecho { color: var(--ink); }
+.objetivos li.hecho .m { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 3px var(--surface); }
+.grande { font-family: var(--f-mono); font-size: 14px; color: var(--ink-2); margin: 6px 0 12px; font-variant-numeric: tabular-nums; }
+.grande b { font-size: 18px; color: var(--ink); font-weight: 500; }
+
+/* vida real */
+.vr-sal { margin: 0; padding: 8px 10px; background: var(--surface-2); border-radius: 8px; font: 12px/1.55 var(--f-mono); white-space: pre-wrap; overflow-wrap: anywhere; min-height: 3em; color: var(--ink); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ TCP y UDP</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Infraestructura y programación · Redes de computadores · UD5</p>
+    <h1>TCP y UDP: puertos y el apretón de manos</h1>
+    <p class="lede">
+      Tu equipo habla con el mismo servidor desde varios programas a la vez: dos pestañas, una conexión remota. ¿Cómo sabe cada respuesta a cuál volver? Y cuando no puede faltar ni un byte, ¿cómo se asegura la red de que todo llegó? Lo vas a construir con las manos: los <b>puertos</b>, el <b>apretón de manos de tres mensajes</b>, un segmento que se pierde y se reenvía, y el contraste con <b>UDP</b>, que no espera a nadie.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> Descargas un archivo y, a la vez, estás en una videollamada. Las dos cosas viajan por la misma red. Si a la descarga le falta un pedacito, la red lo vuelve a pedir; si a la videollamada le falta un fotograma, nadie lo pide otra vez. ¿Por qué crees que se tratan distinto, y cómo se "da cuenta" la red de que algo no llegó?</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: el receptor avisa que recibió algo y si no..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>Abrir una conversación, enviar datos y perder uno</h2>
+      <p>Siete pasos. Cada uno termina con un chequeo: hasta que no lo resuelves, el siguiente queda cerrado. Equivocarte aquí no resta nada, es parte del método.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="Los puertos">
+          <span class="etapa">Paso 1</span>
+          <h3>Un equipo, muchos programas</h3>
+          <p>Tu equipo, el <b>192.168.10.37</b>, le habla al servidor <b>192.168.10.70</b> desde tres programas a la vez: dos pestañas del navegador y un cliente de conexión remota (SSH). La dirección IP basta para que los mensajes lleguen al equipo correcto. Pero dentro del equipo hay muchos programas: ¿a cuál se entrega cada mensaje?</p>
+          <p>Esa pregunta la contesta la capa de Transporte con un número: el <b>puerto</b>. Va de 0 a 65535. Los servicios más conocidos tienen un puerto fijo por debajo de 1024: la web usa el 80, la web segura el 443, el DNS el 53 y SSH el 22 <cite class="cita" data-fuente="red5" data-pag="10" data-pimp="7" data-seccion="4.1 Puertos y multiplexación" data-que="Los puertos van de 0 a 65535, los bien conocidos están por debajo de 1024 (80 HTTP, 443 HTTPS, 53 DNS, 22 SSH) y un socket es una IP más un puerto en origen y destino." data-cuando="Antes de tocar el escenario"></cite>
+          <cite class="cita" data-fuente="red5diapo" data-pag="23" data-seccion="Puertos" data-que="La misma idea en una diapositiva: los cuatro puertos de los servicios más comunes." data-cuando="Si quieres un repaso corto"></cite>.</p>
+          <p>En el escenario, a la izquierda están los programas de tu equipo y a la derecha los servicios del servidor. Toca un programa y mira adónde llega su mensaje.</p>
+          <div class="check" id="chk1"><p class="check-tit">Predice antes de seguir</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="El socket">
+          <span class="etapa">Paso 2</span>
+          <h3>Cuatro valores identifican una conversación</h3>
+          <p>La capa de Transporte pone los puertos en su cabecera. Por eso el nombre de la unidad que viaja en esa capa es <b>segmento</b> (TCP) o <b>datagrama</b> (UDP) <cite class="cita" data-fuente="red4" data-pag="6" data-pimp="4" data-seccion="Capas 4, 5, 6 y 7 (Tablas 4 a 7)" data-que="La capa 4 trabaja con segmentos (TCP) o datagramas (UDP) y ahí actúan los firewalls de capa 4 y los balanceadores." data-cuando="Después de tocar el escenario"></cite>.</p>
+          <p>El material define el <b>socket</b> como una IP más un puerto. Una conversación queda entonces identificada por <b>dos sockets</b>, es decir, por cuatro valores: IP de origen, puerto de origen, IP de destino y puerto de destino. La tabla del escenario los muestra.</p>
+          <p>Un dato que el material no da: los puertos temporales que usa un programa cliente suelen ser altos. Aquí usamos 49152, 49153 y 49160, que son valores inventados pero típicos.</p>
+          <div class="check" id="chk2"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="El apretón de manos">
+          <span class="etapa">Paso 3</span>
+          <h3>Tres mensajes para abrir una conexión</h3>
+          <p>TCP es un protocolo <b>orientado a conexión</b>: antes de mandar datos, los dos extremos se ponen de acuerdo. Lo hacen con tres mensajes, el <b>apretón de manos de tres pasos</b> (three-way handshake). Cada uno lleva una bandera: <b>SYN</b> ("quiero abrir"), <b>SYN-ACK</b> ("recibido, y yo también") y <b>ACK</b> ("recibido") <cite class="cita" data-fuente="red5" data-pag="11" data-pimp="8" data-seccion="4.2 TCP y 4.3 Three-way handshake (Figura 1)" data-que="TCP como protocolo orientado a conexión con número de secuencia y ACK, y la Figura 1: tres cuadros Cliente a Servidor SYN, Servidor a Cliente SYN-ACK, Cliente a Servidor ACK; el cierre usa cuatro pasos con FIN y ACK." data-cuando="Después de recorrer los tres mensajes"></cite>
+          <cite class="cita" data-fuente="red5diapo" data-pag="24" data-seccion="TCP y three-way handshake" data-que="Los tres cuadros SYN, SYN-ACK y ACK en una diapositiva." data-cuando="Si quieres un repaso corto"></cite>.</p>
+          <p>Cada extremo aprovecha para anunciar el <b>número de secuencia inicial</b> desde el que va a contar. Sus valores van en las cabeceras: el material solo dice que el cliente propone el suyo y el servidor confirma el recibido y propone el suyo. En la Figura 1 son tres cuadros de texto, <b>sin números</b>. Los que ves aquí, 1000 y 5000, los inventamos para poder seguir la cuenta. (En la página de capas, la cabecera de juguete también llevaba 1000.)</p>
+          <div class="fbloque">
+            <div data-tex="\text{ack}_{\text{SYN-ACK}} = \text{seq}_{\text{SYN}} + 1" data-display></div>
+            <div class="vivo2" id="vivoHand"></div>
+          </div>
+          <details class="profundizar">
+            <summary>¿Y cómo se cierra la conexión?</summary>
+            <div>
+              <p>El material solo dice que el cierre usa <b>cuatro pasos</b> con banderas FIN y ACK, sin dar números. La idea: cada lado cierra su dirección por separado, y por eso hacen falta dos FIN y dos ACK. Los detalles de los campos están en la bibliografía de la unidad, RFC 793 (TCP) y RFC 768 (UDP) <cite class="cita" data-fuente="red5" data-pag="19" data-pimp="16" data-seccion="Bibliografía" data-que="Las referencias de la unidad, entre ellas RFC 793 (TCP) y RFC 768 (UDP), donde están las cabeceras campo por campo que el material no desarrolla." data-cuando="Cuando quieras ver las cabeceras con todos sus campos"></cite>.</p>
+            </div>
+          </details>
+          <div class="check" id="chk3"><p class="check-tit">Calcula antes de tocar</p><div class="cuerpo"></div></div>
+
+          <div class="destacado" id="destacado">
+            <p class="dest-tit">Una confusión muy común</p>
+            <h4>Si el SYN no lleva datos, ¿por qué el ack es seq + 1?</h4>
+            <p>Parece que, si no se envió ningún byte, el servidor debería confirmar el mismo 1000. Pero responde 1001. La razón es que el SYN <b>gasta un número de secuencia</b>, igual que lo gastaría un byte de datos: así el cliente puede saber sin dudas que ese SYN en particular fue recibido. El primer byte de datos viaja entonces con el 1001. Este detalle no aparece en el material de la unidad: viene del estándar de TCP.</p>
+            <div class="check" id="chk3b"><p class="check-tit">Antes de seguir</p><div class="cuerpo"></div></div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Enviar datos">
+          <span class="etapa">Paso 4</span>
+          <h3>El ack dice qué byte espero ahora</h3>
+          <p>Con la conexión abierta, el cliente manda un archivo de <b>400 bytes</b> (datos inventados, redondos) en <b>4 segmentos de 100 bytes</b>. Cada segmento lleva su número de secuencia: el del <b>primer byte</b> que contiene. El primero lleva 1001, que es lo que sigue al SYN.</p>
+          <p>El servidor contesta con un <b>ack</b>: el número del <b>siguiente byte que espera</b>. Si recibió bien un segmento que empezaba en <span data-tex="s"></span> y llevaba <span data-tex="L"></span> bytes, espera ahora el byte <span data-tex="s + L"></span>:</p>
+          <div class="fbloque">
+            <div data-tex="\text{ack} = s + L" data-display></div>
+            <div class="vivo2" id="vivoDatos"></div>
+          </div>
+          <p>Esta cuenta por bytes (y no por segmentos) viene del estándar. El material solo nombra el "número de secuencia" en la cabecera TCP <cite class="cita" data-fuente="red4" data-pag="8" data-pimp="6" data-seccion="Encapsulación y desencapsulación (Tabla 13)" data-que="En la tabla de encapsulación la capa de transporte pone la cabecera TCP con puertos y número de secuencia, y el resultado es el segmento." data-cuando="Después de enviar los cuatro segmentos"></cite>. Aquí cada segmento lleva 100 bytes, así que los números de secuencia saltan de cien en cien.</p>
+          <div class="check" id="chk4"><p class="check-tit">Calcula antes de tocar</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Pérdida y reenvío">
+          <span class="etapa">Paso 5</span>
+          <h3>Si algo no llega, el ack no avanza</h3>
+          <p>Ahora el camino falla y el segmento 3 se pierde. El servidor no tiene forma de enterarse de lo que no llegó, pero sí de <b>lo que falta</b>: sigue pidiendo el byte 1201 aunque le lleguen segmentos posteriores. Su ack nunca salta un hueco.</p>
+          <p>El cliente, por su parte, arranca un temporizador al enviar cada segmento. Si vence sin recibir el ack correspondiente, <b>retransmite</b>. El material nombra la retransmisión, el control de flujo (la ventana del receptor) y el de congestión, pero sin números ni detalle, y dice que el costo son cabeceras mayores y más latencia <cite class="cita" data-fuente="red5" data-pag="11" data-pimp="8" data-seccion="4.2 TCP" data-que="Lista lo que hace TCP: número de secuencia y ACK, retransmisión, control de flujo y de congestión, a costa de cabeceras mayores y latencia. No da ningún valor numérico." data-cuando="Después de provocar la pérdida"></cite>.</p>
+          <p>El escenario simula todo con tiempos inventados: 20 ms de ida, 20 de vuelta y un temporizador (RTO) que tú eliges. Cuando se resuelva el chequeo se activan los controles.</p>
+          <details class="profundizar">
+            <summary>¿TCP siempre espera al temporizador?</summary>
+            <div>
+              <p>No. Las implementaciones reales también retransmiten cuando llegan tres acks repetidos seguidos (reenvío rápido), sin esperar el vencimiento. Eso no está en el material de la unidad y la simulación no lo usa: aquí solo cuenta el temporizador. Tampoco se modelan la ventana ni la congestión, que decidirían cuántos segmentos pueden ir en vuelo a la vez.</p>
+            </div>
+          </details>
+          <div class="check" id="chk5"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="UDP">
+          <span class="etapa">Paso 6</span>
+          <h3>UDP: sin apretón y sin espera</h3>
+          <p><b>UDP</b> es lo contrario de TCP: sin conexión y sin garantías. No abre ni cierra nada, no numera, no confirma y no reenvía. Su cabecera mide <b>8 bytes</b>, frente a los <b>20 como mínimo</b> de TCP <cite class="cita" data-fuente="red5" data-pag="12" data-pimp="9" data-seccion="4.5 TCP frente a UDP (Tabla 5)" data-que="La tabla de conexión, fiabilidad, latencia y uso típico de cada protocolo, con la regla práctica: una videollamada prefiere perder un fotograma; los archivos y la web necesitan todos los bytes." data-cuando="Al terminar este paso"></cite>. Con el mismo mensaje de 41 bytes de la página de capas, la trama con UDP mide <span data-tex="41 + 8 + 20 + 14 + 4 = 87"></span> bytes y con TCP 99.</p>
+          <p>Lo que se gana es tiempo: no hay apretón (los datos salen de inmediato) ni esperas por reenvíos. Lo que se pierde es la garantía. El ejercicio de la unidad resuelve los dos casos: la videoconferencia usa UDP y la réplica de pesos de un modelo usa TCP, porque ningún byte puede perderse <cite class="cita" data-fuente="red5ej" data-pag="5" data-pimp="4" data-seccion="Solución 6: TCP o UDP" data-que="La videoconferencia va con UDP (tiempo real) y la réplica de pesos con TCP (ningún byte puede perderse)." data-cuando="Al terminar este paso"></cite>. La diapositiva de repaso lo plantea con la videollamada <cite class="cita" data-fuente="red5diapo" data-pag="26" data-seccion="Pregunta de repaso (videollamada con UDP)" data-que="La pregunta y la respuesta sobre usar UDP en una videollamada. Ojo: la cabecera de esa diapositiva dice «Acceso directo a memoria (DMA)», un resto de otra unidad." data-cuando="Al terminar este paso"></cite>.</p>
+          <p>En el escenario, el mismo video de cuatro fotogramas viaja por TCP y por UDP con el mismo fallo. Mueve el reloj y compara lo que ve quien mira.</p>
+          <div class="check" id="chk6"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="SYN flood">
+          <span class="etapa">Paso 7</span>
+          <h3>Cuando el apretón de manos se vuelve un arma</h3>
+          <p>El apretón tiene un costo escondido: al recibir un SYN, el servidor <b>reserva un lugar</b> en su tabla de conexiones a medio abrir y espera el ACK. Un atacante puede aprovecharlo: manda muchísimos SYN y <b>nunca completa</b> el apretón. Es el <b>SYN flood</b>, una forma de denegación de servicio (DoS): agota la tabla de conexiones y los clientes reales ya no caben <cite class="cita" data-fuente="red6" data-pag="6" data-pimp="3" data-seccion="3.2 DoS y DDoS" data-que="Agotar el ancho de banda, la CPU, la memoria o las conexiones; la botnet; y el SYN flood, donde los SYN sin completar el handshake llenan la tabla de conexiones." data-cuando="Después de llenar la tabla"></cite>
+          <cite class="cita" data-fuente="red6diapo" data-pag="9" data-seccion="DoS y DDoS" data-que="La diapositiva del vector DoS y DDoS, con el mismo texto de la teoría." data-cuando="Si quieres un repaso corto"></cite>.</p>
+          <p>El material no da cifras. La tabla de 8 lugares y el tiempo de espera de 60 s del escenario son datos inventados para que la cuenta sea limpia: un servidor real tiene miles de lugares y defensas adicionales.</p>
+          <div class="cita" id="citaHipo" hidden></div>
+          <div class="check" id="chk7"><p class="check-tit">Antes de terminar</p><div class="cuerpo"></div></div>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+        </div>
+
+        <div id="esPuertos">
+          <div class="mesa" id="mesa"></div>
+          <div class="info" id="infoPuertos"></div>
+          <div class="tabla-wrap" id="sockWrap"><table class="sock" id="sock"></table></div>
+          <div class="btn-row ctl" id="ctlSock">
+            <button type="button" class="primary" id="bExtra" disabled>Un segundo equipo (192.168.10.52) abre su pestaña</button>
+          </div>
+        </div>
+
+        <div id="esHand">
+          <div id="handDiag"></div>
+          <div class="estados" id="estados"></div>
+          <div class="info" id="handInfo"></div>
+          <div class="btn-row ctl">
+            <button type="button" id="bHAnt" disabled>Mensaje anterior</button>
+            <button type="button" class="primary" id="bHSig" disabled>Siguiente mensaje</button>
+          </div>
+        </div>
+
+        <div id="esSeq">
+          <div id="seqDiag"></div>
+          <div class="cuenta-t" id="seqCuenta"></div>
+          <div id="seqCtl4" class="btn-row ctl">
+            <button type="button" id="bDAnt" disabled>Deshacer</button>
+            <button type="button" class="primary" id="bDSig" disabled>Enviar el siguiente segmento</button>
+          </div>
+          <div id="seqCtl5">
+            <p class="ctl-lab">Segmento que se pierde</p>
+            <div class="seg" id="segK" role="group" aria-label="Segmento que se pierde"></div>
+            <p class="ctl-lab">Temporizador de reenvío (RTO)</p>
+            <div class="seg" id="segRto" role="group" aria-label="Temporizador"></div>
+          </div>
+        </div>
+
+        <div id="esUdp">
+          <div class="rango"><span>Reloj</span><input type="range" id="slT" min="0" max="300" step="2" value="0" aria-label="Tiempo en milisegundos"><b id="slTv">0 ms</b></div>
+          <div class="film" id="filmTcp"></div>
+          <div class="film" id="filmUdp"></div>
+          <p class="ctl-lab">Fotograma que se pierde</p>
+          <div class="seg" id="segKU" role="group" aria-label="Fotograma que se pierde"></div>
+        </div>
+
+        <div id="esFlood">
+          <div class="cont-f"><span>Tabla: <b id="fCap">8</b> lugares</span><span>Conectados: <b id="fCon">0</b></span><span>Rechazados: <b id="fRech">0</b></span></div>
+          <div class="slots" id="slots"></div>
+          <div class="info" id="floodInfo"></div>
+          <div class="btn-row ctl">
+            <button type="button" id="bLegit">Llega un cliente real</button>
+            <button type="button" id="bFalso">Llega 1 SYN falso</button>
+            <button type="button" id="bFalso4">Llegan 4 SYN falsos</button>
+            <button type="button" class="ghost" id="bPasan">Pasan 60 s</button>
+            <button type="button" class="ghost" id="bFReset">Empezar de nuevo</button>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>El mismo apretón, el mismo archivo de 400 bytes con el segmento 3 perdido, y una tabla de medias conexiones que se llena, todo como un programa. Elige Python o R, dale a reproducir y mira el diagrama y la tabla crecer.</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir</p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="true">Python</button>
+            <button type="button" data-lang="r" aria-pressed="false">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">1 · el apretón</span><span data-f="2">2 · datos y pérdida</span><span data-f="3">3 · SYN flood</span>
+        </div>
+        <h3 class="mini-tit vr-tit">Los mensajes que van saliendo</h3>
+        <div id="vrSeq"></div>
+        <h3 class="mini-tit vr-tit">La tabla de medias conexiones</h3>
+        <div class="cont-f"><span>Ocupadas: <b id="vrOcup">0</b> de 8</span><span>Rechazados: <b id="vrRech">0</b></span></div>
+        <div class="slots" id="vrSlots"></div>
+        <h3 class="mini-tit vr-tit">Lo que imprimió el programa</h3>
+        <pre class="vr-sal" id="vrSalida"></pre>
+      </div>
+    </div>
+
+    <p class="vr-nota">Una aclaración honesta: ni Python ni R traen una función de librería que haga lo que hace TCP, y el código no abre ningún socket: todo ocurre en la memoria del programa, con números escritos a mano. Por eso el programa se verifica contra la cuenta a mano, <code>1000 + 1 + 400 = 1401</code>, y contra <code>10 - 8 = 2</code> SYN rechazados. Los dos lenguajes imprimen lo mismo, salvo el formato de la lista (<code>[1001, 1101, ...]</code> en Python y <code>[1] 1001 1101 ...</code> en R) y de <code>True</code> y <code>TRUE</code>.</p>
+
+    <details class="profundizar">
+      <summary>El mismo conteo de segmentos recibidos, sin el bucle <code>while</code></summary>
+      <div>
+        <p>El <code>while</code> cuenta cuántos segmentos seguidos llegaron desde el primero. Con una lista de verdad y valores 0 y 1 también se puede escribir de una línea: en Python, <code>n = llegado.index(False) if False in llegado else 4</code> da la posición del primer hueco; en R, <code>n &lt;- if (all(llegado)) 4 else which(!llegado)[1] - 1</code>. Es la misma idea: el ack avanza hasta el primer hueco. El bucle explícito se usó porque deja ver cada comprobación.</p>
+      </div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Los índices del <code>while</code> en R</h3><span class="estado" data-reto="codigo2"></span></div>
+        <div id="codigo2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Bytes, no segmentos</h3><span class="estado" data-reto="codigo3"></span></div>
+        <div id="codigo3"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: la biblioteca te avisa en el índice cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>¿TCP o UDP?</h3><span class="estado" data-reto="ojo"></span></div>
+        <p class="desc">Cinco situaciones. Decide qué protocolo encaja mejor, sin calcular nada. Apruebas con 4 de 5.</p>
+        <div id="ojo"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Construir</span><h3>Dosifica la pérdida</h3><span class="estado" data-reto="construir"></span></div>
+        <p class="desc">Elige qué segmento se pierde y cuánto espera el temporizador hasta cumplir cada objetivo. Se marcan solos.</p>
+        <div class="ctl-lab">Segmento que se pierde</div>
+        <div class="seg" id="cK" role="group" aria-label="Segmento que se pierde"></div>
+        <div class="ctl-lab">Temporizador de reenvío (RTO)</div>
+        <div class="seg" id="cRto" role="group" aria-label="Temporizador"></div>
+        <div class="grande" id="constrVivo"></div>
+        <ul class="objetivos" id="objetivos"></ul>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>Calcula el ack</h3><span class="estado" data-reto="mano"></span></div>
+        <p class="desc">Números al azar. Haz la cuenta antes de pedir pistas.</p>
+        <div id="mano"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Alguien se equivocó</h3><span class="estado" data-reto="error"></span></div>
+        <p class="desc">Una de las líneas tiene un error. Tócala.</p>
+        <div id="error"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Dos servicios, un equipo</h3><span class="estado" data-reto="prop1"></span></div>
+        <div id="prop1"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Qué agota un SYN flood</h3><span class="estado" data-reto="prop2"></span></div>
+        <div id="prop2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Réplica de pesos</h3><span class="estado" data-reto="prop3"></span></div>
+        <div id="prop3"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Recordar a la fuerza es lo que fija. Arma la cuenta del ack y el orden del apretón, y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Fórmula de memoria</span><h3>Arma el ack pieza por pieza</h3><span class="estado" data-reto="formula"></span></div>
+        <p class="desc">Hay piezas de más que no pertenecen. No mires arriba.</p>
+        <div id="formula"></div>
+      </article>
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Orden de memoria</span><h3>Ordena el apretón de manos</h3><span class="estado" data-reto="orden"></span></div>
+        <p class="desc">Los tres mensajes que abren la conexión, en el orden en que viajan. Una pieza sobra.</p>
+        <div id="orden"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el material</h2>
+      <p class="lecturas-intro">Ya armaste la idea con las manos. Ahora ve a la versión del material de la unidad y comprueba que la reconoces. Recuerda que el material no trae cabeceras TCP ni números de secuencia concretos: eso lo vas a ver aquí y en los estándares. Cada entrada dice qué vas a encontrar y en qué momento conviene leerla. Si abres la biblioteca con doble clic, el enlace abre el PDF en esa página.</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> Las direcciones IP, los puertos, los números de secuencia (1000 y 5000), los tamaños de segmento, los tiempos de 20 ms y de temporizador y la tabla de 8 lugares son inventados, elegidos para que las cuentas sean limpias; el material de la unidad no trae ninguno. No se abre ninguna conexión real. Tu progreso se guarda solo en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+/*
+  EJEMPLO COMUN DE LA RUTA "REDES DE COMPUTADORES" (definido en conceptos/redes-capas.html; lo reutilizan las demás páginas)
+    Bloque 192.168.10.0/24: Ventas 192.168.10.0/26 (VLAN 10), Soporte 192.168.10.64/27 (VLAN 20), Enlace 192.168.10.96/30.
+    Equipo 192.168.10.37 (Ventas), puerto de origen 49152. Servidor www.ejemplo.org = 192.168.10.70 (Soporte), puerto 80.
+  Aquí: apretón de manos con SYN seq=1000, SYN-ACK seq=5000 ack=1001, ACK seq=1001 ack=5001; 400 bytes en 4 segmentos de 100
+  (seq 1001, 1101, 1201, 1301); el segmento 3 se pierde; ida de 20 ms y vuelta de 20 ms; RTO de 200 ms (valores inventados).
+*/
+(function () {
+  "use strict";
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+
+  var RETOS = ["ojo", "construir", "mano", "error", "formula", "orden", "prop1", "prop2", "prop3", "codigo1", "codigo2", "codigo3"];
+  var C = B.concepto({ id: "tcp-udp-puertos", retos: RETOS, pasos: 7 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  var est = { paso: 0, prog: null, chk1: false, chk2: false, extra: false, h: 1, chk3: false, chk3b: false, d: 0, chk4: false, k: 0, rto: 200, chk5: false, chk6: false, t: 0, kU: 0, chk7: false };
+  var pasos;
+
+  /* ---------------- modelo de tiempos (valores inventados) ---------------- */
+  var T0 = 40, UNO = 20, SEP = 2;
+  var SEQ = [1001, 1101, 1201, 1301];
+
+  // k = segmento perdido (0 = ninguno); rto en ms. Devuelve las filas del diagrama y el tiempo total.
+  function simular(k, rto, pares) {
+    var ev = [], lleg = [false, false, false, false], total = 0, n, i;
+    for (i = 1; i <= 4; i++) {
+      var ts = T0 + SEP * (i - 1);
+      ev.push({ t: ts, o: 0, par: i, dir: "c", cls: i === k ? "perd" : "dato", ack: false,
+        txt: "segmento " + i + " · seq=" + SEQ[i - 1] + " · 100 B" + (i === k ? " · se pierde" : "") });
+      if (i !== k) {
+        lleg[i - 1] = true;
+        n = 0; while (n < 4 && lleg[n]) n++;
+        var ta = ts + UNO;
+        ev.push({ t: ta, o: 1, par: i, dir: "s", cls: "ack", ack: true, val: 1001 + 100 * n, rep: n < i });
+        total = Math.max(total, ta + UNO);
+      }
+    }
+    if (k) {
+      var tr = T0 + SEP * (k - 1) + rto;
+      ev.push({ t: tr, o: 2, par: 6, dir: "t", cls: "timer", ack: false, txt: "vence el temporizador (" + rto + " ms): reenvía el segmento " + k });
+      ev.push({ t: tr, o: 3, par: 6, dir: "c", cls: "reenvio", ack: false, txt: "segmento " + k + " otra vez · seq=" + SEQ[k - 1] + " · 100 B" });
+      lleg[k - 1] = true;
+      n = 0; while (n < 4 && lleg[n]) n++;
+      ev.push({ t: tr + UNO, o: 4, par: 6, dir: "s", cls: "ack", ack: true, val: 1001 + 100 * n, rep: false });
+      total = tr + 2 * UNO;
+    }
+    ev.sort(function (a, b) { return pares ? (a.par - b.par || a.o - b.o) : (a.t - b.t || a.o - b.o); });
+    return { filas: ev, total: total };
+  }
+
+  // fila del diagrama de secuencia
+  function filaHTML(m, conT, ocultarAck, nueva) {
+    var txt = m.txt;
+    if (m.ack) txt = "ack=" + (ocultarAck ? "?" : m.val) + (m.rep && !ocultarAck ? " · repetido" : "");
+    var t = conT && m.t != null ? '<span class="sq-t">t=' + m.t + '</span>' : (conT ? '<span class="sq-t"></span>' : "");
+    return '<div class="sq-f m-' + m.cls + (nueva ? " nueva" : "") + '">' + t +
+      '<div class="sq-c"><span class="sq-l">' + esc(txt) + '</span><i class="sq-a ' + (m.dir === "s" ? "s" : "c") + (m.cls === "perd" ? " perd" : "") + '"></i></div></div>';
+  }
+  function sqHTML(filas, conT, ocultarAck) {
+    var h = '<div class="sq' + (conT ? " con-t" : "") + '"><div class="sq-cab"><span>Cliente<small>192.168.10.37:49152</small></span><span>Servidor<small>192.168.10.70:80</small></span></div>';
+    filas.forEach(function (m, i) { h += filaHTML(m, conT, ocultarAck, i === filas.length - 1); });
+    return h + "</div>";
+  }
+
+  /* ---------------- escenario 1 y 2: puertos y sockets ---------------- */
+  var PROGS = [
+    { n: "Pestaña A del navegador", p: 49152, d: 80 },
+    { n: "Pestaña B del navegador", p: 49153, d: 80 },
+    { n: "Cliente SSH", p: 49160, d: 22 }
+  ];
+  var SERV = [
+    { p: 80, n: "Web (HTTP)" }, { p: 443, n: "Web segura (HTTPS)" }, { p: 53, n: "DNS" }, { p: 22, n: "SSH" }
+  ];
+  function pintarPuertos() {
+    var sel = est.prog, pr = sel === null ? null : PROGS[sel];
+    var h = '<div><h4>Equipo 192.168.10.37</h4>';
+    PROGS.forEach(function (p, i) {
+      h += '<button type="button" class="prog' + (sel === i ? " sel" : "") + '" data-i="' + i + '">' + p.n + '<small>puerto ' + (est.chk1 ? p.p : "?") + '</small></button>';
+    });
+    h += '</div><div class="medio' + (sel !== null ? " on" : "") + '">' + (sel !== null ? "→" : "") + '</div><div><h4>Servidor 192.168.10.70</h4>';
+    SERV.forEach(function (s) {
+      h += '<div class="serv' + (pr && pr.d === s.p ? " aqui" : "") + '">' + s.n + '<small>puerto ' + s.p + '</small></div>';
+    });
+    h += "</div>";
+    $("mesa").innerHTML = h;
+    var info;
+    if (!pr) info = "Toca un programa del equipo para enviar un mensaje al servidor.";
+    else {
+      info = "<b>" + pr.n + "</b> manda su mensaje. La IP lo lleva al servidor 192.168.10.70 y el puerto de destino <b>" + pr.d + "</b> decide a qué servicio se entrega.";
+      info += est.chk1
+        ? "<br>La respuesta vuelve con los puertos al revés (origen " + pr.d + ", destino <b>" + pr.p + "</b>): así el equipo sabe a qué programa entregarla."
+        : "<br>El puerto de origen de este programa todavía es un misterio: resuelve la predicción.";
+    }
+    $("infoPuertos").innerHTML = info;
+    $("sockWrap").hidden = est.paso !== 1;
+    $("ctlSock").hidden = est.paso !== 1;
+    if (est.paso === 1) pintarSock();
+  }
+  $("mesa").addEventListener("click", function (e) {
+    var b = e.target.closest(".prog");
+    if (!b) return;
+    est.prog = +b.getAttribute("data-i");
+    pintarPuertos();
+  });
+  function pintarSock() {
+    var h = '<thead><tr><th>Conversación</th><th>IP origen</th><th>Puerto origen</th><th>IP destino</th><th>Puerto destino</th></tr></thead><tbody>';
+    PROGS.forEach(function (p) {
+      h += '<tr><td>' + p.n.replace(" del navegador", "") + '</td><td>192.168.10.37</td><td>' + p.p + '</td><td>192.168.10.70</td><td>' + p.d + '</td></tr>';
+    });
+    if (est.extra) h += '<tr class="nueva"><td>Pestaña del otro equipo</td><td class="dif">192.168.10.52</td><td>49152</td><td>192.168.10.70</td><td>80</td></tr>';
+    $("sock").innerHTML = h + "</tbody>";
+    $("bExtra").disabled = !est.chk2 || est.extra;
+  }
+  $("bExtra").addEventListener("click", function () { est.extra = true; pintarSock(); });
+
+  /* ---------------- escenario 3: apretón de manos ---------------- */
+  var HAND = [
+    { dir: "c", cls: "syn", t: 0, txt: "SYN · seq=1000", cl: "SYN enviado", sv: "escuchando en el puerto 80", info: "El <b>cliente</b> propone su número de secuencia inicial: <b>1000</b>. Todavía no hay conexión." },
+    { dir: "s", cls: "synack", t: 20, txt: "SYN-ACK · seq=5000 · ack=1001", cl: "SYN enviado", sv: "SYN recibido, espera el ACK", info: "El <b>servidor</b> confirma el número que recibió (ack=1001) y propone el suyo: <b>5000</b>. Reserva un lugar en su tabla de conexiones a medio abrir." },
+    { dir: "c", cls: "ack", t: 40, txt: "ACK · seq=1001 · ack=5001", cl: "conectado", sv: "conectado", info: "El <b>cliente</b> confirma el número del servidor (ack=5001). Los dos conocen el número del otro: ya hay <b>conexión</b>. El servidor la da por abierta cuando recibe este ACK, 20 ms después." }
+  ];
+  function pintarHand() {
+    var lim = est.chk3 ? est.h : 1;
+    var ocultar = !est.chk3;
+    var filas = HAND.slice(0, lim);
+    var h = '<div class="sq con-t"><div class="sq-cab"><span>Cliente<small>192.168.10.37:49152</small></span><span>Servidor<small>192.168.10.70:80</small></span></div>';
+    filas.forEach(function (m, i) {
+      var txt = m.txt;
+      h += '<div class="sq-f m-' + m.cls + (i === lim - 1 ? " nueva" : "") + '"><span class="sq-t">t=' + m.t + '</span><div class="sq-c"><span class="sq-l">' + esc(txt) + '</span><i class="sq-a ' + m.dir + '"></i></div></div>';
+    });
+    h += "</div>";
+    $("handDiag").innerHTML = h;
+    var m = HAND[lim - 1];
+    $("estados").innerHTML = '<div class="' + (m.cl === "conectado" ? "on" : "") + '"><small>cliente</small><b>' + m.cl + '</b></div><div class="' + (m.sv === "conectado" ? "on" : "") + '"><small>servidor</small><b>' + m.sv + '</b></div>';
+    $("handInfo").innerHTML = lim === 1 && !est.chk3 ? m.info + "<br>Resuelve la predicción para ver los otros dos mensajes." : m.info;
+    $("bHSig").disabled = !est.chk3 || est.h >= 3;
+    $("bHAnt").disabled = !est.chk3 || est.h <= 1;
+    $("vivoHand").innerHTML = est.chk3 ? "ack = 1000 + 1 = <b>1001</b> · luego ack = 5000 + 1 = <b>5001</b>" : "ack = 1000 + 1 = <b>?</b>";
+  }
+  $("bHSig").addEventListener("click", function () { if (est.h < 3) est.h++; pintarHand(); });
+  $("bHAnt").addEventListener("click", function () { if (est.h > 1) est.h--; pintarHand(); });
+
+  /* ---------------- escenario 4 y 5: datos, ack y pérdida ---------------- */
+  function pintarSeq() {
+    var p4 = est.paso === 3;
+    var sim = p4 ? simular(0, est.rto, true) : simular(est.k, est.rto, false);
+    var filas = p4 ? sim.filas.slice(0, est.d) : sim.filas;
+    $("seqDiag").innerHTML = filas.length ? sqHTML(filas, !p4, p4 && !est.chk4) : '<p class="paq-vacio">Todavía no se envió nada.</p>';
+    $("seqCtl4").hidden = !p4;
+    $("seqCtl5").hidden = p4;
+    $("bDSig").disabled = !est.chk4 || est.d >= 8;
+    $("bDAnt").disabled = !est.chk4 || est.d <= 0;
+    if (p4) {
+      $("seqCuenta").innerHTML = est.chk4 ? "Cada ack = seq + 100: el siguiente byte que espera el servidor." : "";
+      $("vivoDatos").innerHTML = est.chk4 ? "segmento 1: ack = 1001 + 100 = <b>1101</b> · segmento 2: ack = 1101 + 100 = <b>1201</b>" : "segmento 3: ack = 1201 + 100 = <b>?</b>";
+    } else {
+      var base = simular(0, est.rto, false).total;
+      $("seqCuenta").innerHTML = "Hasta el último ack: <b>" + sim.total + " ms</b>" + (est.k ? " · sin pérdida serían " + base + " ms (<b>+" + (sim.total - base) + " ms</b>)" : " · sin pérdida");
+      var lk = $("segK");
+      [].forEach.call(lk.children, function (b) { b.setAttribute("aria-pressed", +b.getAttribute("data-k") === est.k ? "true" : "false"); b.disabled = !est.chk5; });
+      [].forEach.call($("segRto").children, function (b) { b.setAttribute("aria-pressed", +b.getAttribute("data-r") === est.rto ? "true" : "false"); b.disabled = !est.chk5; });
+    }
+  }
+  function armarSegControl(cont, valores, etiquetas, attr, alClic) {
+    valores.forEach(function (v, i) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.textContent = etiquetas[i];
+      b.setAttribute(attr, v);
+      b.setAttribute("aria-pressed", "false");
+      b.addEventListener("click", function () { alClic(v); });
+      cont.appendChild(b);
+    });
+  }
+  armarSegControl($("segK"), [0, 1, 2, 3, 4], ["ninguno", "1", "2", "3", "4"], "data-k", function (v) { est.k = v; pintarSeq(); });
+  armarSegControl($("segRto"), [100, 200, 400], ["100 ms", "200 ms", "400 ms"], "data-r", function (v) { est.rto = v; pintarSeq(); });
+  $("bDSig").addEventListener("click", function () { if (est.d < 8) est.d++; pintarSeq(); });
+  $("bDAnt").addEventListener("click", function () { if (est.d > 0) est.d--; pintarSeq(); });
+
+  /* ---------------- escenario 6: TCP frente a UDP ---------------- */
+  var RTO_U = 200;
+  function entregas(k) {
+    var tcp = [], udp = [];
+    for (var i = 1; i <= 4; i++) {
+      tcp.push(!k || i < k ? T0 + SEP * (i - 1) + UNO : T0 + SEP * (k - 1) + RTO_U + UNO);
+      udp.push(i === k ? null : SEP * (i - 1) + UNO);
+    }
+    return { tcp: tcp, udp: udp };
+  }
+  function film(cont, titulo, sub, tiempos, k, t, udp) {
+    var h = '<h4>' + titulo + '<small>' + sub + '</small></h4><div class="frames">', ya = [], falta = [], hueco = false, i;
+    for (i = 0; i < 4; i++) {
+      var ok = tiempos[i] !== null && tiempos[i] <= t;
+      var perdido = udp && k === i + 1 && t >= SEP * i + UNO;
+      if (perdido) hueco = true;
+      h += '<div class="fr' + (ok ? " ya" : perdido ? " hueco" : "") + '">fotograma ' + (i + 1) + '<small>' + (ok ? "en pantalla" : perdido ? "se perdió" : "no llegó aún") + '</small></div>';
+      if (ok) ya.push(i + 1); else if (!perdido) falta.push(i + 1);
+    }
+    h += '</div><p>';
+    if (udp) h += "Se ve: <b>" + (ya.length ? ya.join(", ") : "nada") + "</b>." + (hueco ? " Hay un corte, pero la imagen sigue avanzando." : "");
+    else h += "Se ve: <b>" + (ya.length ? ya.join(", ") : "nada") + "</b>." + (falta.length && ya.length && t > tiempos[0] ? " La imagen se queda esperando." : "");
+    cont.innerHTML = h + "</p>";
+  }
+  function pintarUdp() {
+    var en = entregas(est.kU), t = est.t;
+    $("slTv").textContent = t + " ms";
+    film($("filmTcp"), "TCP", "primero el apretón (40 ms); entrega en orden y sin huecos", en.tcp, est.kU, t, false);
+    film($("filmUdp"), "UDP", "sale de inmediato; entrega lo que llega", en.udp, est.kU, t, true);
+    [].forEach.call($("segKU").children, function (b) { b.setAttribute("aria-pressed", +b.getAttribute("data-k") === est.kU ? "true" : "false"); b.disabled = !est.chk6; });
+    $("slT").disabled = false;
+  }
+  armarSegControl($("segKU"), [0, 1, 2, 3, 4], ["ninguno", "1", "2", "3", "4"], "data-k", function (v) { est.kU = v; pintarUdp(); });
+  $("slT").addEventListener("input", function () { est.t = +this.value; pintarUdp(); });
+
+  /* ---------------- escenario 7: SYN flood ---------------- */
+  var CAP = 8;
+  var fl = { slots: [], con: 0, rech: 0, msg: "" };
+  function flReset() { fl.slots = []; fl.con = 0; fl.rech = 0; fl.msg = "La tabla está vacía. Prueba con un cliente real y luego con SYN falsos."; }
+  function pintarSlots(cont, slots) {
+    var h = "";
+    for (var i = 0; i < CAP; i++) h += '<div class="slot' + (slots[i] ? " falso" : "") + '">' + (slots[i] ? "SYN falso<small>espera un ACK que no llegará</small>" : "libre") + '</div>';
+    cont.innerHTML = h;
+  }
+  function pintarFlood() {
+    pintarSlots($("slots"), fl.slots);
+    $("fCon").textContent = fl.con;
+    $("fRech").textContent = fl.rech;
+    $("floodInfo").innerHTML = fl.msg;
+  }
+  function flLegit() {
+    if (fl.slots.length < CAP) { fl.con++; fl.msg = "Entró el cliente real: ocupó un lugar un instante, completó el apretón y lo liberó. Está <b>conectado</b>."; }
+    else { fl.rech++; fl.msg = "La tabla está llena. El cliente real manda su SYN y <b>nadie le contesta</b>: servicio denegado."; }
+  }
+  function flFalso(n) {
+    for (var i = 0; i < n; i++) if (fl.slots.length < CAP) fl.slots.push(1);
+    fl.msg = fl.slots.length >= CAP ? "Los " + CAP + " lugares están ocupados por medias conexiones. El atacante no completó ninguna." : "Hay " + fl.slots.length + " de " + CAP + " lugares ocupados por medias conexiones que nunca se completarán.";
+  }
+  $("bLegit").addEventListener("click", function () { flLegit(); pintarFlood(); });
+  $("bFalso").addEventListener("click", function () { flFalso(1); pintarFlood(); });
+  $("bFalso4").addEventListener("click", function () { flFalso(4); pintarFlood(); });
+  $("bPasan").addEventListener("click", function () { fl.slots = []; fl.msg = "Pasaron 60 s: el servidor descartó las medias conexiones sin ACK. Si el atacante sigue mandando SYN, la tabla se vuelve a llenar enseguida."; pintarFlood(); });
+  $("bFReset").addEventListener("click", function () { flReset(); pintarFlood(); });
+  flReset();
+
+  /* ---------------- control de modos ---------------- */
+  var MODOS = [
+    { hint: "Toca un programa del equipo", bloques: ["esPuertos"] },
+    { hint: "Mira los cuatro valores de cada conversación", bloques: ["esPuertos"] },
+    { hint: "Recorre los tres mensajes", bloques: ["esHand"] },
+    { hint: "Envía los segmentos uno a uno", bloques: ["esSeq"] },
+    { hint: "Elige qué segmento se pierde", bloques: ["esSeq"] },
+    { hint: "Mueve el reloj", bloques: ["esUdp"] },
+    { hint: "Llena la tabla de medias conexiones", bloques: ["esFlood"] }
+  ];
+  var TODOS = ["esPuertos", "esHand", "esSeq", "esUdp", "esFlood"];
+  function entrar(i) {
+    est.paso = i;
+    var m = MODOS[i];
+    TODOS.forEach(function (id) { $(id).hidden = m.bloques.indexOf(id) < 0; });
+    $("escHint").textContent = m.hint;
+    if (i <= 1) pintarPuertos();
+    if (i === 2) pintarHand();
+    if (i === 3 || i === 4) pintarSeq();
+    if (i === 5) pintarUdp();
+    if (i === 6) pintarFlood();
+  }
+
+  /* ---------------- chequeos de cada paso ---------------- */
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+
+  B.opcionMultiple(cuerpo("chk1"), {
+    pregunta: "Antes de ver nada: las dos pestañas del navegador le piden páginas al <b>mismo servidor</b>, al <b>mismo puerto 80</b>, desde el <b>mismo equipo</b>. Las respuestas llegan a la misma IP. ¿Qué dato permite al equipo entregar cada respuesta a su pestaña?",
+    opciones: [
+      "La IP de destino del servidor",
+      "El puerto de origen que usó cada pestaña",
+      "El puerto 80, que es igual en las dos",
+      "La dirección MAC del servidor"
+    ],
+    correcta: 1,
+    pistas: ["Esa IP es la misma para las dos pestañas, así que no puede distinguirlas.", null,
+      "El 80 es el puerto del servicio, y es el mismo en las dos conversaciones.",
+      "La MAC solo sirve en el cable local y tampoco cambia entre pestañas."],
+    explicacion: "Cada pestaña recibe del sistema un <b>puerto de origen distinto</b>. La respuesta vuelve con ese número como puerto de destino y así llega a la pestaña correcta. <b>Ahora toca los programas</b>: los puertos ya se muestran.",
+    alResolver: function () { est.chk1 = true; pintarPuertos(); pasos.completar(0); }
+  });
+
+  B.opcionMultiple(cuerpo("chk2"), {
+    pregunta: "Otro equipo, el 192.168.10.52, abre una pestaña hacia el mismo servidor y su sistema le asigna <b>el mismo puerto de origen, 49152</b>. ¿Se mezclan las dos conversaciones en el servidor?",
+    opciones: [
+      "Sí: el servidor las confunde porque comparten puerto de origen",
+      "No: la IP de origen es distinta, y los cuatro valores juntos no coinciden",
+      "No: el servidor rechaza al segundo equipo porque el puerto ya está en uso",
+      "Sí, pero solo si las dos piden la misma página"
+    ],
+    correcta: 1,
+    pistas: ["Recuerda lo que identifica una conversación: no es un solo número, son cuatro.", null,
+      "El puerto 49152 está en uso en <b>otro equipo</b>, no en el servidor. En el servidor lo que cuenta es la combinación completa.",
+      "La página que piden no interviene en cómo se identifica la conversación."],
+    explicacion: "Una conversación se identifica por los <b>cuatro valores</b>: IP y puerto de origen, IP y puerto de destino. Aquí la IP de origen es distinta, así que son dos conversaciones separadas. <b>Ahora toca el botón</b> y mira la tabla.",
+    alResolver: function () { est.chk2 = true; pintarSock(); pasos.completar(1); }
+  });
+
+  B.numerico(cuerpo("chk3"), {
+    pregunta: "El cliente manda el SYN con seq = $1000$. El servidor responde con el SYN-ACK. ¿Qué número va en su campo <b>ack</b>?",
+    respuesta: 1001,
+    tolerancia: 0,
+    pistas: [
+      "El ack dice cuál es el siguiente número que el servidor espera recibir del cliente.",
+      "La fórmula del paso: $\\text{ack} = \\text{seq} + 1$ con $\\text{seq} = 1000$."
+    ],
+    diagnostico: function (v) {
+      if (v === 1000) return "Ese es el número que mandó el cliente. El ack no lo repite: dice cuál espera después.";
+      if (v === 5000) return "Ese es el número inicial del servidor. En el ack va el número del cliente más uno.";
+      if (v === 5001) return "Ese será el ack del tercer mensaje, el del cliente. El servidor responde primero al 1000 del cliente.";
+      if (v === 1002) return "Sumaste uno de más: el ack es el seq recibido más uno, no más dos.";
+      return null;
+    },
+    explicacion: "$\\text{ack} = 1000 + 1 = 1001$. Ahora los controles del escenario muestran los tres mensajes con todos sus números.",
+    alResolver: function () { est.chk3 = true; pintarHand(); cerrarPaso3(); }
+  });
+  function cerrarPaso3() { if (est.chk3 && est.chk3b) pasos.completar(2); }
+
+  B.opcionMultiple(cuerpo("chk3b"), {
+    pregunta: "El SYN no lleva ningún byte de datos y aun así el servidor responde ack=1001. ¿Cuál es la razón?",
+    opciones: [
+      "El SYN gasta un número de secuencia, como si fuera un byte",
+      "El servidor suma 20, el tamaño de la cabecera TCP",
+      "Es un valor arbitrario sin ninguna función",
+      "El cliente envió 1 byte de datos escondido en el SYN"
+    ],
+    correcta: 0,
+    pistas: [null, "La cabecera no se cuenta en los números de secuencia: solo se cuenta lo que viaja como datos, más las banderas SYN y FIN.",
+      "Tiene una función: permite al cliente saber sin ambigüedad que ese SYN fue recibido.", "No viaja ningún dato en el SYN: la conexión todavía no está abierta."],
+    explicacion: "El SYN (y el FIN, al cerrar) consumen <b>un número de secuencia</b> aunque no lleven datos. Así el ack lo puede confirmar de forma exacta. Por eso el primer byte de datos viaja con el 1001.",
+    alResolver: function () { est.chk3b = true; cerrarPaso3(); }
+  });
+
+  B.numerico(cuerpo("chk4"), {
+    pregunta: "El segmento 3 lleva seq = $1201$ y $100$ bytes de datos. Llega bien, y los dos primeros ya habían llegado. ¿Qué <b>ack</b> manda el servidor?",
+    respuesta: 1301,
+    tolerancia: 0,
+    pistas: [
+      "El ack es el siguiente byte que espera el servidor, no el último que recibió.",
+      "$\\text{ack} = s + L = 1201 + 100$."
+    ],
+    diagnostico: function (v) {
+      if (v === 1201) return "Ese es el seq del propio segmento. El ack señala lo que viene después.";
+      if (v === 1300) return "Ese es el último byte que recibió. El ack es el byte siguiente, el 1301.";
+      if (v === 1202) return "Sumaste solo 1, como en el SYN. Un segmento de datos consume tantos números como bytes lleva.";
+      if (v === 1401) return "Eso sería el ack después del cuarto segmento. Aquí hablamos del tercero.";
+      return null;
+    },
+    explicacion: "$1201 + 100 = 1301$. Ahora puedes enviar los segmentos uno a uno: cada ack ya muestra su valor y aumenta de cien en cien.",
+    alResolver: function () { est.chk4 = true; pintarSeq(); pasos.completar(3); }
+  });
+
+  B.numerico(cuerpo("chk5"), {
+    pregunta: "El segmento 3 (seq = $1201$) se pierde, pero el segmento 4 (seq = $1301$) sí llega al servidor. ¿Qué <b>ack</b> manda el servidor al recibir el 4?",
+    respuesta: 1201,
+    tolerancia: 0,
+    pistas: [
+      "El servidor todavía no tiene el segmento 3. ¿Cuál es el primer byte que le falta?",
+      "El ack nunca salta un hueco: señala el primer byte que falta."
+    ],
+    diagnostico: function (v) {
+      if (v === 1401) return "Eso supondría que ya llegaron los cuatro segmentos completos, pero falta el 3.";
+      if (v === 1301) return "Ese sería el ack si el segmento 3 hubiera llegado. Como falta, el ack se queda antes.";
+      if (v === 1101) return "Ese fue el ack del segmento 1. El 2 también llegó, así que el servidor ya espera el 1201.";
+      return null;
+    },
+    explicacion: "El servidor repite <b>ack = 1201</b>: sigue esperando el byte que falta. Es un ack repetido. <b>Ahora elige qué segmento se pierde</b> y mira cuánto cuesta esperar al temporizador.",
+    alResolver: function () { est.chk5 = true; est.k = 3; pintarSeq(); pasos.completar(4); }
+  });
+
+  B.opcionMultiple(cuerpo("chk6"), {
+    pregunta: "En una videollamada se pierde un fotograma. ¿Qué prefiere quien está en la llamada?",
+    opciones: [
+      "Seguir con el siguiente y aceptar un pequeño corte",
+      "Congelar la imagen hasta que se retransmita el fotograma perdido",
+      "Cortar la llamada y empezar de nuevo",
+      "Que el servidor reenvíe todos los fotogramas desde el principio"
+    ],
+    correcta: 0,
+    pistas: [null, "Esperar el fotograma perdido atrasa también a todos los que vienen después. En vivo, ese retraso se nota más que un corte.",
+      "Un solo fotograma perdido no justifica empezar de cero.", "Reenviar todo hace perder aún más tiempo."],
+    explicacion: "En tiempo real importa más <b>lo nuevo que lo perdido</b>. Por eso las videollamadas prefieren perder un fotograma, que es la respuesta de la diapositiva de repaso. <b>Ahora mueve el reloj</b> y compara los dos protocolos; después cambia el fotograma que se pierde.",
+    alResolver: function () { est.chk6 = true; est.kU = 3; pintarUdp(); pasos.completar(5); }
+  });
+
+  B.opcionMultiple(cuerpo("chk7"), {
+    pregunta: "Un atacante manda muchos SYN con direcciones falsas y nunca contesta el SYN-ACK. ¿Por qué eso puede dejar sin servicio a un servidor, aunque ninguna conexión llegue a abrirse?",
+    opciones: [
+      "Cada SYN reserva un lugar en la tabla de conexiones a medio abrir, y esos lugares se agotan",
+      "Los SYN falsos llenan el disco del servidor con datos",
+      "El servidor se apaga solo al recibir un SYN sin ACK",
+      "Cada SYN cifra la conexión y consume el procesador"
+    ],
+    correcta: 0,
+    pistas: [null, "Un SYN no lleva datos: no hay nada que guardar en disco.", "Un servidor no se apaga por un SYN sin ACK. El problema es lo que ya reservó.",
+      "Un SYN ni siquiera lleva cifrado: es solo una bandera en una cabecera."],
+    explicacion: "El servidor reserva recursos al recibir el SYN y los mantiene esperando el ACK. Con suficientes SYN falsos, la tabla se llena y los clientes reales ya no caben. Es lo que viste en el escenario. En la parte de seguridad de la unidad se estudia como parte de los ataques DoS.",
+    alResolver: function () { pasos.completar(6); }
+  });
+
+  pasos = B.pasos($("recorrido"), {
+    concepto: C,
+    alEntrar: entrar,
+    alTerminar: function () { location.hash = "retos"; }
+  });
+  est.chk1 = pasos.hecho(0);
+  est.chk2 = pasos.hecho(1);
+  est.chk3 = pasos.hecho(2);
+  est.chk3b = pasos.hecho(2);
+  est.chk4 = pasos.hecho(3);
+  est.chk5 = pasos.hecho(4);
+  if (est.chk5) est.k = 3;
+  est.chk6 = pasos.hecho(5);
+  if (est.chk6) est.kU = 3;
+  entrar(0);
+
+  /* ---------------- hipotesis inicial ---------------- */
+  (function () {
+    var ta = $("hipotesis"), t = null;
+    ta.value = B.nota("tcp-udp-puertos", "hipotesis");
+    function cita() {
+      var v = ta.value.trim(), el = $("citaHipo");
+      if (!el) return;
+      el.hidden = !v;
+      if (v) { el.textContent = ""; el.appendChild(document.createTextNode("Al principio escribiste: «" + v + "». ¿Se parece a lo que construimos? ¿Qué te faltaba?")); }
+    }
+    ta.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { B.nota("tcp-udp-puertos", "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; cita(); }, 500);
+    });
+    cita();
+  })();
+
+  /* ---------------- marcadores de estado de retos ---------------- */
+  function pintarEstados() {
+    [].forEach.call(document.querySelectorAll("[data-reto]"), function (el) {
+      var ok = C.retoOk(el.getAttribute("data-reto"));
+      el.textContent = ok ? "resuelto" : "pendiente";
+      el.classList.toggle("ok", ok);
+    });
+  }
+  C.alCambiar(pintarEstados);
+
+  /* ---------------- reto: ojo clinico ---------------- */
+  (function () {
+    var POOL = [
+      ["Una videollamada en vivo, donde un fotograma tardío ya no sirve.", "udp", "En tiempo real conviene seguir adelante: es el caso típico de UDP."],
+      ["La descarga de un archivo, donde no puede faltar ni un byte.", "tcp", "Para que lleguen todos los bytes y en orden hace falta TCP, con sus reenvíos."],
+      ["Un protocolo cuya cabecera mide 8 bytes.", "udp", "La cabecera de UDP mide 8 bytes; la de TCP, 20 como mínimo."],
+      ["Un protocolo que abre la conexión con SYN, SYN-ACK y ACK.", "tcp", "El apretón de manos de tres pasos es de TCP."],
+      ["La réplica de los pesos de un modelo entre dos servidores, donde ningún byte puede perderse.", "tcp", "Es la solución del ejercicio de la unidad: la réplica de pesos va por TCP."],
+      ["Un protocolo que reenvía un segmento si no recibe su ack a tiempo.", "tcp", "La retransmisión por falta de ack es propia de TCP."],
+      ["Un protocolo sin conexión y sin garantías de entrega.", "udp", "Así define el material a UDP: sin conexión ni garantías."],
+      ["Una página web, que necesita todos los bytes para mostrarse.", "tcp", "La web (HTTP) funciona sobre TCP, según el material."],
+      ["Una sesión de conexión remota por SSH, donde cada tecla debe llegar.", "tcp", "SSH necesita fiabilidad: va sobre TCP."],
+      ["Una transmisión de voz en tiempo real que tolera perder un instante de audio.", "udp", "Mismo razonamiento que la videollamada: mejor un corte que un retraso."]
+    ];
+    var cont = $("ojo");
+    cont.innerHTML = '<div class="ronda"></div><p class="afirm"></p>' +
+      '<div class="capa-opts"><button type="button" class="opt" data-a="tcp">TCP</button><button type="button" class="opt" data-a="udp">UDP</button></div>' +
+      '<div class="fb" aria-live="polite"></div><div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    var orden, ronda, aciertos, respondida;
+    function nueva() { orden = B.mezclar(POOL.map(function (_, i) { return i; })).slice(0, 5); ronda = 0; aciertos = 0; mostrar(); }
+    function mostrar() {
+      respondida = false;
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 5 · aciertos " + aciertos;
+      cont.querySelector(".afirm").textContent = POOL[orden[ronda]][0];
+      [].forEach.call(cont.querySelectorAll(".capa-opts .opt"), function (b) { b.disabled = false; b.className = "opt"; });
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+    }
+    cont.querySelector(".capa-opts").addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || respondida) return;
+      respondida = true;
+      var it = POOL[orden[ronda]], ok = b.getAttribute("data-a") === it[1];
+      if (ok) aciertos++;
+      b.classList.add(ok ? "ok" : "mal");
+      if (!ok) cont.querySelector('[data-a="' + it[1] + '"]').classList.add("ok");
+      [].forEach.call(cont.querySelectorAll(".capa-opts .opt"), function (x) { x.disabled = true; });
+      cont.querySelector(".fb").innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No.</span> ') + it[2];
+      var sig = cont.querySelector(".sig");
+      sig.hidden = false;
+      if (ronda === 4) {
+        var aprobo = aciertos >= 4;
+        C.reto("ojo", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertos + " de 5" + (aprobo ? ". Aprobado." : ". Necesitas 4 para aprobar.");
+        sig.textContent = "Otra tanda";
+      } else sig.textContent = "Siguiente ronda";
+    });
+    cont.querySelector(".sig").addEventListener("click", function () { if (ronda === 4) nueva(); else { ronda++; mostrar(); } });
+    nueva();
+  })();
+
+  /* ---------------- reto: construir ---------------- */
+  (function () {
+    var OBJ = [
+      { t: "Sin ninguna pérdida: el último ack llega a los 86 ms.", ok: function (k, r, tot) { return k === 0 && tot === 86; } },
+      { t: "Pierde un segmento y consigue que el último ack llegue a los 284 ms.", ok: function (k, r, tot) { return k > 0 && tot === 284; } },
+      { t: "Pierde el segmento 1 y consigue que todo termine antes de los 200 ms.", ok: function (k, r, tot) { return k === 1 && tot < 200; } }
+    ];
+    var logrados = [false, false, false], avisado = false, k = 0, rto = 200;
+    var ul = $("objetivos");
+    OBJ.forEach(function (o) { var li = document.createElement("li"); li.innerHTML = '<span class="m"></span><span>' + o.t + '</span>'; ul.appendChild(li); });
+    armarSegControl($("cK"), [0, 1, 2, 3, 4], ["ninguno", "1", "2", "3", "4"], "data-k", function (v) { k = v; pintar(); });
+    armarSegControl($("cRto"), [100, 200, 400], ["100 ms", "200 ms", "400 ms"], "data-r", function (v) { rto = v; pintar(); });
+    function pintar() {
+      var tot = simular(k, rto, false).total;
+      [].forEach.call($("cK").children, function (b) { b.setAttribute("aria-pressed", +b.getAttribute("data-k") === k ? "true" : "false"); });
+      [].forEach.call($("cRto").children, function (b) { b.setAttribute("aria-pressed", +b.getAttribute("data-r") === rto ? "true" : "false"); });
+      $("constrVivo").innerHTML = "Segmento perdido: <b>" + (k || "ninguno") + "</b> · RTO <b>" + rto + " ms</b> · último ack a los <b>" + tot + " ms</b>";
+      OBJ.forEach(function (o, i) { if (!logrados[i] && o.ok(k, rto, tot)) logrados[i] = true; ul.children[i].classList.toggle("hecho", logrados[i]); });
+      if (!avisado && logrados.every(Boolean)) { avisado = true; C.reto("construir", true); }
+    }
+    pintar();
+  })();
+
+  /* ---------------- reto: a mano ---------------- */
+  (function () {
+    var tipo, S, L, N;
+    var SS = [2001, 3501, 7001, 9001, 12001, 40001], LS = [50, 100, 200, 500, 1000, 1460], NS = [2000, 7500, 3000, 12000, 41000];
+    function generar() {
+      tipo = Math.random() < 0.7 ? "datos" : "syn";
+      S = SS[Math.floor(Math.random() * SS.length)];
+      L = LS[Math.floor(Math.random() * LS.length)];
+      N = NS[Math.floor(Math.random() * NS.length)];
+    }
+    generar();
+    B.numerico($("mano"), {
+      pregunta: function () {
+        return tipo === "datos"
+          ? "Un segmento lleva seq = $" + S + "$ y $" + L + "$ bytes de datos. Llega bien y no falta nada antes. ¿Qué ack manda el servidor?"
+          : "El cliente manda un SYN con seq = $" + N + "$. ¿Qué ack lleva el SYN-ACK del servidor?";
+      },
+      respuesta: function () { return tipo === "datos" ? S + L : N + 1; },
+      tolerancia: 0,
+      pistas: [
+        function () { return tipo === "datos" ? "El ack es el siguiente byte que espera el servidor: el primero del segmento más la cantidad de bytes." : "El SYN gasta un número de secuencia: el ack es el seq recibido más uno."; },
+        function () { return tipo === "datos" ? "$" + S + " + " + L + "$." : "$" + N + " + 1$."; }
+      ],
+      diagnostico: function (v) {
+        if (tipo === "datos") {
+          if (v === S + L - 1) return "Ese es el último byte recibido. El ack señala el siguiente.";
+          if (v === S + 1) return "Sumaste 1, como en el SYN, pero un segmento de datos consume tantos números como bytes lleva.";
+          if (v === S) return "Ese es el seq del propio segmento: el ack señala lo que viene después.";
+        } else {
+          if (v === N) return "Ese es el mismo seq. El ack dice cuál se espera después.";
+          if (v === N + 2) return "Sumaste uno de más.";
+        }
+        return null;
+      },
+      explicacion: function () { return tipo === "datos" ? "$" + S + " + " + L + " = " + (S + L) + "$." : "$" + N + " + 1 = " + (N + 1) + "$."; },
+      reintentable: true,
+      textoReintentar: "Otro ejercicio",
+      antesDeReintentar: generar,
+      alResolver: function (ok) { C.reto("mano", ok); }
+    });
+  })();
+
+  /* ---------------- reto: cazar el error ---------------- */
+  B.cazarError($("error"), {
+    variantes: [
+      {
+        intro: "El equipo 192.168.10.37 abre una conexión con el servidor 192.168.10.70. Alguien describió el apretón de manos así:",
+        lineas: ["\\text{1. Cliente: SYN, seq=1000}", "\\text{2. Servidor: SYN-ACK, seq=5000, ack=1000}", "\\text{3. Cliente: ACK, seq=1001, ack=5001}"],
+        erronea: 1,
+        explicacion: "El SYN gasta un número de secuencia, así que el servidor confirma <b>1001</b>, no 1000. Con ack=1000 le estaría diciendo que sigue esperando el SYN."
+      },
+      {
+        intro: "El cliente manda segmentos de 100 bytes y el servidor responde sin pérdidas con el ack acumulado:",
+        lineas: ["\\text{segmento 1: seq=1001, ack=1101}", "\\text{segmento 2: seq=1101, ack=1201}", "\\text{segmento 3: seq=1201, ack=1300}", "\\text{segmento 4: seq=1301, ack=1401}"],
+        erronea: 2,
+        explicacion: "El ack es el siguiente byte que se espera: $1201 + 100 = 1301$. El 1300 sería el último byte recibido, pero el ack señala el siguiente."
+      },
+      {
+        intro: "El segmento 3 (seq=1201) se pierde y el 4 sí llega. Alguien describió lo que pasa:",
+        lineas: ["\\text{1. El servidor recibe el segmento 4 (seq=1301)}", "\\text{2. Responde ack=1401, porque ya llegó el último byte}", "\\text{3. El cliente espera al temporizador y reenvía el segmento 3}", "\\text{4. Al llegar el 3, el servidor responde ack=1401}"],
+        erronea: 1,
+        explicacion: "Mientras falte el segmento 3, el ack no puede saltar el hueco: el servidor responde <b>ack=1201</b>. Solo cuando llega el 3 el ack avanza hasta 1401."
+      }
+    ],
+    alResolver: function (ok) { C.reto("error", ok); }
+  });
+
+  /* ---------------- retos: propiedades ---------------- */
+  function prop(id, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple($(id), cfg);
+  }
+  prop("prop1", {
+    pregunta: "Un servidor tiene un servicio web en el puerto 80 y un servicio SSH en el 22. Llega un segmento con <b>puerto de destino 22</b>. ¿A quién se entrega?",
+    opciones: ["Al servicio SSH", "Al servicio web", "A los dos, para que decidan", "Se descarta, porque el 22 no es un puerto de origen"],
+    correcta: 0,
+    pistas: [null, "El servicio web escucha en el 80. El puerto de destino del segmento es otro.",
+      "Cada segmento tiene un solo puerto de destino y se entrega a un solo programa.", "Aquí se habla del puerto de destino, que es justo el que elige el servicio."],
+    explicacion: "El puerto de destino elige el servicio: 22 es SSH. Eso es la multiplexación por puertos: una sola IP atiende a muchos servicios a la vez."
+  });
+  prop("prop2", {
+    pregunta: "En un SYN flood, el atacante manda SYN y nunca contesta los SYN-ACK. ¿Qué recurso del servidor se agota primero?",
+    opciones: ["La tabla de conexiones a medio abrir", "El ancho de banda del disco", "La memoria de los archivos del usuario", "El número de puertos de origen del atacante"],
+    correcta: 0,
+    pistas: [null, "El disco no interviene: un SYN no lleva datos.", "No hay archivos de usuario en juego.", "Los puertos del atacante no limitan al servidor."],
+    explicacion: "Cada SYN reserva un lugar a la espera del ACK. Si ese ACK nunca llega, el lugar queda ocupado hasta que vence el tiempo de espera, y con muchos SYN la tabla se llena."
+  });
+  prop("prop3", {
+    pregunta: "Según el ejercicio de la unidad, ¿qué protocolo conviene para la réplica de pesos de un modelo entre dos servidores, donde ningún byte puede perderse?",
+    opciones: ["TCP", "UDP", "Ninguno: los pesos se copian sin red", "UDP con un puerto por encima de 1024"],
+    correcta: 0,
+    pistas: [null, "UDP no reenvía lo que se pierde: un solo byte perdido dañaría el archivo de pesos.", "Los servidores están en red: algún protocolo de transporte hace falta.",
+      "El número del puerto no cambia las garantías de UDP."],
+    explicacion: "La solución del ejercicio es clara: videoconferencia con UDP, réplica de pesos con TCP, porque ningún byte puede perderse."
+  });
+
+  /* ---------------- formula y orden de memoria ---------------- */
+  B.ordenar($("formula"), {
+    pregunta: "El número de confirmación (ack) tras recibir un segmento de datos:",
+    piezas: ["\\text{ack} =", "s", "+\\, L"],
+    distractores: ["-\\, 1", "\\times L", "+\\, 20"],
+    soluciones: [[0, 1, 2]],
+    explicacion: "El ack es el primer byte del segmento ($s$) más la cantidad de bytes que lleva ($L$): el siguiente byte que se espera. No se resta 1, no se multiplica y la cabecera no cuenta.",
+    alResolver: function (ok) { C.reto("formula", ok); }
+  });
+  B.ordenar($("orden"), {
+    pregunta: "El apretón de manos, de primero a último:",
+    piezas: ["\\text{SYN}", "\\text{SYN-ACK}", "\\text{ACK}"],
+    distractores: ["\\text{FIN}"],
+    soluciones: [[0, 1, 2]],
+    explicacion: "El cliente manda SYN, el servidor responde SYN-ACK y el cliente cierra con ACK. El FIN no abre, cierra: pertenece al final de la conexión.",
+    alResolver: function (ok) { C.reto("orden", ok); }
+  });
+
+  /* ---------------- vida real ---------------- */
+  (function () {
+    var CODIGO = {"py": [[null, "# el equipo 192.168.10.37:49152 le habla al servidor 192.168.10.70:80"], ["isnc", "isn_c = 1000"], ["isns", "isn_s = 5000"], ["psyn", "print(\"SYN     seq=%d\" % isn_c)"], ["psynack", "print(\"SYN-ACK seq=%d ack=%d\" % (isn_s, isn_c + 1))"], ["pack", "print(\"ACK     seq=%d ack=%d\" % (isn_c + 1, isn_s + 1))"], [null, ""], [null, "# 400 bytes en 4 segmentos de 100; el tercero se pierde"], ["largo", "largo = 100"], ["perdido", "perdido = 3"], ["secsini", "secs = []"], ["forsec", "for i in range(4):"], ["appsec", "    secs.append(isn_c + 1 + largo * i)"], ["psecs", "print(secs)"], ["llegini", "llegado = [False, False, False, False]"], ["forseg", "for i in range(4):"], ["ifperd", "    if i + 1 == perdido:"], ["pperd", "        print(\"segmento\", i + 1, \"seq\", secs[i], \"se pierde\")"], ["cont", "        continue"], ["marca", "    llegado[i] = True"], ["n0", "    n = 0"], ["while", "    while n < 4 and llegado[n]:"], ["inc", "        n += 1"], ["ack", "    ack = isn_c + 1 + largo * n"], ["pseg", "    print(\"segmento\", i + 1, \"seq\", secs[i], \"ack\", ack)"], [null, ""], [null, "# vence el temporizador: el cliente reenvía el tercero"], ["marca2", "llegado[perdido - 1] = True"], ["n02", "n = 0"], ["while2", "while n < 4 and llegado[n]:"], ["inc2", "    n += 1"], ["ack2", "ack = isn_c + 1 + largo * n"], ["preen", "print(\"reenvio\", perdido, \"seq\", secs[perdido - 1], \"ack\", ack)"], [null, "# comprobación a mano: 1000 + 1 + 400 = 1401"], ["pfin", "print(ack == 1401)"], [null, ""], [null, "# SYN flood: la tabla guarda 8 medias conexiones y llegan 10 SYN falsos"], ["capac", "capacidad = 8"], ["ocup0", "ocupadas = 0"], ["rech0", "rechazados = 0"], ["forsyn", "for i in range(10):"], ["ifcab", "    if ocupadas < capacidad:"], ["ocup", "        ocupadas += 1"], [null, "    else:"], ["rech", "        rechazados += 1"], ["pflood", "print(ocupadas, rechazados)"]], "r": [[null, "# el equipo 192.168.10.37:49152 le habla al servidor 192.168.10.70:80"], ["isnc", "isn_c <- 1000"], ["isns", "isn_s <- 5000"], ["psyn", "cat(sprintf(\"SYN     seq=%d\", isn_c), \"\\n\", sep = \"\")"], ["psynack", "cat(sprintf(\"SYN-ACK seq=%d ack=%d\", isn_s, isn_c + 1), \"\\n\", sep = \"\")"], ["pack", "cat(sprintf(\"ACK     seq=%d ack=%d\", isn_c + 1, isn_s + 1), \"\\n\", sep = \"\")"], [null, ""], [null, "# 400 bytes en 4 segmentos de 100; el tercero se pierde"], ["largo", "largo <- 100"], ["perdido", "perdido <- 3"], ["secsini", "secs <- c()"], ["forsec", "for (i in 1:4) {"], ["appsec", "  secs <- c(secs, isn_c + 1 + largo * (i - 1))"], [null, "}"], ["psecs", "print(secs)"], ["llegini", "llegado <- c(FALSE, FALSE, FALSE, FALSE)"], ["forseg", "for (i in 1:4) {"], ["ifperd", "  if (i == perdido) {"], ["pperd", "    cat(paste(\"segmento\", i, \"seq\", secs[i], \"se pierde\"), \"\\n\", sep = \"\")"], ["cont", "    next"], [null, "  }"], ["marca", "  llegado[i] <- TRUE"], ["n0", "  n <- 0"], ["while", "  while (n < 4 && llegado[n + 1]) {"], ["inc", "    n <- n + 1"], [null, "  }"], ["ack", "  ack <- isn_c + 1 + largo * n"], ["pseg", "  cat(paste(\"segmento\", i, \"seq\", secs[i], \"ack\", ack), \"\\n\", sep = \"\")"], [null, "}"], [null, ""], [null, "# vence el temporizador: el cliente reenvía el tercero"], ["marca2", "llegado[perdido] <- TRUE"], ["n02", "n <- 0"], ["while2", "while (n < 4 && llegado[n + 1]) {"], ["inc2", "  n <- n + 1"], [null, "}"], ["ack2", "ack <- isn_c + 1 + largo * n"], ["preen", "cat(paste(\"reenvio\", perdido, \"seq\", secs[perdido], \"ack\", ack), \"\\n\", sep = \"\")"], [null, "# comprobación a mano: 1000 + 1 + 400 = 1401"], ["pfin", "print(ack == 1401)"], [null, ""], [null, "# SYN flood: la tabla guarda 8 medias conexiones y llegan 10 SYN falsos"], ["capac", "capacidad <- 8"], ["ocup0", "ocupadas <- 0"], ["rech0", "rechazados <- 0"], ["forsyn", "for (i in 1:10) {"], ["ifcab", "  if (ocupadas < capacidad) {"], ["ocup", "    ocupadas <- ocupadas + 1"], [null, "  } else {"], ["rech", "    rechazados <- rechazados + 1"], [null, "  }"], [null, "}"], ["pflood", "cat(paste(ocupadas, rechazados), \"\\n\", sep = \"\")"]]};
+    var SAL = {"py": ["SYN     seq=1000", "SYN-ACK seq=5000 ack=1001", "ACK     seq=1001 ack=5001", "[1001, 1101, 1201, 1301]", "segmento 1 seq 1001 ack 1101", "segmento 2 seq 1101 ack 1201", "segmento 3 seq 1201 se pierde", "segmento 4 seq 1301 ack 1201", "reenvio 3 seq 1201 ack 1401", "True", "8 2"], "r": ["SYN     seq=1000", "SYN-ACK seq=5000 ack=1001", "ACK     seq=1001 ack=5001", "[1] 1001 1101 1201 1301", "segmento 1 seq 1001 ack 1101", "segmento 2 seq 1101 ack 1201", "segmento 3 seq 1201 se pierde", "segmento 4 seq 1301 ack 1201", "reenvio 3 seq 1201 ack 1401", "[1] TRUE", "8 2"]};
+    var ROWS = [
+      { dir: "c", cls: "syn", txt: "SYN · seq=1000" },
+      { dir: "s", cls: "synack", txt: "SYN-ACK · seq=5000 · ack=1001" },
+      { dir: "c", cls: "ack", txt: "ACK · seq=1001 · ack=5001" },
+      { dir: "c", cls: "dato", txt: "segmento 1 · seq=1001 · 100 B" },
+      { dir: "s", cls: "ack", txt: "ack=1101" },
+      { dir: "c", cls: "dato", txt: "segmento 2 · seq=1101 · 100 B" },
+      { dir: "s", cls: "ack", txt: "ack=1201" },
+      { dir: "c", cls: "dato", txt: "segmento 3 · seq=1201 · 100 B", seg3: true },
+      { dir: "c", cls: "dato", txt: "segmento 4 · seq=1301 · 100 B" },
+      { dir: "s", cls: "ack", txt: "ack=1201 · repetido" },
+      { dir: "c", cls: "reenvio", txt: "segmento 3 otra vez · seq=1201" },
+      { dir: "s", cls: "ack", txt: "ack=1401" }
+    ];
+    var EV = [];
+    (function () {
+      var fase = 1, filas = 0, sal = 0, perd = false, ocup = 0, rech = 0;
+      var vi = null, vn = null, vack = null, vic = null, vis = null, cond = null;
+      var lleg = [false, false, false, false], i, n;
+      function f(id) { EV.push({ id: id, fase: fase, filas: filas, sal: sal, perd: perd, ocup: ocup, rech: rech, i: vi, n: vn, ack: vack, ic: vic, is: vis, cond: cond }); }
+      vic = 1000; f("isnc");
+      vis = 5000; f("isns");
+      filas = 1; sal = 1; f("psyn");
+      filas = 2; sal = 2; f("psynack");
+      filas = 3; sal = 3; f("pack");
+      fase = 2;
+      f("largo"); f("perdido"); f("secsini");
+      for (i = 0; i < 4; i++) { vi = i; f("forsec"); f("appsec"); }
+      vi = null; sal = 4; f("psecs");
+      f("llegini");
+      for (i = 0; i < 4; i++) {
+        vi = i;
+        filas = i === 0 ? 4 : i === 1 ? 6 : i === 2 ? 8 : 9;
+        f("forseg");
+        f("ifperd");
+        if (i === 2) {
+          perd = true; sal++; f("pperd");
+          f("cont");
+          continue;
+        }
+        lleg[i] = true; f("marca");
+        n = 0; vn = 0; f("n0");
+        while (true) {
+          cond = n < 4 && lleg[n]; f("while");
+          if (!cond) break;
+          n++; vn = n; f("inc");
+        }
+        vack = 1001 + 100 * n;
+        filas = i === 0 ? 5 : i === 1 ? 7 : 10;
+        f("ack");
+        sal++; f("pseg");
+      }
+      vi = null; cond = null;
+      lleg[2] = true; filas = 11; f("marca2");
+      n = 0; vn = 0; f("n02");
+      while (true) {
+        cond = n < 4 && lleg[n]; f("while2");
+        if (!cond) break;
+        n++; vn = n; f("inc2");
+      }
+      vack = 1001 + 100 * n; filas = 12; f("ack2");
+      sal++; f("preen");
+      sal++; f("pfin");
+      fase = 3; cond = null; vn = null;
+      f("capac"); f("ocup0"); f("rech0");
+      for (i = 0; i < 10; i++) {
+        vi = i; f("forsyn"); f("ifcab");
+        if (ocup < 8) { ocup++; f("ocup"); } else { rech++; f("rech"); }
+      }
+      vi = null; sal++; f("pflood");
+    })();
+
+    function narrar(e, ctx) {
+      var py = ctx.lang() === "py", ix = ctx.ix;
+      switch (e.id) {
+        case "isnc": return "El cliente elige su número de secuencia inicial: <b>1000</b>. En TCP real es un número casi al azar; aquí lo escribimos a mano.";
+        case "isns": return "El servidor elige el suyo: <b>5000</b>.";
+        case "psyn": return "Primer mensaje del apretón: el cliente manda <b>SYN</b> con seq = 1000. Imprime la línea.";
+        case "psynack": return "Segundo mensaje: el servidor responde <b>SYN-ACK</b>. Su ack es isn_c + 1 = <b>1001</b> y su seq es el suyo, 5000.";
+        case "pack": return "Tercer mensaje: <b>ACK</b> del cliente, con seq = 1001 y ack = isn_s + 1 = <b>5001</b>. Ya hay conexión.";
+        case "largo": return "Cada segmento lleva <b>100 bytes</b> de datos.";
+        case "perdido": return "El segmento número <b>3</b> se va a perder en el camino. Es un número escrito a mano, no al azar.";
+        case "secsini": return "Una lista vacía para los números de secuencia de los cuatro segmentos.";
+        case "forsec": return "Vuelta con <b>i = " + ix(e.i) + "</b>: calcula el seq del segmento " + (e.i + 1) + ".";
+        case "appsec": return "El primer byte del segmento " + (e.i + 1) + " tiene seq = 1001 + 100 × " + e.i + " = <b>" + (1001 + 100 * e.i) + "</b>.";
+        case "psecs": return "Imprime los cuatro números de secuencia: 1001, 1101, 1201 y 1301.";
+        case "llegini": return "Todavía no llegó nada al servidor: cuatro marcas en falso, una por segmento.";
+        case "forseg": return "El cliente envía el segmento <b>" + (e.i + 1) + "</b> (seq = " + (1001 + 100 * e.i) + ").";
+        case "ifperd": return "¿Es el segmento perdido? " + (e.i === 2 ? "<b>Sí</b>: este no va a llegar." : "<b>No</b>: este llega bien.");
+        case "pperd": return "El segmento 3 nunca llega al servidor: <b>no hay ack</b>. Imprime que se pierde.";
+        case "cont": return py ? "<code>continue</code> salta lo que queda de la vuelta: no se marca nada y no hay ack." : "<code>next</code> salta lo que queda de la vuelta: no se marca nada y no hay ack.";
+        case "marca": return "El segmento llegó: se marca en <b>llegado[" + ix(e.i) + "]</b>.";
+        case "n0": case "n02": return "Empieza a contar cuántos segmentos seguidos llegaron desde el primero: <b>n = 0</b>.";
+        case "while": case "while2": return "Comprueba el segmento " + (e.n + 1) + " de la fila (<b>llegado[" + ix(e.n) + "]</b> en este lenguaje): " + (e.cond ? "<b>llegó</b>, sigue contando." : e.n === 4 ? "ya contó los cuatro." : "<b>no ha llegado</b>: hay un hueco y el conteo se detiene.");
+        case "inc": case "inc2": return "Cuenta uno más: <b>n = " + e.n + "</b>.";
+        case "ack": return "El ack es el primer byte que falta: 1001 + 100 × " + e.n + " = <b>" + e.ack + "</b>." + (e.i === 3 ? " Es el mismo ack que antes: el hueco del segmento 3 lo frena." : "");
+        case "pseg": return "Imprime lo que el servidor contesta al segmento " + (e.i + 1) + ".";
+        case "marca2": return "Vence el temporizador. El cliente <b>reenvía el segmento 3</b> y ahora sí llega: se marca <b>llegado[" + ix(2) + "]</b>.";
+        case "ack2": return "Ahora los cuatro segmentos están completos: n = 4 y el ack salta a 1001 + 100 × 4 = <b>" + e.ack + "</b>.";
+        case "preen": return "Imprime el reenvío: el ack pasó de 1201 a <b>1401</b> de un solo salto.";
+        case "pfin": return "Verifica contra la cuenta a mano, 1000 + 1 + 400 = 1401: <b>" + (py ? "True" : "TRUE") + "</b>. No hay una función de librería que haga lo que TCP; por eso se compara con la suma.";
+        case "capac": return "La tabla de medias conexiones tiene <b>8 lugares</b> (dato inventado).";
+        case "ocup0": return "Empieza vacía: 0 lugares ocupados.";
+        case "rech0": return "Y 0 SYN rechazados.";
+        case "forsyn": return "Llega el SYN falso número <b>" + (e.i + 1) + "</b> (índice " + ix(e.i) + ").";
+        case "ifcab": return "¿Queda un lugar libre? " + (e.ocup < 8 ? "<b>Sí</b>: " + e.ocup + " de 8 ocupados." : "<b>No</b>: los 8 lugares están ocupados.");
+        case "ocup": return "El SYN falso ocupa un lugar y se queda esperando un ACK que no va a llegar: <b>ocupadas = " + e.ocup + "</b>.";
+        case "rech": return "No hay lugar: el SYN se descarta. <b>rechazados = " + e.rech + "</b>. Un cliente real tampoco entraría ahora.";
+        case "pflood": return "Imprime <b>8 2</b>: 8 lugares ocupados y 2 SYN rechazados, que coincide con 10 − 8 = 2.";
+      }
+      return "";
+    }
+
+    function visual(e, ant, ctx) {
+      var py = ctx.lang() === "py";
+      var filas = [];
+      if (e) {
+        for (var r = 0; r < e.filas; r++) {
+          var m = Object.assign({}, ROWS[r]);
+          if (m.seg3 && e.perd) { m.cls = "perd"; m.txt += " · se pierde"; }
+          filas.push(m);
+        }
+      }
+      $("vrSeq").innerHTML = filas.length ? sqHTML(filas, false, false) : '<p class="paq-vacio">Todavía no se envió nada.</p>';
+      var ocup = e ? e.ocup : 0, slots = [];
+      for (var s = 0; s < ocup; s++) slots.push(1);
+      pintarSlots($("vrSlots"), slots);
+      $("vrOcup").textContent = ocup;
+      $("vrRech").textContent = e ? e.rech : 0;
+      $("vrSalida").textContent = SAL[py ? "py" : "r"].slice(0, e ? e.sal : 0).join("\n");
+    }
+
+    B.vidaReal($("vidareal"), {
+      codigo: CODIGO,
+      eventos: EV,
+      narrar: narrar,
+      vars: function (e, ctx) {
+        var v = [];
+        if (!e) return v;
+        if (e.ic !== null) v.push('<span>isn_c = <b>' + e.ic + '</b></span>');
+        if (e.is !== null) v.push('<span>isn_s = <b>' + e.is + '</b></span>');
+        if (e.i !== null) v.push('<span class="vj">i = <b>' + ctx.ix(e.i) + '</b></span>');
+        if (e.n !== null) v.push('<span>n = <b>' + e.n + '</b></span>');
+        if (e.ack !== null && e.fase === 2) v.push('<span>ack = <b>' + e.ack + '</b></span>');
+        if (e.fase === 3) v.push('<span>ocupadas = <b>' + e.ocup + '</b></span><span>rechazados = <b>' + e.rech + '</b></span>');
+        return v;
+      },
+      visual: visual,
+      demora: function (e) { return !e ? 600 : (e.id === "while" || e.id === "inc" || e.id === "while2" || e.id === "inc2" || e.id === "forsyn" || e.id === "ifcab") ? 380 : e.id === "ack" || e.id === "ack2" || e.id === "pseg" || e.id === "preen" ? 1000 : 700; }
+    });
+
+    B.numerico($("vrPred").querySelector(".cuerpo"), {
+      pregunta: "Antes de reproducir: al procesar el <b>segmento 4</b> (el 3 se perdió), el <code>while</code> cuenta cuántos segmentos seguidos llegaron desde el primero. ¿Cuántas veces ejecuta la línea que suma 1 a <code>n</code>?",
+      respuesta: 2,
+      tolerancia: 0,
+      pistas: ["Llegaron los segmentos 1, 2 y 4; el 3 no. ¿Hasta dónde avanza el conteo desde el primero?", "El conteo se detiene en el hueco: cuenta el 1 y el 2, y se frena ante el 3."],
+      diagnostico: function (v) {
+        if (v === 3) return "Contaste los tres que llegaron (1, 2 y 4), pero el conteo se detiene ante el hueco y el 4 queda sin contar.";
+        if (v === 4) return "Eso pasaría si no faltara ninguno. Con el segmento 3 perdido, el conteo se frena antes.";
+        if (v === 1) return "Una sola vez serviría para el segmento 1. Para el 4 el conteo avanza por el 1 y por el 2.";
+        return null;
+      },
+      explicacion: "El conteo avanza por los segmentos 1 y 2 y se frena ante el 3: <b>2 veces</b>, así que n = 2 y el ack es 1001 + 100 × 2 = 1201. Ahora dale a reproducir y compara.",
+      alResolver: function (ok) { C.reto("codigo1", ok); }
+    });
+    prop("codigo2", {
+      pregunta: "En Python el <code>while</code> comprueba <code>llegado[n]</code>. En R las listas se numeran desde 1. ¿Cómo se escribe la misma comprobación en R?",
+      opciones: [
+        "<code>llegado[n + 1]</code>",
+        "<code>llegado[n]</code>",
+        "<code>llegado[n - 1]</code>",
+        "<code>llegado[[0]]</code>"
+      ],
+      correcta: 0,
+      pistas: [null, "Con n = 0, <code>llegado[0]</code> en R no da el primer elemento sino un vector vacío, y la condición falla con un error.",
+        "Con n = 0 daría <code>llegado[-1]</code>, que en R significa «todos menos el primero». Tampoco es lo que buscas.", "En R no existe la posición 0."],
+      explicacion: "El segmento número <code>n + 1</code> de la fila está en la posición <code>n + 1</code> de R (y en la <code>n</code> de Python). Por eso el programa en R escribe <code>llegado[n + 1]</code>."
+    });
+    prop("codigo3", {
+      pregunta: "Alguien escribe <code>ack = isn_c + 1 + n</code> en lugar de <code>ack = isn_c + 1 + largo * n</code>. Para el segmento 1 imprime 1002 y el real es 1101. ¿Qué entendió mal?",
+      opciones: [
+        "Que el ack cuenta bytes, no segmentos",
+        "Que el ack debe empezar en 0",
+        "Que el ack es siempre seq más 1",
+        "Que n cuenta desde 0 en lugar de 1"
+      ],
+      correcta: 0,
+      pistas: [null, "El ack empieza donde termina el apretón, no en 0.", "Eso solo vale para el SYN. Un segmento de datos suma tantos números como bytes lleva.",
+        "Que n cuente desde 0 o desde 1 no explica un salto de cien."],
+      explicacion: "Los números de secuencia y los acks cuentan <b>bytes</b>. Tras un segmento de 100 bytes el ack avanza 100, no 1. Por eso en el programa aparece <code>largo * n</code>."
+    });
+  })();
+
+  /* ---------------- tarjetas ---------------- */
+  B.tarjetas($("tarjetas"), [
+    ["¿Qué hace un <b>puerto</b>?", "Dice a qué programa del equipo se entrega el segmento. Va de 0 a 65535; por debajo de 1024 están los servicios conocidos (80 web, 443 web segura, 53 DNS, 22 SSH)."],
+    ["¿Qué identifica a una conversación TCP?", "Cuatro valores: IP de origen, puerto de origen, IP de destino y puerto de destino (dos sockets)."],
+    ["Los tres mensajes del apretón de manos", "SYN del cliente, SYN-ACK del servidor y ACK del cliente. Cada lado anuncia su número de secuencia inicial."],
+    ["Si el SYN trae seq = 1000, ¿qué ack lleva el SYN-ACK?", "1001: el SYN gasta un número de secuencia, así que se confirma seq + 1."],
+    ["¿Qué dice el ack al recibir un segmento de datos?", "El siguiente byte que espera: ack = s + L, donde s es el primer byte del segmento y L los bytes que lleva."],
+    ["¿Qué pasa si un segmento se pierde?", "El ack no avanza (se repite). Al vencer el temporizador el cliente retransmite, y el ack salta hasta donde ya no hay huecos."],
+    ["¿Qué gana y qué pierde UDP frente a TCP?", "Gana velocidad y cabecera corta (8 bytes frente a 20 como mínimo). Pierde conexión, confirmación y reenvíos."],
+    ["¿Qué es un SYN flood?", "Muchos SYN sin completar el apretón que llenan la tabla de conexiones a medio abrir del servidor, hasta que los clientes reales ya no caben."]
+  ]);
+
+  /* ---------------- conexiones ---------------- */
+  B.conexiones("tcp-udp-puertos");
+})();
+</script>
+</body>
+</html>
