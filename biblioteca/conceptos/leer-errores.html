@@ -1,0 +1,1920 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Leer un error y depurar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+/* ---------- escenario ---------- */
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.esc-head .hint { font-size: 12.5px; color: var(--ink-2); }
+.pila-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; align-items: start; }
+.mini-sub { font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 6px; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.mini-sub b { color: var(--accent); font-weight: 500; letter-spacing: 0; text-transform: none; }
+.prog { margin: 0; padding: 6px 0; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; font-family: var(--f-mono); font-size: 11.5px; line-height: 1.6; min-width: 0; }
+.prog .pl { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 6px; padding: 0 8px 0 16px; position: relative; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink-2); min-height: 1.6em; }
+.prog .pl .g { flex: none; width: 2ch; text-align: right; color: var(--ink-3); font-size: 10.5px; }
+.prog .pl .t { min-width: 0; flex: 1 1 0; }
+.prog .pl.cur { background: var(--accent-soft); color: var(--ink); }
+.prog .pl.cur::before { content: ""; position: absolute; left: 4px; top: .5em; border: 5px solid transparent; border-left: 7px solid var(--accent); }
+.prog .pl.err { background: var(--bad-soft); color: var(--ink); }
+.prog .pl.causa { background: var(--accent-soft); color: var(--ink); box-shadow: inset 3px 0 0 var(--accent); }
+.prog .pl .tag { font-family: var(--f-body); font-size: 10.5px; color: var(--accent); flex-basis: 100%; padding-left: calc(2ch + 6px); }
+.prog .pl .tag.mal { color: var(--bad); }
+.pila { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.marco { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 6px 9px; animation: entra .3s ease; }
+.marco.arriba { border: 2px solid var(--accent); }
+.marco.error { border: 2px solid var(--bad); background: var(--bad-soft); }
+.marco.base { background: var(--surface-2); }
+.marco.foco { box-shadow: 0 0 0 3px var(--accent-soft); border-color: var(--accent); }
+.marco.congelado { opacity: .7; border-style: dashed; animation: none; }
+.marco.congelado.marcado { opacity: 1; border-style: solid; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.marco.toca { cursor: pointer; }
+.marco-n { font-family: var(--f-mono); font-size: 11.5px; color: var(--ink-3); margin-bottom: 3px; display: flex; justify-content: space-between; gap: 6px; flex-wrap: wrap; }
+.marco-n .num-tb { color: var(--accent); font-weight: 500; }
+.marco-v { display: flex; flex-wrap: wrap; gap: 4px 10px; font-family: var(--f-mono); font-size: 12px; color: var(--ink); }
+.marco-v .var { white-space: nowrap; }
+.marco-v .var.fn b { color: var(--ink-3); font-weight: 400; }
+.marco-v .var.nuevo { background: var(--accent-soft); border-radius: 4px; padding: 0 3px; }
+.marco-v .vacio { font-family: var(--f-body); font-size: 11.5px; color: var(--ink-3); white-space: normal; }
+.marco-v .tapa { display: inline-block; width: 4.5em; height: .9em; border-radius: 3px; background: var(--line); vertical-align: middle; }
+.retorno { align-self: center; font-family: var(--f-mono); font-size: 12px; padding: 2px 10px; border-radius: 999px; border: 1px solid var(--accent); color: var(--accent); background: var(--surface); animation: baja .5s ease; }
+@keyframes entra { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+@keyframes baja { from { opacity: 0; transform: translateY(-14px); } to { opacity: 1; transform: none; } }
+.salida-esc { margin: 10px 0 0; padding: 7px 10px; border-radius: 8px; background: var(--surface-2); font-family: var(--f-mono); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; min-height: 2.2em; color: var(--ink); }
+.salida-esc .err { color: var(--bad); font-weight: 500; }
+.esc-ctrl { margin-top: 10px; }
+.esc-ctrl button { font-size: 12.5px; padding: 6px 10px; }
+.esc-nota { font-size: 13px; color: var(--ink-2); margin: 8px 0 0; min-height: 1.4em; }
+.esc-nota b { color: var(--ink); }
+.lector-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+.nombres { display: flex; flex-wrap: wrap; gap: 6px; }
+.nombres button { font-family: var(--f-mono); font-size: 12.5px; padding: 5px 10px; }
+.nombres button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.lector-bar .seg { margin-left: auto; }
+
+/* ---------- traceback ---------- */
+.tb { margin: 0; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--line); font-family: var(--f-mono); font-size: 11px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink-2); min-height: 2.2em; }
+.tb .blq { display: block; border-radius: 5px; padding: 1px 4px; border-left: 3px solid transparent; }
+.tb .blq.toca { cursor: pointer; }
+.tb .blq.toca:hover, .tb .blq.foco { background: var(--accent-soft); border-left-color: var(--accent); }
+.tb .que { display: block; color: var(--bad); font-weight: 500; padding: 1px 4px; border-left: 3px solid var(--bad); border-radius: 5px; }
+.tb .que.foco { background: var(--bad-soft); }
+.tb .lab { font-family: var(--f-body); font-size: 10px; font-weight: 600; letter-spacing: .06em; padding: 0 5px; border-radius: 4px; margin-left: 6px; vertical-align: 1px; white-space: nowrap; }
+.tb .lab.q { background: var(--bad); color: var(--surface); }
+.tb .lab.d { background: var(--accent); color: var(--surface); }
+.tb .tapado { display: inline-block; width: 70%; height: 1em; background: var(--line); border-radius: 4px; vertical-align: middle; }
+.tb .zona { border-radius: 4px; cursor: pointer; border-bottom: 2px solid var(--line); }
+.tb .zona.z-donde.on { background: var(--accent-soft); border-bottom-color: var(--accent); color: var(--ink); }
+.tb .zona.z-que.on { background: var(--bad-soft); border-bottom-color: var(--bad); color: var(--ink); }
+.tb .zona.z-pila.on { background: var(--accent-soft); border-bottom-color: var(--accent); color: var(--ink); }
+.tb .ok-msg { color: var(--ink); }
+.tb .sin { color: var(--ink-3); }
+
+/* ---------- cadena (paso 1) ---------- */
+.cadena { display: grid; gap: 8px; margin: 6px 0 10px; }
+.estacion { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; align-items: center; border: 1.5px solid var(--line); border-radius: 10px; padding: 9px 12px; background: var(--surface); transition: border-color .25s, background .25s; }
+.estacion .est-n { grid-row: span 2; font-family: var(--f-mono); font-size: 12px; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-2); color: var(--ink-2); }
+.estacion .est-t { font-size: 14px; color: var(--ink); }
+.estacion .est-d { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); min-height: 1.3em; }
+.estacion.paso-ok { border-color: var(--ok); background: var(--ok-soft); }
+.estacion.paso-ok .est-d { color: var(--ink); }
+.estacion.aqui { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.estacion.rota { border-color: var(--bad); background: var(--bad-soft); }
+.estacion.rota .est-d { color: var(--bad); font-weight: 500; }
+.ficha-cad { display: inline-block; font-family: var(--f-mono); font-size: 12.5px; padding: 4px 10px; border: 1px solid var(--accent); border-radius: 999px; color: var(--accent); background: var(--surface); }
+
+/* ---------- clasificador (paso 5) ---------- */
+.clasif { display: grid; gap: 10px; }
+.tarj { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 8px 10px; min-width: 0; }
+.tarj-cab { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 12.5px; color: var(--ink-3); margin-bottom: 4px; }
+.tarj-cab b { color: var(--accent); font-weight: 500; }
+.tarj pre { margin: 0 0 6px; padding: 6px 8px; background: var(--surface-2); border-radius: 6px; font-family: var(--f-mono); font-size: 11.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink-2); }
+.tarj pre.sal { color: var(--ink); }
+.tarj pre .err { color: var(--bad); font-weight: 500; }
+.tarj .lec-t { display: block; font-family: var(--f-mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 2px; }
+.asig { display: grid; gap: 8px; margin: 8px 0; }
+.asig-fila { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.asig-fila > span { font-size: 13.5px; color: var(--ink-2); min-width: 5.5em; }
+.asig-fila button { font-size: 12.5px; padding: 5px 9px; }
+.asig-fila button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+
+/* ---------- bloques de codigo ---------- */
+.lec-par { display: grid; gap: 8px; margin-top: 6px; }
+.lec { border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); overflow: hidden; min-width: 0; }
+.lec-t { display: block; font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); padding: 5px 10px 0; }
+.lec pre { margin: 0; padding: 4px 10px 8px; font-family: var(--f-mono); font-size: 12px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink-2); }
+.lec pre .sal { color: var(--ink); font-weight: 500; }
+.lec pre .err { color: var(--bad); font-weight: 500; }
+@media (min-width: 700px) { .lec-par.dos { grid-template-columns: 1fr 1fr; } }
+.codigo-bloque { margin: 6px 0 10px; padding: 8px 10px; background: var(--surface-2); border-radius: 8px; font-family: var(--f-mono); font-size: 12.5px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink-2); }
+.codigo-bloque .err { color: var(--bad); font-weight: 500; }
+.codigo-bloque .sal { color: var(--ink); font-weight: 500; }
+
+/* ---------- vida real ---------- */
+.vr-cong { margin-top: 10px; }
+.vr-cong[hidden] { display: none; }
+
+/* ---------- retos propios ---------- */
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.ojo-opts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
+.ojo-opts .opt { text-align: center; }
+.objetivos { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.objetivos li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.objetivos .m { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.objetivos li.hecho { color: var(--ink); }
+.objetivos li.hecho .m { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 3px var(--surface); }
+.editor { display: grid; gap: 6px; margin: 8px 0 10px; }
+.editor label { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-family: var(--f-mono); font-size: 12.5px; color: var(--ink-2); }
+.editor input { flex: 1 1 10em; min-width: 0; font-family: var(--f-mono); font-size: 12.5px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); }
+.editor input.mal { border-color: var(--bad); }
+.ou-q { font-size: 14px; color: var(--ink); margin: 8px 0 6px; }
+.paso-b { margin-top: 12px; }
+.chip { max-width: 100%; overflow-x: auto; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ Leer un error y depurar</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Programación con datos · Python base · Think Python cap. 20 (y cap. 2, 3, 5 y 6), ISLR2 3.6.7</p>
+    <h1>Leer un error y depurar: el traceback es la pila escrita en texto</h1>
+    <p class="lede">
+      Cuando un programa se rompe, Python no solo se queja: te deja una nota con <b>qué</b> pasó y <b>dónde</b>, marco por marco.
+      Ese bloque de texto, el <i>traceback</i>, es la misma pila de llamadas que ya conoces, congelada en el instante del fallo.
+      Lo vas a leer con un programa pequeño que calcula el promedio de las notas de cuatro alumnos inventados: uno termina bien y tres se rompen de maneras distintas.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> Cuando un programa se rompe y escupe un bloque de texto rojo, ¿qué parte lees primero y por qué? ¿Crees que la línea que señala el error es siempre la que hay que arreglar? Escribe lo que haces hoy, aunque sea "lo copio y lo busco".</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: leo primero..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>De una cadena que se detiene al mensaje de R</h2>
+      <p>Siete pasos. Cada uno termina con un chequeo: hasta que no lo resuelves, el siguiente queda cerrado. Equivocarte aquí no resta nada, es parte del método.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="Una cadena que se detiene">
+          <span class="etapa">Paso 1</span>
+          <h3>Una cadena de encargos que se detiene</h3>
+          <p>Un programa es una cadena de encargos. Alguien pide un informe de un alumno; el informe le pide a otra pieza que saque el promedio; el promedio suma las notas y después divide entre cuántas notas hay. Cada pieza confía en que la anterior le pasa algo con sentido.</p>
+          <p>En el escenario ves las tres estaciones y una ficha esperando al inicio: <b>luis</b>. Luis está en la lista de alumnos, pero todavía no tiene ninguna nota. Cuando algo falla, la cadena no se detiene "en general": se detiene en una estación concreta, y ese lugar es la primera pista.</p>
+          <div class="check" id="chk1">
+            <p class="check-tit">Predice antes de tocar</p>
+            <div class="cuerpo"></div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="La última línea dice qué">
+          <span class="etapa">Paso 2</span>
+          <h3>La última línea dice qué pasó</h3>
+          <p>Ahora la cadena tiene código. En el escenario está el programa (16 líneas) y lo que Python imprimió al correrlo con <code>nombre = "luis"</code>: primero la línea <code>alumno: luis</code>, que demuestra que el programa sí arrancó, y después un bloque que empieza con <code>Traceback (most recent call last):</code>.</p>
+          <p>Ese bloque tiene dos clases de renglones. Los pares <code>File "programa.py", line N, in f</code> seguidos de una línea de código, y un único renglón final que no se parece a los demás. La línea final está tapada a propósito: decide primero dónde buscarías el tipo de fallo.
+          <cite class="cita" data-fuente="thinpython" data-pag="260" data-pimp="239" data-seccion="Chapter 20. Debugging: When I run the program I get an exception" data-que="Qué información trae el mensaje de una excepción y cómo el traceback recorre la secuencia de llamadas hasta el lugar del fallo. Arranca con NameError." data-cuando="Al terminar este paso"></cite></p>
+          <p>Las marcas <code>~~~~~~^~~~~~</code> debajo de algunas líneas existen desde Python 3.11: subrayan la parte exacta de la expresión que falló. En los tracebacks del libro no aparecen porque son de una versión anterior.</p>
+          <div class="check" id="chk2"><p class="check-tit">Elige y explica</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Las de arriba dicen dónde">
+          <span class="etapa">Paso 3</span>
+          <h3>Las de arriba dicen dónde: cada par es un marco</h3>
+          <p>Cada par <code>File ..., line N, in f</code> es un <b>marco de la pila</b>, el mismo dibujo de la página "Funciones y el marco de llamada". Van en el orden en que se apilaron: arriba el más externo (<code>&lt;module&gt;</code>, el programa principal), abajo el más reciente, justo encima de la línea del qué. Por eso el título dice <i>most recent call last</i>: lo más reciente, al final.
+          <cite class="cita" data-fuente="thinpython" data-pag="49" data-pimp="28" data-seccion="Chapter 3. Functions: Stack Diagrams" data-que="Figure 3-1, el diagrama de pila con __main__ y dos funciones, y el traceback que sale de esa misma pila cuando algo falla en la función de arriba." data-cuando="Ahora, con el escenario al lado"></cite></p>
+          <p>Toca un renglón del traceback y mira qué caja de la pila y qué línea del programa se encienden. O pulsa <b>Leer de abajo hacia arriba</b>: primero el qué, después dónde falló, quién llamó a esa función y quién llamó a esa otra.
+          <cite class="cita" data-fuente="thinpython" data-pag="50" data-pimp="29" data-seccion="Chapter 3. Functions: Stack Diagrams (final)" data-que="La lista de funciones del traceback va en el mismo orden que los marcos del diagrama de pila, y cada una muestra la línea que se estaba ejecutando." data-cuando="Después de resolver el chequeo"></cite></p>
+          <p>Un detalle del libro: en la página 49 del PDF el encabezado dice <code>Traceback (innermost last)</code>, el título que usaban las versiones viejas de Python. Más adelante en el mismo libro, y en el Python 3 de hoy, dice <code>Traceback (most recent call last)</code>. Mismo orden, otro título.</p>
+          <p>Ahora se activan los nombres del escenario. Elige uno, pulsa <b>Ejecutar</b> y mira cómo crece la pila marco a marco.</p>
+          <div class="check" id="chk3"><p class="check-tit">Calcula con los datos en vivo</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Síntoma y causa">
+          <span class="etapa">Paso 4</span>
+          <h3>Dónde falla no es dónde está la causa</h3>
+          <p>El traceback te lleva al lugar donde el programa <b>ya no pudo seguir</b>. Eso es el síntoma. La causa puede estar antes: en los datos que llegaron, o en la función que los mandó. Think Python lo dice con todas las letras: el mensaje marca dónde se descubrió el problema, que no siempre es donde se originó.
+          <cite class="cita" data-fuente="thinpython" data-pag="76" data-pimp="55" data-seccion="Chapter 5. Conditionals and Recursion: Debugging" data-que="Qué partes del mensaje mirar primero (el tipo de error y dónde ocurrió) y la advertencia de que el lugar señalado puede engañar." data-cuando="Al terminar este paso"></cite></p>
+
+          <div class="destacado" id="destacado">
+            <p class="dest-tit">Una confusión muy común</p>
+            <h4>"La línea que marca el error es la que hay que arreglar"</h4>
+            <p>Mira el escenario: el traceback de luis apunta a la línea 9, <code>return total / len(lista)</code>. Antes de tocar nada, decide.</p>
+            <div class="check" id="chkD"><p class="check-tit">Predice antes de arreglar</p><div class="cuerpo"></div></div>
+            <p>La línea 9 está bien escrita: divide la suma entre la cantidad de notas, que es justo lo que es un promedio. Lo que no se cumplió fue una <b>suposición</b>: que la lista traería al menos una nota. El libro trae un ejemplo con la misma forma, en el que la línea señalada no tiene nada mal.
+            <cite class="cita" data-fuente="thinpython" data-pag="77" data-pimp="56" data-seccion="Chapter 5. Debugging (continuación)" data-que="Un cálculo de decibeles que falla en una línea correcta: el error real está una línea antes, en una división entera que dio cero." data-cuando="Después de resolver la predicción"></cite></p>
+          </div>
+
+          <div class="cita" id="citaHipo" hidden></div>
+
+          <details class="profundizar">
+            <summary>¿Qué es una precondición?</summary>
+            <div>
+              <p><code>promedio</code> supone que la lista no está vacía. Esa suposición es su <b>precondición</b>: lo que tiene que ser cierto al entrar para que la función haga bien su trabajo. Think Python propone revisar las precondiciones al entrar a una función y las postcondiciones al salir, para saber de quién es la culpa: si la precondición no se cumple, el error es de quien llamó.
+              <cite class="cita" data-fuente="thinpython" data-pag="91" data-pimp="70" data-seccion="Chapter 6. Fruitful Functions: Debugging" data-que="Precondiciones y postcondiciones: si los argumentos no cumplen lo que la función espera, el problema está en la llamada; si la función los recibe bien y devuelve mal, el problema está dentro." data-cuando="Cuando escribas tu próxima función"></cite></p>
+              <p>Una versión con guarda decide qué hacer con la lista vacía:</p>
+              <div class="lec"><span class="lec-t">Python</span><pre>def promedio(lista):
+    if len(lista) == 0:
+        return None
+    total = 0
+    for x in lista:
+        total = total + x
+    return total / len(lista)
+
+p = promedio([])
+print(p)
+print(p + 1)
+<span class="sal">None</span>
+<span class="err">TypeError: unsupported operand type(s) for +: 'NoneType' and 'int'</span></pre></div>
+              <p>La guarda evita el <code>ZeroDivisionError</code>, pero devolver <code>None</code> solo <b>mueve</b> el problema a quien use el resultado: el error aparece una línea más abajo, con otro nombre. Decidir qué significa "promedio de nada" es una decisión del programa, no de la línea 9.</p>
+            </div>
+          </details>
+        </section>
+
+        <section class="paso card" data-titulo="Tres familias de errores">
+          <span class="etapa">Paso 5</span>
+          <h3>Tres familias: no arranca, se detiene, miente</h3>
+          <p>Antes de leer un error conviene saber de qué familia es, porque cada una se busca distinto:</p>
+          <ul>
+            <li><b>Sintaxis</b>: Python ni siquiera empieza. Lee el archivo entero antes de correr y encuentra algo mal escrito.</li>
+            <li><b>Ejecución</b>: el programa arranca y se detiene a mitad con un traceback. Los del paso 3 son de esta familia.</li>
+            <li><b>Semántico</b>: el programa termina sin quejarse y entrega algo equivocado. No hay mensaje que leer.</li>
+          </ul>
+          <p>
+          <cite class="cita" data-fuente="thinpython" data-pag="37" data-pimp="16" data-seccion="Chapter 2. Variables, Expressions and Statements: Debugging" data-que="La primera presentación de los tres tipos de error (sintaxis, ejecución y semánticos), cada uno con un ejemplo de una línea." data-cuando="Al terminar este paso"></cite>
+          <cite class="cita" data-fuente="thinpython" data-pag="256" data-pimp="235" data-seccion="Chapter 20. Debugging (apertura)" data-que="Las tres clases de errores otra vez, ahora como punto de partida de un capítulo entero: el primer paso es saber cuál de las tres tienes." data-cuando="Cuando quieras repasar los tres casos juntos"></cite></p>
+          <p>El escenario trae tres tarjetas con su programa y su salida real. Asigna cada una a su familia en el chequeo de abajo. Un detalle de versión: el libro dice que el mensaje típico de sintaxis es <code>SyntaxError: invalid syntax</code>; Python 3.13 ahora es más concreto y dice, por ejemplo, <code>SyntaxError: expected ':'</code>.</p>
+          <div class="check" id="chk5"><p class="check-tit">Elige y explica</p><div class="cuerpo"></div></div>
+          <div id="trampa5" hidden>
+            <p><b>La trampa de este paso:</b> el mismo programa del promedio es un error de <b>ejecución</b> en Python y un error <b>semántico</b> en R. Con luis, Python lanza <code>ZeroDivisionError</code>; R calcula <code>0/0</code>, devuelve <code>NaN</code> y sigue como si nada. Con pepe, Python da <code>KeyError</code>; R devuelve <code>NULL</code> al buscarlo y termina en <code>NaN</code>. Que un lenguaje no se queje no significa que el programa esté bien.
+            <cite class="cita" data-fuente="thinpython" data-pag="262" data-pimp="241" data-seccion="Chapter 20. Debugging: Semantic Errors" data-que="Por qué los errores semánticos son los más difíciles: el programa corre sin mensajes y la única pista es comparar lo que hace con lo que debería hacer." data-cuando="Después de resolver el chequeo"></cite></p>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="El estado al fallar">
+          <span class="etapa">Paso 6</span>
+          <h3>El estado del programa en el instante del fallo</h3>
+          <p>El traceback dice qué y dónde, pero no siempre por qué. El porqué está en las <b>variables</b> de cada marco en el momento del fallo. En el escenario corre ahora <b>eva</b>, cuyas notas son <code>[10, "6"]</code>: la segunda nota es un texto. Toca cada caja de la pila para abrir sus variables. Las de <code>promedio</code> se destapan cuando resuelvas el chequeo.</p>
+          <p>Que Python no convierta <code>"6"</code> en 6 por su cuenta es lo que viste en "Tipos y coerción". R sí convierte, pero al revés: en <code>c(10, "6")</code> el 10 se vuelve texto, así que en R eva falla antes, en la primera vuelta.
+          <cite class="cita" data-fuente="thinpython" data-pag="261" data-pimp="240" data-seccion="Chapter 20. Debugging: Runtime Errors" data-que="Qué suele significar cada excepción común: TypeError, KeyError, AttributeError (con el caso de NoneType) e IndexError, y la sugerencia de usar el depurador pdb para mirar el estado justo antes del error." data-cuando="Al terminar este paso, y cuando te salga uno de esos nombres"></cite></p>
+          <details class="profundizar">
+            <summary>Mirar dentro sin prints</summary>
+            <div>
+              <p>No hace falta llenar el programa de <code>print</code>. En Python, una línea <code>breakpoint()</code> dentro de la función (o correr el archivo con <code>python -m pdb programa.py</code>) detiene el programa y te deja escribir nombres de variables, subir y bajar por los marcos con <code>up</code> y <code>down</code>, y avanzar línea por línea con <code>n</code>. Es este mismo escenario, pero sobre tu código real.</p>
+              <p>En R, <code>browser()</code> dentro de una función hace lo mismo. Y en la consola interactiva, justo después de un error, <code>traceback()</code> imprime la pila. Ojo: con <code>Rscript</code> no sirve, porque el script ya terminó cuando lo pedirías. Por eso la vida real de esta página usa otra vía en R.</p>
+            </div>
+          </details>
+          <div class="check" id="chk6"><p class="check-tit">Calcula con los datos en vivo</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="El mismo error contado por R">
+          <span class="etapa">Paso 7</span>
+          <h3>El mismo error contado por R</h3>
+          <p>El escenario pasa a R con eva. R lo cuenta en tres líneas y en otro orden. La primera, <code>Error in total + x : ...</code>, junta el dónde (la expresión exacta, <code>total + x</code>) y el qué (el texto después de los dos puntos). La segunda, <code>Calls: informe -&gt; promedio</code>, es la pila, escrita en una sola línea <b>de afuera hacia adentro</b>, de izquierda a derecha. La tercera, <code>Execution halted</code>, solo avisa que el script se detuvo. Toca las tres zonas del mensaje.</p>
+          <p>Los mensajes de esta página salieron en inglés. Si tu R está configurado en español, el mismo error dice "argumento no numérico para un operador binario".</p>
+          <p>Los errores de R que verás primero son de nombres: si llamas a una función antes de definirla, R contesta que no la encuentra. ISLR2 lo muestra justo antes de escribir su primera función.
+          <cite class="cita" data-fuente="islr2" data-pag="132" data-pimp="121" data-seccion="3.6.7 Writing Functions" data-que="Al llamar LoadLibraries antes de definirla, R responde object 'LoadLibraries' not found y could not find function. Después la define y funciona." data-cuando="Al terminar este paso"></cite>
+          En el material de la materia hay otro error de R a la vista: <code>seq(20, 2, 2)</code> responde <i>wrong sign in 'by' argument</i>, porque por posición el 20 entra como inicio y el 2 como final.
+          <cite class="cita" data-fuente="prog4html" data-ancla="funciones" data-seccion="Funciones y ayuda" data-que="Argumentos por nombre y por posición con seq(from = 2, to = 20, by = 2), y el error de seq(20, 2, 2): un mensaje de R que se entiende leyendo el qué." data-cuando="Cuando repases la UD4"></cite></p>
+          <p>El material de la UD1 no trae una sección sobre errores ni sobre depuración. Los cuadernos de clase sí muestran errores reales, como <code>ValueError: Table 'ordenes' already exists</code> al crear dos veces una tabla: ahora puedes leerlos con este método.</p>
+          <div class="check" id="chk7"><p class="check-tit">Elige y explica</p><div class="cuerpo"></div></div>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+        </div>
+
+        <div id="modoCadena">
+          <p class="mini-sub"><span>La cadena del informe</span><span class="ficha-cad" id="fichaCad">luis · sin notas</span></p>
+          <div class="cadena">
+            <div class="estacion" id="est0"><span class="est-n">1</span><span class="est-t">Informe pide las notas</span><span class="est-d"></span></div>
+            <div class="estacion" id="est1"><span class="est-n">2</span><span class="est-t">Promedio suma</span><span class="est-d"></span></div>
+            <div class="estacion" id="est2"><span class="est-n">3</span><span class="est-t">Promedio divide entre cuántas notas hay</span><span class="est-d"></span></div>
+          </div>
+          <div class="btn-row">
+            <button type="button" id="cadLuis" disabled>Mandar a luis</button>
+            <button type="button" id="cadAna" disabled>Mandar a ana (7, 9 y 8)</button>
+          </div>
+          <p class="esc-nota" id="cadNota">Responde la predicción para soltar la ficha.</p>
+        </div>
+
+        <div id="modoLector" hidden>
+          <div class="lector-bar">
+            <div class="nombres" id="chips" role="group" aria-label="Alumno"></div>
+            <button type="button" class="primary" id="btnEjec">Ejecutar</button>
+            <div class="seg" id="escLang" role="group" aria-label="Lenguaje del escenario">
+              <button type="button" data-l="py" aria-pressed="true">Python</button>
+              <button type="button" data-l="r" aria-pressed="false">R</button>
+            </div>
+          </div>
+          <div class="pila-grid">
+            <div>
+              <p class="mini-sub"><span>Programa</span><b id="progNom">programa.py</b></p>
+              <div class="prog" id="prog"></div>
+            </div>
+            <div id="colPila">
+              <p class="mini-sub"><span>Pila de marcos</span><b id="prof"></b></p>
+              <div class="pila" id="pila"></div>
+            </div>
+          </div>
+          <p class="mini-sub" style="margin-top:10px"><span>Lo que imprimió</span><b id="tbVer"></b></p>
+          <pre class="tb" id="tb"></pre>
+          <div class="btn-row esc-ctrl" id="leerRow">
+            <button type="button" id="btnLeer">Leer de abajo hacia arriba</button>
+          </div>
+          <p class="esc-nota" id="escNota"></p>
+        </div>
+
+        <div id="modoClasif" hidden>
+          <div class="clasif" id="clasif"></div>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>El mismo programa del recorrido, con las mismas notas inventadas, recorre los cuatro nombres. Esta vez no se rompe: cada fallo se atrapa con <code>try</code>/<code>except</code> en Python y con <code>tryCatch</code> en R, y el programa escribe su qué y su dónde. En Python el dónde sale de recorrer la pila guardada en el error con un bucle explícito, y al final se compara con la función de la librería que formatea el error. Los dos lenguajes no fallan en los mismos sitios: por eso cada uno tiene su propia secuencia de líneas ejecutadas. Al cambiar de lenguaje, la animación vuelve a empezar.</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir</p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="true">Python</button>
+            <button type="button" data-lang="r" aria-pressed="false">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">1 · definir</span><span data-f="2">2 · ana</span><span data-f="3">3 · luis</span><span data-f="4">4 · eva</span><span data-f="5">5 · pepe</span>
+        </div>
+        <h3 class="mini-tit vr-tit">La pila viva</h3>
+        <div class="pila" id="vrPila"></div>
+        <div class="vr-cong" id="vrCongBox" hidden>
+          <h3 class="mini-tit vr-tit" id="vrCongTit">La pila guardada en el error</h3>
+          <div class="pila" id="vrCong"></div>
+        </div>
+        <h3 class="mini-tit vr-tit">Salida del programa</h3>
+        <pre class="salida-esc" id="vrSal"></pre>
+      </div>
+    </div>
+
+    <p class="vr-nota">En la práctica: lee la última línea (qué), sube por los <code>File ..., line N</code> hasta el primer marco que sea tu propio código (dónde), y mira las variables de ese marco (por qué). La función de librería que hace el trabajo de las líneas <code>pila</code> y <code>donde</code> es <code>traceback.print_exc()</code>, que imprime el traceback completo sin detener el programa. En R no hay una línea equivalente dentro de <code>tryCatch</code> que no meta marcos internos de R (<code>sys.calls()</code> dentro de <code>withCallingHandlers</code> trae cosas como <code>.handleSimpleError</code>); por eso las líneas <code>pila</code> y <code>for marco</code> solo existen en Python, y en R el dónde sale de <code>conditionCall(e)</code>, la expresión que falló. El <code>Calls: informe -&gt; promedio</code> del error sin atrapar, que viste en el paso 7, es lo que en R hace el papel de la pila. Los mensajes de R salieron en inglés.</p>
+
+    <details class="profundizar">
+      <summary>Atrapar solo lo que esperas</summary>
+      <div>
+        <p><code>except Exception</code> atrapa todo, también lo que no esperabas. Si solo esperas la lista vacía, nombra esa excepción: lo demás sigue rompiendo el programa, como debe.</p>
+        <div class="lec-par dos">
+          <div class="lec"><span class="lec-t">Python</span><pre>def promedio(lista):
+    return sum(lista) / len(lista)
+
+for v in [[7, 9, 8], [], [10, "6"]]:
+    try:
+        print(promedio(v))
+    except ZeroDivisionError:
+        print("lista vacia")
+<span class="sal">8.0
+lista vacia</span>
+<span class="err">TypeError: unsupported operand type(s) for +: 'int' and 'str'</span></pre></div>
+          <div class="lec"><span class="lec-t">R</span><pre>promedio &lt;- function(lista) {
+  if (length(lista) == 0) stop("lista vacia")
+  sum(lista) / length(lista)
+}
+r &lt;- tryCatch(promedio(c()), error = function(e) conditionMessage(e))
+print(r)
+x &lt;- tryCatch(as.numeric("8,5"), warning = function(w) conditionMessage(w))
+print(x)
+<span class="sal">[1] "lista vacia"
+[1] "NAs introduced by coercion"</span></pre></div>
+        </div>
+        <p>En R, <code>stop("lista vacia")</code> falla a propósito con tu propio mensaje (lo que en Python sería <code>raise</code>), y <code>tryCatch(..., warning = ...)</code> convierte un aviso en algo que puedes ver y manejar. Python Workout usa el mismo patrón para no romperse cuando el usuario escribe algo que no es un número: un <code>try</code> alrededor de <code>int(...)</code> con <code>except ValueError</code>.
+        <cite class="cita" data-fuente="pyworkout" data-pag="87" data-pimp="61" data-seccion="Exercise 15, recuadro Trapping input errors" data-que="try y except ValueError alrededor de int(input(...)) para que una entrada mala no detenga el programa, atrapando solo esa excepción." data-cuando="Cuando escribas un programa que lea datos de alguien"></cite></p>
+      </div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>El except desnudo que miente</h3><span class="estado" data-reto="codigo1"></span></div>
+        <div class="lec"><span class="lec-t">Python</span><pre>notas = {"ana": [7, 9, 8], "luis": [], "eva": [10, "6"]}
+
+def promedio(lista):
+    total = 0
+    for x in lista:
+        total = total + x
+    return total / len(lista)
+
+try:
+    print(promedio(notas["eva"]))
+except:
+    print("eva no tiene notas")
+<span class="sal">eva no tiene notas</span></pre></div>
+        <div id="codigo1" style="margin-top:10px"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>El $ de R completa nombres</h3><span class="estado" data-reto="codigo2"></span></div>
+        <div class="lec"><span class="lec-t">R</span><pre>notas &lt;- list(ana = c(7, 9, 8), luis = c(), eva = c(10, "6"))
+print(notas$e)
+print(notas[["e"]])
+<span class="sal">[1] "10" "6"
+NULL</span></pre></div>
+        <div id="codigo2" style="margin-top:10px"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Un aviso no es un error</h3><span class="estado" data-reto="codigo3"></span></div>
+        <div class="lec"><span class="lec-t">R (Rscript)</span><pre>x &lt;- as.numeric(c("7", "9", "8,5"))
+cat("promedio:", mean(x), "\n")
+<span class="err">Warning message:
+NAs introduced by coercion</span>
+<span class="sal">promedio: NA</span></pre></div>
+        <div id="codigo3" style="margin-top:10px"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: la biblioteca te avisa en el índice cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>¿De qué familia es?</h3><span class="estado" data-reto="ojo-familia"></span></div>
+        <p class="desc">Un fragmento corto y su salida real. Decide si es un error de sintaxis, de ejecución o semántico. Cinco rondas; apruebas con 4.</p>
+        <div id="ojoFam"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>Qué y dónde</h3><span class="estado" data-reto="ojo-ultima"></span></div>
+        <p class="desc">Tracebacks reales de 2 a 4 marcos. En cada ronda toca primero el renglón que dice <b>qué</b> pasó y después el marco de <b>tu</b> código donde falló (el más bajo que sea de <code>programa.py</code>). La ronda cuenta si aciertas las dos al primer toque. Cinco rondas; apruebas con 4.</p>
+        <div id="ojoUlt"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Construir</span><h3>Fabrica los errores</h3><span class="estado" data-reto="construir-pila"></span></div>
+        <p class="desc">Cambia las notas y ejecuta nombres hasta cumplir los tres objetivos. Escribe las notas separadas por comas; un texto va entre comillas, como <code>"6"</code>. Si dejas vacío el campo de pepe, pepe no está en el diccionario; si escribes <code>[]</code>, está con una lista vacía. Ana no se toca.</p>
+        <div class="editor" id="cpEditor"></div>
+        <div class="lector-bar"><div class="nombres" id="cpChips" role="group" aria-label="Ejecutar alumno"></div></div>
+        <pre class="tb" id="cpTb"></pre>
+        <ul class="objetivos" id="cpObj"></ul>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>El estado al fallar</h3><span class="estado" data-reto="a-mano-estado"></span></div>
+        <p class="desc">Sigue el bucle en papel, vuelta por vuelta, antes de pedir pistas.</p>
+        <div id="amCod"></div>
+        <div id="amA"></div>
+        <div id="amB" class="paso-b"></div>
+        <div class="btn-row" style="margin-top:8px"><button type="button" class="ghost" id="amOtro" hidden>Otro ejercicio</button></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Leyó el traceback al revés</h3><span class="estado" data-reto="cazar-1"></span></div>
+        <p class="desc">Alguien lee el traceback de luis. Una de las líneas de su razonamiento está mal. Tócala.</p>
+        <div id="cazar1"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Culpó a la función equivocada</h3><span class="estado" data-reto="cazar-2"></span></div>
+        <p class="desc">Ahora con el traceback de pepe. Toca la línea mal razonada.</p>
+        <div id="cazar2"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Sin error, todo bien</h3><span class="estado" data-reto="cazar-3"></span></div>
+        <p class="desc">Alguien corrió el programa en R. Toca la línea mal razonada.</p>
+        <div id="cazar3"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Nombres de excepciones</h3><span class="estado" data-reto="prop-tipos"></span></div>
+        <p class="desc">Dos preguntas. El reto cuenta cuando aciertas las dos.</p>
+        <div id="propA"></div>
+        <div id="propB" class="paso-b"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Recordar a la fuerza es lo que fija. Arma la receta de memoria y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Receta de memoria</span><h3>Cómo leer un error, en orden</h3><span class="estado" data-reto="formula"></span></div>
+        <p class="desc">Hay piezas de más que no pertenecen. No mires arriba.</p>
+        <div id="formula"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el libro</h2>
+      <p class="lecturas-intro">Ya leíste tracebacks con la pila al lado. Ahora ve al capítulo 20 de Think Python, que está dedicado entero a depurar, y reconoce cada caso. Cada entrada dice qué vas a encontrar y en qué momento conviene leerla. Si abres la biblioteca con doble clic, el enlace abre el archivo en esa página. Para el final, el mismo libro tiene una lista corta de tácticas para cuando estás atascado (leer, ejecutar, rumiar, explicárselo a un pato de goma, retroceder).
+      <cite class="cita" data-fuente="thinpython" data-pag="182" data-pimp="161" data-seccion="Chapter 13. Case Study: Debugging" data-que="Cinco tácticas para depurar: leer el código, ejecutar cambios, rumiar, el pato de goma y retroceder hasta algo que funcione." data-cuando="Al terminar la página"></cite>
+      Una advertencia: el material de la UD1 de la materia no tiene una sección sobre errores ni sobre depuración; lo que aquí se explica de Python sale de Think Python, y lo de R, de ISLR2 y de los mensajes reales que dio R al correr el código.</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> Los alumnos y sus notas (ana con 7, 9 y 8; luis sin notas; eva con un texto entre sus notas; pepe, que no existe) son inventados, elegidos para que el promedio de ana dé 8 exacto y cada uno de los otros falle de una manera distinta. Todas las salidas,
+    tracebacks y mensajes de esta página se obtuvieron ejecutando el código en Python 3.13.5 y en R 4.6.1 (con los mensajes en inglés); en los tracebacks se recortó la ruta de los archivos: el tuyo aparece como <code>programa.py</code> y los de la librería de Python como <code>.../python3.13/</code>. Tu progreso se guarda solo en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+(function () {
+  "use strict";
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var RETOS = ["ojo-familia", "ojo-ultima", "construir-pila", "a-mano-estado", "cazar-1", "cazar-2", "cazar-3", "prop-tipos", "formula", "codigo1", "codigo2", "codigo3"];
+  var C = B.concepto({ id: "leer-errores", retos: RETOS, pasos: 7 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  /*LIB*/
+  function azar(n) { return Math.floor(Math.random() * n); }
+  function entre(a, b) { return a + azar(b - a + 1); }
+  function barajar(a) { a = a.slice(); for (var i = a.length - 1; i > 0; i--) { var j = azar(i + 1), t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
+
+  // repr de Python: numeros tal cual, textos con comillas simples, listas con [a, b]
+  function reprPy(v) {
+    if (Array.isArray(v)) return "[" + v.map(reprPy).join(", ") + "]";
+    if (typeof v === "string") return "'" + v + "'";
+    return String(v);
+  }
+  // float de Python al imprimir una division
+  function floatPy(v) { return Number.isInteger(v) ? v + ".0" : String(v); }
+
+  // Simula informe(nombre) del programa en Python con un diccionario de notas.
+  // Devuelve { frames [{n, ln, v}], err {tipo, msg, ln} o null, valor, vuelta, total, x }
+  function correrPy(nombre, datos) {
+    var fr = [{ n: "<module>", ln: 16, v: [["nombre", reprPy(nombre)]] }, { n: "informe", ln: 12, v: [["nombre", reprPy(nombre)]] }];
+    if (!Object.prototype.hasOwnProperty.call(datos, nombre)) {
+      return { frames: fr, err: { tipo: "KeyError", msg: reprPy(nombre), ln: 12 } };
+    }
+    var lista = datos[nombre], total = 0;
+    for (var i = 0; i < lista.length; i++) {
+      var x = lista[i];
+      if (typeof x === "string") {
+        fr.push({ n: "promedio", ln: 8, v: [["lista", reprPy(lista)], ["total", String(total)], ["x", reprPy(x)]] });
+        return { frames: fr, err: { tipo: "TypeError", msg: "unsupported operand type(s) for +: 'int' and 'str'", ln: 8 }, vuelta: i + 1, total: total, x: x };
+      }
+      total += x;
+    }
+    var pv = [["lista", reprPy(lista)], ["total", String(total)]];
+    if (lista.length) pv.push(["x", reprPy(lista[lista.length - 1])]);
+    fr.push({ n: "promedio", ln: 9, v: pv });
+    if (!lista.length) return { frames: fr, err: { tipo: "ZeroDivisionError", msg: "division by zero", ln: 9 } };
+    return { frames: fr, err: null, valor: floatPy(total / lista.length) };
+  }
+
+  // Lee "7, 9, \"6\"" o "[7, 9]" -> lista; null si no se entiende
+  function leerLista(txt) {
+    var s = String(txt).trim();
+    if (s.charAt(0) === "[" && s.charAt(s.length - 1) === "]") s = s.slice(1, -1).trim();
+    if (s === "") return [];
+    var partes = s.split(","), out = [];
+    for (var i = 0; i < partes.length; i++) {
+      var p = partes[i].trim(), m;
+      if (/^-?\d{1,4}$/.test(p)) out.push(parseInt(p, 10));
+      else if ((m = /^"([^"]*)"$/.exec(p)) || (m = /^'([^']*)'$/.exec(p))) out.push(m[1]);
+      else return null;
+    }
+    return out;
+  }
+
+  // a mano: notas al azar con un texto en la posicion k (desde 1)
+  function genEstado() {
+    var n = entre(4, 5), k = entre(2, n), v = [], total = 0;
+    for (var i = 1; i <= n; i++) {
+      var d = entre(1, 9);
+      if (i === k) v.push(String(d));
+      else { v.push(d); if (i < k) total += d; }
+    }
+    return { notas: v, k: k, total: total };
+  }
+
+  // ojo clinico de familias: 0 sintaxis, 1 ejecucion, 2 semantico
+  var FAMILIAS = ["sintaxis", "ejecución", "semántico"];
+  var BANCO_FAM = [
+    { lang: "Python", cod: 'print("hola"', sal: "SyntaxError: '(' was never closed", err: true, f: 0, por: "Falta cerrar el paréntesis. Python lo detecta al leer el archivo, antes de ejecutar nada." },
+    { lang: "Python", cod: 'edad = int("doce")', sal: "ValueError: invalid literal for int() with base 10: 'doce'", err: true, f: 1, por: "La línea está bien escrita; falla al ejecutarse porque \"doce\" no se puede convertir en número." },
+    { lang: "Python", cod: "v = [4, 6, 8]\npromedio = sum(v) / 2\nprint(promedio)", sal: "9.0", err: false, f: 2, por: "Termina sin quejarse y da 9.0, pero el promedio de 4, 6 y 8 es 6.0: divide entre 2 en vez de entre 3." },
+    { lang: "Python", cod: "x = 3\nif x = 3:\n    print(x)", sal: "SyntaxError: invalid syntax. Maybe you meant '==' or ':=' instead of '='?", err: true, f: 0, por: "Comparar se escribe <code>==</code>. Con <code>=</code> la línea no es Python válido y no corre nada." },
+    { lang: "Python", cod: "print([1, 2][5])", sal: "IndexError: list index out of range", err: true, f: 1, por: "Arranca y se detiene al pedir la posición 5 de una lista que solo tiene 0 y 1." },
+    { lang: "R", cod: 'mean(c("7", "9"))', sal: '[1] NA\nWarning message:\nIn mean.default(c("7", "9")) :\n  argument is not numeric or logical: returning NA', err: false, f: 2, por: "No hay <code>Error</code>: hay un aviso y un <code>NA</code>. El script sigue y el resultado no es el promedio de 7 y 9." },
+    { lang: "Python", cod: 'd = {}\nd["a"]', sal: "KeyError: 'a'", err: true, f: 1, por: "Se ejecuta y se detiene al buscar una clave que no existe." },
+    { lang: "Python", cod: "v = [4, 6, 8]\ntotal = 0\nfor i in range(len(v) - 1):\n    total = total + v[i]\nprint(total)", sal: "10", err: false, f: 2, por: "<code>range(len(v) - 1)</code> se salta el último: suma 4 y 6 y da 10 en vez de 18, sin ningún aviso." },
+    { lang: "Python", cod: "def f(x) return x", sal: "SyntaxError: expected ':'", err: true, f: 0, por: "Faltan los dos puntos de la cabecera y el cuerpo en su propia línea. Python no puede ni leerlo." }
+  ];
+  function genFamilias() { return barajar(BANCO_FAM.map(function (_, i) { return i; })).slice(0, 5); }
+
+  // tracebacks reales (rutas recortadas). bloques: tit, marco (propio o de libreria), que
+  var BANCO_TB = [
+    { b: [["tit", "Traceback (most recent call last):"],
+      ["m", '  File "programa.py", line 6, in <module>\n    print(resumen([]))\n          ~~~~~~~^^^^', 1],
+      ["m", '  File "programa.py", line 4, in resumen\n    return statistics.mean(notas)\n           ~~~~~~~~~~~~~~~^^^^^^^', 1],
+      ["m", '  File ".../python3.13/statistics.py", line 490, in mean\n    raise StatisticsError(\'mean requires at least one data point\')', 0],
+      ["q", "statistics.StatisticsError: mean requires at least one data point"]], tuyo: 2,
+      por: "El último marco es de la librería <code>statistics</code>: ahí no vas a arreglar nada. Tu código más bajo es <code>resumen</code>, línea 4, que le pasó una lista vacía a <code>mean</code>." },
+    { b: [["tit", "Traceback (most recent call last):"],
+      ["m", '  File "programa.py", line 7, in <module>\n    print(informe([7, 9, 8]))\n          ~~~~~~~^^^^^^^^^^^', 1],
+      ["m", '  File "programa.py", line 5, in informe\n    return nota_final(notas, 3)', 1],
+      ["m", '  File "programa.py", line 2, in nota_final\n    return notas[i]\n           ~~~~~^^^', 1],
+      ["q", "IndexError: list index out of range"]], tuyo: 3,
+      por: "Todos los marcos son tuyos; el más bajo es <code>nota_final</code>, línea 2. La causa, eso sí, está en <code>informe</code>, que pidió la posición 3 de una lista de tres." },
+    { b: [["tit", "Traceback (most recent call last):"],
+      ["m", '  File "programa.py", line 7, in <module>\n    print(registrar("ana", "doce"))\n          ~~~~~~~~~^^^^^^^^^^^^^^^', 1],
+      ["m", '  File "programa.py", line 5, in registrar\n    return nombre, edad(texto)\n                   ~~~~^^^^^^^', 1],
+      ["m", '  File "programa.py", line 2, in edad\n    return int(texto)', 1],
+      ["q", "ValueError: invalid literal for int() with base 10: 'doce'"]], tuyo: 3,
+      por: "<code>int</code> es una función integrada y no deja marco propio. El marco más bajo es <code>edad</code>, línea 2." },
+    { b: [["tit", "Traceback (most recent call last):"],
+      ["m", '  File "programa.py", line 9, in <module>\n    print(informe([3, "4"]))\n          ~~~~~~~^^^^^^^^^^', 1],
+      ["m", '  File "programa.py", line 7, in informe\n    return mediana(valores) + 1\n           ~~~~~~~^^^^^^^^^', 1],
+      ["m", '  File "programa.py", line 4, in mediana\n    return statistics.median(valores)\n           ~~~~~~~~~~~~~~~~~^^^^^^^^^', 1],
+      ["m", '  File ".../python3.13/statistics.py", line 634, in median\n    data = sorted(data)', 0],
+      ["q", "TypeError: '<' not supported between instances of 'str' and 'int'"]], tuyo: 3,
+      por: "Cuatro marcos; el último es de la librería. Tu marco más bajo es <code>mediana</code>, línea 4. El texto <code>\"4\"</code> venía de la línea 9." },
+    { b: [["tit", "Traceback (most recent call last):"],
+      ["m", '  File "programa.py", line 8, in <module>\n    print(primero([3, 1, 2]))\n          ~~~~~~~^^^^^^^^^^^', 1],
+      ["m", '  File "programa.py", line 6, in primero\n    return ordenar(v)[0]\n           ~~~~~~~~~~^^^', 1],
+      ["q", "TypeError: 'NoneType' object is not subscriptable"]], tuyo: 2,
+      por: "Falla en <code>primero</code>, línea 6, pero la causa está en <code>ordenar</code>, que devolvió <code>None</code> (por <code>w = v.sort()</code>) y ya terminó: por eso no aparece en la pila." },
+    { b: [["tit", "Traceback (most recent call last):"],
+      ["m", '  File "programa.py", line 16, in <module>\n    print(nombre, informe(nombre))\n                  ~~~~~~~^^^^^^^^', 1],
+      ["m", '  File "programa.py", line 12, in informe\n    return promedio(notas[nombre])', 1],
+      ["m", '  File "programa.py", line 9, in promedio\n    return total / len(lista)\n           ~~~~~~^~~~~~~~~~~~', 1],
+      ["q", "ZeroDivisionError: division by zero"]], tuyo: 3,
+      por: "Es luis: falla en <code>promedio</code>, línea 9, el marco más bajo." },
+    { b: [["tit", "Traceback (most recent call last):"],
+      ["m", '  File "programa.py", line 16, in <module>\n    print(nombre, informe(nombre))\n                  ~~~~~~~^^^^^^^^', 1],
+      ["m", '  File "programa.py", line 12, in informe\n    return promedio(notas[nombre])', 1],
+      ["m", '  File "programa.py", line 8, in promedio\n    total = total + x\n            ~~~~~~^~~', 1],
+      ["q", "TypeError: unsupported operand type(s) for +: 'int' and 'str'"]], tuyo: 3,
+      por: "Es eva: falla en <code>promedio</code>, línea 8, al sumar el texto." },
+    { b: [["tit", "Traceback (most recent call last):"],
+      ["m", '  File "programa.py", line 16, in <module>\n    print(nombre, informe(nombre))\n                  ~~~~~~~^^^^^^^^', 1],
+      ["m", '  File "programa.py", line 12, in informe\n    return promedio(notas[nombre])\n                    ~~~~~^^^^^^^^', 1],
+      ["q", "KeyError: 'pepe'"]], tuyo: 2,
+      por: "Es pepe: solo dos marcos; falla en <code>informe</code>, línea 12, antes de llamar a <code>promedio</code>." }
+  ];
+  function genUltima() { return barajar(BANCO_TB.map(function (_, i) { return i; })).slice(0, 5); }
+  /*FIN-LIB*/
+
+  function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+
+  /* ================= datos del recorrido ================= */
+  var DATOS = { ana: [7, 9, 8], luis: [], eva: [10, "6"] };
+  var NOMBRES = ["ana", "luis", "eva", "pepe"];
+  var PROG_PY = [
+    "# programa.py (notas inventadas)", "",
+    'notas = {"ana": [7, 9, 8], "luis": [], "eva": [10, "6"]}', "",
+    "def promedio(lista):", "    total = 0", "    for x in lista:", "        total = total + x", "    return total / len(lista)", "",
+    "def informe(nombre):", "    return promedio(notas[nombre])", "",
+    'nombre = "luis"', 'print("alumno:", nombre)', "print(nombre, informe(nombre))"
+  ];
+  var PROG_R = [
+    'notas <- list(ana = c(7, 9, 8), luis = c(), eva = c(10, "6"))', "",
+    "promedio <- function(lista) {", "  total <- 0", "  for (x in lista) {", "    total <- total + x", "  }", "  return(total / length(lista))", "}", "",
+    "informe <- function(nombre) {", "  return(promedio(notas[[nombre]]))", "}",
+    'nombre <- "eva"', 'cat("alumno:", nombre, "\\n")', "informe(nombre)"
+  ];
+  // codigo y marcas de cada marco del traceback de Python
+  var TB_COD = {
+    "<module>": ["    print(nombre, informe(nombre))", "                  ~~~~~~~^^^^^^^^"],
+    informe: ["    return promedio(notas[nombre])"],
+    informeKey: ["    return promedio(notas[nombre])", "                    ~~~~~^^^^^^^^"],
+    p8: ["        total = total + x", "            ~~~~~~^~~"],
+    p9: ["    return total / len(lista)", "           ~~~~~~^~~~~~~~~~~~"]
+  };
+  function codMarco(f, res) {
+    if (f.n === "<module>") return TB_COD["<module>"];
+    if (f.n === "informe") return res.err && res.err.tipo === "KeyError" ? TB_COD.informeKey : TB_COD.informe;
+    return f.ln === 8 ? TB_COD.p8 : TB_COD.p9;
+  }
+  // R: resultados reales del programa de 16 lineas con cada nombre
+  var RES_R = {
+    ana: { out: "alumno: ana \n[1] 8" },
+    luis: { out: "alumno: luis \n[1] NaN" },
+    pepe: { out: "alumno: pepe \n[1] NaN" },
+    eva: { out: "alumno: eva ", err: true, frames: [
+      { n: "entorno global", ln: 16, v: [["nombre", '"eva"']] },
+      { n: "informe", ln: 12, v: [["nombre", '"eva"']] },
+      { n: "promedio", ln: 6, v: [["lista", 'c("10", "6")'], ["total", "0"], ["x", '"10"']] }] }
+  };
+
+  /* ================= estado del escenario ================= */
+  var est = { paso: 0, nombre: "luis", lang: "py", vistos: 99, corrido: true, foco: null, leer: -1, sel: null, zona: null, anim: 0,
+    c1: false, c2: false, c3: false, cD: false, c5: false, c6: false, c7: false };
+  var pasos;
+
+  function resActual() { return correrPy(est.nombre, DATOS); }
+
+  function htmlMarco(m, extra, opciones) {
+    opciones = opciones || {};
+    var v;
+    if (opciones.sinVars) v = "";
+    else if (opciones.tapar) v = m.v.map(function (x) { return '<span class="var"><code>' + esc(x[0]) + '</code> → <span class="tapa"></span></span>'; }).join("");
+    else v = m.v.length ? m.v.map(function (x) {
+      return '<span class="var ' + (x[2] || "") + '"><code>' + esc(x[0]) + "</code> → <b>" + esc(x[1]) + "</b></span>";
+    }).join("") : '<span class="vacio">sin variables todavía</span>';
+    return '<div class="marco ' + (extra || "") + '"' + (opciones.k != null ? ' data-k="' + opciones.k + '"' : "") + '><div class="marco-n"><span>' + esc(m.n) + "</span>" +
+      (opciones.tag ? '<span class="num-tb">' + opciones.tag + "</span>" : "") + "</div>" + (v ? '<div class="marco-v">' + v + "</div>" : "") + "</div>";
+  }
+
+  /* ---------------- paso 1: la cadena ---------------- */
+  var cadTok = 0;
+  function cadena(quien) {
+    var tok = ++cadTok, E = [$("est0"), $("est1"), $("est2")];
+    E.forEach(function (e) { e.className = "estacion"; e.querySelector(".est-d").textContent = ""; });
+    var luis = quien === "luis";
+    $("fichaCad").textContent = luis ? "luis · sin notas" : "ana · 7, 9 y 8";
+    var textos = luis ? ["notas de luis: ninguna", "suma de ninguna nota = 0", "0 entre 0 notas: imposible"] : ["notas de ana: 7, 9 y 8", "7 + 9 + 8 = 24", "24 entre 3 notas = 8"];
+    $("cadNota").textContent = "La ficha avanza...";
+    var i = 0;
+    (function sig() {
+      if (tok !== cadTok) return;
+      if (i > 0) E[i - 1].classList.remove("aqui");
+      if (i === 3) {
+        $("cadNota").innerHTML = luis ? "Pedir y sumar funcionan. La cadena se rompe en la <b>tercera estación</b>: no hay forma de repartir 0 entre 0 notas." : "Ana pasa las tres estaciones: su promedio es <b>8</b>.";
+        return;
+      }
+      E[i].classList.add("aqui");
+      E[i].querySelector(".est-d").textContent = textos[i];
+      if (luis && i === 2) { E[i].classList.remove("aqui"); E[i].classList.add("rota"); i = 3; setTimeout(sig, 50); return; }
+      setTimeout(function () { if (tok !== cadTok) return; E[i].classList.add("paso-ok"); i++; sig(); }, 650);
+    })();
+  }
+  function abrirCadena() {
+    $("cadLuis").disabled = $("cadAna").disabled = false;
+  }
+  $("cadLuis").addEventListener("click", function () { cadena("luis"); });
+  $("cadAna").addEventListener("click", function () { cadena("ana"); });
+
+  /* ---------------- lector: chips, programa, pila y traceback ---------------- */
+  // los nombres se activan en el paso 3; en los pasos 6 y 7, solo despues de resolver su chequeo
+  function pintarChips() {
+    var act = est.paso === 2 || (est.paso === 5 && est.c6) || (est.paso === 6 && est.c7);
+    $("chips").innerHTML = NOMBRES.map(function (n) {
+      return '<button type="button" data-n="' + n + '" aria-pressed="' + (n === est.nombre) + '"' + (act ? "" : " disabled") + ">" + n + "</button>";
+    }).join("");
+    $("btnEjec").disabled = !act;
+  }
+  function langActivo() { return est.paso === 2 || est.paso === 5 || est.paso === 6; }
+  function pintarLang() {
+    [].forEach.call($("escLang").children, function (b) {
+      b.setAttribute("aria-pressed", b.getAttribute("data-l") === est.lang ? "true" : "false");
+      b.disabled = !langActivo();
+    });
+  }
+
+  function pintarLector() {
+    pintarChips();
+    pintarLang();
+    if (est.lang === "py") pintarPy(); else pintarR();
+  }
+
+  function lineaFoco(res) {
+    if (est.foco === "que") return res.frames[res.frames.length - 1].ln;
+    if (typeof est.foco === "number" && res.frames[est.foco]) return res.frames[est.foco].ln;
+    return null;
+  }
+
+  function pintarPy() {
+    var res = resActual(), p = PROG_PY.slice();
+    p[13] = 'nombre = "' + est.nombre + '"';
+    $("progNom").textContent = "programa.py";
+    var hayErr = !!res.err && est.corrido && est.vistos >= res.frames.length;
+    var nf = est.corrido ? Math.min(est.vistos, res.frames.length) : 0;
+    var lnCur = !est.corrido ? null : (nf < res.frames.length ? res.frames[nf - 1] && res.frames[nf - 1].ln : null);
+    var lnFoco = hayErr ? lineaFoco(res) : null;
+    var lnErr = hayErr ? res.err.ln : null;
+    var causa = est.paso === 3 && est.cD && est.nombre === "luis";
+    $("prog").innerHTML = p.map(function (t, k) {
+      var ln = k + 1, cls = "pl";
+      if (lnCur === ln || (lnFoco === ln && ln !== lnErr)) cls += " cur";
+      if (lnErr === ln) cls += " err";
+      if (causa && ln === 3) cls += " causa";
+      var tag = "";
+      if (causa && ln === 9) tag = '<span class="tag mal">síntoma: aquí explota la división</span>';
+      if (causa && ln === 3) tag = '<span class="tag">causa: la lista de luis está vacía</span>';
+      return '<div class="' + cls + '"><span class="g">' + ln + '</span><span class="t">' + esc(t || " ") + "</span>" + tag + "</div>";
+    }).join("");
+
+    // pila
+    var verPila = est.paso >= 2;
+    $("colPila").hidden = !verPila;
+    var insp = est.paso >= 5, h = [];
+    if (est.corrido) {
+      var fr = res.err || nf < res.frames.length ? res.frames.slice(0, nf) : [res.frames[0]];
+      for (var i = fr.length - 1; i >= 0; i--) {
+        var top = i === fr.length - 1 && fr.length > 1;
+        var ex = (i === 0 ? "base " : "") + (top ? (hayErr ? "error " : "arriba ") : "") + (est.foco === i ? "foco " : "") + (insp && hayErr ? "toca " : "");
+        var mostrarVars = insp && hayErr && est.sel === i;
+        var tapar = mostrarVars && fr[i].n === "promedio" && !est.c6;
+        h.push(htmlMarco(fr[i], ex, { k: i, tag: "línea " + fr[i].ln, sinVars: !mostrarVars, tapar: tapar }));
+      }
+      if (!res.err && nf >= res.frames.length) h.unshift('<div class="retorno">terminó: informe devolvió <b>' + esc(res.valor) + "</b></div>");
+    } else h.push('<span class="vacio" style="font-size:12.5px;color:var(--ink-3)">Pulsa Ejecutar.</span>');
+    $("pila").innerHTML = h.join("");
+    $("prof").textContent = est.corrido && hayErr ? res.frames.length + " marcos" : "";
+
+    // salida y traceback
+    var tb = [];
+    if (est.corrido) {
+      tb.push('<span class="ok-msg">alumno: ' + esc(est.nombre) + "</span>");
+      if (!res.err && nf >= res.frames.length) tb.push('<span class="ok-msg">' + esc(est.nombre + " " + res.valor) + "</span>");
+      if (hayErr) {
+        tb.push('<span class="blq">Traceback (most recent call last):</span>');
+        var leerFr = leyendo();
+        res.frames.forEach(function (f, k) {
+          var cod = codMarco(f, res);
+          var lab = (est.foco === k || leerFr[k]) ? '<span class="lab d">DÓNDE</span>' : "";
+          tb.push('<span class="blq' + (est.paso >= 2 ? " toca" : "") + (est.foco === k ? " foco" : "") + '" data-k="' + k + '">  File "programa.py", line ' + f.ln + ", in " + esc(f.n) + lab + "\n" + esc(cod.join("\n")) + "</span>");
+        });
+        if (est.paso === 1 && !est.c2) tb.push('<span class="blq"><span class="tapado" aria-label="línea tapada"></span></span>');
+        else tb.push('<span class="que' + (est.foco === "que" ? " foco" : "") + '" data-k="que">' + esc(res.err.tipo + ": " + res.err.msg) + '<span class="lab q">QUÉ</span></span>');
+      }
+    } else tb.push('<span class="sin">Todavía no se ejecutó.</span>');
+    $("tb").innerHTML = tb.join("\n").replace(/<\/span>\n<span class="(blq|que)/g, '</span><span class="$1');
+    $("tbVer").textContent = "Python 3.13";
+    $("leerRow").hidden = !(est.paso >= 2 && hayErr && est.paso !== 5);
+  }
+  function leyendo() {
+    var res = resActual(), m = {};
+    if (est.leer >= 1) for (var j = 1; j <= est.leer; j++) m[res.frames.length - j] = true;
+    return m;
+  }
+
+  function pintarR() {
+    var r = RES_R[est.nombre], p = PROG_R.slice();
+    p[13] = 'nombre <- "' + est.nombre + '"';
+    $("progNom").textContent = "programa.R";
+    var corr = est.corrido, nf = r.err ? Math.min(est.vistos, 3) : 0, hayErr = r.err && corr && nf >= 3;
+    $("prog").innerHTML = p.map(function (t, k) {
+      var ln = k + 1, cls = "pl";
+      if (hayErr && ln === 6) cls += " err";
+      else if (hayErr && typeof est.foco === "number" && r.frames[est.foco].ln === ln) cls += " cur";
+      return '<div class="' + cls + '"><span class="g">' + ln + '</span><span class="t">' + esc(t || " ") + "</span></div>";
+    }).join("");
+    $("colPila").hidden = false;
+    var h = [];
+    if (corr && r.err) {
+      for (var i = nf - 1; i >= 0; i--) {
+        var top = i === nf - 1 && nf > 1, mostrar = est.paso >= 5 && hayErr && est.sel === i;
+        h.push(htmlMarco(r.frames[i], (i === 0 ? "base " : "") + (top ? (hayErr ? "error " : "arriba ") : "") + (est.foco === i ? "foco " : "") + (est.paso >= 5 && hayErr ? "toca" : ""), { k: i, sinVars: !mostrar, tapar: mostrar && r.frames[i].n === "promedio" && !est.c6 }));
+      }
+    } else if (corr) h.push('<div class="retorno">terminó sin error</div>' + htmlMarco({ n: "entorno global", v: [] }, "base", { sinVars: true }));
+    else h.push('<span class="vacio" style="font-size:12.5px;color:var(--ink-3)">Pulsa Ejecutar.</span>');
+    $("pila").innerHTML = h.join("");
+    $("prof").textContent = hayErr ? "3 marcos" : "";
+    var tb;
+    if (!corr) tb = '<span class="sin">Todavía no se ejecutó.</span>';
+    else if (!r.err) tb = '<span class="ok-msg">' + esc(r.out) + "</span>" + (est.nombre !== "ana" ? '\n<span class="sin">Sin mensaje de error: 0/0 en R es NaN, no un fallo.</span>' : "");
+    else if (!hayErr) tb = '<span class="ok-msg">' + esc(r.out) + "</span>";
+    else {
+      var z = function (cl, txt) { return '<span class="zona z-' + cl + (est.zona === cl ? " on" : "") + '" data-z="' + cl + '">' + txt + "</span>"; };
+      tb = '<span class="ok-msg">' + esc(r.out) + "</span>\n" +
+        '<span class="que" style="border-left-color:var(--bad)">Error in ' + z("donde", "total + x") + " : " + z("que", "non-numeric argument to binary operator") + "</span>" +
+        '<span class="blq">Calls: ' + z("pila", "informe -&gt; promedio") + "</span>" +
+        '<span class="blq">Execution halted</span>';
+    }
+    $("tb").innerHTML = tb;
+    $("tbVer").textContent = "R 4.6 (Rscript)";
+    $("leerRow").hidden = true;
+  }
+
+  function ejecutar() {
+    var tok = ++est.anim;
+    est.corrido = true; est.vistos = 0; est.foco = null; est.leer = -1; est.sel = null; est.zona = null;
+    var total = est.lang === "py" ? resActual().frames.length : (RES_R[est.nombre].err ? 3 : 0);
+    pintarLector();
+    $("escNota").innerHTML = "La pila crece marco a marco...";
+    (function sig() {
+      if (tok !== est.anim) return;
+      if (est.vistos >= total) { est.vistos = 99; pintarLector(); notaLector(); return; }
+      est.vistos++;
+      pintarLector();
+      setTimeout(sig, 420);
+    })();
+  }
+  function notaLector() {
+    var t;
+    if (est.lang === "r") {
+      if (est.nombre === "eva") t = est.paso === 6 ? "Toca las tres zonas del mensaje: la expresión, el motivo y la cadena de llamadas." : "R se detuvo en <code>total + x</code>, dentro de <code>promedio</code>. Mira la pila: es la misma que en Python.";
+      else t = "R terminó sin error y escribió <code>" + esc(RES_R[est.nombre].out.split("\n")[1]) + "</code>." + (est.nombre === "ana" ? "" : " Ningún aviso: el fallo se volvió silencioso.");
+    } else {
+      var res = resActual();
+      if (!res.err) t = "Ana termina bien: la pila crece hasta <code>promedio</code>, se vacía al volver y el programa imprime <b>" + esc(res.valor) + "</b>.";
+      else if (est.paso === 1) t = "Pídele al traceback el tipo de fallo: ¿qué renglón lo dice?";
+      else if (est.paso === 5) t = "Toca una caja de la pila para ver sus variables en el instante del fallo.";
+      else t = "Toca un renglón del traceback, o pulsa <b>Leer de abajo hacia arriba</b>.";
+    }
+    $("escNota").innerHTML = t;
+  }
+
+  $("chips").addEventListener("click", function (e) {
+    var b = e.target.closest("button");
+    if (!b || b.disabled) return;
+    est.anim++;
+    est.nombre = b.getAttribute("data-n");
+    est.corrido = false; est.foco = null; est.leer = -1; est.sel = null; est.zona = null;
+    pintarLector();
+    $("escNota").innerHTML = "Cambió la línea 14. Pulsa <b>Ejecutar</b>.";
+  });
+  $("btnEjec").addEventListener("click", ejecutar);
+  $("escLang").addEventListener("click", function (e) {
+    var b = e.target.closest("button");
+    if (!b || b.disabled) return;
+    est.lang = b.getAttribute("data-l");
+    est.anim++; est.corrido = false; est.foco = null; est.leer = -1; est.sel = null; est.zona = null;
+    pintarLector();
+    $("escNota").innerHTML = "Pulsa <b>Ejecutar</b> para correr el programa en " + (est.lang === "py" ? "Python." : "R.");
+  });
+
+  var NOTA_FOCO = {
+    "<module>": function (f) { return "Marco <b>&lt;module&gt;</b>, el programa principal. Está esperando en la línea " + f.ln + ", la que llamó a <code>informe</code>. Es el más externo: por eso va arriba."; },
+    informe: function (f, res) { return "Marco <b>informe</b>, línea " + f.ln + "." + (res.err.tipo === "KeyError" ? " Aquí mismo falló: buscó la clave y no estaba. Es el último marco, el más reciente." : " Está esperando a que <code>promedio</code> le devuelva algo."); },
+    promedio: function (f) { return "Marco <b>promedio</b>, línea " + f.ln + ". Es el más reciente, el último del traceback: aquí se detuvo el programa."; }
+  };
+  $("tb").addEventListener("click", function (e) {
+    var z = e.target.closest(".zona");
+    if (z) {
+      est.zona = z.getAttribute("data-z");
+      pintarLector();
+      var tz = { donde: "<b>Dónde</b>: la expresión exacta que falló, <code>total + x</code>. R no da número de línea; la buscas en el código (línea 6).", que: "<b>Qué</b>: el motivo. Un operador de dos lados (<code>+</code>) recibió algo que no es número.", pila: "<b>La pila</b>, de afuera hacia adentro: <code>informe</code> llamó a <code>promedio</code>. La función donde falló es <b>la última</b> de la cadena, al revés de leer el traceback de Python de abajo hacia arriba." };
+      $("escNota").innerHTML = tz[est.zona];
+      return;
+    }
+    var b = e.target.closest(".blq.toca, .que");
+    if (!b || est.lang !== "py" || est.paso < 2) return;
+    var k = b.getAttribute("data-k"), res = resActual();
+    est.foco = k === "que" ? "que" : +k;
+    pintarLector();
+    if (est.foco === "que") $("escNota").innerHTML = "<b>Qué</b>: <code>" + esc(res.err.tipo) + "</code>, " + esc(res.err.msg) + ". El tipo de excepción y su motivo.";
+    else { var f = res.frames[est.foco]; $("escNota").innerHTML = NOTA_FOCO[f.n](f, res); }
+  });
+  $("pila").addEventListener("click", function (e) {
+    var m = e.target.closest(".marco[data-k]");
+    if (!m) return;
+    var k = +m.getAttribute("data-k");
+    if (est.paso >= 5) {
+      est.sel = est.sel === k ? null : k;
+      pintarLector();
+      if (est.sel !== null) {
+        var fr = est.lang === "py" ? resActual().frames : RES_R[est.nombre].frames;
+        if (fr && fr[k] && fr[k].n === "promedio" && !est.c6) $("escNota").innerHTML = "Las variables de <code>promedio</code> se destapan cuando resuelvas el chequeo.";
+        else if (fr && fr[k]) $("escNota").innerHTML = "Variables de <b>" + esc(fr[k].n) + "</b> en el instante del fallo.";
+      }
+      return;
+    }
+    if (est.lang === "py" && est.paso >= 2) {
+      var res = resActual();
+      if (!res.err) return;
+      est.foco = k;
+      pintarLector();
+      $("escNota").innerHTML = NOTA_FOCO[res.frames[k].n](res.frames[k], res);
+    }
+  });
+  $("btnLeer").addEventListener("click", function () {
+    var res = resActual();
+    if (!res.err) return;
+    est.leer = (est.leer + 1) % (res.frames.length + 1);
+    var n = res.frames.length;
+    if (est.leer === 0) { est.foco = "que"; $("escNota").innerHTML = "1. <b>Qué</b>: la última línea, <code>" + esc(res.err.tipo + ": " + res.err.msg) + "</code>."; }
+    else {
+      est.foco = n - est.leer;
+      var f = res.frames[est.foco];
+      var ord = ["", "2. <b>Dónde falló</b>", "3. <b>Quién lo llamó</b>", "4. <b>Quién llamó a ese</b>"][est.leer];
+      $("escNota").innerHTML = ord + ": <code>" + esc(f.n) + "</code>, línea " + f.ln + "." + (est.leer === n ? " Llegaste arriba: la lectura terminó. Pulsa otra vez para empezar de nuevo." : "");
+    }
+    pintarLector();
+  });
+
+  /* ---------------- paso 5: clasificador ---------------- */
+  var TARJ = [
+    { t: "Tarjeta 1 · Python", cod: "notas = [7, 9, 8]\nprint(notas)\n\ndef informe(nombre)\n    return nombre", sal: '  File "programa.py", line 4\n    def informe(nombre)\n                       ^\n<span class="err">SyntaxError: expected \':\'</span>' },
+    { t: "Tarjeta 2 · Python", cod: "notas = [7, 9, 8]\nprint(notas)\nprint(notas[3])", sal: '[7, 9, 8]\nTraceback (most recent call last):\n  File "programa.py", line 3, in &lt;module&gt;\n    print(notas[3])\n          ~~~~~^^^\n<span class="err">IndexError: list index out of range</span>' },
+    { t: "Tarjeta 3 · R", cod: 'notas &lt;- list(ana = c(7, 9, 8), luis = c())\npromedio &lt;- function(lista) {\n  total &lt;- 0\n  for (x in lista) total &lt;- total + x\n  total / length(lista)\n}\ncat("luis", promedio(notas[["luis"]]), "\\n")', sal: "luis NaN" }
+  ];
+  var asig = [null, null, null];
+  function pintarClasif() {
+    $("clasif").innerHTML = TARJ.map(function (t, i) {
+      return '<div class="tarj"><div class="tarj-cab"><span>' + t.t + "</span><b>" + (asig[i] == null ? "sin asignar" : FAMILIAS[asig[i]]) + '</b></div><span class="lec-t">Código</span><pre>' + t.cod + '</pre><span class="lec-t">Salida real</span><pre class="sal">' + t.sal + "</pre></div>";
+    }).join("");
+  }
+
+  /* ---------------- entrar a cada paso ---------------- */
+  var HINTS = [
+    "Tres estaciones y una ficha esperando",
+    "El traceback de luis, con la última línea tapada",
+    "Elige un nombre y pulsa Ejecutar",
+    "El traceback de luis: síntoma y causa",
+    "Tres programas rotos de tres maneras",
+    "Toca cada caja de la pila",
+    "El mismo fallo de eva, contado por R"
+  ];
+  function entrar(i) {
+    est.paso = i;
+    est.anim++;
+    $("escHint").textContent = HINTS[i];
+    var modo = i === 0 ? "Cadena" : i === 4 ? "Clasif" : "Lector";
+    ["Cadena", "Lector", "Clasif"].forEach(function (m) { $("modo" + m).hidden = m !== modo; });
+    if (modo === "Clasif") { pintarClasif(); return; }
+    if (modo === "Cadena") return;
+    est.foco = null; est.leer = -1; est.sel = null; est.zona = null; est.vistos = 99; est.corrido = true;
+    if (i === 1 || i === 3) { est.nombre = "luis"; est.lang = "py"; }
+    if (i === 2) { est.lang = "py"; }
+    if (i === 5) { est.nombre = "eva"; est.lang = "py"; }
+    if (i === 6) { est.nombre = "eva"; est.lang = "r"; }
+    pintarLector();
+    notaLector();
+    if (i === 3) $("escNota").innerHTML = est.cD ? "La línea 9 es donde explota; la línea 3 es donde nace el problema." : "El traceback apunta a la línea 9. Responde el recuadro antes de decidir qué arreglar.";
+  }
+
+  /* ================= chequeos ================= */
+  B.opcionMultiple(cuerpo("chk1"), {
+    pregunta: "Luis no tiene ninguna nota. ¿En qué estación se detiene la cadena?",
+    opciones: ["Al dividir", "Al pedir las notas", "Al sumar", "No se detiene: da 0"],
+    correcta: 0,
+    pistas: [null,
+      "Luis sí existe en la lista de alumnos. Lo que tiene es una lista de notas vacía.",
+      "Sumar ninguna nota no rompe nada: el total simplemente se queda en 0.",
+      "Eso haría una calculadora que inventa un resultado. Python se niega a dividir entre cero."],
+    explicacion: "Se detiene <b>al dividir</b>. Sumar cero notas da 0 sin problema, pero repartir ese 0 entre cero notas es imposible. <b>Ahora mira</b> la ficha recorrer la cadena, y prueba también con ana.",
+    alResolver: function () { est.c1 = true; abrirCadena(); cadena("luis"); pasos.completar(0); }
+  });
+
+  B.opcionMultiple(cuerpo("chk2"), {
+    pregunta: "¿Qué renglón del bloque te dice qué tipo de fallo fue?",
+    opciones: ["La última línea, la que está tapada", "La primera, <code>Traceback (most recent call last):</code>", "La que tiene el número de línea más alto", "La que tiene las marcas <code>~~~~~~^~~~~~</code>"],
+    correcta: 0,
+    pistas: [null,
+      "Ese es solo el título. Lo útil que dice es el orden: lo más reciente va al final.",
+      "Los números de línea dicen <b>dónde</b>, no <b>qué</b>.",
+      "Las marcas subrayan la parte exacta de la expresión, pero no nombran el error."],
+    explicacion: "<b>La última.</b> Ahí está el tipo de excepción y su motivo: <code>ZeroDivisionError: division by zero</code>. Ya está destapada en el escenario, con la etiqueta QUÉ.",
+    alResolver: function () { est.c2 = true; if (est.paso === 1) pintarLector(); pasos.completar(1); }
+  });
+
+  B.opcionMultiple(cuerpo("chk3"), {
+    pregunta: "Elige <b>pepe</b> y pulsa Ejecutar. ¿Cuántos marcos tiene su traceback y en qué función se detuvo?",
+    opciones: ["2 marcos; se detuvo en <code>informe</code>, línea 12", "3 marcos; se detuvo en <code>promedio</code>", "1 marco; se detuvo en <code>&lt;module&gt;</code>", "Depende de sus notas"],
+    correcta: 0,
+    pistas: [null,
+      "Eso pasa con luis o con eva. ¿Pepe llega a llamar a <code>promedio</code>?",
+      "El error ocurre dentro de <code>informe</code>, que sí alcanzó a abrir su marco.",
+      "Pepe no tiene notas que revisar: el fallo es al buscar su nombre."],
+    explicacion: "<b>2 marcos</b>: <code>&lt;module&gt;</code> y <code>informe</code>. <code>notas[\"pepe\"]</code> falla con <code>KeyError: 'pepe'</code> antes de llamar a <code>promedio</code>, así que ese marco nunca se abre. El número de marcos te dice hasta dónde llegó el programa.",
+    alResolver: function () { est.c3 = true; pasos.completar(2); }
+  });
+
+  B.opcionMultiple(cuerpo("chkD"), {
+    pregunta: "El error de luis señala la línea 9. ¿Qué cambiarías para arreglarlo?",
+    opciones: [
+      "Depende de lo que quieras: o la lista de luis no debería estar vacía (línea 3), o <code>promedio</code> debe decidir qué hacer con una lista vacía antes de dividir",
+      "Borrar la división de la línea 9",
+      "Envolver todo en <code>try</code>/<code>except</code> y seguir",
+      "La línea 12, porque es la que llama a <code>promedio</code>"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "Desaparece el error, y el resultado deja de ser un promedio. Cambiaste el síntoma por un error semántico.",
+      "Escondes el síntoma: el informe saldría sin luis y sin ningún aviso.",
+      "<code>informe</code> solo pasa la lista que encontró; no la fabrica."],
+    revelarTras: 2,
+    explicacion: "La línea 9 está bien. El problema es un <b>dato</b> que no cumple lo que la función suponía. En el escenario apareció la marca de la <b>causa</b> en la línea 3. Arreglar es decidir dónde se rompe esa suposición, no silenciar la línea que explota.",
+    alResolver: function () { est.cD = true; if (est.paso === 3) entrar(3); revelarHipo(); pasos.completar(3); }
+  });
+
+  (function () {
+    var el = cuerpo("chk5");
+    el.innerHTML = '<p class="q">Asigna cada tarjeta del escenario a su familia.</p><div class="asig" id="asig"></div>' +
+      '<div class="btn-row"><button type="button" class="primary" id="asigOk">Comprobar</button></div><div class="fb" aria-live="polite"></div>';
+    var fb = el.querySelector(".fb"), hecho = false;
+    function pintar() {
+      $("asig").innerHTML = TARJ.map(function (t, i) {
+        return '<div class="asig-fila"><span>Tarjeta ' + (i + 1) + "</span>" + FAMILIAS.map(function (f, j) {
+          return '<button type="button" data-t="' + i + '" data-f="' + j + '" aria-pressed="' + (asig[i] === j) + '"' + (hecho ? " disabled" : "") + ">" + f + "</button>";
+        }).join("") + "</div>";
+      }).join("");
+    }
+    $("asig").addEventListener("click", function (e) {
+      var b = e.target.closest("button");
+      if (!b || hecho) return;
+      asig[+b.getAttribute("data-t")] = +b.getAttribute("data-f");
+      pintar();
+      if (est.paso === 4) pintarClasif();
+    });
+    $("asigOk").addEventListener("click", function () {
+      if (hecho) return;
+      if (asig.indexOf(null) >= 0) { fb.innerHTML = '<span class="no">Falta asignar alguna tarjeta.</span>'; return; }
+      if (asig[0] === 0 && asig[1] === 1 && asig[2] === 2) {
+        hecho = true;
+        pintar();
+        $("asigOk").disabled = true;
+        fb.innerHTML = '<span class="si">Correcto.</span> La 1 no corre ni una línea (no se imprimió la lista), la 2 arranca, imprime y se detiene con un traceback, y la 3 termina con un número que no es un promedio. Debajo del chequeo tienes la trampa del paso.';
+        abrir5();
+        pasos.completar(4);
+        return;
+      }
+      var msg;
+      if (asig[2] === 1) msg = "¿Viste algún mensaje en la tarjeta 3? R terminó y te dio un número que no es un promedio.";
+      else if (asig[0] === 1) msg = "Fíjate en la tarjeta 1: no se imprimió <code>[7, 9, 8]</code>, que estaba antes del error. Python ni siquiera empezó.";
+      else if (asig[1] === 2) msg = "La tarjeta 2 se detuvo con un mensaje. Un error semántico no avisa.";
+      else if (asig[0] === 2) msg = "La tarjeta 1 sí da un mensaje, y antes de ejecutar nada. Un error semántico no da mensaje.";
+      else if (asig[1] === 0) msg = "La tarjeta 2 imprimió <code>[7, 9, 8]</code>: el programa arrancó. Un error de sintaxis no deja correr ni una línea.";
+      else msg = "La tarjeta 3 no tiene ningún error de escritura: R la ejecutó entera.";
+      fb.innerHTML = '<span class="no">Todavía no.</span> ' + msg;
+    });
+    pintar();
+  })();
+  function abrir5() { est.c5 = true; $("trampa5").hidden = false; }
+
+  B.opcionMultiple(cuerpo("chk6"), {
+    pregunta: "Cuando eva falla en la línea 8, ¿cuánto vale <code>total</code> y qué hay en <code>x</code>?",
+    opciones: ["<code>total</code> = 10 y <code>x</code> = <code>'6'</code>, un texto", "<code>total</code> = 16", "<code>total</code> = 0 y <code>x</code> = 10", "<code>total</code> = <code>'106'</code>"],
+    correcta: 0,
+    pistas: [null,
+      "Eso supone que <code>'6'</code> se convirtió en número. Python no convierte texto a número por su cuenta.",
+      "La primera suma, 0 + 10, sí funcionó. El fallo es en la segunda vuelta.",
+      "Python no pega un número con un texto: por eso salta el <code>TypeError</code>."],
+    explicacion: "La primera vuelta hizo 0 + 10 = 10. La segunda intenta <code>10 + '6'</code> y ahí se detiene: <code>total</code> = 10, <code>x</code> = <code>'6'</code>. Ya puedes abrir el marco de <code>promedio</code> en el escenario.",
+    alResolver: function () { est.c6 = true; if (est.paso === 5) pintarLector(); pasos.completar(5); }
+  });
+
+  B.opcionMultiple(cuerpo("chk7"), {
+    pregunta: "En el mensaje de R, ¿dónde está la función en la que falló?",
+    opciones: [
+      "Al final de <code>Calls:</code> (<code>promedio</code>); la expresión exacta va después de <code>Error in</code>",
+      "Al principio de <code>Calls:</code>",
+      "R no lo dice",
+      "En <code>Execution halted</code>"
+    ],
+    correcta: 0,
+    pistas: [null,
+      "<code>informe</code> es la llamada más externa, la que en Python va arriba del traceback.",
+      "Sí lo dice. Lo que R no siempre hace es fallar: acuérdate de luis y pepe en el paso 5.",
+      "Esa línea solo avisa que el script se detuvo."],
+    explicacion: "La cadena <code>informe -&gt; promedio</code> va de afuera hacia adentro: la función que falló es <b>la última</b>. Y <code>Error in total + x</code> te da la expresión exacta. Python pone lo más reciente abajo; R, a la derecha.",
+    alResolver: function () { est.c7 = true; pasos.completar(6); }
+  });
+
+  pasos = B.pasos($("recorrido"), {
+    concepto: C,
+    alEntrar: entrar,
+    alTerminar: function () { location.hash = "retos"; }
+  });
+  est.c1 = pasos.hecho(0);
+  est.c2 = pasos.hecho(1);
+  est.c3 = pasos.hecho(2);
+  est.cD = pasos.hecho(3);
+  est.c6 = pasos.hecho(5);
+  est.c7 = pasos.hecho(6);
+  if (est.c1) abrirCadena();
+  if (pasos.hecho(4)) abrir5();
+  entrar(0);
+
+  /* ---------------- hipotesis inicial ---------------- */
+  var revelarHipo;
+  (function () {
+    var ta = $("hipotesis"), t = null, visible = est.cD;
+    ta.value = B.nota("leer-errores", "hipotesis");
+    function cita() {
+      var v = ta.value.trim(), e = $("citaHipo");
+      e.hidden = !v || !visible;
+      if (v) { e.textContent = ""; e.appendChild(document.createTextNode("Al principio escribiste: «" + v + "». Ahora sabes que la última línea dice qué, que las de arriba dicen dónde, y que la línea señalada es el síntoma: la causa puede estar en los datos. ¿Se parece a lo que hacías?")); }
+    }
+    revelarHipo = function () { visible = true; cita(); };
+    cita();
+    ta.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { B.nota("leer-errores", "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; cita(); }, 500);
+    });
+  })();
+
+  /* ---------------- marcadores de estado de retos ---------------- */
+  function pintarEstados() {
+    [].forEach.call(document.querySelectorAll("[data-reto]"), function (e) {
+      var ok = C.retoOk(e.getAttribute("data-reto"));
+      e.textContent = ok ? "resuelto" : "pendiente";
+      e.classList.toggle("ok", ok);
+    });
+  }
+  C.alCambiar(pintarEstados);
+
+  /* ---------------- reto: ojo clinico de familias ---------------- */
+  (function () {
+    var cont = $("ojoFam"), orden, ronda, aciertos, respondida, actual;
+    cont.innerHTML = '<div class="ronda"></div><div class="lec" style="margin-top:6px"><span class="lec-t"></span><pre class="cod"></pre></div>' +
+      '<div class="lec" style="margin-top:6px"><span class="lec-t">Salida real</span><pre class="sal"></pre></div>' +
+      '<div class="ojo-opts">' + FAMILIAS.map(function (f, k) { return '<button type="button" class="opt" data-a="' + k + '">' + f + "</button>"; }).join("") + "</div>" +
+      '<div class="fb" aria-live="polite"></div><div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    var opts = cont.querySelector(".ojo-opts");
+    function nueva() { orden = genFamilias(); ronda = 0; aciertos = 0; mostrar(); }
+    function mostrar() {
+      respondida = false;
+      actual = BANCO_FAM[orden[ronda]];
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 5 · aciertos " + aciertos;
+      cont.querySelector(".lec-t").textContent = actual.lang;
+      cont.querySelector(".cod").textContent = actual.cod;
+      cont.querySelector(".sal").innerHTML = actual.err ? '<span class="err">' + esc(actual.sal) + "</span>" : '<span class="sal">' + esc(actual.sal) + "</span>";
+      [].forEach.call(opts.children, function (x) { x.disabled = false; x.classList.remove("ok", "mal"); });
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+    }
+    opts.addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || respondida) return;
+      respondida = true;
+      var ok = +b.getAttribute("data-a") === actual.f;
+      if (ok) aciertos++;
+      b.classList.add(ok ? "ok" : "mal");
+      if (!ok) opts.querySelector('[data-a="' + actual.f + '"]').classList.add("ok");
+      [].forEach.call(opts.children, function (x) { x.disabled = true; });
+      cont.querySelector(".fb").innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No: es ' + FAMILIAS[actual.f] + ".</span> ") + actual.por;
+      var sig = cont.querySelector(".sig");
+      sig.hidden = false;
+      if (ronda === 4) {
+        var aprobo = aciertos >= 4;
+        C.reto("ojo-familia", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertos + " de 5" + (aprobo ? ". Aprobado." : ". Necesitas 4 para aprobar.");
+        sig.textContent = "Otra tanda";
+      } else sig.textContent = "Siguiente ronda";
+    });
+    cont.querySelector(".sig").addEventListener("click", function () { if (ronda === 4) nueva(); else { ronda++; mostrar(); } });
+    nueva();
+  })();
+
+  /* ---------------- reto: ojo clinico, que y donde ---------------- */
+  (function () {
+    var cont = $("ojoUlt"), orden, ronda, aciertos, fase, okRonda, actual;
+    cont.innerHTML = '<div class="ronda"></div><p class="ou-q"></p><pre class="tb ou-tb"></pre><div class="fb" aria-live="polite"></div>' +
+      '<div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    var tb = cont.querySelector(".ou-tb"), fb = cont.querySelector(".fb");
+    function nueva() { orden = genUltima(); ronda = 0; aciertos = 0; mostrar(); }
+    function pintar(marcas) {
+      marcas = marcas || {};
+      tb.innerHTML = actual.b.map(function (bl, k) {
+        var cls = bl[0] === "q" ? "que" : "blq" + (bl[0] === "m" ? " toca" : "");
+        var st = marcas[k] === "ok" ? ' style="background:var(--ok-soft)"' : marcas[k] === "mal" ? ' style="background:var(--bad-soft)"' : "";
+        return '<span class="' + cls + (bl[0] === "tit" ? " toca" : "") + '" data-k="' + k + '"' + st + ">" + esc(bl[1]) + "</span>";
+      }).join("");
+    }
+    function mostrar() {
+      actual = BANCO_TB[orden[ronda]];
+      fase = 0; okRonda = true;
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 5 · aciertos " + aciertos;
+      cont.querySelector(".ou-q").innerHTML = "1. Toca el renglón que dice <b>qué</b> pasó.";
+      fb.innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+      pintar();
+    }
+    var marcas = {};
+    tb.addEventListener("click", function (e) {
+      var b = e.target.closest("[data-k]");
+      if (!b || fase > 1) return;
+      var k = +b.getAttribute("data-k"), qk = actual.b.length - 1;
+      if (fase === 0) {
+        marcas = {};
+        if (k === qk) { marcas[k] = "ok"; fb.innerHTML = '<span class="si">Bien.</span> El qué siempre está al final.'; }
+        else { okRonda = false; marcas[k] = "mal"; marcas[qk] = "ok"; fb.innerHTML = '<span class="no">No.</span> El qué siempre está al final: es el renglón sin <code>File</code>, con el nombre de la excepción.'; }
+        fase = 1;
+        pintar(marcas);
+        cont.querySelector(".ou-q").innerHTML = "2. Ahora toca el marco de <b>tu</b> código donde falló: el más bajo que sea de <code>programa.py</code>.";
+        return;
+      }
+      if (k === qk) return;
+      var ok = k === actual.tuyo;
+      if (!ok) { okRonda = false; marcas[k] = "mal"; }
+      marcas[actual.tuyo] = "ok";
+      fase = 2;
+      pintar(marcas);
+      var pista = !ok && actual.b[k] && actual.b[k][0] === "m" && actual.b[k][2] === 0 ? " Un marco de librería tiene una ruta que no es tu archivo." : "";
+      if (okRonda) aciertos++;
+      fb.innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No.</span>' + pista + " ") + actual.por;
+      var sig = cont.querySelector(".sig");
+      sig.hidden = false;
+      if (ronda === 4) {
+        var aprobo = aciertos >= 4;
+        C.reto("ojo-ultima", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertos + " de 5" + (aprobo ? ". Aprobado." : ". Necesitas 4 para aprobar.");
+        sig.textContent = "Otra tanda";
+      } else sig.textContent = "Siguiente ronda";
+    });
+    cont.querySelector(".sig").addEventListener("click", function () { if (ronda === 4) nueva(); else { ronda++; mostrar(); } });
+    nueva();
+  })();
+
+  /* ---------------- reto: construir los errores ---------------- */
+  (function () {
+    var campos = { luis: "[]", eva: '[10, "6"]', pepe: "" };
+    var logros = [false, false, false], marcado = false;
+    var OBJ = [
+      "Un traceback de exactamente 2 marcos.",
+      "Un <code>TypeError</code> en la línea 8 en la <b>primera</b> vuelta del bucle.",
+      "Que los cuatro nombres terminen sin error con los mismos datos (cumple la precondición de <code>promedio</code>)."
+    ];
+    var ul = $("cpObj");
+    OBJ.forEach(function (t) { var li = document.createElement("li"); li.innerHTML = '<span class="m"></span><span>' + t + "</span>"; ul.appendChild(li); });
+    $("cpEditor").innerHTML = '<label>ana = <code>[7, 9, 8]</code></label>' + ["luis", "eva", "pepe"].map(function (n) {
+      return '<label for="cp-' + n + '">' + n + ' = <input id="cp-' + n + '" data-n="' + n + '" value="' + esc(campos[n]).replace(/"/g, "&quot;") + '" autocomplete="off" spellcheck="false"' + (n === "pepe" ? ' placeholder="vacío: pepe no existe"' : "") + "></label>";
+    }).join("");
+    $("cpChips").innerHTML = NOMBRES.map(function (n) { return '<button type="button" data-n="' + n + '">Ejecutar ' + n + "</button>"; }).join("");
+    function datos() {
+      var d = { ana: [7, 9, 8] }, ok = true;
+      ["luis", "eva", "pepe"].forEach(function (n) {
+        var inp = $("cp-" + n), v = inp.value;
+        if (n === "pepe" && v.trim() === "") { inp.classList.remove("mal"); return; }
+        var l = leerLista(v);
+        inp.classList.toggle("mal", l === null);
+        if (l === null) ok = false; else d[n] = l;
+      });
+      return ok ? d : null;
+    }
+    function pintarObj() {
+      [].forEach.call(ul.children, function (li, i) { li.classList.toggle("hecho", logros[i]); });
+      if (!marcado && logros.every(Boolean)) { marcado = true; C.reto("construir-pila", true); }
+    }
+    function revisarTodos() {
+      var d = datos();
+      if (!d) return;
+      if (NOMBRES.every(function (n) { return !correrPy(n, d).err; })) { logros[2] = true; pintarObj(); }
+    }
+    $("cpEditor").addEventListener("input", function () { revisarTodos(); });
+    $("cpChips").addEventListener("click", function (e) {
+      var b = e.target.closest("button");
+      if (!b) return;
+      var d = datos();
+      if (!d) { $("cpTb").innerHTML = '<span class="que">Hay un campo que no se entiende: usa números enteros y textos entre comillas, separados por comas.</span>'; return; }
+      var n = b.getAttribute("data-n"), res = correrPy(n, d), out = ["alumno: " + esc(n)];
+      if (!res.err) out.push(esc(n + " " + res.valor));
+      else {
+        out.push("Traceback (most recent call last):");
+        res.frames.forEach(function (f) { out.push('  File "programa.py", line ' + f.ln + ", in " + esc(f.n) + "\n" + esc(codMarco(f, res).join("\n"))); });
+        out.push('<span class="que">' + esc(res.err.tipo + ": " + res.err.msg) + "</span>");
+        if (res.frames.length === 2) logros[0] = true;
+        if (res.err.tipo === "TypeError" && res.vuelta === 1) logros[1] = true;
+      }
+      $("cpTb").innerHTML = out.join("\n").replace(/\n<span class="que">/, '<span class="que">') +
+        (res.err ? '\n<span class="sin">' + res.frames.length + " marcos" + (res.vuelta ? ", vuelta " + res.vuelta + " del bucle" : "") + "</span>" : "");
+      pintarObj();
+    });
+    $("cpTb").innerHTML = '<span class="sin">Pulsa un botón para ejecutar el programa con esas notas.</span>';
+    pintarObj();
+  })();
+
+  /* ---------------- reto: a mano, el estado ---------------- */
+  (function () {
+    var D, okA;
+    function generar() {
+      D = genEstado();
+      okA = null;
+      var lit = "[" + D.notas.map(function (v) { return typeof v === "string" ? '"' + v + '"' : String(v); }).join(", ") + "]";
+      $("amCod").innerHTML = '<pre class="codigo-bloque">' + esc(["notas = " + lit, "total = 0", "for x in notas:", "    total = total + x", "print(total / len(notas))"].join("\n")) + "</pre>";
+      $("amB").innerHTML = "";
+      $("amOtro").hidden = true;
+      B.numerico($("amA"), {
+        pregunta: "El programa se detiene con un <code>TypeError</code>. ¿Cuánto vale <code>total</code> en ese instante?",
+        respuesta: function () { return D.total; },
+        tolerancia: 0,
+        pistas: [
+          "El bucle suma hasta antes del texto: la vuelta del texto no llega a sumar nada.",
+          "Cuenta las vueltas desde 1 y marca en cuál aparece el texto.",
+          function () { var p = D.notas.slice(0, D.k - 1); return "Antes del texto entran " + p.join(" + ") + " = " + D.total + "."; }
+        ],
+        diagnostico: function (v) {
+          var conTexto = D.total + (+D.notas[D.k - 1]);
+          if (v === conTexto) return "Sumaste también el texto. Python no convierte <code>\"" + D.notas[D.k - 1] + "\"</code> en número: ahí se detiene.";
+          var todo = D.notas.reduce(function (a, b) { return a + (+b); }, 0);
+          if (v === todo) return "Esa es la suma de todas las notas, como si no hubiera fallado.";
+          if (v === 0) return "Las vueltas anteriores al texto sí sumaron.";
+          return null;
+        },
+        explicacion: function () { return "<code>total</code> = <b>" + D.total + "</b>: se sumaron las " + (D.k - 1) + " notas anteriores al texto, y la vuelta " + D.k + " intentó <code>" + D.total + " + '" + D.notas[D.k - 1] + "'</code>."; },
+        alResolver: function (ok) { okA = ok; parteB(); }
+      });
+    }
+    function parteB() {
+      B.numerico($("amB"), {
+        pregunta: "¿En qué vuelta del bucle falla? Cuenta desde 1.",
+        respuesta: function () { return D.k; },
+        tolerancia: 0,
+        pistas: ["La primera vuelta usa la primera nota; la vuelta que falla es la que toma el texto."],
+        diagnostico: function (v) {
+          if (v === D.k - 1) return "Contaste las posiciones desde 0, como los índices de Python. Aquí se cuentan vueltas, desde 1.";
+          if (v === D.notas.length) return "El bucle no llega al final: se detiene antes.";
+          return null;
+        },
+        explicacion: function () { return "Falla en la vuelta <b>" + D.k + "</b>, la del texto <code>'" + D.notas[D.k - 1] + "'</code>. Con <code>python -m pdb</code> verías <code>x = '" + D.notas[D.k - 1] + "'</code> y <code>total = " + D.total + "</code> justo ahí."; },
+        alResolver: function (ok) { C.reto("a-mano-estado", !!okA && ok); $("amOtro").hidden = false; }
+      });
+    }
+    $("amOtro").addEventListener("click", generar);
+    generar();
+  })();
+
+  /* ---------------- retos: cazar el error ---------------- */
+  B.cazarError($("cazar1"), {
+    variantes: [{
+      intro: "Traceback de luis: tres marcos (<code>&lt;module&gt;</code> línea 16, <code>informe</code> línea 12, <code>promedio</code> línea 9) y al final <code>ZeroDivisionError</code>.",
+      lineas: ["\\text{La última línea dice ZeroDivisionError: es el qué.}", "\\text{Los marcos van del más externo al más reciente.}", "\\text{El marco de arriba es donde falló,}", "\\text{así que el error está en la línea 16.}"],
+      erronea: 2,
+      explicacion: "El marco donde falló es el <b>más bajo</b>, el más reciente: <code>promedio</code>, línea 9. El de arriba, <code>&lt;module&gt;</code>, solo es el que empezó la cadena de llamadas. La línea 4 sale de ese error."
+    }],
+    alResolver: function (ok) { C.reto("cazar-1", ok); }
+  });
+  B.cazarError($("cazar2"), {
+    variantes: [{
+      intro: "Traceback de pepe: dos marcos y al final <code>KeyError: 'pepe'</code>.",
+      lineas: ["\\text{El qué es KeyError: 'pepe'.}", "\\text{Falló en informe, en la línea 12.}", "\\text{La causa es que promedio no sabe dividir.}", "\\text{Arreglo: decidir qué hacer si pepe no está.}"],
+      erronea: 2,
+      explicacion: "<code>promedio</code> ni siquiera se llamó: su marco no aparece en el traceback. La causa es que <code>'pepe'</code> no es una clave del diccionario <code>notas</code>."
+    }],
+    alResolver: function (ok) { C.reto("cazar-2", ok); }
+  });
+  B.cazarError($("cazar3"), {
+    variantes: [{
+      intro: "En R, el programa del recorrido imprimió <code>luis NaN</code> y siguió con los demás.",
+      lineas: ["\\text{R calculó 0 / length(NULL), o sea 0 / 0.}", "\\text{0 / 0 en R da NaN, sin mensaje.}", "\\text{Como no hubo error, el programa es correcto.}", "\\text{Python, con el mismo dato, se detiene.}"],
+      erronea: 2,
+      explicacion: "<code>NaN</code> es justamente la señal de un error <b>semántico</b>: el programa terminó y entregó algo que no es un promedio. Que R no se queje no lo hace correcto."
+    }],
+    alResolver: function (ok) { C.reto("cazar-3", ok); }
+  });
+
+  /* ---------------- retos: propiedades ---------------- */
+  function prop(id, el, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple(el, cfg);
+  }
+  (function () {
+    var okA = null, okB = null;
+    function cerrar() { if (okA !== null && okB !== null) C.reto("prop-tipos", okA && okB); }
+    B.opcionMultiple($("propA"), {
+      pregunta: "Con <code>notas = {\"ana\": [7, 9, 8]}</code>, ¿qué excepción da <code>notas[\"Ana\"]</code>?",
+      opciones: ["<code>KeyError: 'Ana'</code>", "<code>NameError</code>", "<code>IndexError</code>", "<code>ValueError</code>"],
+      correcta: 0,
+      mezclar: true,
+      reintentable: true,
+      pistas: [null,
+        "<code>NameError</code> es una variable que no existe. <code>notas</code> sí existe; lo que falta es una clave.",
+        "<code>IndexError</code> es para posiciones de una lista, no para claves de un diccionario.",
+        "El valor no tiene nada raro: lo que no existe es la clave."],
+      explicacion: "<code>KeyError: 'Ana'</code>. Las mayúsculas cuentan: <code>\"Ana\"</code> y <code>\"ana\"</code> son claves distintas.",
+      alResolver: function (ok) { okA = ok; cerrar(); }
+    });
+    B.opcionMultiple($("propB"), {
+      pregunta: "Un <code>AttributeError: 'NoneType' object has no attribute 'append'</code> suele significar que...",
+      opciones: [
+        "Una variable vale <code>None</code>, por ejemplo porque una función no tenía <code>return</code> o guardaste el resultado de <code>sort()</code>",
+        "La lista está vacía",
+        "<code>append</code> no existe en esta versión de Python",
+        "Escribiste mal el nombre de la lista"
+      ],
+      correcta: 0,
+      mezclar: true,
+      reintentable: true,
+      pistas: [null,
+        "Una lista vacía sí tiene <code>append</code>: <code>[].append(3)</code> funciona.",
+        "<code>append</code> existe; el problema es el objeto al que se lo pides. Mira la palabra <code>NoneType</code>.",
+        "Un nombre mal escrito da <code>NameError</code>. Aquí el nombre existe, pero vale <code>None</code>."],
+      explicacion: "<code>NoneType</code> es el tipo de <code>None</code>. Casi siempre viene de usar el resultado de una función que no devuelve nada: <code>w = v.sort()</code> deja <code>w = None</code>, y <code>w.append(2)</code> da exactamente este error (verificado). Think Python lo trata en la página 240 del libro.",
+      alResolver: function (ok) { okB = ok; cerrar(); }
+    });
+  })();
+
+  /* ---------------- memoria ---------------- */
+  B.ordenar($("formula"), {
+    pregunta: "Ordena la receta para leer un error, del primer paso al último.",
+    piezas: ["\\text{lee la última línea: qué}", "\\text{sube a tu marco más bajo: dónde}", "\\text{mira las variables de ese marco}", "\\text{busca la suposición que se rompió}", "\\text{busca la causa antes: datos o llamador}"],
+    distractores: ["\\text{lee la primera línea}", "\\text{borra la línea que marca el error}", "\\text{envuelve todo en try/except}"],
+    soluciones: [[0, 1, 2, 3, 4]],
+    explicacion: "Qué, dónde, con qué valores, qué suposición falló y de dónde vino. Borrar la línea o atrapar todo con <code>try</code> solo esconde el síntoma.",
+    alResolver: function (ok) { C.reto("formula", ok); }
+  });
+
+  /* ---------------- vida real ---------------- */
+  (function () {
+    var CODIGO = {
+      py: [
+        ["importar", "import traceback"],
+        [null, ""],
+        ["datos", 'notas = {"ana": [7, 9, 8], "luis": [], "eva": [10, "6"]}'],
+        [null, ""],
+        ["def-promedio", "def promedio(lista):"],
+        ["total0", "    total = 0"],
+        ["for-x", "    for x in lista:"],
+        ["sumar", "        total = total + x"],
+        ["dividir", "    return total / len(lista)"],
+        [null, ""],
+        ["def-informe", "def informe(nombre):"],
+        ["buscar", "    return promedio(notas[nombre])"],
+        [null, ""],
+        ["for-nombre", 'for nombre in ["ana", "luis", "eva", "pepe"]:'],
+        ["intentar", "    try:"],
+        ["imprimir", "        print(nombre, informe(nombre))"],
+        ["capturar", "    except Exception as e:"],
+        ["avisar", '        print(nombre, "fallo")'],
+        ["pila", "        pila = traceback.extract_tb(e.__traceback__)"],
+        ["for-marco", "        for marco in pila:"],
+        ["donde", '            print("  donde:", marco.name, "linea", marco.lineno)'],
+        ["que", '        print("  que:", type(e).__name__ + ":", e)'],
+        ["libreria", '        print("  libreria:", traceback.format_exception_only(e)[-1].strip())']
+      ],
+      r: [
+        ["datos", 'notas <- list(ana = c(7, 9, 8), luis = c(), eva = c(10, "6"))'],
+        [null, ""],
+        ["def-promedio", "promedio <- function(lista) {"],
+        ["total0", "  total <- 0"],
+        ["for-x", "  for (x in lista) {"],
+        ["sumar", "    total <- total + x"],
+        [null, "  }"],
+        ["dividir", "  return(total / length(lista))"],
+        [null, "}"],
+        [null, ""],
+        ["def-informe", "informe <- function(nombre) {"],
+        ["buscar", "  return(promedio(notas[[nombre]]))"],
+        [null, "}"],
+        [null, ""],
+        ["for-nombre", 'for (nombre in c("ana", "luis", "eva", "pepe")) {'],
+        ["intentar", "  tryCatch({"],
+        ["imprimir", '    cat(nombre, informe(nombre), "\\n")'],
+        ["capturar", "  }, error = function(e) {"],
+        ["avisar", '    cat(nombre, "fallo\\n")'],
+        ["donde", '    cat("  donde:", deparse(conditionCall(e)), "\\n")'],
+        ["que", '    cat("  que:", conditionMessage(e), "\\n")'],
+        ["libreria", '    cat("  libreria:", capture.output(print(e)), "\\n")'],
+        [null, "  })"],
+        [null, "}"]
+      ]
+    };
+    var SALIDA = {
+      py: ["ana 8.0", "luis fallo", "  donde: <module> linea 16", "  donde: informe linea 12", "  donde: promedio linea 9", "  que: ZeroDivisionError: division by zero", "  libreria: ZeroDivisionError: division by zero",
+        "eva fallo", "  donde: <module> linea 16", "  donde: informe linea 12", "  donde: promedio linea 8", "  que: TypeError: unsupported operand type(s) for +: 'int' and 'str'", "  libreria: TypeError: unsupported operand type(s) for +: 'int' and 'str'",
+        "pepe fallo", "  donde: <module> linea 16", "  donde: informe linea 12", "  que: KeyError: 'pepe'", "  libreria: KeyError: 'pepe'"],
+      r: ["ana 8 ", "luis NaN ", "eva fallo", "  donde: total + x ", "  que: non-numeric argument to binary operator ", "  libreria: <simpleError in total + x: non-numeric argument to binary operator> ", "pepe NaN "]
+    };
+
+    // construye la foto del estado por linea ejecutada para un lenguaje
+    function construir(lang) {
+      var py = lang === "py", E = [], out = 0;
+      var g = { notas: false, fp: false, fi: false, nombre: null, e: null, pila: null, marco: null };
+      var q = function (s) { return py ? "'" + s + "'" : '"' + s + '"'; };
+      function main() {
+        var v = [];
+        if (g.notas) v.push(["notas", py ? "dict, 3 claves" : "list, 3 elementos"]);
+        if (g.fp) v.push(["promedio", py ? "función" : "function", "fn"]);
+        if (g.fi) v.push(["informe", py ? "función" : "function", "fn"]);
+        if (g.nombre) v.push(["nombre", q(g.nombre)]);
+        if (g.e) v.push(["e", g.e]);
+        if (g.pila) v.push(["pila", g.pila]);
+        return v;
+      }
+      function f(id, fase, txt, o) {
+        o = o || {};
+        if (o.sale) out += o.sale;
+        E.push({ id: id, fase: fase, txt: txt, main: main(), frames: o.frames || [], cong: o.cong || null, marca: o.marca == null ? -1 : o.marca,
+          error: !!o.error, out: out, chips: o.chips || [], nuevo: o.nuevo, ret: o.ret, fin: !!o.fin });
+      }
+      var BASE = py ? "<module>" : "entorno global";
+      function inf(n) { return { n: "informe", v: [["nombre", q(n)]] }; }
+      function pro(lista, total, x) { var v = [["lista", lista]]; if (total != null) v.push(["total", String(total)]); if (x != null) v.push(["x", x]); return { n: "promedio", v: v }; }
+      function cg(lns) { return lns.map(function (p) { return { n: p[0], ln: p[1] }; }); }
+
+      if (py) f("importar", 1, "Carga el módulo <code>traceback</code>, que sabe leer la pila guardada dentro de un error.");
+      g.notas = true; f("datos", 1, py ? "El diccionario con las notas inventadas: ana con 7, 9 y 8; luis con una lista vacía; eva con un texto <code>\"6\"</code> entre sus notas." : "La lista con las notas. Ojo: <code>c(10, \"6\")</code> ya es un vector de texto, <code>\"10\" \"6\"</code>, y <code>luis = c()</code> guarda <code>NULL</code>.", { nuevo: "notas" });
+      g.fp = true; f("def-promedio", 1, "Se guarda la receta de <code>promedio</code>. No se ejecuta nada todavía.", { nuevo: "promedio" });
+      g.fi = true; f("def-informe", 1, "Se guarda la receta de <code>informe</code>.", { nuevo: "informe" });
+
+      // ana
+      g.nombre = "ana"; f("for-nombre", 2, "Primera vuelta: <code>nombre</code> = " + q("ana") + ".", { nuevo: "nombre" });
+      f("intentar", 2, py ? "<code>try:</code> lo que sigue corre vigilado. Si algo falla, el programa salta al <code>except</code> en vez de detenerse." : "<code>tryCatch</code>: lo que va entre llaves corre vigilado. Si hay un error, R salta a la función <code>error =</code>.");
+      f("imprimir", 2, "Para imprimir hay que calcular primero <code>informe(nombre)</code>: se abre su marco.", { frames: [inf("ana")] });
+      f("buscar", 2, "<code>informe</code> busca las notas de ana y llama a <code>promedio</code> con ellas.", { frames: [inf("ana")] });
+      var la = py ? "[7, 9, 8]" : "c(7, 9, 8)";
+      f("total0", 2, "Se abre el marco de <code>promedio</code> con <code>lista</code> = " + la + ". <code>total</code> empieza en 0.", { frames: [inf("ana"), pro(la, 0)], chips: [["total", 0]] });
+      var acum = 0;
+      [7, 9, 8].forEach(function (x, i) {
+        f("for-x", 2, "Vuelta " + (i + 1) + ": <code>x</code> = " + x + ".", { frames: [inf("ana"), pro(la, acum, String(x))], chips: [["total", acum], ["x", x]] });
+        acum += x;
+        f("sumar", 2, "<code>total</code> pasa a " + (acum - x) + " + " + x + " = " + acum + ".", { frames: [inf("ana"), pro(la, acum, String(x))], chips: [["total", acum], ["x", x]] });
+      });
+      f("dividir", 2, "24 / 3 = " + (py ? "8.0" : "8") + ". <code>promedio</code> devuelve el valor y su marco se borra; después se borra el de <code>informe</code>.", { frames: [inf("ana"), pro(la, 24, "8")], ret: py ? "8.0" : "8", chips: [["total", 24], ["x", 8]] });
+      f("imprimir", 2, "Ahora sí se imprime: <code>" + esc(SALIDA[lang][0]) + "</code>. Ana pasó sin errores.", { sale: 1 });
+
+      // luis
+      g.nombre = "luis"; f("for-nombre", 3, "Segunda vuelta: <code>nombre</code> = " + q("luis") + ".", { nuevo: "nombre" });
+      f("intentar", 3, "Otra vez, corre vigilado.");
+      f("imprimir", 3, "Se llama a <code>informe(" + q("luis") + ")</code>.", { frames: [inf("luis")] });
+      var ll = py ? "[]" : "NULL";
+      f("buscar", 3, py ? "Las notas de luis son <code>[]</code>, una lista vacía. Se pasa a <code>promedio</code>." : "<code>notas[[\"luis\"]]</code> es <code>NULL</code>. Se pasa a <code>promedio</code> sin queja.", { frames: [inf("luis")] });
+      f("total0", 3, "<code>lista</code> = " + ll + ", <code>total</code> = 0.", { frames: [inf("luis"), pro(ll, 0)], chips: [["total", 0]] });
+      f("for-x", 3, "La lista está vacía: el bucle no da ninguna vuelta.", { frames: [inf("luis"), pro(ll, 0)], chips: [["total", 0]] });
+      if (py) {
+        f("dividir", 3, "<code>0 / len([])</code> es <code>0 / 0</code>: <b>ZeroDivisionError</b>. El programa no se detiene porque está dentro del <code>try</code>: la pila se congela tal como está y viaja dentro del error.", { frames: [inf("luis"), pro("[]", 0)], error: true, chips: [["total", 0]] });
+        g.e = "ZeroDivisionError";
+        var CL = cg([["<module>", 16], ["informe", 12], ["promedio", 9]]);
+        f("capturar", 3, "Salta al <code>except</code>. Los marcos de <code>informe</code> y <code>promedio</code> ya no están vivos, pero quedaron guardados en <code>e.__traceback__</code> (abajo, en gris).", { cong: CL, nuevo: "e" });
+        f("avisar", 3, "Imprime <code>luis fallo</code>.", { cong: CL, sale: 1 });
+        g.pila = "3 marcos"; f("pila", 3, "<code>extract_tb</code> convierte la pila guardada en una lista de 3 marcos, del más externo al más reciente: el mismo orden del traceback.", { cong: CL, nuevo: "pila" });
+        CL.forEach(function (m, k) {
+          f("for-marco", 3, "Marco " + k + ": <code>" + esc(m.n) + "</code>.", { cong: CL, marca: k, chips: [["marco.name", m.n], ["marco.lineno", m.ln]] });
+          f("donde", 3, "Imprime <code>" + esc(SALIDA.py[out]) + "</code>.", { cong: CL, marca: k, sale: 1, chips: [["marco.name", m.n], ["marco.lineno", m.ln]] });
+        });
+        f("que", 3, "El qué: el nombre del tipo de excepción y su mensaje.", { cong: CL, sale: 1 });
+        f("libreria", 3, "La librería da la misma última línea: <code>format_exception_only</code> coincide con lo que armó el bucle.", { cong: CL, sale: 1 });
+      } else {
+        f("dividir", 3, "<code>0 / length(NULL)</code> es <code>0 / 0</code>, y en R eso es <b>NaN</b>, sin error. <code>promedio</code> devuelve NaN tan tranquila.", { frames: [inf("luis"), pro(ll, 0)], ret: "NaN", chips: [["total", 0]] });
+        f("imprimir", 3, "Imprime <code>luis NaN</code>. No entró a la función de error: para R esto no fue un fallo. Es un error <b>semántico</b>.", { sale: 1 });
+      }
+
+      // eva
+      g.nombre = "eva"; g.e = null; f("for-nombre", 4, "Tercera vuelta: <code>nombre</code> = " + q("eva") + "." + (py ? " La <code>e</code> anterior ya no existe: Python la borra al salir del <code>except</code>." : ""), { nuevo: "nombre" });
+      f("intentar", 4, "Corre vigilado.");
+      f("imprimir", 4, "Se llama a <code>informe(" + q("eva") + ")</code>.", { frames: [inf("eva")] });
+      var le = py ? "[10, '6']" : 'c("10", "6")';
+      f("buscar", 4, "Las notas de eva: <code>" + esc(le) + "</code>.", { frames: [inf("eva")] });
+      f("total0", 4, "<code>lista</code> = " + esc(le) + ", <code>total</code> = 0.", { frames: [inf("eva"), pro(le, 0)], chips: [["total", 0]] });
+      if (py) {
+        f("for-x", 4, "Vuelta 1: <code>x</code> = 10.", { frames: [inf("eva"), pro(le, 0, "10")], chips: [["total", 0], ["x", 10]] });
+        f("sumar", 4, "0 + 10 = 10. Funciona.", { frames: [inf("eva"), pro(le, 10, "10")], chips: [["total", 10], ["x", 10]] });
+        f("for-x", 4, "Vuelta 2: <code>x</code> = <code>'6'</code>, un texto.", { frames: [inf("eva"), pro(le, 10, "'6'")], chips: [["total", 10], ["x", "'6'"]] });
+        f("sumar", 4, "<code>10 + '6'</code>: <b>TypeError</b>. Se congela la pila con <code>total</code> = 10 y <code>x</code> = <code>'6'</code>.", { frames: [inf("eva"), pro(le, 10, "'6'")], error: true, chips: [["total", 10], ["x", "'6'"]] });
+        g.e = "TypeError"; g.pila = null;
+        var CE = cg([["<module>", 16], ["informe", 12], ["promedio", 8]]);
+        f("capturar", 4, "Salta al <code>except</code>. La pila guardada es igual a la de luis, salvo que el último marco se detuvo en la línea 8.", { cong: CE, nuevo: "e" });
+        f("avisar", 4, "Imprime <code>eva fallo</code>.", { cong: CE, sale: 1 });
+        g.pila = "3 marcos"; f("pila", 4, "Otra vez 3 marcos.", { cong: CE, nuevo: "pila" });
+        CE.forEach(function (m, k) {
+          f("for-marco", 4, "Marco " + k + ": <code>" + esc(m.n) + "</code>.", { cong: CE, marca: k, chips: [["marco.name", m.n], ["marco.lineno", m.ln]] });
+          f("donde", 4, "Imprime <code>" + esc(SALIDA.py[out]) + "</code>.", { cong: CE, marca: k, sale: 1, chips: [["marco.name", m.n], ["marco.lineno", m.ln]] });
+        });
+        f("que", 4, "El qué: <code>TypeError</code>, sumar un número y un texto.", { cong: CE, sale: 1 });
+        f("libreria", 4, "La librería coincide.", { cong: CE, sale: 1 });
+      } else {
+        f("for-x", 4, "Vuelta 1: <code>x</code> = <code>\"10\"</code>. Ya es texto: R lo convirtió al crear el vector.", { frames: [inf("eva"), pro(le, 0, '"10"')], chips: [["total", 0], ["x", '"10"']] });
+        f("sumar", 4, "<code>0 + \"10\"</code>: <b>error</b> en la <b>primera</b> vuelta (Python falló en la segunda). R salta a la función de error.", { frames: [inf("eva"), pro(le, 0, '"10"')], error: true, chips: [["total", 0], ["x", '"10"']] });
+        g.e = "simpleError";
+        var CR = cg([["entorno global", 16], ["informe", 12], ["promedio", 6]]);
+        f("capturar", 4, "Dentro de la función de error, <code>e</code> es un objeto condición con la llamada que falló y el mensaje.", { cong: CR, nuevo: "e" });
+        f("avisar", 4, "Imprime <code>eva fallo</code>.", { cong: CR, sale: 1 });
+        f("donde", 4, "<code>conditionCall(e)</code> es la expresión que falló, <code>total + x</code>; <code>deparse</code> la vuelve texto. Es el dónde de R: sin número de línea.", { cong: CR, marca: 2, sale: 1 });
+        f("que", 4, "<code>conditionMessage(e)</code>: el qué.", { cong: CR, sale: 1 });
+        f("libreria", 4, "<code>print(e)</code> es como R muestra el objeto error completo: coincide con lo anterior.", { cong: CR, sale: 1 });
+      }
+
+      // pepe
+      g.nombre = "pepe"; g.e = null; f("for-nombre", 5, "Última vuelta: <code>nombre</code> = " + q("pepe") + ", que no está en las notas.", { nuevo: "nombre" });
+      f("intentar", 5, "Corre vigilado.");
+      f("imprimir", 5, "Se llama a <code>informe(" + q("pepe") + ")</code>.", { frames: [inf("pepe")] });
+      if (py) {
+        f("buscar", 5, "<code>notas[\"pepe\"]</code>: esa clave no existe. <b>KeyError</b> dentro de <code>informe</code>; <code>promedio</code> nunca se llama.", { frames: [inf("pepe")], error: true });
+        g.e = "KeyError"; g.pila = null;
+        var CP = cg([["<module>", 16], ["informe", 12]]);
+        f("capturar", 5, "Salta al <code>except</code>. Esta vez la pila guardada tiene solo 2 marcos.", { cong: CP, nuevo: "e" });
+        f("avisar", 5, "Imprime <code>pepe fallo</code>.", { cong: CP, sale: 1 });
+        g.pila = "2 marcos"; f("pila", 5, "Una lista de 2 marcos.", { cong: CP, nuevo: "pila" });
+        CP.forEach(function (m, k) {
+          f("for-marco", 5, "Marco " + k + ": <code>" + esc(m.n) + "</code>.", { cong: CP, marca: k, chips: [["marco.name", m.n], ["marco.lineno", m.ln]] });
+          f("donde", 5, "Imprime <code>" + esc(SALIDA.py[out]) + "</code>.", { cong: CP, marca: k, sale: 1, chips: [["marco.name", m.n], ["marco.lineno", m.ln]] });
+        });
+        f("que", 5, "El qué: <code>KeyError: 'pepe'</code>.", { cong: CP, sale: 1 });
+        f("libreria", 5, "La librería coincide. Fin: de cuatro nombres, solo uno imprimió un número.", { cong: CP, sale: 1, fin: true });
+      } else {
+        f("buscar", 5, "<code>notas[[\"pepe\"]]</code> no falla: devuelve <code>NULL</code>.", { frames: [inf("pepe")] });
+        f("total0", 5, "<code>lista</code> = NULL, <code>total</code> = 0.", { frames: [inf("pepe"), pro("NULL", 0)], chips: [["total", 0]] });
+        f("for-x", 5, "Ninguna vuelta.", { frames: [inf("pepe"), pro("NULL", 0)], chips: [["total", 0]] });
+        f("dividir", 5, "Otra vez <code>0 / 0</code> = NaN.", { frames: [inf("pepe"), pro("NULL", 0)], ret: "NaN", chips: [["total", 0]] });
+        f("imprimir", 5, "Imprime <code>pepe NaN</code>. Fin: R imprimió tres números, y solo uno es un promedio de verdad.", { sale: 1, fin: true });
+      }
+      return E;
+    }
+    var EV = construir("py");
+    var lang = "py";
+    function rehacer(l) { lang = l; var n = construir(l); EV.length = 0; n.forEach(function (e) { EV.push(e); }); }
+
+    function visual(e, anterior, ctx) {
+      var py = ctx.lang() === "py", base = py ? "<module>" : "entorno global";
+      if (!e) {
+        $("vrPila").innerHTML = htmlMarco({ n: base, v: [] }, "base");
+        $("vrCongBox").hidden = true;
+        $("vrSal").textContent = "";
+        return;
+      }
+      var fr = [{ n: base, v: e.main.map(function (v) { return [v[0], v[1], (v[2] || "") + (v[0] === e.nuevo ? " nuevo" : "")]; }) }].concat(e.frames);
+      var h = [];
+      if (e.ret) h.push('<div class="retorno">promedio devuelve <b>' + esc(e.ret) + "</b></div>");
+      for (var i = fr.length - 1; i >= 0; i--) {
+        var top = i === fr.length - 1 && fr.length > 1;
+        h.push(htmlMarco(fr[i], (i === 0 ? "base " : "") + (top ? (e.error ? "error" : "arriba") : "")));
+      }
+      $("vrPila").innerHTML = h.join("");
+      $("vrCongBox").hidden = !e.cong;
+      if (e.cong) {
+        $("vrCongTit").textContent = py ? "La pila guardada en e.__traceback__" : "La pila del error (en R solo se ve conditionCall)";
+        var c = [];
+        for (var k = e.cong.length - 1; k >= 0; k--) {
+          c.push(htmlMarco({ n: e.cong[k].n, v: [] }, "congelado" + (k === e.marca ? " marcado" : ""), { sinVars: true, tag: py ? "línea " + e.cong[k].ln : (k === 2 ? "total + x" : "") }));
+        }
+        $("vrCong").innerHTML = c.join("");
+      }
+      $("vrSal").textContent = SALIDA[ctx.lang()].slice(0, e.out).join("\n");
+    }
+
+    // al cambiar de lenguaje se reconstruyen los eventos antes de que el motor repinte
+    $("vrLang").addEventListener("click", function (ev) {
+      var b = ev.target.closest("button");
+      if (!b || !CODIGO[b.getAttribute("data-lang")]) return;
+      rehacer(b.getAttribute("data-lang"));
+    });
+    var api = B.vidaReal($("vidareal"), {
+      codigo: CODIGO,
+      eventos: EV,
+      narrar: function (e) { return e.txt; },
+      vars: function (e, ctx) {
+        if (!e) return [];
+        var v = [];
+        if (e.main.some(function (x) { return x[0] === "nombre"; })) v.push('<span class="vj">nombre = <b>' + esc(e.main.filter(function (x) { return x[0] === "nombre"; })[0][1]) + "</b></span>");
+        v.push('<span class="vk">marcos vivos = <b>' + (1 + e.frames.length) + "</b></span>");
+        e.chips.forEach(function (c) { v.push("<span>" + esc(c[0]) + " = <b>" + esc(c[1]) + "</b></span>"); });
+        var eo = e.main.filter(function (x) { return x[0] === "e"; })[0];
+        if (eo) v.push('<span>e = <b>' + esc(eo[1]) + "</b></span>");
+        return v;
+      },
+      visual: visual,
+      demora: function (e) { return !e ? 600 : e.error ? 1600 : e.id === "capturar" ? 1400 : e.id === "for-x" || e.id === "sumar" ? 650 : 900; }
+    });
+    $("vrLang").addEventListener("click", function () { api.parar(); api.ir(-1); });
+
+    B.opcionMultiple(cuerpo("vrPred"), {
+      pregunta: "Antes de reproducir: de los cuatro nombres, ¿cuántos terminan imprimiendo un número en Python, y cuántos en R?",
+      opciones: ["1 en Python y 3 en R", "4 en los dos", "1 en los dos", "1 en Python y 2 en R"],
+      correcta: 0,
+      pistas: [null,
+        "Luis, eva y pepe tienen problemas. La pregunta es cuál de los dos lenguajes se queja.",
+        "R no falla igual que Python: <code>0/0</code> en R no es un error.",
+        "Casi. ¿Qué devuelve R al buscar un nombre que no está, como pepe? ¿Y qué pasa después con ese valor?"],
+      explicacion: "Python imprime un número solo para ana. R imprime tres: <code>ana 8</code>, <code>luis NaN</code> y <code>pepe NaN</code>. Solo uno de los tres es un promedio de verdad. Reproduce en los dos lenguajes y compruébalo."
+    });
+
+    prop("codigo1", $("codigo1"), {
+      pregunta: "El programa dice <code>eva no tiene notas</code>. ¿Qué error se escondió de verdad?",
+      opciones: [
+        "Un <code>TypeError</code>: sumar el número 10 con el texto <code>'6'</code>",
+        "Un <code>ZeroDivisionError</code>: eva no tiene notas",
+        "Un <code>KeyError</code>: eva no está en el diccionario",
+        "Ninguno: el mensaje es correcto"
+      ],
+      correcta: 0,
+      pistas: [null,
+        "Eva sí tiene notas: dos. Ese mensaje lo inventó quien escribió el <code>except</code>.",
+        "<code>\"eva\"</code> es una clave del diccionario.",
+        "Eva tiene notas, así que el mensaje miente."],
+      explicacion: "Un <code>except:</code> sin nombre atrapa <b>cualquier</b> error y lo reemplaza por tu explicación, que puede ser falsa. Aquí convirtió un error de ejecución en uno semántico: el programa no avisa y dice algo falso. Nombra la excepción que esperas (<code>except ZeroDivisionError:</code>) o, si atrapas todo, imprime <code>e</code>."
+    });
+    prop("codigo2", $("codigo2"), {
+      pregunta: "¿Qué devuelve <code>notas$e</code>?",
+      opciones: [
+        "Las notas de eva: <code>\"10\" \"6\"</code>",
+        "<code>NULL</code>, igual que <code>notas[[\"e\"]]</code>",
+        "Un error, porque no hay ninguna clave <code>e</code>",
+        "<code>NA</code>"
+      ],
+      correcta: 0,
+      pistas: [null,
+        "Eso devuelve <code>[[</code>, que exige el nombre exacto. <code>$</code> es más permisivo.",
+        "R no se queja: ni con <code>$</code> ni con <code>[[</code> un nombre ausente es un error.",
+        "<code>NA</code> es un valor faltante dentro de un vector; aquí se busca un elemento de una lista."],
+      explicacion: "<code>$</code> completa nombres a medias: <code>e</code> solo puede ser <code>eva</code>, así que devuelve sus notas sin avisar. <code>[[</code> exige el nombre exacto y da <code>NULL</code>. En Python, <code>notas[\"e\"]</code> daría <code>KeyError: 'e'</code>. Para no llevarte sorpresas en código que importa, usa <code>[[</code>."
+    });
+    prop("codigo3", $("codigo3"), {
+      pregunta: "Con Rscript, ¿se detuvo el programa?",
+      opciones: [
+        "No: el aviso sale en cuanto termina la línea que lo produjo, el programa sigue y el <code>NA</code> ya se propagó al promedio",
+        "Sí: un <code>Warning</code> detiene el script igual que un <code>Error</code>",
+        "No, y el promedio es 8 porque R ignora el <code>\"8,5\"</code>",
+        "Sí, pero solo después de imprimir el promedio"
+      ],
+      correcta: 0,
+      pistas: [null,
+        "Si se hubiera detenido, la línea <code>promedio: NA</code> no se habría impreso.",
+        "R no ignora el valor: lo convierte en <code>NA</code>, y la media de algo con un <code>NA</code> es <code>NA</code>.",
+        "Un aviso nunca detiene el programa. Y el script terminó normalmente."],
+      explicacion: "Un aviso (<i>warning</i>) no es un error: R lo anota y sigue. <code>\"8,5\"</code> con coma decimal no es un número para R, se volvió <code>NA</code> y contaminó la media. Fíjate en el orden real de la salida: el aviso salió <b>antes</b> de <code>promedio: NA</code>, al terminar la línea de <code>as.numeric</code>, y el programa siguió de todos modos. Es la misma trampa de <code>as.numeric(\"3,14\")</code> en los ejercicios de la UD4."
+    });
+  })();
+
+  /* ---------------- tarjetas ---------------- */
+  B.tarjetas($("tarjetas"), [
+    ["¿Qué dice la última línea de un traceback de Python?", "El tipo de excepción y su mensaje: qué pasó."],
+    ["¿En qué orden van los marcos de un traceback?", "De la llamada más externa (arriba) a la más reciente (abajo): <i>most recent call last</i>."],
+    ["Error de sintaxis, de ejecución y semántico", "No arranca; arranca y se detiene con un mensaje; termina sin mensaje y da algo equivocado."],
+    ["¿Por qué el error de luis está en los datos y no en la línea 9?", "La línea 9 supone una lista no vacía; el dato rompió esa suposición (la precondición)."],
+    ["<code>KeyError</code> frente a <code>IndexError</code>", "Una clave que no existe en un diccionario; una posición fuera de una lista."],
+    ["¿Cómo muestra R la pila?", "<code>Error in expresión : mensaje</code> y <code>Calls: externa -&gt; interna</code>. En la consola, <code>traceback()</code> justo después del error."],
+    ["¿Por qué R dio <code>NaN</code> para luis?", "En R, <code>0/0</code> no es un error: es <code>NaN</code>. El fallo se volvió semántico."]
+  ]);
+
+  /* ---------------- conexiones ---------------- */
+  B.conexiones("leer-errores");
+})();
+</script>
+</body>
+</html>

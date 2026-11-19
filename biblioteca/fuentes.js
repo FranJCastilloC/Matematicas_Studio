@@ -1624,5 +1624,26 @@ window.FUENTES = {
     archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142002 - Programacion y entorno de trabajo para la IA/UD5. R/Unidad 5 - EDA I.html",
     nota: "tidyverse, dplyr, el pipe y ggplot2. Citar con data-ancla (id de sección sin #).",
     tipo: "documento"
+  },
+  thinpython: {
+    corto: "Think Python",
+    titulo: "Think Python, 2.ª edición",
+    autor: "Allen B. Downey",
+    archivo: "/Users/franciscocastillo/Desktop/Libros/Think_Python_1748353929.pdf",
+    nota: "Python desde cero con diagramas de pila y de alias; es Python puro, sin NumPy ni pandas. Página PDF = impresa + 21. Mapa: brain/fuentes/think-python.md."
+  },
+  pyworkout: {
+    corto: "Python Workout",
+    titulo: "Python Workout: 50 ten-minute exercises",
+    autor: "Reuven Lerner",
+    archivo: "/Users/franciscocastillo/Desktop/Libros/Python Workout 50 ten-minute exercises.pdf",
+    nota: "Cincuenta ejercicios de Python puro (cadenas, listas, diccionarios, archivos, funciones, objetos, generadores). Sirve de modelo para retos. Página PDF = impresa + 26. Mapa: brain/fuentes/python-workout.md."
+  },
+  islr2: {
+    corto: "ISLR2",
+    titulo: "An Introduction to Statistical Learning with Applications in R, 2.ª edición (impresión corregida de junio de 2023)",
+    autor: "James, Witten, Hastie y Tibshirani",
+    archivo: "/Users/franciscocastillo/Downloads/ISLRv2_corrected_June_2023.pdf",
+    nota: "Teoría y laboratorios en R de regresión, remuestreo, regularización, árboles, SVM, PCA y agrupamiento. Usa R base y paquetes por tema, sin tidyverse. Página PDF = impresa + 11. Mapa: brain/fuentes/islr2-r.md."
   }
 };

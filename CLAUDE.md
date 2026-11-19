@@ -12,7 +12,7 @@ Lo que hay que estudiar vive en `~/brain` (`01-Academico`, `02-Biblioteca`, `03-
 ```
 biblioteca/
   index.html              rutas agrupadas y plegables, filtro por materia y unidad, progreso, repaso, próximas tandas, libros
-  catalogo.js             el mapa completo: UNIDADES (20 rutas en 5 grupos), MATERIAS, TANDAS y CATALOGO (listos y planeados)
+  catalogo.js             el mapa completo: UNIDADES (34 rutas en 7 grupos), MATERIAS, TANDAS y CATALOGO (listos y planeados)
   fuentes.js              window.FUENTES: los libros y el material del máster que se citan, con la ruta al PDF
   nucleo/estilo.css       tokens de color y componentes compartidos (incluye vida real, destacado y citas)
   nucleo/nucleo.js        window.Biblioteca: progreso, pasos con candado, tipos de reto, citas, motor de vida real
@@ -48,7 +48,9 @@ CSS ni JS relativos con `file://`, así que para probar siempre usar el servidor
    `fuentes: [ids]` con las fuentes que la página cita. Si es nuevo, se agrega con todos los campos (ver la cabecera del archivo)
    y se suma su título a `siguientes` de sus prerrequisitos. Luego `python3 nucleo/verificar_catalogo.py` tiene que decir OK.
    Las rutas están en `window.UNIDADES`, agrupadas por `grupo` (Fundamentos, Cálculo, Álgebra lineal, Probabilidad y
-   estadística, Aprendizaje automático). Si un concepto pertenece a más de una ruta, va en su ruta principal y en
+   estadística, Aprendizaje automático, Infraestructura y programación, Programación con datos). Este último grupo reparte
+   Python y R por librería (Python básico, NumPy, Pandas, Matplotlib, scikit-learn, Keras, R base, Tidyverse, Modelado en R);
+   cada página sigue siendo bilingüe y vive en la ruta de su librería principal, con `tambien` en las otras. Si un concepto pertenece a más de una ruta, va en su ruta principal y en
    `tambien: [{ unidad, orden }]`. `aparece: [{ materia, ud }]` dice dónde lo enseñan en el máster (`window.MATERIAS`).
 4b. Citar las fuentes: si el concepto sale de un libro o material que no está mapeado en `brain/fuentes/`, leerlo
    primero (o delegar la lectura) y guardar el mapa de citas con páginas verificadas antes de construir.
@@ -62,7 +64,7 @@ CSS ni JS relativos con `file://`, así que para probar siempre usar el servidor
 
 ## Construir por tandas
 
-El catálogo tiene el mapa completo (188 conceptos, todos listos al 2026-11-13) y cada planeado lleva `tanda` (1 primero), ordenada por las
+El catálogo tiene el mapa completo (281 conceptos al 2026-11-19: 261 listos y 20 planeados, de las tandas 2, 9 y 10; la 8 ya está construida) y cada planeado lleva `tanda` (1 primero), ordenada por las
 fechas del campus (`window.TANDAS`). El plan completo está en `~/.claude/plans/users-franciscocastillo-brain-second-br-splendid-diffie.md`.
 Por cada tanda:
 1. Mapas de citas primero: por cada fuente nueva, leer el PDF (o delegar la lectura) y guardar `brain/fuentes/<fuente>.md`
