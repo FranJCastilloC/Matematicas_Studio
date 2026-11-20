@@ -1,0 +1,1712 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Partición de datos: train, test y fuga de datos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+/* ---------- escenario ---------- */
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.esc-head .hint { font-size: 12.5px; color: var(--ink-2); }
+.esc-ctrl { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin: 0 0 10px; }
+.esc-ctrl button { font-family: var(--f-mono); font-size: 12px; padding: 6px 9px; }
+.esc-ctrl .seg button { padding: 5px 8px; }
+.esc-nota { font-size: 12.5px; color: var(--ink-3); margin: 8px 0 0; }
+.esc-frase { font-size: 13.5px; color: var(--ink); margin: 10px 0 0; padding: 8px 10px; border-left: 3px solid var(--accent); background: var(--accent-soft); border-radius: 0 6px 6px 0; }
+.esc-frase.mal { border-left-color: var(--bad); background: var(--bad-soft); }
+.esc-frase.bien { border-left-color: var(--ok); background: var(--ok-soft); }
+.tog { display: inline-flex; gap: 5px; align-items: center; font-size: 12.5px; color: var(--ink-2); }
+.tog input { accent-color: var(--accent); }
+.tog.off { opacity: .5; }
+.semilla { display: inline-flex; gap: 5px; align-items: center; font-family: var(--f-mono); font-size: 12px; color: var(--ink-2); }
+.semilla input { width: 70px; font-family: var(--f-mono); font-size: 12px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); }
+.cuentas { display: flex; flex-wrap: wrap; gap: 6px 8px; margin: 8px 0 0; }
+.cuentas span { font-family: var(--f-mono); font-size: 12px; padding: 3px 8px; border-radius: 6px; border: 1px solid var(--line); color: var(--ink-2); }
+.cuentas span.tr { border-color: var(--j); color: var(--j); background: var(--j-soft); }
+.cuentas span.te { border-color: var(--k); color: var(--k); background: var(--k-soft); }
+.cuentas span.acc { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.cuentas span.mal { border-color: var(--bad); color: var(--bad); background: var(--bad-soft); }
+
+/* las fichas en SVG */
+.escena-host { width: 100%; min-width: 0; }
+.escena-svg { display: block; width: 100%; height: auto; overflow: visible; }
+.escena-svg .ficha, .escena-svg .punto { transition: transform .75s cubic-bezier(.3,.7,.2,1), opacity .4s; cursor: pointer; }
+.escena-svg .f-rect { fill: var(--surface); stroke: var(--line); stroke-width: 1.5; }
+.escena-svg .ficha.tr .f-rect { fill: var(--j-soft); stroke: var(--j); }
+.escena-svg .ficha.te .f-rect { fill: var(--k-soft); stroke: var(--k); }
+.escena-svg .ficha.nuevo .f-rect { stroke-dasharray: 5 3; stroke: var(--ink-3); }
+.escena-svg .ficha.sel .f-rect { stroke: var(--accent); stroke-width: 3; }
+.escena-svg .t-nom { font-family: var(--f-body); font-size: 11px; fill: var(--ink); text-anchor: middle; }
+.escena-svg .t-h { font-family: var(--f-mono); font-size: 16px; font-weight: 600; fill: var(--ink); text-anchor: middle; }
+.escena-svg .p-si { fill: var(--pos); }
+.escena-svg .p-no { fill: var(--neg); }
+.escena-svg .t-ap { font-family: var(--f-mono); font-size: 10px; fill: #fff; text-anchor: middle; }
+.escena-svg .candado { fill: none; stroke: var(--k); stroke-width: 1.4; }
+.escena-svg .candado-c { fill: var(--k); }
+.escena-svg .ficha:not(.te) .candado, .escena-svg .ficha:not(.te) .candado-c { display: none; }
+.escena-svg .marca { font-family: var(--f-mono); font-size: 10px; text-anchor: middle; fill: var(--ink-2); }
+.escena-svg .marca.ok { fill: var(--ok); font-weight: 600; }
+.escena-svg .marca.mal { fill: var(--bad); font-weight: 600; }
+.escena-svg .marca.acc { fill: var(--accent); font-weight: 600; }
+.escena-svg .muro { stroke: var(--ink); stroke-width: 5; stroke-linecap: round; fill: none; }
+.escena-svg .caja-r { fill: var(--surface-2); stroke: var(--accent); stroke-width: 1.5; }
+.escena-svg .caja-r.fuga { stroke: var(--bad); fill: var(--bad-soft); }
+.escena-svg .caja-t { font-family: var(--f-body); font-size: 11px; fill: var(--ink-3); }
+.escena-svg .caja-v { font-family: var(--f-mono); font-size: 14px; font-weight: 600; fill: var(--ink); }
+.escena-svg .tubo { fill: none; stroke: var(--j); stroke-width: 2; opacity: .5; }
+.escena-svg .tubo.activo { stroke: var(--accent); stroke-width: 3.2; opacity: 1; }
+.escena-svg .tubo.fuga { stroke: var(--bad); stroke-width: 2.6; opacity: 1; stroke-dasharray: 6 4; animation: goteo 1s linear infinite; }
+.escena-svg .tubo.inverso { stroke: var(--accent); stroke-width: 3; opacity: 1; stroke-dasharray: 6 4; animation: goteo 1s linear infinite reverse; }
+@keyframes goteo { to { stroke-dashoffset: -20; } }
+.escena-svg .eje { stroke: var(--ink-3); stroke-width: 1.4; }
+.escena-svg .tick { font-family: var(--f-mono); font-size: 10px; fill: var(--ink-3); text-anchor: middle; }
+.escena-svg .regla-t { font-family: var(--f-body); font-size: 11px; fill: var(--ink-3); }
+.escena-svg .punto circle { fill: var(--j-soft); stroke: var(--j); stroke-width: 1.5; }
+.escena-svg .punto.te circle { fill: var(--k-soft); stroke: var(--k); stroke-dasharray: 3 2; }
+.escena-svg .punto text { font-family: var(--f-mono); font-size: 10.5px; font-weight: 600; fill: var(--ink); text-anchor: middle; }
+@media (prefers-reduced-motion: reduce) {
+  .escena-svg .ficha, .escena-svg .punto { transition: none; }
+  .escena-svg .tubo.fuga, .escena-svg .tubo.inverso { animation: none; }
+}
+
+/* barras de proporcion */
+.barras { display: grid; gap: 6px; margin-top: 10px; }
+.barra { display: grid; grid-template-columns: 110px minmax(0, 1fr) 54px; gap: 8px; align-items: center; font-size: 12.5px; color: var(--ink-2); }
+.barra .b-track { height: 12px; border-radius: 6px; background: var(--neg); opacity: .85; overflow: hidden; }
+.barra .b-fill { height: 100%; background: var(--pos); }
+.barra b { font-family: var(--f-mono); font-size: 12px; color: var(--ink); text-align: right; }
+@media (max-width: 420px) { .barra { grid-template-columns: 84px minmax(0, 1fr) 46px; } }
+
+/* paso 5: veinte modelos */
+.modelos { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 4px; margin-top: 8px; }
+.modelo { border: 1px solid var(--line); border-radius: 6px; padding: 4px 2px; text-align: center; font-family: var(--f-mono); font-size: 10.5px; color: var(--ink-2); background: var(--surface); min-width: 0; }
+.modelo .mb { height: 34px; display: flex; align-items: flex-end; justify-content: center; margin-bottom: 2px; }
+.modelo .mb span { display: block; width: 60%; background: var(--ink-3); border-radius: 2px 2px 0 0; }
+.modelo.gana { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.modelo.gana .mb span { background: var(--accent); }
+.filas20 { display: grid; grid-template-columns: repeat(20, minmax(0, 1fr)); gap: 2px; margin-top: 8px; }
+.filas20 span { height: 14px; border-radius: 2px; background: var(--surface-2); border: 1px solid var(--line); }
+.filas20 span.si { background: var(--pos); border-color: var(--pos); }
+.filas20 span.no { background: var(--neg); border-color: var(--neg); }
+.mirador { font-family: var(--f-mono); font-size: 13px; padding: 6px 10px; border-radius: 8px; border: 1.5px solid var(--accent); color: var(--accent); background: var(--accent-soft); display: inline-block; margin-top: 10px; }
+.tabla-ref { border-collapse: collapse; font-family: var(--f-mono); font-size: 12px; margin-top: 10px; }
+.tabla-ref th, .tabla-ref td { border-bottom: 1px solid var(--line); padding: 3px 10px; text-align: right; }
+.tabla-ref th { color: var(--ink-3); font-weight: 500; }
+@media (max-width: 520px) { .modelos { grid-template-columns: repeat(5, minmax(0, 1fr)); } .filas20 { grid-template-columns: repeat(10, minmax(0, 1fr)); } }
+
+/* paso 7: quinientas columnas de ruido */
+.ruido { display: grid; grid-template-columns: repeat(25, minmax(0, 1fr)); gap: 2px; margin-top: 8px; }
+.ruido span { aspect-ratio: 1; border-radius: 2px; background: var(--surface-2); border: 1px solid var(--line-soft); }
+.ruido span.on { background: var(--accent); border-color: var(--accent); }
+.ruido span.on.mal { background: var(--bad); border-color: var(--bad); }
+.ruido span.on.bien { background: var(--ok); border-color: var(--ok); }
+.hist { display: block; width: 100%; height: auto; margin-top: 10px; }
+.hist .hb-todo { fill: var(--bad); opacity: .8; }
+.hist .hb-train { fill: var(--ok); opacity: .8; }
+.hist text { font-family: var(--f-mono); font-size: 10px; fill: var(--ink-3); text-anchor: middle; }
+.hist .eje { stroke: var(--ink-3); }
+
+/* retos propios */
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.ojo-caso { font-size: 14px; padding: 10px 12px; background: var(--surface-2); border-radius: 8px; margin: 8px 0; color: var(--ink); }
+.ojo-opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
+.ojo-opts .opt { text-align: center; }
+.objetivos { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.objetivos li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.objetivos .m { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.objetivos li.hecho { color: var(--ink); }
+.objetivos li.hecho .m { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 3px var(--surface); }
+.mano-datos { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 10px; }
+.mano-datos span { font-family: var(--f-mono); font-size: 14px; padding: 5px 10px; border-radius: 6px; border: 1.5px solid var(--j); background: var(--j-soft); color: var(--ink); }
+.mano-datos span.te { border-color: var(--k); background: var(--k-soft); border-style: dashed; }
+.mano-datos small { font-size: 10px; color: var(--ink-3); margin-left: 4px; }
+.parte { border-top: 1px dashed var(--line); padding-top: 8px; margin-top: 8px; }
+.lec { border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); overflow: hidden; margin: 6px 0 10px; min-width: 0; }
+.lec-t { display: block; font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); padding: 5px 10px 0; }
+.lec pre { margin: 0; padding: 4px 10px 8px; font-family: var(--f-mono); font-size: 12px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink-2); }
+.lec pre .sal { color: var(--ink); font-weight: 500; }
+.lec-par { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 520px) { .lec-par { grid-template-columns: minmax(0, 1fr); } }
+
+/* vida real */
+.vr-sal { margin: 4px 0 0; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); font-family: var(--f-mono); font-size: 12px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; min-height: 3em; color: var(--ink); }
+
+/* piezas largas de ordenar y lineas de cazar el error: que se puedan partir a 375 px */
+.chip { max-width: 100%; white-space: normal; text-align: left; }
+.chip .katex-html, .linea .katex-html { white-space: normal; }
+.chip .mord.texttt, .chip .mord.text, .linea .mord.texttt { white-space: normal; overflow-wrap: anywhere; }
+.linea { min-width: 0; }
+.linea > span:last-child { min-width: 0; overflow-wrap: anywhere; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ Partición de datos</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Aprendizaje automático · Técnicas de IA: clasificaciones y agrupaciones (SM142003), UD0 · Raschka cap. 6</p>
+    <h1>Partición de datos: train, test y fuga de datos</h1>
+    <p class="lede">
+      Antes de mirar los datos se pone un <b>muro</b>: de un lado queda el <b>entrenamiento</b>, con el que el modelo aprende todo lo que tiene que aprender;
+      del otro, el <b>test</b>, que espera cerrado con candado hasta el final. Esta página es sobre ese muro: dónde ponerlo, cómo barajar antes, por qué el test se
+      mira una sola vez y cómo se cuela información a través del muro sin que nadie lo note. Eso último se llama <b>fuga de datos</b>.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> Un compañero te muestra su modelo: acierta el 100 % de los casos con los que lo entrenó. ¿Te alcanza para confiar en él? ¿Qué le pedirías antes de creerle? Escribe tu idea.</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: creo que..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>Diez estudiantes y un muro</h2>
+      <p>Siete pasos. Cada uno termina con un chequeo: hasta que no lo resuelves, el siguiente queda cerrado. Equivocarte aquí no resta nada. Los datos son inventados: diez estudiantes con las horas que estudiaron en la semana y si aprobaron el parcial (5 aprobaron y 5 no). La lista viene <b>ordenada por horas</b>, como suele salir un archivo exportado de una planilla, y eso va a importar.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="El examen que ya viste">
+          <span class="etapa">Paso 1</span>
+          <h3>El examen que ya viste</h3>
+          <p>En el escenario hay diez fichas: nombre, horas de estudio y una marca, <b>sí</b> si aprobó y <b>no</b> si no. Un "modelo" muy simple, el <b>memorizador</b>, estudió a ocho de los diez: todos menos Hugo y Julia, que tienen el borde punteado.</p>
+          <p>Así trabaja: si le preguntas por alguien que ya vio, copia su resultado de la tabla. Si es alguien nuevo, busca entre los que vio al de horas más parecidas y copia su resultado.</p>
+          <div class="check" id="chk1">
+            <p class="check-tit">Predice antes de tocar nada</p>
+            <div class="cuerpo"></div>
+          </div>
+          <div id="post1" hidden>
+            <p>Ahora toca las fichas para examinarlo. Empieza por las ocho que estudió y termina con <b>Hugo y Julia</b>. Hugo estudió 7 horas: el memorizador copia a Gabi, que también estudió 7 y aprobó, y falla, porque Hugo no aprobó. Julia estudió 13: copia a Iván (9 horas, aprobó) y acierta. Con los nuevos saca <b>1 de 2, un 50 %</b>. El 100 % con los conocidos no anunciaba nada de esto.</p>
+            <p>Es lo que en "Sesgo y varianza de un modelo" se llamó varianza alta: el modelo copia hasta el ruido. Gabi y Hugo estudiaron lo mismo y les fue distinto, y el memorizador se quedó con la casualidad de Gabi como si fuera una regla.
+            ISLR2 lo dice con el error cuadrático medio: lo que importa es el error con datos que el método no vio, y el error con los datos de entrenamiento puede ser muy chico justo cuando el método está copiando ruido
+            <cite class="cita" data-fuente="islr2" data-pag="40" data-pimp="29" data-seccion="2.2.1 Measuring the Quality of Fit" data-que="El MSE de entrenamiento (2.5) frente al de prueba (2.6), y la Figura 2.9: el error de entrenamiento baja siempre con la flexibilidad; el de prueba tiene forma de U." data-cuando="Al terminar este paso"></cite>.</p>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Un muro antes de mirar">
+          <span class="etapa">Paso 2</span>
+          <h3>Un muro antes de mirar</h3>
+          <p>La solución es apartar un trozo de los datos <b>antes de hacer nada</b>: el <b>test</b>. Queda detrás de un muro, con candado, y se usa solo al final para medir. El resto, el <b>entrenamiento</b>, sirve para todo lo demás: explorar, preprocesar, elegir y ajustar el modelo. El objetivo no es predecir bien los datos que ya tienes, sino los que todavía no llegaron
+          <cite class="cita" data-fuente="intro3" data-pag="18" data-ancla="data-splitting" data-seccion="4.3 Data splitting" data-que="El objetivo del modelado es generalizar: predecir bien valores futuros de Y. Por eso se separan datos de entrenamiento y de prueba." data-cuando="Al leer este paso"></cite>.</p>
+          <p>En el escenario, mueve el muro con los botones de proporción. Las más habituales son 70/30 y 80/20
+          <cite class="cita" data-fuente="intro3" data-pag="20" data-ancla="5/5" data-seccion="Proporciones de la partición" data-que="Las proporciones típicas 70/30 y 80/20, y la advertencia de que más de un 80 % en entrenamiento arriesga sobreajuste (ver la aclaración de este paso)." data-cuando="Al leer este paso"></cite>.
+          Fíjate en lo que dice el escenario debajo de las fichas: con 2 filas de test la exactitud solo puede ser 0 %, 50 % o 100 %. Con 3 filas, 0, 33, 67 o 100 %. Cada fila del test pesa mucho cuando hay pocos datos.</p>
+          <p>Una aclaración sobre la diapositiva 20: dice que poner más del 80 % en el entrenamiento arriesga <b>sobreajuste</b>. La proporción no sobreajusta a ningún modelo. Lo que pasa con un test muy chico es que se <b>mide mal</b>: el número del test se vuelve muy ruidoso, como ves con los valores posibles de la exactitud. Así lo plantea también HOML, el libro en el que se basa la unidad.</p>
+          <p>ISLR2 dibuja la misma idea como una fila de observaciones partida en dos: unas para ajustar y otras para medir
+          <cite class="cita" data-fuente="islr2" data-pag="209" data-pimp="198" data-seccion="5.1.1 The Validation Set Approach" data-que="Por qué apartar observaciones, la Figura 5.1 con la fila partida en dos, y en la página 200 la Figura 5.2: con otra partición al azar, la estimación del error cambia." data-cuando="Al terminar este paso"></cite>.</p>
+          <details class="profundizar">
+            <summary>¿Y con millones de filas?</summary>
+            <div>
+              <p>La diapositiva 21 agrega dos matices: con más de 100 000 filas se puede usar un entrenamiento más chico para ganar velocidad, y cuando hay más columnas que filas (p ≥ n) hacen falta más muestras. Con millones de filas, un 1 % de test ya son decenas de miles: alcanza de sobra para medir. La proporción importa sobre todo cuando los datos son pocos.</p>
+            </div>
+          </details>
+          <div class="check" id="chk2"><p class="check-tit">Calcula con los datos en vivo</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Barajar con semilla">
+          <span class="etapa">Paso 3</span>
+          <h3>Barajar con semilla</h3>
+          <p>Hasta ahora el muro cortó la lista tal como venía. Pero la lista viene ordenada por horas: sin barajar, el test son siempre <b>las últimas filas</b>. En el escenario está encendido <b>sin barajar</b>.</p>
+          <div class="check" id="chk3"><p class="check-tit">Calcula con los datos en vivo</p><div class="cuerpo"></div></div>
+          <div id="post3" hidden>
+            <p>Esa es la trampa: el modelo aprende con los que menos estudiaron y se examina con los que más. Por eso el muro se pone <b>después de barajar</b>. Ahora toca <b>Barajar</b> con la semilla 1673: las fichas cambian de lugar y quedan en el test Hugo y Julia. Las medias de horas se acercan (5 y 10 en vez de 4.75 y 11).</p>
+            <p>Vuelve a barajar con la misma semilla: sale <b>lo mismo</b>. Esa es la función de la <b>semilla</b>: fija la secuencia de azar para que mañana la partición se repita. Aquí entra la notación. En R, <code>set.seed(1673)</code> y luego <code>sample(10)</code>; en Python, <code>train_test_split(..., random_state=1673)</code>. Cambia la semilla y obtienes otra partición.</p>
+            <p>La UD0 usa <code>set.seed(123)</code> para el muestreo aleatorio simple
+            <cite class="cita" data-fuente="intro3" data-pag="22" data-ancla="5/7" data-seccion="4.3.1 Simple random sampling" data-que="El muestreo aleatorio simple, con set.seed(123) para que la partición se pueda repetir." data-cuando="Al leer este paso"></cite>.
+            Esa diapositiva lo presenta como "ideal cuando los datos siguen una distribución normal". La normalidad no tiene nada que ver: lo que decide si basta con barajar al azar es el tamaño de los datos y el balance de la respuesta (paso 4).
+            ISLR2 parte el dataset Auto a la mitad con <code>set.seed(1)</code> y <code>sample(392, 196)</code>, y muestra que con <code>set.seed(2)</code> los errores cambian
+            <cite class="cita" data-fuente="islr2" data-pag="224" data-pimp="213" data-seccion="5.3.1 The Validation Set Approach (laboratorio)" data-que="set.seed(1), sample(392, 196) para elegir el entrenamiento, y la repetición con set.seed(2), que da otros errores." data-cuando="Al terminar este paso"></cite>.</p>
+            <p><b>Segunda trampa: la misma semilla no da la misma partición en Python y en R.</b> Cada lenguaje tiene su propio generador. Con la semilla 42, <code>train_test_split</code> deja en el test a Iván y Beto; <code>set.seed(42); sample(10)[1:2]</code> deja a Ana y Eva. Pruébalo con el selector Python / R del escenario. La semilla 1673 se eligió a propósito porque es de las pocas que dejan a Hugo y Julia en los dos lenguajes: de 20 000 semillas probadas, solo 11 lo logran, y 1673 es la primera. Y sin <code>random_state</code>, <code>train_test_split</code> parte distinto cada vez: tres corridas dieron como índices de test <code>[2, 7]</code>, <code>[2, 4]</code> y <code>[6, 4]</code>.</p>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Estratificar">
+          <span class="etapa">Paso 4</span>
+          <h3>Estratificar</h3>
+          <p>Barajar al azar puede dejar un test con una proporción de clases muy distinta del total. Pon la semilla 42 y el generador de R: el test queda con Ana y Eva, <b>0 % de aprobados</b>, frente a un 50 % en el total y un 62.5 % (5 de 8) en el entrenamiento. No es mala suerte rara: con 10 filas y un test de 2, la probabilidad de que las dos sean de la misma clase es 20/45, un <b>44 %</b> (en 2 000 semillas de <code>train_test_split</code> salió 43.75 %).</p>
+          <p><b>Estratificar</b> es repartir <b>cada clase por separado</b>: se baraja dentro de los aprobados y dentro de los no aprobados, y cada grupo aporta al test la misma proporción. Las barras del escenario muestran el porcentaje de aprobados de cada lado.</p>
+          <div class="check" id="chk4"><p class="check-tit">Calcula con los datos en vivo</p><div class="cuerpo"></div></div>
+          <div id="post4" hidden>
+            <p>Enciende <b>estratificar</b>. Con 80/20 el test recibe siempre un aprobado y uno no: con la semilla 42, scikit-learn deja a Eva y Julia; con la 1673, a Dani y Fede. Con 70/30 hay que repartir 3 filas entre dos clases de 5: las librerías dan 2 de una y 1 de la otra. Y con 90/10 no se puede: un test de una fila no puede tener las dos clases, y scikit-learn responde <code>ValueError: The test_size = 1 should be greater or equal to the number of classes = 2</code>.</p>
+            <p>Estratificar importa sobre todo en clasificación con clases raras o con pocos datos. En regresión se estratifica por cuantiles de la respuesta: así parte la UD1 los datos de Ames, con <code>initial_split(prop = 0.7, strata = "Sale_Price")</code>
+            <cite class="cita" data-fuente="intro3" data-pag="23" data-ancla="5/8" data-seccion="4.3.2 Stratified sampling" data-que="Estratificar en clasificación (el ejemplo de attrition, 16 % frente a 84 %) y por cuantiles en regresión, con el paquete rsample." data-cuando="Al terminar este paso"></cite>.
+            En Python es el argumento <code>stratify=y</code>; Raschka lo usa con Iris y comprueba con <code>np.bincount</code> que cada parte conserva la proporción de cada clase
+            <cite class="cita" data-fuente="raschka3" data-pag="3" data-pimp="55" data-seccion="First steps with scikit-learn" data-que="train_test_split(X, y, test_size=0.3, random_state=1, stratify=y) y np.bincount para ver que las tres clases quedan en la misma proporción en entrenamiento y prueba." data-cuando="Al terminar este paso"></cite>.
+            Qué hacer cuando una clase es realmente rara es tema de "Muestreo estratificado y desbalance de clases".</p>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="El test se mira una vez">
+          <span class="etapa">Paso 5</span>
+          <h3>El test se mira una sola vez</h3>
+          <p>Si usas el test para <b>elegir</b> (entre modelos, hiperparámetros o variables), el test ya trabajó de entrenamiento, y su número sale optimista. Para verlo, el escenario cambia: un test nuevo de 20 filas y <b>20 modelos que adivinan tirando una moneda</b>. Ninguno sabe nada.</p>
+          <div class="check" id="chk5"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+          <div id="post5" hidden>
+            <p>Ahora toca <b>Evaluar los 20 en el test</b> y después <b>Test nuevo para el ganador</b>. El ganador baja a un número cercano al 50 %: no tenía nada de especial, solo tuvo suerte con esas 20 filas. Cuanto más eliges mirando el test, más se infla. El contador de miradas lleva la cuenta.</p>
+            <p>Es la regla de oro de la UD0: el test se usa <b>una sola vez</b>, al final
+            <cite class="cita" data-fuente="intro3" data-pag="19" data-ancla="5/4" data-seccion="Entrenamiento frente a test" data-que="La regla de oro: el conjunto de test se usa una sola vez, para la evaluación final del modelo." data-cuando="Al leer este paso"></cite>.
+            Para elegir se usa una parte del entrenamiento, la <b>validación</b>, o la validación cruzada (páginas "Validación cruzada" y "Ajuste de hiperparámetros y búsqueda en rejilla"). Raschka lo explica con el método holdout: si reutilizas el mismo test para elegir el modelo, ese test pasa a ser parte del entrenamiento y la estimación sale demasiado optimista
+            <cite class="cita" data-fuente="raschka6" data-pag="5" data-pimp="175" data-seccion="Using the holdout method" data-que="Por qué no reutilizar el test en la selección de modelos, y en la página siguiente la Figure 6.2: entrenamiento, validación y test." data-cuando="Al terminar este paso"></cite>.</p>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="La fuga de datos">
+          <span class="etapa">Paso 6</span>
+          <h3>La fuga de datos: normalizar antes de partir</h3>
+          <p><b>Fuga de datos</b> (en inglés, data leakage) es cualquier información del test que llega al entrenamiento. La más común pasa al preprocesar. Para estandarizar hace falta una media y una desviación: ¿de dónde salen?</p>
+          <p>La regla: todo lo que se <b>aprende</b> de los datos (medias, desviaciones, la λ de Box-Cox, las categorías, los valores para rellenar faltantes) se aprende <b>solo del entrenamiento</b> y después se <b>aplica</b> al test. En scikit-learn es <code>fit</code> con el entrenamiento y <code>transform</code> en los dos
+          <cite class="cita" data-fuente="raschka3" data-pag="4" data-pimp="56" data-seccion="First steps with scikit-learn" data-que="sc.fit(X_train) estima la media y la desviación con el entrenamiento, y después sc.transform estandariza el entrenamiento y la prueba con esos mismos parámetros." data-cuando="Al leer este paso"></cite>.</p>
+          <p>El escenario vuelve a las fichas, con la partición de la página (semilla 1673, 80/20). Arriba está la <b>caja del modelo</b> con lo que aprende el escalado, y los <b>tubos</b> muestran de qué fichas bebe. Abajo, la <b>regla de z</b>: cada ficha cae en su z. Toca una ficha para ver su cuenta. Aquí la desviación divide entre n, como <code>StandardScaler</code>. La fórmula del z está explicada en "Estandarización y normalización"; aquí solo se usa:</p>
+          <div class="fbloque"><div class="vivo" id="vivo6"></div></div>
+          <div class="check" id="chk6"><p class="check-tit">Calcula con los datos en vivo</p><div class="cuerpo"></div></div>
+
+          <div class="destacado" id="destacado">
+            <p class="dest-tit">Una confusión muy común</p>
+            <h4>Si normalizo antes de partir, ¿qué números cambian?</h4>
+            <p>En el escenario hay un interruptor, <b>normalizar antes de partir</b>: la media y la desviación se calculan con los diez y después se pone el muro. Antes de encenderlo, predice.</p>
+            <div class="check" id="chkD"><p class="check-tit">Predice antes de encenderlo</p><div class="cuerpo"></div></div>
+            <div id="postD" hidden>
+              <p>Enciéndelo. La media pasa de 5 a 6 y la desviación de 2 a 3, porque Hugo y Julia entraron en la cuenta. Cambian los z del test (Hugo de 1 a 0.333, Julia de 4 a 2.333) <b>y también los del entrenamiento</b> (Ana de −1.5 a −1.333, Iván de 2 a 1), aunque ningún dato del entrenamiento cambió. El entrenamiento ya lleva la huella del test: los tubos rojos cruzan el muro.</p>
+              <p>Mira a Julia. Con las cuentas honestas está a <b>4 desviaciones</b>, más lejos que cualquier dato que el modelo vio (el máximo del entrenamiento es 2). Con la fuga parece estar a 2.333: la sorpresa se suaviza, porque el preprocesado ya sabía que Julia existía. Por eso el número del test sale mejor de lo que es.</p>
+              <div class="cita" id="citaHipo" hidden></div>
+              <p>Un matiz honesto: con un escalado, la fuga suele mover poco la exactitud final. El problema es que ya no puedes saber cuánto, porque el test dejó de ser "datos que el modelo nunca vio". Y hay fugas enormes (paso 7). La UD1 lo resume en su sección de fuga de información: las medias y desviaciones se estiman dentro de cada partición de entrenamiento
+              <cite class="cita" data-fuente="fe1" data-pag="83" data-ancla="data-leakage" data-seccion="8.3 Data leakage" data-que="Qué es la fuga de información y la Figure 12: el preprocesado se estima dentro de cada partición de entrenamiento, también en cada vuelta de la validación cruzada." data-cuando="Después de encender el interruptor"></cite>.</p>
+              <p>El mismo error aparece en un libro de referencia. En el laboratorio de KNN con Caravan, ISLR2 escribe <code>standardized.X &lt;- scale(Caravan[, -86])</code> con las 5 822 filas y <b>después</b> separa <code>test &lt;- 1:1000</code>
+              <cite class="cita" data-fuente="islr2" data-pag="194" data-pimp="183" data-seccion="4.7.6 K-Nearest Neighbors (Caravan)" data-que="scale(Caravan[, -86]) estandariza todas las filas y después test <- 1:1000 toma las primeras mil: la fuga de este paso, y además sin barajar." data-cuando="Después de este destacado"></cite>.
+              Es exactamente esta fuga (pequeña, con tantas filas), y además el test son las primeras mil filas, sin barajar.</p>
+            </div>
+          </div>
+
+          <details class="profundizar">
+            <summary>¿Y la desviación con n o con n − 1?</summary>
+            <div>
+              <p><code>StandardScaler</code> divide entre n: la desviación del entrenamiento es 2. <code>scale</code> y <code>sd</code> de R dividen entre n − 1: 2.13809. No es una fuga, pero cambia los z: Hugo sale 0.935 en vez de 1. Lo importante es usar la misma regla en el entrenamiento y en el test. Lo ves en la trampa real <b>codigo2</b> de la vida real.</p>
+            </div>
+          </details>
+        </section>
+
+        <section class="paso card" data-titulo="Fugas grandes">
+          <span class="etapa">Paso 7</span>
+          <h3>Fugas grandes: elegir variables mirando todo</h3>
+          <p>Hay fugas que convierten ruido en un modelo "bueno". El experimento del escenario: 40 filas, <b>500 columnas de puro ruido</b> (números al azar) y una etiqueta también al azar, 20 y 20. Ninguna columna tiene nada que ver con la etiqueta.</p>
+          <p>Dos formas de trabajar. <b>Elegir con todo</b>: buscas las 5 columnas más correlacionadas con la etiqueta usando las 40 filas, y después partes 30/10 y mides. <b>Elegir con el entrenamiento</b>: partes primero y buscas las 5 columnas solo con las 30 filas de entrenamiento. El modelo es el mismo en los dos casos (el centroide más cercano con esas 5 columnas).</p>
+          <div class="check" id="chk7"><p class="check-tit">Predice antes de correr</p><div class="cuerpo"></div></div>
+          <div id="post7" hidden>
+            <p>Corre las dos versiones, de a una o de a cien. En Python con NumPy, 2 000 repeticiones dieron: eligiendo con todo, exactitud media en el test de <b>82.9 %</b> (mediana 80 %, y en el 90 % central de 60 % a 100 %); eligiendo solo con el entrenamiento, <b>49.1 %</b> (de 20 % a 70 %). Tu navegador da números parecidos, no idénticos. Ese 83 % es pura fuga: con 500 columnas, alguna se parece a la etiqueta por casualidad en esas 40 filas, test incluido.</p>
+            <p>Otras fugas del material: el <b>target encoding</b> codifica una categoría con la respuesta (UD1, diap. 77), y la UD1 avisa que la preselección de variables va antes del entrenamiento final para no filtrar información. Y una errata con fuga del target: en la diapositiva 79, la receta aplica <code>step_center</code>, <code>step_scale</code> y <code>step_pca(all_numeric())</code> sin <code>-all_outcomes()</code>, así que <code>Sale_Price</code>, la respuesta, entra en el PCA
+            <cite class="cita" data-fuente="fe1" data-pag="79" data-ancla="8/1" data-seccion="PCA en la receta" data-que="La receta con step_pca(all_numeric()): incluye la respuesta en el PCA. Las diapositivas 85 y 86 sí la excluyen." data-cuando="Al terminar este paso"></cite>.
+            Las diapositivas 85 y 86 sí la excluyen.</p>
+            <p>La herramienta que evita todo esto sin depender de tu memoria es meter el preprocesado <b>dentro del modelo</b>, para que se aprenda solo con el entrenamiento y dentro de cada vuelta de la validación cruzada. En R, la UD1 lo hace con <code>recipe()</code>, <code>prep(training = ...)</code> y <code>bake()</code>. Es el tema de "Pipeline: el preprocesado dentro del modelo" y "Un flujo de modelado reproducible en R". Lo de scikit-learn en esta página sale de Raschka y de la documentación (verificado con la versión 1.6.1): el material oficial de SM142002 sobre scikit-learn no está publicado.</p>
+          </div>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+        </div>
+        <div class="esc-ctrl" id="escCtrl"></div>
+        <div class="escena-host" id="escFichas"></div>
+        <div id="escInfo"></div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>El algoritmo completo con bucles explícitos: barajar con semilla, partir 80/20, calcular la media y la desviación <b>solo con el entrenamiento</b> y estandarizar el test con ellas. Al final se compara con la librería: <code>train_test_split</code> y <code>StandardScaler</code> en Python; <code>sd</code> y <code>scale</code> en R. Mismos diez estudiantes del recorrido. Elige Python o R y dale a reproducir.</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir</p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="true">Python</button>
+            <button type="button" data-lang="r" aria-pressed="false">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">1 · barajar y partir</span><span data-f="2">2 · aprender del entrenamiento</span><span data-f="3">3 · aplicar al test</span><span data-f="4">4 · la librería</span>
+        </div>
+        <div class="escena-host" id="vrEsc"></div>
+        <h3 class="mini-tit vr-tit">Salida del programa</h3>
+        <pre class="vr-sal" id="vrSal"></pre>
+      </div>
+    </div>
+
+    <p class="vr-nota">En la práctica se escribe en dos líneas. En Python, <code>X_tr, X_te = train_test_split(X, test_size=0.2, random_state=1673, stratify=y)</code> y <code>StandardScaler().fit(X_tr)</code>. En R con tidymodels, <code>initial_split(datos, prop = 0.8, strata = y)</code> y una receta <code>recipe(...) |&gt; step_normalize(...) |&gt; prep(training = ...)</code>; esa forma no se corre en esta página, sale en "Un flujo de modelado reproducible en R". Fíjate en la salida de R: la media coincide, pero <code>sd</code> da 2.13809 y no 2, porque divide entre n − 1.</p>
+
+    <details class="profundizar">
+      <summary>La forma vectorizada</summary>
+      <div>
+        <p>Los bucles se reemplazan por una máscara de índices. En NumPy, <code>media = horas[train].mean()</code> y <code>desv = horas[train].std()</code>, que divide entre n por defecto y da 2.0. En R, <code>mean(horas[train])</code> y <code>sqrt(mean((horas[train] - media)^2))</code>, que da 2. El vector <code>train</code> hace el trabajo del bucle: elige qué filas entran en la cuenta, y Hugo y Julia quedan fuera.</p>
+      </div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Ajustar el escalado antes de partir</h3><span class="estado" data-reto="codigo1"></span></div>
+        <div class="lec"><span class="lec-t">Python</span><pre>import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+horas = np.array([2, 4, 4, 4, 5, 5, 7, 7, 9, 13]).reshape(-1, 1)
+esc = StandardScaler().fit(horas)  # se ajusta con los 10: fuga
+X_tr, X_te = train_test_split(horas, test_size=0.2, random_state=1673)
+print(esc.mean_, esc.scale_)
+print(esc.transform(X_te).ravel())
+bien = StandardScaler().fit(X_tr)
+print(bien.transform(X_te).ravel())
+<span class="sal">[6.] [3.]
+[0.33333333 2.33333333]
+[1. 4.]</span></pre></div>
+        <div id="codigo1"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>n o n − 1</h3><span class="estado" data-reto="codigo2"></span></div>
+        <div class="lec"><span class="lec-t">R</span><pre>horas &lt;- c(2, 4, 4, 4, 5, 5, 7, 7, 9, 13)
+train &lt;- c(1, 2, 3, 4, 5, 6, 7, 9)
+z &lt;- scale(horas[train])
+print(attr(z, "scaled:scale"))
+print(sqrt(mean((horas[train] - 5)^2)))
+print((horas[c(8, 10)] - 5) / attr(z, "scaled:scale"))
+<span class="sal">[1] 2.13809
+[1] 2
+[1] 0.9354143 3.7416574</span></pre></div>
+        <p class="desc">En NumPy pasa lo mismo con un argumento: <code>np.std(x)</code> da 2.0 y <code>np.std(x, ddof=1)</code> da 2.138089935299395. Es el mismo <code>ddof</code> de "Covarianza".</p>
+        <div id="codigo2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>La misma semilla, otros estudiantes</h3><span class="estado" data-reto="codigo3"></span></div>
+        <div class="lec-par">
+          <div class="lec"><span class="lec-t">Python</span><pre>from sklearn.model_selection import train_test_split
+nombres = ["Ana", "Beto", "Cris", "Dani", "Eva", "Fede", "Gabi", "Hugo", "Iván", "Julia"]
+entreno, prueba = train_test_split(nombres, test_size=0.2, random_state=42)
+print(prueba)
+<span class="sal">['Iván', 'Beto']</span></pre></div>
+          <div class="lec"><span class="lec-t">R</span><pre>nombres &lt;- c("Ana", "Beto", "Cris", "Dani", "Eva", "Fede", "Gabi", "Hugo", "Iván", "Julia")
+set.seed(42)
+prueba &lt;- nombres[sample(10)[1:2]]
+print(prueba)
+<span class="sal">[1] "Ana" "Eva"</span></pre></div>
+        </div>
+        <div id="codigo3"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: la biblioteca te avisa en el índice cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>¿Hay fuga?</h3><span class="estado" data-reto="ojo"></span></div>
+        <p class="desc">Ocho rondas al azar. Cada una describe un procedimiento en una línea. Decide si hay fuga de datos o no, sin calcular nada. Apruebas con 7 de 8.</p>
+        <div id="ojo"></div>
+      </article>
+
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Construir</span><h3>Una partición limpia</h3><span class="estado" data-reto="construir"></span></div>
+        <p class="desc">Empiezas sin barajar, con 80/20 y con la fuga encendida. Con los controles, consigue que se cumplan las cuatro condiciones a la vez. Se marcan solas.</p>
+        <ul class="objetivos" id="objetivos"></ul>
+        <div class="esc-ctrl" id="cstCtrl" style="margin-top:12px"></div>
+        <div class="escena-host" id="cstEsc"></div>
+        <div id="cstInfo"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>Escalar con el entrenamiento</h3><span class="estado" data-reto="mano"></span></div>
+        <p class="desc">Seis valores al azar: cuatro de entrenamiento (borde lleno) y dos de test (borde punteado). Con papel, en tres partes.</p>
+        <div id="mano"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Una línea mal</h3><span class="estado" data-reto="error"></span></div>
+        <p class="desc">Tres variantes del programa de la vida real. En cada una, una línea está mal y la salida real lo delata. Tócala.</p>
+        <div id="error"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Para qué sirve el test</h3><span class="estado" data-reto="prop1"></span></div>
+        <div id="prop1"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Qué hace una semilla</h3><span class="estado" data-reto="prop2"></span></div>
+        <div id="prop2"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Cuándo estratificar</h3><span class="estado" data-reto="prop3"></span></div>
+        <div id="prop3"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Recordar a la fuerza es lo que fija. Arma el flujo en orden y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Flujo de memoria</span><h3>El orden sin fugas</h3><span class="estado" data-reto="formula"></span></div>
+        <p class="desc">Hay piezas de más que no pertenecen. No mires arriba.</p>
+        <div id="formula"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el material</h2>
+      <p class="lecturas-intro">Ya construiste la idea con las manos. Ahora ve al material del máster y a los libros y comprueba que la reconoces. Cada entrada dice qué vas a encontrar y en qué momento conviene leerla. Si abres la biblioteca con doble clic, el enlace abre el archivo en esa página. Al leer las diapositivas de la UD0 y el laboratorio de Caravan de ISLR2, busca las tres aclaraciones de esta página: la proporción no causa sobreajuste, la normalidad no decide el muestreo, y estandarizar antes de partir es una fuga.</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> Los diez estudiantes, sus horas y sus resultados son inventados, elegidos para que las cuentas den limpias (media 5 y desviación 2 en el entrenamiento; media 6 y desviación 3 con los diez). Los retos generan otros números al azar.
+    Las salidas de código de esta página se obtuvieron ejecutando el código en Python 3.13 con NumPy 2.1.3 y scikit-learn 1.6.1, y en R 4.6.1. Las particiones de las semillas 1673 y 42 son las reales de cada lenguaje; para otras semillas tu navegador baraja con su propio generador. Las simulaciones de los pasos 5 y 7 corren en tu navegador con su propio azar; los números de referencia salieron de NumPy. Tu progreso se guarda solo en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+(function () {
+  "use strict";
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+  var ID = "particion-train-test";
+
+  var RETOS = ["ojo", "construir", "mano", "error", "prop1", "prop2", "prop3", "codigo1", "codigo2", "codigo3", "formula"];
+  var C = B.concepto({ id: "particion-train-test", retos: RETOS, pasos: 7 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  /* ---------------- utilidades ---------------- */
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+  function rango(a, b) { var r = []; for (var i = a; i < b; i++) r.push(i); return r; }
+  function porNum(a, b) { return a - b; }
+  function f3(x) {
+    var r = Math.round(x * 1000) / 1000;
+    if (Object.is(r, -0) || r === 0) return "0";
+    return (r < 0 ? "−" : "") + String(Math.abs(r));
+  }
+  function pct(x) { return Math.round(x * 1000) / 10 + " %"; }
+  function codTex(s) { return s.replace(/\\/g, "").replace(/([_#%&{}$])/g, "\\$1").replace(/\^/g, "\\textasciicircum{}").replace(/~/g, "\\textasciitilde{}"); }
+  // codigo en monoespaciado, con cortes permitidos entre palabras (para 375 px)
+  function tt(s) {
+    var m = /^( *)(.*)$/.exec(s), sang = Math.round(m[1].length / 2);
+    var palabras = m[2].split(" ").map(function (w) { return "\\texttt{" + codTex(w) + "}"; });
+    return new Array(sang + 1).join("\\quad ") + palabras.join("\\texttt{ }\\allowbreak ");
+  }
+  // texto normal con cortes permitidos entre palabras
+  function tx(s) {
+    return s.split(" ").map(function (w) { return "\\text{" + codTex(w) + "}"; }).join("\\text{ }\\allowbreak ");
+  }
+
+  /* ---------------- los datos ---------------- */
+  var NOM = ["Ana", "Beto", "Cris", "Dani", "Eva", "Fede", "Gabi", "Hugo", "Iván", "Julia"];
+  var H = [2, 4, 4, 4, 5, 5, 7, 7, 9, 13];
+  var AP = [0, 0, 1, 0, 0, 1, 1, 0, 1, 1];
+  var PROPS = [[50, 5], [60, 4], [70, 3], [80, 2], [90, 1]];
+  // permutaciones reales: np.random.RandomState(s).permutation(10) y set.seed(s); sample(10) - 1
+  var PERM = {
+    py: { 1673: [7, 9, 0, 4, 1, 3, 6, 8, 2, 5], 42: [8, 1, 5, 0, 7, 2, 9, 4, 3, 6] },
+    r: { 1673: [9, 7, 5, 3, 2, 4, 1, 6, 8, 0], 42: [0, 4, 9, 7, 1, 3, 5, 8, 6, 2] }
+  };
+  // train_test_split(..., test_size=k, random_state=s, stratify=y): indices de test
+  var ESTRAT = {
+    1673: { 2: [3, 5], 3: [3, 5, 9], 4: [3, 5, 7, 9], 5: [2, 3, 5, 7, 9] },
+    42: { 2: [4, 9], 3: [0, 4, 9], 4: [0, 2, 4, 9], 5: [0, 2, 3, 4, 9] }
+  };
+  function mulberry(a) {
+    return function () {
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      var t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+  function barajar(arr, rnd) {
+    var a = arr.slice();
+    for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(rnd() * (i + 1)); var t = a[i]; a[i] = a[j]; a[j] = t; }
+    return a;
+  }
+  function particion(st) {
+    var n = st.nTest, test, como = "";
+    if (!st.barajado) { test = rango(10 - n, 10); como = "sin barajar: el test son las últimas " + n + " filas"; }
+    else if (st.estrat && n >= 2) {
+      if (ESTRAT[st.semilla]) { test = ESTRAT[st.semilla][n].slice(); como = "estratificado con la semilla " + st.semilla + ", como scikit-learn"; }
+      else {
+        var rnd = mulberry(st.semilla * 7919 + 13);
+        var si = barajar([2, 5, 6, 8, 9], rnd), no = barajar([0, 1, 3, 4, 7], rnd);
+        var nsi = Math.floor(n / 2) + (n % 2 && rnd() < 0.5 ? 1 : 0);
+        test = si.slice(0, nsi).concat(no.slice(0, n - nsi));
+        como = "estratificado por tu navegador (semilla " + st.semilla + ")";
+      }
+    } else {
+      var p = PERM[st.gen][st.semilla];
+      if (p) como = "barajado con la semilla " + st.semilla + ", como " + (st.gen === "py" ? "Python" : "R");
+      else { p = barajar(rango(0, 10), mulberry(st.semilla)); como = "barajado por tu navegador (semilla " + st.semilla + ")"; }
+      test = p.slice(0, n);
+    }
+    test.sort(porNum);
+    var train = rango(0, 10).filter(function (i) { return test.indexOf(i) < 0; });
+    return { train: train, test: test, como: como, sinEstrat: !!(st.estrat && st.barajado && n < 2) };
+  }
+  function media(idx) { return idx.reduce(function (s, i) { return s + H[i]; }, 0) / idx.length; }
+  function desvN(idx) { var m = media(idx); return Math.sqrt(idx.reduce(function (s, i) { return s + (H[i] - m) * (H[i] - m); }, 0) / idx.length); }
+  function aprob(idx) { return idx.length ? idx.reduce(function (s, i) { return s + AP[i]; }, 0) / idx.length : 0; }
+  var TODOS = rango(0, 10);
+
+  /* ---------------- la escena: fichas, muro, caja del modelo, tubos y regla de z ---------------- */
+  var NS = "http://www.w3.org/2000/svg";
+  function Escena(host, opt) {
+    opt = opt || {};
+    host.innerHTML = '<svg class="escena-svg" xmlns="' + NS + '" role="img" aria-label="Diez fichas de estudiantes separadas por un muro"><g class="l-caja"></g><g class="l-tubos"></g><g class="l-muro"></g><g class="l-fichas"></g><g class="l-marcas"></g><g class="l-regla"></g><g class="l-puntos"></g></svg>';
+    var svg = host.querySelector("svg"), L = {};
+    ["caja", "tubos", "muro", "fichas", "marcas", "regla", "puntos"].forEach(function (k) { L[k] = svg.querySelector(".l-" + k); });
+    var F = [], P = [], ultimo = null, estrecho = null;
+    TODOS.forEach(function (i) {
+      var g = document.createElementNS(NS, "g");
+      g.setAttribute("class", "ficha");
+      g.setAttribute("data-i", i);
+      L.fichas.appendChild(g);
+      F.push(g);
+      var p = document.createElementNS(NS, "g");
+      p.setAttribute("class", "punto");
+      p.setAttribute("data-i", i);
+      p.innerHTML = '<circle r="11" cx="0" cy="0"></circle><text x="0" y="4">' + NOM[i].charAt(0) + "</text>";
+      L.puntos.appendChild(p);
+      P.push(p);
+    });
+    function dibujarFicha(g, i, fw) {
+      var fh = 64;
+      g.innerHTML = '<rect class="f-rect" x="0" y="0" width="' + fw + '" height="' + fh + '" rx="8"></rect>' +
+        '<text class="t-nom" x="' + fw / 2 + '" y="15">' + NOM[i] + "</text>" +
+        '<text class="t-h" x="' + fw / 2 + '" y="38">' + H[i] + " h</text>" +
+        '<rect class="' + (AP[i] ? "p-si" : "p-no") + '" x="' + (fw / 2 - 15) + '" y="45" width="30" height="14" rx="7"></rect>' +
+        '<text class="t-ap" x="' + fw / 2 + '" y="55.5">' + (AP[i] ? "sí" : "no") + "</text>" +
+        '<path class="candado" d="M' + (fw - 13) + ' 7 v-2 a3 3 0 0 1 6 0 v2"></path>' +
+        '<rect class="candado-c" x="' + (fw - 14.5) + '" y="7" width="9" height="7" rx="1.5"></rect>';
+    }
+    svg.addEventListener("click", function (e) {
+      var g = e.target.closest ? e.target.closest(".ficha, .punto") : null;
+      if (g && opt.alTocar) opt.alTocar(+g.getAttribute("data-i"));
+    });
+    function pintar(cfg) {
+      ultimo = cfg;
+      var ancho = host.clientWidth || 640, nar = ancho < 500;
+      if (nar !== estrecho) { estrecho = nar; F.forEach(function (g, i) { dibujarFicha(g, i, nar ? 58 : 56); }); }
+      var fw = nar ? 58 : 56, fh = 64;
+      var W = nar ? 348 : 652;
+      var top = cfg.caja ? 92 : 10;
+      var muro = !!cfg.muro, part = cfg.part;
+      var k = muro ? part.train.length : 10;
+      var orden = muro ? part.train.concat(part.test) : TODOS;
+      var pos = {};
+      orden.forEach(function (i, s) {
+        if (!nar) pos[i] = { x: 10 + s * 62 + (muro && s >= k ? 16 : 0), y: top };
+        else {
+          var fila = s < 5 ? 0 : 1, col = s < 5 ? s : s - 5;
+          pos[i] = { x: 10 + col * 64 + (muro && fila === 1 && s >= k && k > 5 ? 12 : 0), y: top + fila * (fh + 16) };
+        }
+      });
+      var abajo = top + (nar ? 2 * fh + 16 : fh);
+      var marcas = cfg.marcas || {}, hayMarcas = Object.keys(marcas).length > 0;
+      var finFichas = abajo + (hayMarcas ? 16 : 6);
+      // fichas
+      orden.forEach(function (i) {
+        var g = F[i], cl = "ficha";
+        if (muro) cl += part.test.indexOf(i) >= 0 ? " te" : " tr";
+        if (cfg.nuevos && cfg.nuevos.indexOf(i) >= 0) cl += " nuevo";
+        if (cfg.sel === i) cl += " sel";
+        g.setAttribute("class", cl);
+        g.style.transform = "translate(" + pos[i].x + "px," + pos[i].y + "px)";
+      });
+      // marcas debajo de cada ficha
+      L.marcas.innerHTML = Object.keys(marcas).map(function (i) {
+        var m = marcas[i], p = pos[i];
+        return '<text class="marca ' + (m.cls || "") + '" x="' + (p.x + fw / 2) + '" y="' + (p.y + fh + 12) + '">' + m.txt + "</text>";
+      }).join("");
+      // muro
+      var xm = null, mh = "";
+      if (muro) {
+        var y0 = top - (cfg.caja ? 22 : 6), y1 = abajo + 6;
+        if (!nar) { xm = 10 + k * 62 + 5; mh = '<line class="muro" x1="' + xm + '" y1="' + y0 + '" x2="' + xm + '" y2="' + y1 + '"></line>'; }
+        else if (k === 5) { var yh = top + fh + 8; mh = '<line class="muro" x1="4" y1="' + yh + '" x2="' + (W - 4) + '" y2="' + yh + '"></line>'; }
+        else {
+          var c = k - 5, xv = 10 + c * 64 + 3, yt = top + fh + 8;
+          mh = '<polyline class="muro" points="' + xv + "," + y1 + " " + xv + "," + yt + " " + (W - 4) + "," + yt + '"></polyline>';
+          xm = xv;
+        }
+      }
+      L.muro.innerHTML = mh;
+      // caja del modelo y tubos
+      var ch = "", th = "";
+      if (cfg.caja) {
+        ch = '<rect class="caja-r' + (cfg.caja.fuga ? " fuga" : "") + '" x="8" y="6" width="' + (W - 16) + '" height="54" rx="8"></rect>' +
+          '<text class="caja-t" x="20" y="24">' + cfg.caja.titulo + "</text>" +
+          '<text class="caja-v" x="20" y="47">' + cfg.caja.texto + "</text>";
+        var tubos = (cfg.tubos || []).slice().sort(function (a, b) { return pos[a.i].x - pos[b.i].x || pos[a.i].y - pos[b.i].y; });
+        var xa = 28, xb = (!nar && xm) ? xm - 14 : W - 28;
+        th = tubos.map(function (t, n) {
+          var p = pos[t.i], fx = p.x + fw / 2, fy = p.y;
+          var ex = tubos.length > 1 ? xa + (xb - xa) * n / (tubos.length - 1) : (xa + xb) / 2, ey = 60;
+          var d = t.tipo === "inverso"
+            ? "M" + ex + " " + ey + " C" + ex + " " + (ey + 30) + " " + fx + " " + (fy - 30) + " " + fx + " " + fy
+            : "M" + fx + " " + fy + " C" + fx + " " + (fy - 30) + " " + ex + " " + (ey + 30) + " " + ex + " " + ey;
+          return '<path class="tubo ' + (t.tipo || "") + '" d="' + d + '"></path>';
+        }).join("");
+      }
+      L.caja.innerHTML = ch;
+      L.tubos.innerHTML = th;
+      // regla de z
+      var H2 = finFichas + 8;
+      if (cfg.regla) {
+        var R = cfg.regla, ry = finFichas + 26, ye = ry + 78;
+        var x0 = 26, x1 = W - 26;
+        var X = function (z) { return x0 + (x1 - x0) * (z - R.lo) / (R.hi - R.lo); };
+        var rh = '<text class="regla-t" x="' + x0 + '" y="' + ry + '">' + R.titulo + "</text>" +
+          '<line class="eje" x1="' + x0 + '" y1="' + ye + '" x2="' + x1 + '" y2="' + ye + '"></line>';
+        for (var z = Math.ceil(R.lo); z <= R.hi; z++) {
+          rh += '<line class="eje" x1="' + X(z) + '" y1="' + (ye - 4) + '" x2="' + X(z) + '" y2="' + (ye + 4) + '"></line><text class="tick" x="' + X(z) + '" y="' + (ye + 17) + '">' + (z < 0 ? "−" + (-z) : z) + "</text>";
+        }
+        L.regla.innerHTML = rh;
+        var pila = {};
+        TODOS.forEach(function (i) {
+          var zz = R.z[i], clave = Math.round(zz * 100), n = pila[clave] || 0;
+          pila[clave] = n + 1;
+          var pt = P[i];
+          pt.setAttribute("class", "punto" + (part && part.test.indexOf(i) >= 0 ? " te" : ""));
+          pt.style.transform = "translate(" + X(zz) + "px," + (ye - 15 - n * 23) + "px)";
+          pt.style.opacity = R.ocultos && R.ocultos.indexOf(i) >= 0 ? "0" : "1";
+          pt.style.display = "";
+        });
+        H2 = ye + 26;
+      } else {
+        L.regla.innerHTML = "";
+        P.forEach(function (pt) { pt.style.display = "none"; });
+      }
+      svg.setAttribute("viewBox", "0 0 " + W + " " + H2);
+    }
+    var tRes = null;
+    window.addEventListener("resize", function () {
+      clearTimeout(tRes);
+      tRes = setTimeout(function () { if (ultimo && ((host.clientWidth || 640) < 500) !== estrecho) pintar(ultimo); }, 150);
+    });
+    return { pintar: pintar };
+  }
+
+  /* ---------------- controles compartidos (escenario y reto construir) ---------------- */
+  function ctrlHtml(st, o) {
+    var h = "";
+    if (o.props) h += '<div class="seg" role="group" aria-label="Proporción">' + PROPS.map(function (p) {
+      return '<button type="button" data-prop="' + p[1] + '" aria-pressed="' + (st.nTest === p[1]) + '">' + p[0] + "/" + (100 - p[0]) + "</button>";
+    }).join("") + "</div>";
+    if (o.barajar) {
+      var dis = o.lockBarajar ? " disabled" : "";
+      h += '<label class="tog' + (o.lockBarajar ? " off" : "") + '"><input type="checkbox" data-tog="sin"' + (!st.barajado ? " checked" : "") + dis + "> sin barajar</label>" +
+        '<span class="semilla">semilla <input type="number" data-semilla min="0" step="1" value="' + st.semilla + '"' + dis + ' aria-label="Semilla"></span>' +
+        '<button type="button" data-act="barajar"' + dis + ">Barajar</button>";
+    }
+    if (o.gen) h += '<div class="seg" role="group" aria-label="Generador"><button type="button" data-gen="py" aria-pressed="' + (st.gen === "py") + '"' + (o.lockBarajar ? " disabled" : "") + '>Python</button><button type="button" data-gen="r" aria-pressed="' + (st.gen === "r") + '"' + (o.lockBarajar ? " disabled" : "") + ">R</button></div>";
+    if (o.estrat) h += '<label class="tog' + (o.lockEstrat ? " off" : "") + '"><input type="checkbox" data-tog="estrat"' + (st.estrat ? " checked" : "") + (o.lockEstrat ? " disabled" : "") + "> estratificar</label>";
+    if (o.fuga) h += '<label class="tog' + (o.lockFuga ? " off" : "") + '"><input type="checkbox" data-tog="fuga"' + (st.fuga ? " checked" : "") + (o.lockFuga ? " disabled" : "") + "> normalizar antes de partir</label>";
+    if (o.base) h += '<button type="button" class="ghost" data-act="base">Partición de la página</button>';
+    return h;
+  }
+  // aplica un clic o un cambio de los controles al estado; devuelve true si cambio algo
+  function manejarCtrl(st, t, tipo) {
+    if (t.disabled) return false;
+    if (tipo === "click") {
+      var b = t.closest("button");
+      if (!b || b.disabled) return false;
+      if (b.hasAttribute("data-prop")) { st.nTest = +b.getAttribute("data-prop"); return true; }
+      if (b.hasAttribute("data-gen")) { st.gen = b.getAttribute("data-gen"); return true; }
+      var act = b.getAttribute("data-act");
+      if (act === "barajar") {
+        var inp = b.parentNode.querySelector("[data-semilla]");
+        var s = inp ? Math.abs(Math.round(+inp.value)) : st.semilla;
+        if (!isFinite(s)) s = 1673;
+        st.repetida = st.barajado && s === st.semilla;
+        st.semilla = s;
+        st.barajado = true;
+        return true;
+      }
+      if (act === "base") { st.nTest = 2; st.barajado = true; st.semilla = 1673; st.gen = "py"; st.estrat = false; st.fuga = false; return true; }
+      return false;
+    }
+    if (t.hasAttribute("data-semilla")) {
+      var v = Math.abs(Math.round(+t.value));
+      if (!isFinite(v)) return false;
+      st.semilla = v;
+      st.repetida = false;
+      return st.barajado;
+    }
+    var tog = t.getAttribute("data-tog");
+    if (tog === "sin") { st.barajado = !t.checked; if (!st.barajado) st.estrat = false; return true; }
+    if (tog === "estrat") { st.estrat = t.checked; if (st.estrat) st.barajado = true; return true; }
+    if (tog === "fuga") { st.fuga = t.checked; return true; }
+    return false;
+  }
+
+  /* ---------------- estado del escenario ---------------- */
+  var est = { c1: false, c2: false, c3: false, c4: false, c5: false, c6: false, cD: false, c7: false };
+  var ESC = { nTest: 2, barajado: false, semilla: 1673, gen: "py", estrat: false, fuga: false, sel: null, examen: {}, repetida: false, visto6: false };
+  var modo = 0, pasos;
+  var escena = Escena($("escFichas"), { alTocar: tocarFicha });
+
+  // el memorizador: estudio a todos menos Hugo y Julia
+  var MEMO = [0, 1, 2, 3, 4, 5, 6, 8];
+  function memoriza(i) {
+    if (MEMO.indexOf(i) >= 0) return { pred: AP[i], copia: i };
+    var mejor = MEMO[0];
+    MEMO.forEach(function (j) { if (Math.abs(H[j] - H[i]) < Math.abs(H[mejor] - H[i])) mejor = j; });
+    return { pred: AP[mejor], copia: mejor };
+  }
+  function tocarFicha(i) {
+    if (modo === 0) {
+      if (!est.c1) { $("escHint").textContent = "Primero responde el chequeo: predice sin tocar."; return; }
+      ESC.examen[i] = true;
+      ESC.ultimo = i;
+      render();
+    } else if (modo === 5) { ESC.sel = i; render(); }
+  }
+
+  function objetivo6() { var p = particion(ESC); return p.test.reduce(function (a, i) { return H[i] > H[a] ? i : a; }, p.test[0]); }
+  function params(st, p) { return st.fuga ? { m: media(TODOS), s: desvN(TODOS), de: "los 10" } : { m: media(p.train), s: desvN(p.train), de: "las " + p.train.length + " de entrenamiento" }; }
+
+  function cuentasHtml(p) {
+    return '<div class="cuentas"><span class="tr">entrenamiento: ' + p.train.length + '</span><span class="te">test: ' + p.test.length + "</span></div>";
+  }
+  function barrasHtml(p) {
+    function b(nom, idx) {
+      var a = aprob(idx);
+      return '<div class="barra"><span>' + nom + '</span><span class="b-track"><span class="b-fill" style="width:' + (a * 100) + '%;display:block"></span></span><b>' + pct(a) + "</b></div>";
+    }
+    return '<div class="barras">' + b("total (10)", TODOS) + b("entrenamiento (" + p.train.length + ")", p.train) + b("test (" + p.test.length + ")", p.test) + "</div>" +
+      '<p class="esc-nota">Porcentaje de aprobados de cada lado (teal sí, coral no).</p>';
+  }
+  function notaGen() { return '<p class="esc-nota">Tu navegador baraja con su propio generador; 1673 y 42 reproducen lo que hacen Python y R.</p>'; }
+
+  function render() {
+    var p = particion(ESC), h = "", ctrl = "", info = "";
+    $("escFichas").hidden = modo === 4 || modo === 6;
+    if (modo === 0) {
+      escena.pintar({ part: p, muro: false, nuevos: [7, 9], marcas: marcas0(), sel: ESC.ultimo });
+      info = info0();
+    } else if (modo >= 1 && modo <= 3) {
+      ctrl = ctrlHtml(ESC, { props: true, barajar: modo >= 2, lockBarajar: !est.c3, gen: modo >= 2, estrat: modo === 3, lockEstrat: !est.c4, base: modo >= 2 && est.c3 });
+      escena.pintar({ part: p, muro: true });
+      info = cuentasHtml(p);
+      if (modo === 1) {
+        var n = p.test.length, vals = rango(0, n + 1).map(function (k) { return Math.round(100 * k / n) + " %"; });
+        info += '<p class="esc-frase">Con ' + n + " fila" + (n > 1 ? "s" : "") + " de test, la exactitud solo puede ser: <b>" + vals.join(", ") + "</b>.</p>";
+      }
+      if (modo === 2) {
+        info += '<p class="esc-nota">' + p.como + ".</p>";
+        if (!est.c3) info += '<div class="cuentas"><span class="tr">media de horas del entrenamiento: ?</span><span class="te">media de horas del test: ?</span></div><p class="esc-nota">Barajar se activa al resolver el chequeo.</p>';
+        else {
+          info += '<div class="cuentas"><span class="tr">media de horas del entrenamiento: ' + f3(media(p.train)) + '</span><span class="te">media de horas del test: ' + f3(media(p.test)) + "</span></div>";
+          if (ESC.repetida) info += '<p class="esc-frase bien">Misma semilla, misma partición: nada se movió.</p>';
+          info += notaGen();
+        }
+      }
+      if (modo === 3) {
+        info += '<p class="esc-nota">' + p.como + ".</p>";
+        if (p.sinEstrat) info += '<p class="esc-frase mal">Con 90/10 no se puede estratificar: un test de 1 fila no puede tener las dos clases. scikit-learn responde <code>ValueError: The test_size = 1 should be greater or equal to the number of classes = 2</code>. Se muestra la partición sin estratificar.</p>';
+        info += barrasHtml(p);
+        if (!est.c4) info += '<p class="esc-nota">El interruptor estratificar se activa al resolver el chequeo.</p>';
+        else if (ESC.estrat && ESC.gen === "r") info += '<p class="esc-nota">R base no estratifica solo: lo que ves es lo que hace scikit-learn (en R se hace con <code>rsample::initial_split(..., strata = )</code>).</p>';
+        info += notaGen();
+      }
+    } else if (modo === 4) {
+      ctrl = '<button type="button" class="primary" data-act="evaluar"' + (est.c5 ? "" : " disabled") + '>Evaluar los 20 en el test</button><button type="button" data-act="nuevo"' + (est.c5 && SIM5.acc ? "" : " disabled") + '>Test nuevo para el ganador</button><button type="button" class="ghost" data-act="otros"' + (est.c5 ? "" : " disabled") + ">Otros 20 modelos</button>";
+      info = info5();
+    } else if (modo === 5) {
+      ctrl = ctrlHtml(ESC, { props: true, barajar: true, gen: true, fuga: true, lockFuga: !(est.c6 && est.cD), base: true });
+      var pr = params(ESC, p), t6 = objetivo6();
+      var pt = { m: media(p.train), s: desvN(p.train) }, pa = { m: media(TODOS), s: desvN(TODOS) };
+      var zs = TODOS.map(function (i) { return (H[i] - pr.m) / pr.s; });
+      var todosZ = TODOS.map(function (i) { return (H[i] - pt.m) / pt.s; }).concat(TODOS.map(function (i) { return (H[i] - pa.m) / pa.s; }));
+      var lo = Math.floor(Math.min.apply(null, todosZ)), hi = Math.ceil(Math.max.apply(null, todosZ));
+      var tubos = p.train.map(function (i) { return { i: i }; });
+      if (ESC.fuga) p.test.forEach(function (i) { tubos.push({ i: i, tipo: "fuga" }); });
+      escena.pintar({
+        part: p, muro: true, sel: ESC.sel,
+        caja: { titulo: "lo que aprende el escalado (de " + pr.de + ")", texto: "media = " + f3(pr.m) + "   desviación = " + f3(pr.s), fuga: ESC.fuga },
+        tubos: tubos,
+        regla: { z: zs, lo: lo, hi: hi, ocultos: est.c6 ? [] : [t6], titulo: "regla de z" + (ESC.fuga ? " (con la fuga)" : "") }
+      });
+      info = cuentasHtml(p);
+      if (ESC.fuga) info += '<p class="esc-frase mal">La media y la desviación salen de los 10: los tubos rojos cruzan el muro y todos los puntos de la regla se movieron.</p>';
+      if (!est.c6) info += '<p class="esc-nota">El punto de ' + NOM[t6] + " aparece en la regla al resolver el chequeo.</p>";
+      if (!(est.c6 && est.cD)) info += '<p class="esc-nota">El interruptor de la fuga se activa al resolver el chequeo y la predicción del destacado.</p>';
+      info += notaGen();
+      vivo6(p, pr, t6);
+    } else if (modo === 6) {
+      ctrl = '<button type="button" class="primary" data-act="todo"' + (est.c7 ? "" : " disabled") + '>Elegir con todo</button><button type="button" data-act="train"' + (est.c7 ? "" : " disabled") + '>Elegir con el entrenamiento</button><button type="button" class="ghost" data-act="cien"' + (est.c7 ? "" : " disabled") + ">100 veces cada una</button>";
+      info = info7();
+    }
+    $("escCtrl").innerHTML = ctrl;
+    $("escInfo").innerHTML = info;
+    if (chk2) chk2.refrescar();
+    if (chk3) chk3.refrescar();
+    if (chk4) chk4.refrescar();
+    if (chk6) chk6.refrescar();
+  }
+
+  function marcas0() {
+    var m = {};
+    Object.keys(ESC.examen).forEach(function (k) {
+      var i = +k, r = memoriza(i), ok = r.pred === AP[i];
+      m[i] = { txt: ok ? "acierta" : "falla", cls: ok ? "ok" : "mal" };
+    });
+    if (!Object.keys(m).length) { m[7] = { txt: "no lo vio", cls: "" }; m[9] = { txt: "no lo vio", cls: "" }; }
+    return m;
+  }
+  function info0() {
+    var h = '<p class="esc-nota">Borde lleno: el memorizador lo estudió. Borde punteado: no lo vio nunca.</p>';
+    var vistos = 0, okV = 0, nuevos = 0, okN = 0;
+    Object.keys(ESC.examen).forEach(function (k) {
+      var i = +k, ok = memoriza(i).pred === AP[i];
+      if (MEMO.indexOf(i) >= 0) { vistos++; if (ok) okV++; } else { nuevos++; if (ok) okN++; }
+    });
+    if (ESC.ultimo != null) {
+      var i = ESC.ultimo, r = memoriza(i), ok = r.pred === AP[i];
+      var txt = MEMO.indexOf(i) >= 0
+        ? "Examinas a " + NOM[i] + ": lo estudió, así que copia su resultado anotado (" + (AP[i] ? "aprobó" : "no aprobó") + "). Acierta."
+        : "Examinas a " + NOM[i] + " (" + H[i] + " h), que no vio. Busca al más parecido que estudió: " + NOM[r.copia] + " (" + H[r.copia] + " h, " + (AP[r.copia] ? "aprobó" : "no aprobó") + ") y dice <b>" + (r.pred ? "aprobó" : "no aprobó") + "</b>. En realidad " + NOM[i] + " " + (AP[i] ? "aprobó" : "no aprobó") + ": " + (ok ? "acierta." : "falla.");
+      h += '<p class="esc-frase ' + (ok ? "bien" : "mal") + '">' + txt + "</p>";
+    }
+    if (est.c1) h += '<div class="cuentas"><span class="tr">con los que estudió: ' + okV + " de " + vistos + '</span><span class="te">con los nuevos: ' + okN + " de " + nuevos + "</span></div>";
+    return h;
+  }
+  function vivo6(p, pr, t6) {
+    var i = ESC.sel != null ? ESC.sel : (p.test.indexOf(7) >= 0 && t6 !== 7 ? 7 : p.train[0]);
+    var z = (H[i] - pr.m) / pr.s, oculto = !est.c6 && i === t6;
+    var tex = "z_{\\text{" + NOM[i] + "}} = \\dfrac{" + H[i] + " - " + f3(pr.m).replace("−", "-") + "}{" + f3(pr.s) + "} = " + (oculto ? "\\,?" : f3(z).replace("−", "-"));
+    $("vivo6").innerHTML = B.texStr(tex, true) + '<div class="esc-nota" style="text-align:center">' + (p.test.indexOf(i) >= 0 ? "ficha de test" : "ficha de entrenamiento") + ", media y desviación de " + pr.de + (oculto ? ". Esa cuenta es la del chequeo." : "") + "</div>";
+  }
+
+  /* paso 5: veinte modelos que adivinan */
+  var SIM5 = { verdad: null, acc: null, gana: null, nuevo: null, verdadN: null, miradas: 0 };
+  function moneda(n) { var a = []; for (var i = 0; i < n; i++) a.push(Math.random() < 0.5 ? 1 : 0); return a; }
+  function exactitud(pred, v) { var s = 0; for (var i = 0; i < v.length; i++) if (pred[i] === v[i]) s++; return s / v.length; }
+  function evaluar5() {
+    SIM5.verdad = moneda(20);
+    SIM5.acc = rango(0, 20).map(function () { return exactitud(moneda(20), SIM5.verdad); });
+    SIM5.gana = SIM5.acc.indexOf(Math.max.apply(null, SIM5.acc));
+    SIM5.nuevo = null; SIM5.verdadN = null;
+    SIM5.miradas++;
+  }
+  function info5() {
+    var h = "";
+    if (!SIM5.acc) h += '<div class="filas20">' + rango(0, 20).map(function () { return "<span></span>"; }).join("") + '</div><p class="esc-nota">Las 20 filas del test, todavía sin mirar.</p>';
+    else h += '<div class="filas20">' + SIM5.verdad.map(function (v) { return '<span class="' + (v ? "si" : "no") + '"></span>'; }).join("") + '</div><p class="esc-nota">Las 20 filas del test (teal aprobó, coral no).</p>';
+    h += '<div class="modelos">' + rango(0, 20).map(function (m) {
+      var a = SIM5.acc ? SIM5.acc[m] : null;
+      return '<div class="modelo' + (SIM5.acc && m === SIM5.gana ? " gana" : "") + '"><div class="mb"><span style="height:' + (a == null ? 2 : Math.max(2, a * 34)) + 'px"></span></div>M' + (m + 1) + "<br>" + (a == null ? "?" : Math.round(a * 100) + " %") + "</div>";
+    }).join("") + "</div>";
+    if (SIM5.acc) {
+      h += '<p class="esc-frase">El ganador es M' + (SIM5.gana + 1) + " con <b>" + Math.round(SIM5.acc[SIM5.gana] * 100) + " %</b> en este test.";
+      if (SIM5.nuevo != null) h += " En un test nuevo de 20 filas que nadie miró saca <b>" + Math.round(SIM5.nuevo * 100) + " %</b>.";
+      h += "</p>";
+    }
+    h += '<div class="mirador">miradas al test: ' + SIM5.miradas + "</div>";
+    if (est.c5) h += '<table class="tabla-ref"><tr><th>te quedas con el mejor de</th><th>exactitud media del ganador</th></tr><tr><td>1</td><td>50.0 %</td></tr><tr><td>5</td><td>63.0 %</td></tr><tr><td>20</td><td>70.6 %</td></tr><tr><td>100</td><td>77.3 %</td></tr></table><p class="esc-nota">NumPy, 20 000 repeticiones, modelos que aciertan cada fila con probabilidad 0.5.</p>';
+    return h;
+  }
+
+  /* paso 7: quinientas columnas de ruido */
+  var SIM7 = { hist: { todo: [], train: [] }, ultimo: null };
+  function normal() { var u = 1 - Math.random(), v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
+  function corrida7(conTodo) {
+    var n = 40, p = 500, X = new Float64Array(n * p), y = barajar(rango(0, 40).map(function (i) { return i < 20 ? 0 : 1; }), Math.random);
+    for (var q = 0; q < n * p; q++) X[q] = normal();
+    var orden = barajar(rango(0, 40), Math.random), te = orden.slice(0, 10), tr = orden.slice(10);
+    var filas = conTodo ? rango(0, 40) : tr;
+    var my = filas.reduce(function (s, r) { return s + y[r]; }, 0) / filas.length;
+    var puntaje = [];
+    for (var c = 0; c < p; c++) {
+      var mx = 0, r;
+      for (r = 0; r < filas.length; r++) mx += X[filas[r] * p + c];
+      mx /= filas.length;
+      var sxy = 0, sxx = 0, syy = 0;
+      for (r = 0; r < filas.length; r++) { var dx = X[filas[r] * p + c] - mx, dy = y[filas[r]] - my; sxy += dx * dy; sxx += dx * dx; syy += dy * dy; }
+      puntaje.push([Math.abs(sxy / Math.sqrt(sxx * syy)), c]);
+    }
+    puntaje.sort(function (a, b) { return b[0] - a[0]; });
+    var cols = puntaje.slice(0, 5).map(function (x) { return x[1]; });
+    var cen = [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0]], cnt = [0, 0];
+    tr.forEach(function (r) { cnt[y[r]]++; cols.forEach(function (c, k) { cen[y[r]][k] += X[r * p + c]; }); });
+    cen.forEach(function (v, cl) { for (var k = 0; k < 5; k++) v[k] /= cnt[cl] || 1; });
+    var ok = 0;
+    te.forEach(function (r) {
+      var d = [0, 1].map(function (cl) { return cols.reduce(function (s, c, k) { var t = X[r * p + c] - cen[cl][k]; return s + t * t; }, 0); });
+      if ((d[1] < d[0] ? 1 : 0) === y[r]) ok++;
+    });
+    return { acc: ok / 10, cols: cols };
+  }
+  function correr7(conTodo, veces) {
+    for (var v = 0; v < veces; v++) {
+      var r = corrida7(conTodo);
+      SIM7.hist[conTodo ? "todo" : "train"].push(r.acc);
+      SIM7.ultimo = { acc: r.acc, cols: r.cols, todo: conTodo };
+    }
+  }
+  function info7() {
+    var u = SIM7.ultimo, h = '<div class="ruido">' + rango(0, 500).map(function (c) {
+      return '<span class="' + (u && u.cols.indexOf(c) >= 0 ? "on " + (u.todo ? "mal" : "bien") : "") + '"></span>';
+    }).join("") + '</div><p class="esc-nota">Las 500 columnas de ruido. Se encienden las 5 elegidas en la última corrida.</p>';
+    if (u) h += '<p class="esc-frase ' + (u.todo ? "mal" : "bien") + '">Última corrida, eligiendo ' + (u.todo ? "con las 40 filas" : "solo con las 30 de entrenamiento") + ": exactitud en el test <b>" + Math.round(u.acc * 100) + " %</b>.</p>";
+    var ht = SIM7.hist.todo, hn = SIM7.hist.train;
+    function prom(a) { return a.length ? Math.round(a.reduce(function (s, x) { return s + x; }, 0) / a.length * 1000) / 10 + " %" : "sin corridas"; }
+    h += '<div class="cuentas"><span class="mal">con todo: ' + ht.length + " corridas, media " + prom(ht) + '</span><span class="tr">con el entrenamiento: ' + hn.length + " corridas, media " + prom(hn) + "</span></div>";
+    if (ht.length || hn.length) {
+      var bt = rango(0, 11).map(function () { return 0; }), bn = bt.slice();
+      ht.forEach(function (a) { bt[Math.round(a * 10)]++; });
+      hn.forEach(function (a) { bn[Math.round(a * 10)]++; });
+      var mx = Math.max.apply(null, bt.concat(bn)) || 1, W = 330, Hh = 120, s = '<svg class="hist" viewBox="0 0 ' + W + " " + (Hh + 24) + '" role="img" aria-label="Histograma de exactitudes en el test">';
+      for (var b = 0; b <= 10; b++) {
+        var x = 10 + b * 28.5, ht1 = Hh * bt[b] / mx, hn1 = Hh * bn[b] / mx;
+        s += '<rect class="hb-todo" x="' + x + '" y="' + (Hh - ht1) + '" width="12" height="' + ht1 + '"></rect><rect class="hb-train" x="' + (x + 12) + '" y="' + (Hh - hn1) + '" width="12" height="' + hn1 + '"></rect>';
+        if (b % 2 === 0) s += '<text x="' + (x + 12) + '" y="' + (Hh + 16) + '">' + b * 10 + "</text>";
+      }
+      s += '<line class="eje" x1="6" y1="' + Hh + '" x2="' + (W - 4) + '" y2="' + Hh + '"></line></svg>';
+      h += s + '<p class="esc-nota">Exactitud en el test (%) de cada corrida. Coral: elegir con todo. Verde: elegir con el entrenamiento.</p>';
+    }
+    return h;
+  }
+
+  /* eventos del escenario */
+  $("escCtrl").addEventListener("click", function (e) {
+    var b = e.target.closest("button");
+    if (!b || b.disabled) return;
+    var act = b.getAttribute("data-act");
+    if (modo === 4) {
+      if (act === "evaluar") evaluar5();
+      else if (act === "nuevo" && SIM5.acc) { SIM5.verdadN = moneda(20); SIM5.nuevo = exactitud(moneda(20), SIM5.verdadN); SIM5.miradas++; }
+      else if (act === "otros") { SIM5.acc = null; SIM5.verdad = null; SIM5.nuevo = null; }
+      else return;
+      render();
+      return;
+    }
+    if (modo === 6) {
+      if (act === "todo") correr7(true, 1);
+      else if (act === "train") correr7(false, 1);
+      else if (act === "cien") { correr7(true, 100); correr7(false, 100); }
+      else return;
+      render();
+      return;
+    }
+    if (manejarCtrl(ESC, e.target, "click")) { if (act !== "barajar") ESC.repetida = false; render(); }
+  });
+  $("escCtrl").addEventListener("change", function (e) {
+    if (manejarCtrl(ESC, e.target, "change")) render();
+  });
+
+  function entrar(i) {
+    modo = i;
+    if (i === 2 && !est.c3) { ESC.barajado = false; ESC.estrat = false; }
+    if (i === 5 && !est.c6 && !ESC.visto6) { ESC.visto6 = true; ESC.nTest = 2; ESC.barajado = true; ESC.semilla = 1673; ESC.gen = "py"; ESC.estrat = false; ESC.fuga = false; ESC.sel = 7; }
+    var hints = [
+      est.c1 ? "Toca fichas para examinar al memorizador" : "Predice sin tocar",
+      "Mueve el muro con las proporciones",
+      est.c3 ? "Baraja, cambia la semilla y el generador" : "Responde el chequeo: todavía sin barajar",
+      est.c4 ? "Enciende estratificar y mira las barras" : "Mira las barras de aprobados",
+      est.c5 ? "Evalúa los 20 y prueba al ganador" : "Predice antes de tocar",
+      "Toca una ficha para ver su z",
+      est.c7 ? "Corre las dos versiones" : "Predice antes de correr"
+    ];
+    $("escHint").textContent = hints[i];
+    render();
+  }
+
+  /* ---------------- chequeos de cada paso ---------------- */
+  var chk2 = null, chk3 = null, chk4 = null, chk6 = null;
+
+  B.opcionMultiple(cuerpo("chk1"), {
+    pregunta: "El memorizador estudió a ocho de los diez (todos menos Hugo y Julia). Lo examinas con esos mismos ocho. ¿Cuántos acierta?",
+    opciones: ["Los ocho: los tiene anotados.", "Seis o siete: nadie es perfecto.", "La mitad: adivina.", "No se puede saber sin probar."],
+    correcta: 0,
+    mezclar: true,
+    pistas: [null,
+      "Un memorizador no se equivoca en lo que copió: para esos ocho tiene la respuesta anotada.",
+      "Solo tiene que adivinar con los que no vio. Con estos ocho no adivina nada.",
+      "Sí se puede saber: copia la respuesta guardada, así que con los ocho que vio no puede fallar."],
+    explicacion: "Acierta los ocho, un 100 %. Ese número no dice nada: es un examen con las respuestas a la vista. <b>Ahora toca las fichas</b> del escenario y termina con Hugo y Julia.",
+    alResolver: function () { est.c1 = true; $("post1").hidden = false; if (pasos.actual() === 0) entrar(0); pasos.completar(0); }
+  });
+
+  function prop2() { return ESC.nTest === 3 ? [60, 4] : [70, 3]; }
+  chk2 = B.numerico(cuerpo("chk2"), {
+    pregunta: function () { var p = prop2(); return "Con los diez estudiantes y una partición " + p[0] + "/" + (100 - p[0]) + ", ¿cuántos quedan en el test?"; },
+    respuesta: function () { return prop2()[1]; },
+    tolerancia: 0,
+    pistas: [function () { var p = prop2(); return "El segundo número es el porcentaje del test: el " + (100 - p[0]) + " % de 10."; }],
+    diagnostico: function (v) { var p = prop2(); if (v === 10 - p[1]) return "Eso es el entrenamiento. El test es el otro lado del muro."; if (v === 100 - p[0]) return "Ese es el porcentaje. ¿Cuántas filas son de 10?"; return null; },
+    explicacion: function () { var p = prop2(); return "El " + (100 - p[0]) + " % de 10 son <b>" + p[1] + "</b> filas de test y " + (10 - p[1]) + " de entrenamiento. Pruébalo en el escenario: la exactitud solo podría tomar " + (p[1] + 1) + " valores."; },
+    alResolver: function () { est.c2 = true; pasos.completar(1); }
+  });
+
+  function ultimas() { return rango(10 - ESC.nTest, 10); }
+  chk3 = B.numerico(cuerpo("chk3"), {
+    pregunta: function () { var n = ESC.nTest; return "Sin barajar, con " + PROPS.filter(function (p) { return p[1] === n; })[0][0] + "/" + (100 - PROPS.filter(function (p) { return p[1] === n; })[0][0]) + ", el test son las " + (n > 1 ? n + " últimas filas" : "última fila") + ". ¿Cuál es la media de horas del test?"; },
+    respuesta: function () { return media(ultimas()); },
+    tolerancia: 0.01,
+    pistas: [function () { return "El test son: " + ultimas().map(function (i) { return NOM[i] + " (" + H[i] + ")"; }).join(", ") + ". Suma y divide."; }],
+    diagnostico: function (v) {
+      if (Math.abs(v - 6) < 0.01) return "Esa es la media de los diez. El test son solo las últimas filas.";
+      if (Math.abs(v - media(rango(0, 10 - ESC.nTest))) < 0.01) return "Esa es la media del entrenamiento, el otro lado del muro.";
+      return null;
+    },
+    explicacion: function () {
+      var u = ultimas(), tr = rango(0, 10 - ESC.nTest);
+      return "(" + u.map(function (i) { return H[i]; }).join(" + ") + ") / " + u.length + " = <b>" + f3(media(u)) + "</b>, frente a " + f3(media(tr)) + " en el entrenamiento. El test se quedó con los que más estudiaron. <b>Ya puedes barajar</b> en el escenario.";
+    },
+    alResolver: function () { est.c3 = true; $("post3").hidden = false; if (pasos.actual() === 2) entrar(2); pasos.completar(2); }
+  });
+
+  function n4() { return ESC.nTest === 1 ? 2 : ESC.nTest; }
+  function nombreProp(n) { var p = PROPS.filter(function (x) { return x[1] === n; })[0]; return p[0] + "/" + (100 - p[0]); }
+  chk4 = B.numerico(cuerpo("chk4"), {
+    pregunta: function () { return "Estratificas con " + nombreProp(n4()) + ". ¿Cuántos aprobados van al test?" + (n4() % 2 ? " (Si no da entero, piensa cómo se redondea.)" : ""); },
+    respuesta: function () { return n4() / 2; },
+    tolerancia: 0.5,
+    pistas: ["Hay 5 aprobados de 10, un 50 %. El test debe tener la misma proporción."],
+    diagnostico: function (v) { if (v === n4()) return "Eso sería un test todo de aprobados: justo lo que estratificar evita."; if (v === 5) return "Esos son todos los aprobados. ¿Cuántos van al test?"; return null; },
+    explicacion: function () {
+      var n = n4();
+      return n % 2 === 0 ? "El 50 % de " + n + " es <b>" + n / 2 + "</b>: el test recibe " + n / 2 + " aprobado" + (n > 2 ? "s" : "") + " y " + n / 2 + " no. <b>Ahora enciende estratificar</b>." : "El 50 % de " + n + " es " + n / 2 + ", que no es entero. Las librerías redondean y reparten " + n + " filas como " + Math.ceil(n / 2) + " de una clase y " + Math.floor(n / 2) + " de la otra: valen " + Math.floor(n / 2) + " o " + Math.ceil(n / 2) + ". <b>Ahora enciende estratificar</b>.";
+    },
+    alResolver: function () { est.c4 = true; $("post4").hidden = false; if (pasos.actual() === 3) entrar(3); pasos.completar(3); }
+  });
+
+  B.opcionMultiple(cuerpo("chk5"), {
+    pregunta: "Veinte modelos que adivinan al azar. Te quedas con el que mejor sale en el test. ¿Qué exactitud muestra ese ganador, más o menos?",
+    opciones: ["Alrededor de 70 %, aunque todos adivinan.", "50 %: son monedas.", "100 %.", "No se puede saber."],
+    correcta: 0,
+    mezclar: true,
+    pistas: [null,
+      "50 % vale para un modelo elegido de antemano. Pero aquí eliges al mejor de veinte después de mirar.",
+      "No tantos: con 20 filas, sacar 100 % tirando monedas es rarísimo, y 20 modelos no alcanzan.",
+      "Sí se puede: es el máximo de 20 tiradas de 20 monedas cada una."],
+    explicacion: "El mejor de 20 sale, en promedio, <b>70.6 %</b> (20 000 repeticiones con NumPy; entre 60 % y 80 % en el 90 % de los casos). Nadie sabe nada: el número se infló solo por elegir mirando el test. <b>Ahora pruébalo</b> en el escenario.",
+    alResolver: function () { est.c5 = true; $("post5").hidden = false; if (pasos.actual() === 4) entrar(4); pasos.completar(4); }
+  });
+
+  chk6 = B.numerico(cuerpo("chk6"), {
+    pregunta: function () { var t = objetivo6(); return "Con la media y la desviación del entrenamiento (las de la caja), ¿cuál es el z de " + NOM[t] + ", que estudió " + H[t] + " horas?"; },
+    respuesta: function () { var p = particion(ESC); return (H[objetivo6()] - media(p.train)) / desvN(p.train); },
+    tolerancia: 0.01,
+    pistas: [function () { var p = particion(ESC); return "Resta la media del entrenamiento (" + f3(media(p.train)) + ") y divide entre su desviación (" + f3(desvN(p.train)) + ")."; }],
+    diagnostico: function (v) {
+      var t = objetivo6(), p = particion(ESC);
+      if (Math.abs(v - (H[t] - 6) / 3) < 0.01) return "Usaste la media 6 y la desviación 3, que salen de los diez: incluyen a " + NOM[t] + ". Esa es la cuenta con fuga.";
+      var m = media(p.train), s1 = Math.sqrt(p.train.reduce(function (s, i) { return s + (H[i] - m) * (H[i] - m); }, 0) / (p.train.length - 1));
+      if (Math.abs(v - (H[t] - m) / s1) < 0.01) return "Dividiste entre n − 1. En esta página la desviación divide entre n, como StandardScaler.";
+      return null;
+    },
+    explicacion: function () { var t = objetivo6(), p = particion(ESC), m = media(p.train), s = desvN(p.train); return "$z = (" + H[t] + " - " + f3(m) + ") / " + f3(s) + "$ = <b>" + f3((H[t] - m) / s) + "</b>. " + NOM[t] + " ya aparece en la regla. Ahora sigue con el destacado."; },
+    alResolver: function () { est.c6 = true; if (pasos.actual() === 5) entrar(5); cerrar6(); }
+  });
+
+  B.opcionMultiple(cuerpo("chkD"), {
+    pregunta: "Enciendes \"normalizar antes de partir\". ¿Qué z cambian?",
+    opciones: ["Solo los del test.", "Solo los del entrenamiento.", "Todos.", "Ninguno: son los mismos datos."],
+    correcta: 2,
+    pistas: ["Los del test cambian, sí. Pero la media y la desviación son las mismas para todas las fichas: si cambian, ¿quién se salva?", "También cambian los del test: ellos reciben la nueva media y la nueva desviación.", null, "Los datos son los mismos, pero la media y la desviación no: ahora Hugo y Julia entran en la cuenta."],
+    explicacion: "Cambian <b>todos</b>: la media pasa de 5 a 6 y la desviación de 2 a 3, y esos dos números se usan con cada ficha. <b>Ahora enciende el interruptor</b> en el escenario y mira la regla.",
+    alResolver: function () { est.cD = true; $("postD").hidden = false; if (pasos.actual() === 5) entrar(5); cerrar6(); }
+  });
+  function cerrar6() { if (est.c6 && est.cD) pasos.completar(5); }
+
+  B.opcionMultiple(cuerpo("chk7"), {
+    pregunta: "Las 500 columnas son ruido. Eliges las 5 mejores con las 40 filas y después mides en el test. ¿Qué exactitud esperas?",
+    opciones: ["Bastante más de 50 %: la elección ya vio el test.", "50 %: es ruido.", "100 % siempre.", "Menos de 50 %."],
+    correcta: 0,
+    mezclar: true,
+    pistas: [null,
+      "Eso es lo que da si eliges las columnas solo con el entrenamiento. Pero aquí la elección usó las 40 filas, las 10 del test incluidas.",
+      "A veces llega, pero no siempre: en promedio ronda el 80 %.",
+      "No hay razón para que salga peor que el azar."],
+    explicacion: "Bastante más: en NumPy, <b>82.9 %</b> de media. Entre 500 columnas al azar siempre hay alguna que, por casualidad, se parece a la etiqueta en esas 40 filas. Si la eliges mirando el test, el test ya no es nuevo. <b>Ahora corre las dos versiones</b>.",
+    alResolver: function () { est.c7 = true; $("post7").hidden = false; if (pasos.actual() === 6) entrar(6); pasos.completar(6); }
+  });
+
+  pasos = B.pasos($("recorrido"), {
+    concepto: C,
+    alEntrar: entrar,
+    alTerminar: function () { location.hash = "retos"; }
+  });
+  est.c1 = pasos.hecho(0);
+  est.c2 = pasos.hecho(1);
+  est.c3 = pasos.hecho(2);
+  est.c4 = pasos.hecho(3);
+  est.c5 = pasos.hecho(4);
+  est.c6 = est.cD = pasos.hecho(5);
+  est.c7 = pasos.hecho(6);
+  if (est.c1) $("post1").hidden = false;
+  if (est.c3) { $("post3").hidden = false; ESC.barajado = true; }
+  if (est.c4) $("post4").hidden = false;
+  if (est.c5) $("post5").hidden = false;
+  if (est.c6) { $("postD").hidden = false; ESC.visto6 = true; ESC.sel = 7; }
+  if (est.c7) $("post7").hidden = false;
+  entrar(pasos.actual());
+
+  /* ---------------- hipotesis inicial ---------------- */
+  (function () {
+    var ta = $("hipotesis"), t = null;
+    ta.value = B.nota(ID, "hipotesis");
+    function cita() {
+      var v = ta.value.trim(), e = $("citaHipo");
+      e.hidden = !v;
+      if (v) { e.textContent = ""; e.appendChild(document.createTextNode("Al principio escribiste: «" + v + "». Ahora lo ves de otro modo: el 100 % del entrenamiento no decía nada, y hasta el número del test puede verse mejor de lo que es si el test se coló en el preprocesado.")); }
+    }
+    cita();
+    ta.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { B.nota(ID, "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; cita(); }, 500);
+    });
+  })();
+
+  /* ---------------- marcadores de estado de retos ---------------- */
+  function pintarEstados() {
+    [].forEach.call(document.querySelectorAll("[data-reto]"), function (e) {
+      var ok = C.retoOk(e.getAttribute("data-reto"));
+      e.textContent = ok ? "resuelto" : "pendiente";
+      e.classList.toggle("ok", ok);
+    });
+  }
+  C.alCambiar(pintarEstados);
+
+  /* ---------------- reto: ojo clinico ---------------- */
+  (function () {
+    var BANCO = [
+      [true, "Estandarizas con <code>scale(X)</code> y después partes en entrenamiento y test.", "La media y la desviación salen de todas las filas, test incluido: es la fuga del paso 6."],
+      [true, "Rellenas los faltantes con la media de toda la columna y después partes.", "Esa media se calculó con las filas del test. Rellenar también se aprende: va solo con el entrenamiento."],
+      [true, "Eliges las 10 variables más correlacionadas con la respuesta usando todas las filas.", "Es la fuga del paso 7: la elección ya vio el test, y con mucho ruido convierte casualidades en un modelo bueno."],
+      [true, "Pruebas 30 valores de k y te quedas con el que mejor sale en el test.", "Elegir mirando el test lo infla, como el ganador de los 20 modelos del paso 5. Para elegir se usa validación."],
+      [true, "Codificas cada barrio con el precio medio de sus casas, calculado con todos los datos.", "Es target encoding con la respuesta del test adentro: la codificación ya conoce los precios que vas a predecir."],
+      [true, "Para predecir si un cliente se va, usas una columna <code>fecha_de_baja</code>.", "Esa columna solo tiene valor porque el cliente ya se fue: es información del futuro, que no tendrás al predecir."],
+      [true, "Las fotos del mismo paciente quedan unas en el entrenamiento y otras en el test.", "El modelo puede reconocer al paciente en vez de la enfermedad. Hay que partir por paciente, no por foto."],
+      [true, "Haces PCA con todas las columnas numéricas, la respuesta incluida.", "La respuesta entra en las componentes: es la errata de la diapositiva 79 de la UD1, una fuga del target."],
+      [false, "Partes, ajustas <code>StandardScaler</code> con <code>X_train</code> y transformas <code>X_test</code>.", "Es el orden correcto: fit con el entrenamiento, transform en los dos."],
+      [false, "Eliges k con validación cruzada dentro del entrenamiento y evalúas una sola vez en el test.", "El test no participó en la elección y se mira una vez: limpio."],
+      [false, "Fijas <code>random_state=1</code> para repetir la partición.", "La semilla solo hace la partición repetible. No mete información del test en ningún lado."],
+      [false, "Estratificas por la clase al partir.", "Usar la clase para repartir no se la pasa al modelo: solo cuida que las proporciones coincidan."],
+      [false, "Cambias la semilla y vuelves a partir, antes de entrenar nada.", "Si todavía no miraste ningún resultado, cambiar la semilla no filtra nada. (Elegir la semilla que da mejor test sí sería fuga.)"],
+      [false, "Metes el escalado y el modelo en un <code>Pipeline</code> dentro de <code>cross_val_score</code>.", "El pipeline aprende el escalado dentro de cada vuelta, solo con su entrenamiento: así se evita la fuga."]
+    ];
+    var cont = $("ojo");
+    cont.innerHTML = '<div class="ronda"></div><div class="ojo-caso" id="ojoCaso"></div><div class="ojo-opts"><button type="button" class="opt" data-a="1">Hay fuga</button><button type="button" class="opt" data-a="0">No hay fuga</button></div><div class="fb" aria-live="polite"></div><div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    var ronda, aciertos, respondida, tanda;
+    function nueva() { ronda = 0; aciertos = 0; tanda = barajar(BANCO, Math.random).slice(0, 8); mostrar(); }
+    function mostrar() {
+      respondida = false;
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 8 · aciertos " + aciertos;
+      $("ojoCaso").innerHTML = tanda[ronda][1];
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (b) { b.disabled = false; b.className = "opt"; });
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+    }
+    cont.querySelector(".ojo-opts").addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || respondida) return;
+      respondida = true;
+      var caso = tanda[ronda], ok = (b.getAttribute("data-a") === "1") === caso[0];
+      if (ok) aciertos++;
+      b.classList.add(ok ? "ok" : "mal");
+      if (!ok) cont.querySelector('.ojo-opts [data-a="' + (caso[0] ? "1" : "0") + '"]').classList.add("ok");
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (x) { x.disabled = true; });
+      cont.querySelector(".fb").innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No.</span> ') + caso[2];
+      var sig = cont.querySelector(".sig");
+      sig.hidden = false;
+      if (ronda === 7) {
+        var aprobo = aciertos >= 7;
+        C.reto("ojo", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertos + " de 8" + (aprobo ? ". Aprobado." : ". Necesitas 7 para aprobar.");
+        sig.textContent = "Otra tanda";
+      } else sig.textContent = "Siguiente ronda";
+    });
+    cont.querySelector(".sig").addEventListener("click", function () { if (ronda === 7) nueva(); else { ronda++; mostrar(); } });
+    nueva();
+  })();
+
+  /* ---------------- reto: construir ---------------- */
+  (function () {
+    var st = { nTest: 2, barajado: false, semilla: 1673, gen: "py", estrat: false, fuga: true, repetida: false };
+    var esc2 = Escena($("cstEsc"));
+    var OBJ = [
+      { t: "Un test de 3 filas (70/30).", ok: function (p) { return p.test.length === 3; } },
+      { t: "En el test, al menos un aprobado y al menos uno que no aprobó.", ok: function (p) { var a = p.test.filter(function (i) { return AP[i]; }).length; return a >= 1 && a < p.test.length; } },
+      { t: "Ningún tubo cruza el muro: la caja aprende solo del entrenamiento.", ok: function () { return !st.fuga; } },
+      { t: "La media de horas del entrenamiento entre 4.5 y 5.5.", ok: function (p) { var m = media(p.train); return m >= 4.5 && m <= 5.5; } }
+    ];
+    var ul = $("objetivos"), listo = false;
+    OBJ.forEach(function (o) { var li = document.createElement("li"); li.innerHTML = '<span class="m"></span><span>' + o.t + "</span>"; ul.appendChild(li); });
+    function pintar() {
+      var p = particion(st), pr = params(st, p);
+      var tubos = p.train.map(function (i) { return { i: i }; });
+      if (st.fuga) p.test.forEach(function (i) { tubos.push({ i: i, tipo: "fuga" }); });
+      $("cstCtrl").innerHTML = ctrlHtml(st, { props: true, barajar: true, gen: true, estrat: true, fuga: true });
+      esc2.pintar({ part: p, muro: true, caja: { titulo: "lo que aprende el escalado (de " + pr.de + ")", texto: "media = " + f3(pr.m) + "   desviación = " + f3(pr.s), fuga: st.fuga }, tubos: tubos });
+      $("cstInfo").innerHTML = '<div class="cuentas"><span class="tr">media de horas del entrenamiento: ' + f3(media(p.train)) + '</span><span class="te">test: ' + p.test.map(function (i) { return NOM[i]; }).join(", ") + "</span></div>" +
+        '<p class="esc-nota">' + p.como + (p.sinEstrat ? ". Con un test de 1 fila no se puede estratificar." : ".") + "</p>";
+      var todos = true;
+      OBJ.forEach(function (o, i) { var ok = o.ok(p); ul.children[i].classList.toggle("hecho", ok); if (!ok) todos = false; });
+      if (todos && !listo) { listo = true; C.reto("construir", true); }
+    }
+    $("cstCtrl").addEventListener("click", function (e) { if (manejarCtrl(st, e.target, "click")) pintar(); });
+    $("cstCtrl").addEventListener("change", function (e) { if (manejarCtrl(st, e.target, "change")) pintar(); });
+    pintar();
+  })();
+
+  /* ---------------- reto: a mano ---------------- */
+  (function () {
+    var T;
+    function ent(a, b) { return a + Math.floor(Math.random() * (b - a + 1)); }
+    function gen() {
+      for (;;) {
+        var tr = [ent(1, 12), ent(1, 12), ent(1, 12), ent(1, 12)];
+        var s = tr[0] + tr[1] + tr[2] + tr[3];
+        if (s % 4) continue;
+        var m = s / 4, q = tr.reduce(function (a, x) { return a + (x - m) * (x - m); }, 0) / 4, d = Math.sqrt(q);
+        if (d === 0 || Math.abs(d - Math.round(d)) > 1e-9) continue;
+        var te = [ent(1, 12), ent(1, 12)];
+        var orden = barajar([0, 1, 2, 3, 4, 5], Math.random);
+        return { tr: tr, te: te, m: m, d: d, z: (te[0] - m) / d, orden: orden };
+      }
+    }
+    function armar() {
+      T = gen();
+      var vals = T.tr.map(function (v) { return { v: v, te: false }; }).concat(T.te.map(function (v, k) { return { v: v, te: true, k: k }; }));
+      var datos = T.orden.map(function (j) { var x = vals[j]; return '<span class="' + (x.te ? "te" : "") + '">' + x.v + "<small>" + (x.te ? (x.k === 0 ? "test 1" : "test 2") : "entrena") + "</small></span>"; }).join("");
+      $("mano").innerHTML = '<div class="mano-datos">' + datos + '</div><div class="parte" id="mano1"></div><div class="parte" id="mano2"></div><div class="parte" id="mano3"></div><div id="manoFin"></div>';
+      var res = [null, null, null];
+      function fin(k, ok) {
+        res[k] = ok;
+        if (res.every(function (r) { return r !== null; })) {
+          var bien = res.every(Boolean);
+          C.reto("mano", bien);
+          $("manoFin").innerHTML = '<p class="fb">' + (bien ? '<span class="si">Las tres partes bien.</span>' : '<span class="no">Quedó alguna parte sin resolver.</span>') + ' </p><button type="button" class="reintentar ghost">Otro ejercicio</button>';
+          $("manoFin").querySelector("button").addEventListener("click", armar);
+        }
+      }
+      var seis = T.tr.concat(T.te), m6 = seis.reduce(function (a, x) { return a + x; }, 0) / 6;
+      B.numerico($("mano1"), {
+        pregunta: "1. ¿Cuál es la media del entrenamiento?",
+        respuesta: T.m, tolerancia: 0.01,
+        pistas: ["Solo las cuatro de entrenamiento: los dos valores de test no entran.", "Suma las cuatro y divide entre 4.", "(" + T.tr.join(" + ") + ") / 4 = ..."],
+        diagnostico: function (v) { return Math.abs(v - m6) < 0.01 ? "Usaste los seis valores. Los dos de test quedan fuera de la cuenta." : null; },
+        explicacion: "(" + T.tr.join(" + ") + ") / 4 = <b>" + T.m + "</b>.",
+        alResolver: function (ok) { fin(0, ok); }
+      });
+      B.numerico($("mano2"), {
+        pregunta: "2. ¿Cuál es la desviación del entrenamiento, dividiendo entre n?",
+        respuesta: T.d, tolerancia: 0.01,
+        pistas: ["Solo las cuatro de entrenamiento.", "Promedio de los cuadrados de las distancias a la media (dividiendo entre 4), y después la raíz.",
+          "Distancias a " + T.m + ": " + T.tr.map(function (x) { return x - T.m; }).join(", ") + ". Al cuadrado: " + T.tr.map(function (x) { return (x - T.m) * (x - T.m); }).join(", ") + "."],
+        diagnostico: function (v) {
+          var q = T.tr.reduce(function (a, x) { return a + (x - T.m) * (x - T.m); }, 0);
+          if (Math.abs(v - Math.sqrt(q / 3)) < 0.01) return "Dividiste entre n − 1 = 3. Aquí se divide entre 4, como StandardScaler.";
+          if (Math.abs(v - q / 4) < 0.01) return "Esa es la varianza. Falta la raíz.";
+          return null;
+        },
+        explicacion: "Los cuadrados suman " + T.tr.reduce(function (a, x) { return a + (x - T.m) * (x - T.m); }, 0) + "; entre 4 da " + T.d * T.d + ", y la raíz es <b>" + T.d + "</b>.",
+        alResolver: function (ok) { fin(1, ok); }
+      });
+      B.numerico($("mano3"), {
+        pregunta: "3. ¿Cuál es el z del valor marcado test 1? (dos decimales)",
+        respuesta: T.z, tolerancia: 0.01,
+        pistas: ["Usa la media y la desviación del entrenamiento, las de las partes 1 y 2.", "$z = (x - \\bar x_{\\text{train}}) / s_{\\text{train}}$", "(" + T.te[0] + " − " + T.m + ") / " + T.d + " = ..."],
+        diagnostico: function (v) {
+          var m = m6, d = Math.sqrt(seis.reduce(function (a, x) { return a + (x - m) * (x - m); }, 0) / 6);
+          if (Math.abs(v - (T.te[0] - m) / d) < 0.01) return "Usaste la media y la desviación de los seis valores: esa es la cuenta con fuga.";
+          return null;
+        },
+        explicacion: "(" + T.te[0] + " − " + T.m + ") / " + T.d + " = <b>" + f3(T.z) + "</b>.",
+        alResolver: function (ok) { fin(2, ok); }
+      });
+    }
+    armar();
+  })();
+
+  /* ---------------- reto: cazar el error ---------------- */
+  B.cazarError($("error"), {
+    variantes: [
+      {
+        intro: "Python, el programa de la vida real. La salida real empieza con <code>Hugo -0.15617376188860607</code> y <code>Julia 1.7179113807746667</code> en vez de 1.0 y 4.0.",
+        lineas: [tt("suma = 0"), tt("for i in range(10):"), tt("    suma = suma + horas[i]"), tt("media = suma / len(train)"), tt("cuadrados = 0"), tt("for i in train:"), tt("    cuadrados = cuadrados + (horas[i] - media) ** 2"), tt("desv = (cuadrados / len(train)) ** 0.5")],
+        erronea: 1,
+        explicacion: "El primer bucle recorre las diez filas, no <code>train</code>: la suma da 60 y la media 60 / 8 = 7.5 (diez sumandos y ocho de divisor). El test se metió en la media dentro del bucle: una fuga. Los cuadrados dan 82 y la desviación √(82/8) = 3.2016."
+      },
+      {
+        intro: "R, el programa de la vida real. La salida real es <code>Hugo 1.341641</code> y <code>Julia 4.024922</code>, en vez de 1 y 4.",
+        lineas: [tt("suma <- 0"), tt("for (i in train) {"), tt("  suma <- suma + horas[i]"), tt("}"), tt("media <- suma / 10"), tt("cuadrados <- 0"), tt("for (i in train) {"), tt("  cuadrados <- cuadrados + (horas[i] - media)^2"), tt("}"), tt("desv <- sqrt(cuadrados / length(train))")],
+        erronea: 4,
+        explicacion: "La suma es de ocho filas, pero se divide entre 10: la media sale 4 en vez de 5. Con esa media los cuadrados dan 40, la desviación √5 = 2.236 y todos los z se corren. El divisor es <code>length(train)</code>."
+      },
+      {
+        intro: "Python, el cierre con la librería. La salida real es <code>[6.] [3.]</code> y <code>[0.33333333 2.33333333]</code>.",
+        lineas: [tt("X_tr, X_te = train_test_split(horas.reshape(-1, 1), test_size=0.2, random_state=1673)"), tt("esc = StandardScaler().fit(horas.reshape(-1, 1))"), tt("print(esc.mean_, esc.scale_)"), tt("print(esc.transform(X_te).ravel())")],
+        erronea: 1,
+        explicacion: "<code>fit</code> recibe las diez filas, Hugo y Julia incluidos: aprende media 6 y desviación 3. Es la fuga del paso 6. Lo correcto es <code>StandardScaler().fit(X_tr)</code>, que da <code>[5.] [2.]</code> y <code>[1. 4.]</code>."
+      }
+    ],
+    alResolver: function (ok) { C.reto("error", ok); }
+  });
+
+  /* ---------------- retos: propiedades ---------------- */
+  function prop(id, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple($(id), cfg);
+  }
+  prop("prop1", {
+    pregunta: "¿Para qué sirve el test?",
+    opciones: ["Para estimar, una sola vez al final, cómo le irá al modelo con datos nuevos.", "Para elegir el mejor modelo.", "Para entrenar con más datos.", "Para ajustar el escalado."],
+    correcta: 0,
+    pistas: [null, "Eso es la validación. Si eliges con el test, el número se infla (paso 5).", "El test no entra en el entrenamiento: por eso está detrás del muro.", "El escalado se ajusta con el entrenamiento y se aplica al test (paso 6)."],
+    explicacion: "El test es la medición final: datos que el modelo nunca vio, usados una vez. Todo lo demás (elegir, ajustar, preprocesar) se hace del otro lado del muro."
+  });
+  prop("prop2", {
+    pregunta: "¿Qué hace una semilla?",
+    opciones: ["Fija la secuencia de azar para que la misma partición se repita en ese lenguaje.", "Hace la partición más aleatoria.", "Garantiza la misma partición en Python y en R.", "Mejora la exactitud."],
+    correcta: 0,
+    pistas: [null, "No cambia la calidad del azar: lo hace repetible.", "Cada lenguaje tiene su propio generador: con 42, Python deja a Iván y Beto y R a Ana y Eva (trampa real codigo3).", "Elegir la semilla que da mejor test es otra forma de mirar el test."],
+    explicacion: "La semilla es el punto de partida del generador: con la misma semilla, el mismo lenguaje produce la misma secuencia y, por tanto, la misma partición."
+  });
+  prop("prop3", {
+    pregunta: "¿Cuándo es más importante estratificar?",
+    opciones: ["Cuando una clase es rara o el conjunto es chico.", "Cuando los datos son normales.", "Nunca: el azar ya reparte bien.", "Solo en regresión."],
+    correcta: 0,
+    pistas: [null, "La normalidad no tiene que ver: es la errata de la diapositiva 22.", "Con 10 filas y un test de 2, el 44 % de las veces el test queda de una sola clase.", "En regresión se estratifica por cuantiles, pero donde más importa es en clasificación con clases desbalanceadas."],
+    explicacion: "Con pocos datos o una clase rara, el azar puede dejar el test sin casos de esa clase, y la medición no sirve. Estratificar reparte cada clase por separado."
+  });
+
+  /* ---------------- formula de memoria ---------------- */
+  B.ordenar($("formula"), {
+    pregunta: "Arma el flujo de trabajo sin fugas, del primer paso al último.",
+    piezas: [tx("1. Barajar con semilla"), tx("2. Partir en entrenamiento y test (estratificando si hace falta)"), tx("3. Ajustar el preprocesado con el entrenamiento (fit)"), tx("4. Transformar entrenamiento y test con esos parámetros (transform)"), tx("5. Elegir y entrenar el modelo con el entrenamiento (validación cruzada)"), tx("6. Evaluar en el test, una sola vez")],
+    distractores: [tx("Estandarizar con todos los datos"), tx("Elegir el modelo con mejor exactitud en el test"), tx("Elegir variables correlacionadas con y usando todas las filas")],
+    soluciones: [[0, 1, 2, 3, 4, 5]],
+    explicacion: "Barajar, partir, aprender el preprocesado del entrenamiento, aplicarlo a los dos, elegir con validación y mirar el test una vez. Las tres piezas de más son las tres fugas de la página: escalar con todo, elegir con el test y elegir variables con todo.",
+    alResolver: function (ok) { C.reto("formula", ok); }
+  });
+
+  /* ---------------- vida real: el algoritmo en codigo ---------------- */
+  (function () {
+    var CODIGO = {
+      py: [
+        ["import", "import numpy as np"],
+        [null, "from sklearn.model_selection import train_test_split"],
+        [null, "from sklearn.preprocessing import StandardScaler"],
+        ["nombres", 'nombres = ["Ana", "Beto", "Cris", "Dani", "Eva", "Fede", "Gabi", "Hugo", "Iván", "Julia"]'],
+        ["horas", "horas = np.array([2, 4, 4, 4, 5, 5, 7, 7, 9, 13])  # inventado"],
+        ["semilla", "rng = np.random.RandomState(1673)"],
+        ["orden", "orden = rng.permutation(10)"],
+        ["test", "test = np.sort(orden[:2])"],
+        ["train", "train = np.sort(orden[2:])"],
+        ["suma0", "suma = 0"],
+        ["fort", "for i in train:"],
+        ["suma", "    suma = suma + horas[i]"],
+        ["media", "media = suma / len(train)"],
+        ["cuad0", "cuadrados = 0"],
+        ["fort2", "for i in train:"],
+        ["cuad", "    cuadrados = cuadrados + (horas[i] - media) ** 2"],
+        ["desv", "desv = (cuadrados / len(train)) ** 0.5"],
+        ["forte", "for i in test:"],
+        ["imp", "    print(nombres[i], (horas[i] - media) / desv)"],
+        ["lib1", "X_tr, X_te = train_test_split(horas.reshape(-1, 1), test_size=0.2, random_state=1673)"],
+        ["lib2", "esc = StandardScaler().fit(X_tr)"],
+        ["lib3", "print(esc.mean_, esc.scale_)"],
+        ["lib4", "print(esc.transform(X_te).ravel())"]
+      ],
+      r: [
+        ["nombres", 'nombres <- c("Ana", "Beto", "Cris", "Dani", "Eva", "Fede", "Gabi", "Hugo", "Iván", "Julia")'],
+        ["horas", "horas <- c(2, 4, 4, 4, 5, 5, 7, 7, 9, 13)  # inventado"],
+        ["semilla", "set.seed(1673)"],
+        ["orden", "orden <- sample(10)"],
+        ["test", "test <- sort(orden[1:2])"],
+        ["train", "train <- sort(orden[3:10])"],
+        ["suma0", "suma <- 0"],
+        ["fort", "for (i in train) {"],
+        ["suma", "  suma <- suma + horas[i]"],
+        [null, "}"],
+        ["media", "media <- suma / length(train)"],
+        ["cuad0", "cuadrados <- 0"],
+        ["fort2", "for (i in train) {"],
+        ["cuad", "  cuadrados <- cuadrados + (horas[i] - media)^2"],
+        [null, "}"],
+        ["desv", "desv <- sqrt(cuadrados / length(train))"],
+        ["forte", "for (i in test) {"],
+        ["imp", "  cat(nombres[i], (horas[i] - media) / desv, fill = TRUE)"],
+        [null, "}"],
+        ["lib3", "print(c(mean(horas[train]), sd(horas[train])))  # sd divide entre n - 1"],
+        ["lib4", "print(scale(horas[test], center = media, scale = desv)[, 1])"]
+      ]
+    };
+    var SAL = {
+      imp: { py: { 7: "Hugo 1.0", 9: "Julia 4.0" }, r: { 7: "Hugo 1", 9: "Julia 4" } },
+      lib3: { py: "[5.] [2.]", r: "[1] 5.00000 2.13809" },
+      lib4: { py: "[1. 4.]", r: "[1] 1 4" }
+    };
+    var TR = [0, 1, 2, 3, 4, 5, 6, 8], TE = [7, 9];
+    var EV = [];
+    (function () {
+      var b = { fase: 1, datos: 0, part: false, suma: null, media: null, cuad: null, desv: null, i: null, k: null, hechos: [], zs: [], sal: [] };
+      function foto(id, extra) { EV.push(Object.assign({ id: id }, b, { hechos: b.hechos.slice(), zs: b.zs.slice(), sal: b.sal.slice() }, extra || {})); }
+      foto("import");
+      b.datos = 1; foto("nombres");
+      b.datos = 2; foto("horas");
+      foto("semilla");
+      b.orden = true; foto("orden");
+      b.part = true; b.ladoTest = true; foto("test");
+      foto("train");
+      b.fase = 2; b.suma = 0; b.etapa = "suma"; foto("suma0");
+      TR.forEach(function (i, k) {
+        foto("fort", { i: i, k: k });
+        b.suma += H[i];
+        foto("suma", { i: i, k: k, aporte: H[i] });
+        b.hechos.push(i);
+      });
+      b.media = b.suma / 8; foto("media");
+      b.hechos = []; b.cuad = 0; b.etapa = "cuad"; foto("cuad0");
+      TR.forEach(function (i, k) {
+        foto("fort2", { i: i, k: k });
+        b.cuad += (H[i] - 5) * (H[i] - 5);
+        foto("cuad", { i: i, k: k, aporte: (H[i] - 5) * (H[i] - 5) });
+        b.hechos.push(i);
+      });
+      b.desv = Math.sqrt(b.cuad / 8); b.etapa = "listo"; foto("desv");
+      b.fase = 3;
+      TE.forEach(function (i, k) {
+        foto("forte", { i: i, k: k });
+        b.zs.push(i); b.sal.push(["imp", i]);
+        foto("imp", { i: i, k: k });
+      });
+      b.fase = 4;
+      foto("lib1");
+      foto("lib2");
+      b.sal.push(["lib3"]); foto("lib3");
+      b.sal.push(["lib4"]); foto("lib4", { fin: true });
+    })();
+
+    var escVR = Escena($("vrEsc"));
+    function num(v, py) { return py ? (Number.isInteger(v) ? v + ".0" : String(v)) : String(v); }
+    function lista(a, py) { return py ? "[" + a.join(" ") + "]" : a.join(" "); }
+    function narrar(e, ctx) {
+      var py = ctx.lang() === "py", i = e.i;
+      switch (e.id) {
+        case "import": return py ? "Carga NumPy. Las dos líneas siguientes traen <code>train_test_split</code> y <code>StandardScaler</code> de scikit-learn, que se usan al final para comparar." : "Esta línea solo existe en Python: R trae <code>sample</code>, <code>sort</code> y <code>scale</code> sin cargar nada.";
+        case "nombres": return "Los nombres de los diez estudiantes, en el orden del archivo: ordenados por horas.";
+        case "horas": return "Las horas de estudio, en el mismo orden. Son los datos inventados del recorrido.";
+        case "semilla": return py ? "Crea un generador de azar propio con la semilla 1673. Desde aquí, todo el azar de <code>rng</code> se puede repetir." : "Fija la semilla del generador global de R. Desde aquí, el azar de <code>sample</code> se puede repetir.";
+        case "orden": return py ? "Una permutación de las filas 0 a 9: <code>[7 9 0 4 1 3 6 8 2 5]</code>. Es el barajado." : "Una permutación de las filas 1 a 10: <code>10 8 6 4 3 5 2 7 9 1</code>. Otro orden que en Python, pero con los mismos dos primeros: Hugo y Julia. Por eso se eligió la semilla 1673.";
+        case "test": return "Los dos primeros de la permutación van al test, ordenados: " + (py ? "<code>[7 9]</code>" : "<code>8 10</code>") + ", Hugo y Julia. Quedan detrás del muro.";
+        case "train": return "El resto es el entrenamiento: " + (py ? "<code>[0 1 2 3 4 5 6 8]</code>" : "<code>1 2 3 4 5 6 7 9</code>") + ". Ocho filas. Falta Hugo: el índice salta de " + ctx.ix(6) + " a " + ctx.ix(8) + ".";
+        case "suma0": return "Empieza la suma en cero. Lo que se aprende de los datos se aprende de este lado del muro.";
+        case "fort": return "Vuelta " + (e.k + 1) + " de 8: <code>i</code> = " + ctx.ix(i) + ", " + NOM[i] + "." + (i === 8 ? " Se saltó a Hugo: no está en <code>train</code>." : "");
+        case "suma": return "Suma las " + H[i] + " horas de " + NOM[i] + ": <code>suma</code> = " + e.suma + ". El tubo de " + NOM[i] + " se enciende.";
+        case "media": return "Se divide entre <code>" + (py ? "len(train)" : "length(train)") + "</code> (8), no entre 10: Hugo y Julia no cuentan. 40 / 8 = <b>" + num(5, py) + "</b>.";
+        case "cuad0": return "Ahora la desviación: la suma de los cuadrados de las distancias a la media empieza en cero.";
+        case "fort2": return "Vuelta " + (e.k + 1) + " de 8 del segundo bucle: " + NOM[i] + ", que estudió " + H[i] + " horas, a " + (H[i] - 5) + " de la media.";
+        case "cuad": return "(" + H[i] + " − 5)² = " + e.aporte + (e.aporte === 0 ? ": está justo en la media, no aporta nada" : "") + ". <code>cuadrados</code> = " + num(e.cuad, py) + ".";
+        case "desv": return "√(32 / 8) = √4 = <b>" + num(2, py) + "</b>. Divide entre n, como <code>StandardScaler</code>. La caja del modelo ya tiene todo lo que necesita.";
+        case "forte": return "Ahora el test: " + NOM[i] + ". El test no aporta nada a la media: solo la recibe. El tubo va al revés, de la caja a la ficha.";
+        case "imp": return NOM[i] + ": (" + H[i] + " − 5) / 2 = <b>" + num((H[i] - 5) / 2, py) + "</b>. " + (i === 9 ? "Julia queda a 4 desviaciones, más lejos que cualquier dato del entrenamiento." : "Imprime el nombre y su z.");
+        case "lib1": return py ? "<code>train_test_split</code> hace el mismo barajado por dentro (<code>RandomState(1673).permutation</code>) y toma las dos primeras: <code>X_te</code> son Hugo y Julia." : "R base no tiene un <code>train_test_split</code>: la partición ya la hiciste a mano con <code>sample</code> (en tidymodels sería <code>rsample::initial_split</code>).";
+        case "lib2": return py ? "<code>fit</code> solo con <code>X_tr</code>: el escalado aprende del entrenamiento." : "Esta línea solo existe en Python: en R el escalado se aplica directo con <code>scale</code>, en la última línea.";
+        case "lib3": return py ? "<code>mean_</code> y <code>scale_</code>: <code>[5.] [2.]</code>, lo mismo que calculaste con los bucles." : "La media coincide, 5, pero <code>sd</code> da 2.13809: divide entre n − 1. No es un error, es otra regla (trampa real codigo2).";
+        case "lib4": return py ? "<code>transform</code> en el test: <code>[1. 4.]</code>, igual que el bucle." : "<code>scale</code> con la media y la desviación que calculaste: <code>1 4</code>, igual que el bucle.";
+      }
+      return "";
+    }
+    function visual(e, anterior, ctx) {
+      var py = ctx.lang() === "py";
+      var part = { train: TR, test: TE }, cfg = { part: part, muro: !!(e && e.part) };
+      if (e && e.suma !== null) {
+        var tit = "lo que aprende el modelo (del entrenamiento)", txt;
+        if (e.etapa === "suma") txt = e.media === null ? "suma = " + e.suma : "media = " + num(5, py);
+        else if (e.etapa === "cuad") txt = "media = " + num(5, py) + "   cuadrados = " + num(e.cuad, py);
+        else txt = "media = " + num(5, py) + "   desv = " + num(2, py);
+        if (e.etapa === "suma" && e.media !== null) txt = "suma = 40   media = " + num(5, py);
+        cfg.caja = { titulo: tit, texto: txt };
+        var tub = e.hechos.map(function (i) { return { i: i }; });
+        if (e.fase >= 3 || e.id === "desv" || (e.etapa === "suma" && e.media !== null)) tub = TR.map(function (i) { return { i: i }; });
+        if ((e.id === "suma" || e.id === "cuad")) tub.push({ i: e.i, tipo: "activo" });
+        if (e.id === "forte" || e.id === "imp") tub.push({ i: e.i, tipo: "inverso" });
+        cfg.tubos = tub;
+      }
+      if (e && e.i !== null) cfg.sel = e.i;
+      var mk = {};
+      if (e) e.zs.forEach(function (i) { mk[i] = { txt: "z = " + num((H[i] - 5) / 2, py), cls: "acc" }; });
+      cfg.marcas = mk;
+      escVR.pintar(cfg);
+      var L = ctx.lang();
+      $("vrSal").textContent = e ? e.sal.map(function (s) { return s[0] === "imp" ? SAL.imp[L][s[1]] : SAL[s[0]][L]; }).join("\n") : "";
+    }
+    B.vidaReal($("vidareal"), {
+      codigo: CODIGO,
+      eventos: EV,
+      narrar: narrar,
+      vars: function (e, ctx) {
+        var py = ctx.lang() === "py", v = [];
+        if (!e) return v;
+        if (e.orden) v.push("<span>orden = <b>" + (py ? "[7 9 0 4 1 3 6 8 2 5]" : "10 8 6 4 3 5 2 7 9 1") + "</b></span>");
+        if (e.part) v.push('<span class="vk">test = <b>' + lista(TE.map(ctx.ix), py) + "</b></span>");
+        if (e.part && e.id !== "test") v.push('<span class="vj">train = <b>' + lista(TR.map(ctx.ix), py) + "</b></span>");
+        if (e.i !== null) v.push("<span>i = <b>" + ctx.ix(e.i) + "</b></span><span>horas[i] = <b>" + H[e.i] + "</b></span>");
+        if (e.suma !== null) v.push("<span>suma = <b>" + e.suma + "</b></span>");
+        if (e.media !== null) v.push("<span>media = <b>" + num(5, py) + "</b></span>");
+        if (e.cuad !== null) v.push("<span>cuadrados = <b>" + (e.cuad === 0 ? "0" : num(e.cuad, py)) + "</b></span>");
+        if (e.desv !== null) v.push("<span>desv = <b>" + num(2, py) + "</b></span>");
+        return v;
+      },
+      visual: visual,
+      demora: function (e) { return !e ? 600 : e.id === "fort" || e.id === "fort2" ? 450 : e.id === "suma" || e.id === "cuad" ? 900 : e.id === "imp" || e.id === "media" || e.id === "desv" ? 1400 : 1000; }
+    });
+
+    B.numerico(cuerpo("vrPred"), {
+      pregunta: "¿Cuántas veces se ejecuta la línea <code>suma = suma + horas[i]</code> (en R, <code>suma &lt;- suma + horas[i]</code>)?",
+      respuesta: 8,
+      tolerancia: 0,
+      pistas: ["El bucle recorre <code>train</code>, no <code>horas</code>."],
+      diagnostico: function (v) {
+        if (v === 10) return "Eso sería recorrer todas las filas. El bucle recorre <code>train</code>.";
+        if (v === 2) return "Esas son las filas del test. Este bucle es el del entrenamiento.";
+        if (v === 40) return "40 es el valor final de <code>suma</code>, no las veces que corre la línea.";
+        return null;
+      },
+      explicacion: "<b>8 veces</b>, una por fila de entrenamiento. Hugo y Julia no pasan por esa línea. Ahora dale a reproducir y mira cómo se encienden los tubos."
+    });
+
+    prop("codigo1", {
+      pregunta: "¿Por qué el test sale con z distintos en la segunda y la tercera línea de la salida?",
+      opciones: ["El primer escalado aprendió la media y la desviación con los diez, Hugo y Julia incluidos: el test se coló en el preprocesado.", "<code>train_test_split</code> baraja distinto cada vez.", "<code>StandardScaler</code> usa n − 1.", "El orden de las líneas no importa: los datos son los mismos."],
+      correcta: 0,
+      pistas: [null, "No: con <code>random_state=1673</code> la partición es siempre la misma.", "No: usa n. Por eso da 2 y 3 exactos.", "Importa: el <code>fit</code> decide con qué datos se aprende."],
+      explicacion: "<code>esc</code> se ajustó con las diez filas (media 6, desviación 3) y <code>bien</code> solo con <code>X_tr</code> (media 5, desviación 2). El código no da ningún error: la fuga es silenciosa."
+    });
+    prop("codigo2", {
+      pregunta: "Python te dio z = 1 para Hugo y R 0.935. ¿Quién se equivoca?",
+      opciones: ["Ninguno: <code>StandardScaler</code> divide entre n (desviación 2) y <code>scale</code> entre n − 1 (2.13809). Lo que no puede pasar es mezclar las dos reglas entre entrenamiento y test.", "R tiene un error de redondeo.", "R incluye el test en la cuenta.", "Python usa la mediana."],
+      correcta: 0,
+      pistas: [null, "La diferencia es de 7 %, no de redondeo: son dos divisores distintos.", "No: <code>horas[train]</code> solo tiene las ocho filas del entrenamiento.", "No: <code>mean_</code> es la media, 5."],
+      explicacion: "Las dos son estandarizaciones válidas con divisores distintos: √(32/8) = 2 y √(32/7) = 2.13809. En NumPy se elige con <code>ddof</code>: <code>np.std(x)</code> da 2.0 y <code>np.std(x, ddof=1)</code> da 2.138089935299395. Más sobre esto en \"Estandarización y normalización\"."
+    });
+    prop("codigo3", {
+      pregunta: "¿Por qué con la misma semilla salen estudiantes distintos?",
+      opciones: ["Cada lenguaje tiene su propio generador de números al azar: la semilla fija la secuencia dentro de un lenguaje, no entre lenguajes.", "Python cuenta desde 0.", "42 no es una semilla válida en R.", "<code>train_test_split</code> no baraja."],
+      correcta: 0,
+      pistas: [null, "La diferencia no es de un lugar: son otros estudiantes.", "Es válida: R la acepta y siempre da Ana y Eva.", "Sí baraja: <code>shuffle=True</code> es el valor por defecto."],
+      explicacion: "Python usa su generador (Mersenne Twister a través de <code>RandomState</code>) y R el suyo, con otra forma de convertir la secuencia en una permutación. Fíjate además en el test de R: Ana y Eva, <b>0 % de aprobados</b>. Es el problema que resuelve estratificar (paso 4)."
+    });
+  })();
+
+  /* ---------------- tarjetas ---------------- */
+  B.tarjetas($("tarjetas"), [
+    ["¿Por qué no mido con los datos de entrenamiento?", "Porque un modelo que memoriza saca 100 % ahí y eso no dice nada de datos nuevos."],
+    ["¿70/30 u 80/20?", "Cualquiera. Con pocos datos, un test chico mide mal. La proporción no causa sobreajuste."],
+    ["¿Para qué barajar?", "Los archivos vienen ordenados: sin barajar, el test son los últimos (aquí, los que más estudiaron)."],
+    ["¿Qué hace la semilla?", "Repite la misma partición en el mismo lenguaje. Python y R no coinciden con la misma semilla."],
+    ["¿Qué es estratificar?", "Repartir cada clase por separado para que el test tenga la misma proporción que el total."],
+    ["¿Cuántas veces miro el test?", "Una, al final. El mejor de 20 modelos al azar sale cerca de 70 % si eliges con el test."],
+    ["¿Qué es la fuga de datos?", "Información del test que llega al entrenamiento: escalar, imputar o elegir variables con todos los datos."],
+    ["¿Cómo se evita?", "<code>fit</code> con el entrenamiento y <code>transform</code> en los dos; o el preprocesado dentro del modelo (Pipeline, recipes)."]
+  ]);
+
+  /* ---------------- conexiones ---------------- */
+  B.conexiones(ID);
+})();
+</script>
+</body>
+</html>

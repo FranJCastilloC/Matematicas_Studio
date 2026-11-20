@@ -367,6 +367,7 @@ No hay ecuaciones matemáticas en ningún archivo de esta fuente. El material es
 **Guía y resumen**
 - La guía describe el Módulo 6 como "Entornos de desarrollo de aplicaciones (EDA) ... Pytest, Git y similares"; el material de UD6 en la carpeta es "Análisis exploratorio de datos" (Quarto, correlación, faltantes). El resumen y la carpeta usan EDA como análisis exploratorio.
 - La guía y el resumen dicen que UD5 es "dplyr, tidymodels y ggplot2"; el PDF y el HTML de UD5 no mencionan tidymodels (0 apariciones).
+- Hoja de NumPy (hojanumpy): describe `b.max(axis=0)` como el máximo "de una fila", pero `axis=0` recorre las filas y devuelve el máximo de cada columna. Las páginas `array-forma-ejes` y `numpy-estadistica-algebra` lo dicen con naturalidad.
 
 ## No aparece (lo que uno esperaría)
 

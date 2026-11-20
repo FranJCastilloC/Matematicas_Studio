@@ -1,0 +1,1883 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ajuste de hiperparámetros y búsqueda en rejilla</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+/* ---------- escenario ---------- */
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.esc-head .hint { font-size: 12.5px; color: var(--ink-2); }
+.esc-ctrl { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin: 0 0 10px; }
+.esc-ctrl button { font-family: var(--f-mono); font-size: 12px; padding: 6px 9px; }
+.esc-ctrl button[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.esc-ctrl .lab { font-size: 12.5px; color: var(--ink-2); }
+.esc-nota { font-size: 12.5px; color: var(--ink-3); margin: 8px 0 0; }
+.esc-frase { font-size: 13.5px; color: var(--ink); margin: 10px 0 0; padding: 8px 10px; border-left: 3px solid var(--accent); background: var(--accent-soft); border-radius: 0 6px 6px 0; }
+.esc-tit { font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); margin: 12px 0 6px; }
+
+/* plano */
+.plano { width: 100%; max-width: 360px; display: block; margin: 0 auto; touch-action: manipulation; }
+.plano .eje { stroke: var(--ink-3); stroke-width: 1; }
+.plano .rej { stroke: var(--line-soft); stroke-width: 1; }
+.plano text { font-family: var(--f-mono); font-size: 10px; fill: var(--ink-3); }
+.plano .reg-pos { fill: var(--pos); opacity: .14; }
+.plano .reg-neg { fill: var(--neg); opacity: .14; }
+.plano .pt-pos { fill: var(--pos); stroke: var(--surface); stroke-width: 1.5; }
+.plano .pt-neg { fill: var(--neg); stroke: var(--surface); stroke-width: 1.5; }
+.plano .hit { fill: transparent; cursor: pointer; }
+.plano .anillo { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 3 2; }
+.plano .sel { fill: none; stroke: var(--ink); stroke-width: 2; }
+.plano .vec { stroke: var(--ink-2); stroke-width: 1.2; }
+.plano .bola { fill: var(--accent-soft); fill-opacity: .35; stroke: var(--accent); stroke-width: 1.3; }
+.plano .val { fill: none; stroke: var(--accent); stroke-width: 2.5; }
+.plano .ok { fill: none; stroke: var(--ok); stroke-width: 2.5; }
+.plano .mal { fill: none; stroke: var(--bad); stroke-width: 2.5; }
+.plano .nuevo-pos { fill: var(--pos); stroke: var(--ink); stroke-width: 1.2; }
+.plano .nuevo-neg { fill: var(--neg); stroke: var(--ink); stroke-width: 1.2; }
+.plano .etq { fill: var(--accent); font-size: 9.5px; }
+.leyenda { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--ink-2); margin: 6px 0 0; }
+.leyenda i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; vertical-align: -1px; }
+
+/* tablero de la rejilla */
+.tablero { display: grid; gap: 4px; font-family: var(--f-mono); font-size: 12px; max-width: 100%; }
+.tablero .th { color: var(--ink-3); font-size: 11px; display: flex; align-items: center; justify-content: center; text-align: center; padding: 2px; min-width: 0; }
+.celda { position: relative; border: 2px solid var(--line); border-radius: 8px; background: var(--cell-zero); color: var(--ink-2); padding: 5px 4px 4px; min-height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 3px; font-family: var(--f-mono); min-width: 0; }
+button.celda { cursor: pointer; }
+.celda.pintada { color: #fff; border-color: transparent; background: color-mix(in oklab, var(--pos) var(--s), var(--neg)); }
+.celda.ganadora { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.celda.actual { outline: 2px dashed var(--ink); outline-offset: 2px; }
+.celda .cm { font-size: 13px; font-weight: 600; }
+.celda .barras { display: flex; gap: 3px; align-items: flex-end; height: 30px; }
+.celda .barras i { display: block; width: 12px; border-radius: 2px 2px 0 0; background: var(--ink-3); opacity: .25; font-style: normal; font-size: 9px; line-height: 1; text-align: center; color: var(--surface); }
+.celda .barras i.on { opacity: 1; background: var(--ink); }
+.celda.pintada .barras i.on { background: rgba(255,255,255,.85); color: #222; }
+.celda.chica { min-height: 38px; padding: 3px; }
+.celda.chica .cm { font-size: 11.5px; }
+.tablero.flash .celda.pintada { animation: flash 1s ease-out 1; }
+@keyframes flash { 0% { box-shadow: 0 0 0 4px var(--accent); } 100% { box-shadow: 0 0 0 0 var(--accent); } }
+@media (prefers-reduced-motion: reduce) { .tablero.flash .celda.pintada { animation: none; } }
+.contador { font-family: var(--f-mono); font-size: 12.5px; color: var(--ink); margin: 8px 0 0; padding: 6px 8px; background: var(--surface-2); border-radius: 6px; overflow-wrap: anywhere; }
+.dos-col { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+
+/* tabla simple */
+.tsim { border-collapse: collapse; font-family: var(--f-mono); font-size: 12px; margin-top: 8px; }
+.tsim th, .tsim td { border-bottom: 1px solid var(--line); padding: 3px 8px; text-align: right; }
+.tsim th { color: var(--ink-3); font-weight: 500; }
+.tsim td.hi { color: var(--accent); font-weight: 600; }
+.tsim td.mal { color: var(--bad); font-weight: 600; }
+.tsim td.bien { color: var(--ok); }
+.marcador { font-family: var(--f-mono); font-size: 13px; margin: 8px 0 0; }
+.marcador b { color: var(--accent); }
+
+/* bandeja de fichas */
+.fichas { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 10px; }
+.ficha { font-family: var(--f-mono); font-size: 12px; padding: 5px 8px; border-radius: 6px; max-width: 100%; overflow-wrap: anywhere; text-align: left; }
+.ficha[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.ficha.bien { border-color: var(--ok); color: var(--ok); }
+.ficha.mal { border-color: var(--bad); color: var(--bad); }
+.cajas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.caja { border: 2px dashed var(--line); border-radius: 8px; padding: 6px; min-height: 70px; display: flex; flex-direction: column; gap: 4px; align-items: stretch; font-size: 12px; text-align: left; }
+.caja b { font-size: 12px; }
+.caja .ficha { font-size: 11px; padding: 3px 5px; }
+@media (max-width: 520px) { .cajas { grid-template-columns: minmax(0, 1fr); } }
+
+/* costo */
+.deslizadores { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
+.desl { display: grid; grid-template-columns: 9.5em minmax(0, 1fr) 2.5em; gap: 8px; align-items: center; font-size: 12.5px; color: var(--ink-2); }
+.desl input { width: 100%; accent-color: var(--accent); }
+.desl output { font-family: var(--f-mono); color: var(--ink); text-align: right; }
+.muro { display: flex; flex-wrap: wrap; gap: 2px; margin-top: 8px; max-height: 210px; overflow: hidden; }
+.muro i { display: block; width: 6px; height: 6px; background: var(--ink-3); border-radius: 1px; }
+.muro.grande i { width: 11px; height: 11px; }
+.muro i.re { background: var(--accent); }
+.azar-fig { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
+.azar-fig svg { width: 100%; display: block; }
+.azar-fig text { font-family: var(--f-mono); font-size: 9px; fill: var(--ink-3); }
+
+/* termometro */
+.termo { display: grid; gap: 6px; margin-top: 8px; }
+.termo-fila { display: grid; grid-template-columns: 8.5em minmax(0, 1fr) 3.4em; gap: 8px; align-items: center; font-size: 12px; color: var(--ink-2); }
+.termo-fila .bar { height: 14px; background: var(--surface-2); border-radius: 7px; overflow: hidden; }
+.termo-fila .bar i { display: block; height: 100%; background: var(--accent); border-radius: 7px; }
+.termo-fila.rej .bar i { background: var(--ink-3); }
+.termo-fila.ex .bar i { background: var(--pos); }
+.termo-fila output { font-family: var(--f-mono); color: var(--ink); text-align: right; }
+
+/* anidada */
+.anid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.anid .tablero { font-size: 10.5px; }
+.anid-res { font-size: 11.5px; color: var(--ink-2); margin-top: 4px; text-align: center; }
+@media (max-width: 520px) { .anid { grid-template-columns: minmax(0, 1fr); } }
+
+/* simulador del destacado */
+.sim-ctrl { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.etiquetas { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
+.etiquetas i { display: inline-block; width: 14px; height: 14px; border-radius: 50%; }
+.hist { display: flex; align-items: flex-end; gap: 3px; height: 120px; margin-top: 8px; border-bottom: 1px solid var(--line); }
+.hist div { flex: 1 1 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; min-width: 0; }
+.hist div i { display: block; width: 100%; background: var(--ink-3); border-radius: 2px 2px 0 0; }
+.hist div.alto i { background: var(--accent); }
+.hist div span { font-family: var(--f-mono); font-size: 9.5px; color: var(--ink-3); }
+.hist-eje { display: flex; gap: 3px; }
+.hist-eje span { flex: 1 1 0; text-align: center; font-family: var(--f-mono); font-size: 10px; color: var(--ink-3); min-width: 0; }
+
+/* campos y retos propios */
+.campos-fila { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-top: 6px; }
+.campo { display: inline-flex; align-items: center; gap: 4px; font-family: var(--f-mono); font-size: 13px; color: var(--ink-2); }
+.campo input.num { width: 80px; }
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.ojo-pieza { font-family: var(--f-mono); font-size: 15px; padding: 10px 12px; background: var(--surface-2); border-radius: 8px; margin: 8px 0; overflow-wrap: anywhere; }
+.ojo-opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 6px; margin-top: 10px; }
+.ojo-opts .opt { text-align: center; }
+.objetivos { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.objetivos li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.objetivos .m { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.objetivos li.hecho { color: var(--ink); }
+.objetivos li.hecho .m { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 3px var(--surface); }
+.lec { border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); overflow: hidden; margin: 6px 0 10px; }
+.lec-t { display: block; font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); padding: 5px 10px 0; }
+.lec pre { margin: 0; padding: 4px 10px 8px; font-family: var(--f-mono); font-size: 12px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink-2); }
+.lec pre .sal { color: var(--ink); font-weight: 500; }
+.lec pre .err { color: var(--bad); font-weight: 500; }
+.mini-t { border-collapse: collapse; font-family: var(--f-mono); font-size: 12.5px; margin: 6px 0; }
+.mini-t th, .mini-t td { border: 1px solid var(--line); padding: 3px 8px; text-align: right; }
+.mini-t th { color: var(--ink-3); font-weight: 500; }
+
+/* vida real */
+.vr-sal { margin: 4px 0 0; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); font-family: var(--f-mono); font-size: 12px; line-height: 1.55; white-space: pre; overflow-x: auto; min-height: 3em; color: var(--ink); }
+.vr-res { font-family: var(--f-mono); font-size: 12px; color: var(--ink-2); margin: 6px 0 0; overflow-wrap: anywhere; }
+
+/* piezas largas: que se puedan partir a 375 px */
+.chip { max-width: 100%; white-space: normal; text-align: left; }
+.chip .katex-html { white-space: normal; }
+.chip .mord.texttt { white-space: normal; overflow-wrap: anywhere; }
+.linea .katex-html { white-space: normal; }
+.linea .mord.texttt { white-space: normal; overflow-wrap: anywhere; }
+.linea { min-width: 0; overflow-wrap: anywhere; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ Ajuste de hiperparámetros y búsqueda en rejilla</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Aprendizaje automático · Clasificaciones y agrupaciones (SM142003), UD0 · ISLR2, lab 6.5 · Raschka, cap. 6</p>
+    <h1>Ajuste de hiperparámetros y búsqueda en rejilla</h1>
+    <p class="lede">
+      Casi todo modelo tiene <b>perillas</b> que no aprende de los datos: las fijas tú antes de entrenar. La búsqueda en rejilla prueba todas las combinaciones de perillas,
+      mide cada una con validación cruzada y se queda con la mejor. Aquí la ves como un <b>tablero</b>: cada celda es una combinación, se entrena una vez por bloque
+      y se pinta con su puntuación. Después vas a descubrir lo que el tablero no dice: cuánto cuesta, dónde puede engañarte y por qué la mejor celda promete de más.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> Tienes un modelo con dos perillas. Pruebas todas las combinaciones con validación cruzada y la mejor acierta 11 de cada 12. Cuando lleguen alumnos nuevos, ¿crees que va a acertar 11 de cada 12, más o menos? ¿Por qué?</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: creo que con alumnos nuevos..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>El tablero de perillas</h2>
+      <p>Siete pasos. Cada uno termina con un chequeo: hasta que no lo resuelves, el siguiente queda cerrado. Los doce alumnos son inventados: dos notas de 0 a 10, <b>tareas</b> y <b>prácticas</b>, y si aprobaron el examen final. La regla de fondo es "aprueba si tareas + prácticas pasa de 10", con una excepción puesta a propósito: el alumno de (0.6, 7.9) suma 8.5 y aprobó.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="Una perilla que no se aprende">
+          <span class="etapa">Paso 1</span>
+          <h3>Una perilla que no se aprende</h3>
+          <p>En el escenario están los doce alumnos. Los verdes aprobaron y los rojos no. El modelo es <b>kNN</b>: para decidir si un alumno aprueba, mira a los <b>k</b> alumnos más cercanos y hace votar a sus etiquetas. El fondo pintado muestra qué decidiría el modelo en cada lugar del plano.</p>
+          <p>Ese número k no sale de los datos: lo eliges tú antes de empezar. Mueve k entre 1, 3, 5 y 7 y mira cómo cambian las regiones. Toca un alumno para ver a sus vecinos. El marcador de aciertos está tapado.</p>
+          <p>La forma de medir distancias también es una elección. Por ahora es la de <b>línea recta</b>, la de siempre.</p>
+          <div class="check" id="chk1">
+            <p class="check-tit">Predice antes de ver nada</p>
+            <div class="cuerpo"></div>
+          </div>
+          <div id="tras1" hidden>
+            <p style="margin-top:14px">Ahora el escenario muestra el barrido completo. Con los mismos 12 alumnos con los que aprendió, k = 1 acierta todo y parece el mejor. La validación cruzada, que pregunta por alumnos que el modelo no vio (la viste en <a class="enl" data-tit="Validación cruzada">Validación cruzada</a>), elige k = 3. La única ventaja de k = 1 era aprenderse de memoria la excepción.</p>
+            <p>Esto pasa en el material de la UD3: los casos básico y particular miden la exactitud sobre los mismos puntos con los que entrenaron, y por eso allí k = 1 da 100 % siempre (además la llaman "precisión"). Es justo la trampa de este paso. La regla de la UD3, k cercano a la raíz de n (√469 da 21), es un punto de partida, no una elección. Cómo vota kNN por dentro está en <a class="enl" data-tit="kNN y regiones de decisión">kNN y regiones de decisión</a>.</p>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Parámetros e hiperparámetros">
+          <span class="etapa">Paso 2</span>
+          <h3>Parámetros e hiperparámetros</h3>
+          <p>Un <b>parámetro</b> lo calcula el algoritmo a partir de los datos al entrenar: los pesos de una regresión, los umbrales de un árbol. Un <b>hiperparámetro</b> lo fijas tú antes de entrenar y controla cómo aprende: k en kNN, C y γ en una SVM, λ en ridge, la profundidad máxima de un árbol.</p>
+          <p>Una regla práctica para el código: si <code>fit</code> lo cambia, es parámetro; si se lo pasas al construir el modelo, es hiperparámetro. En notación, el modelo es $\hat f_{\theta}$, con parámetros $\theta$ aprendidos, y los hiperparámetros $h$ deciden cómo se aprenden:</p>
+          <div class="fbloque"><div data-tex="\theta = \text{fit}(\text{datos};\; h)" data-display></div></div>
+          <p>La UD0 lo dice igual: los hiperparámetros se fijan antes de aprender y no salen de los datos, como k en k-NN o el parámetro de complejidad de un árbol
+          <cite class="cita" data-fuente="intro3" data-pag="38" data-ancla="hyperparameter-tuning" data-seccion="5.4 Hyperparameter tuning" data-que="La definición: valores que se fijan antes de aprender (k en k-NN, la complejidad de un árbol), distintos de los parámetros que se aprenden." data-cuando="Al leer este paso"></cite>.
+          Raschka abre su sección de búsqueda en rejilla con la misma distinción: los pesos se aprenden; los parámetros de ajuste, como la regularización o la profundidad, se optimizan aparte
+          <cite class="cita" data-fuente="raschka6" data-pag="15" data-pimp="185" data-seccion="Fine-tuning machine learning models via grid search" data-que="Parámetros aprendidos de los datos (los pesos) frente a hiperparámetros o parámetros de ajuste (regularización, profundidad máxima)." data-cuando="Al terminar este paso"></cite>.
+          Y en ISLR2 aparece con λ de ridge: <code>cv.glmnet</code> prueba muchos λ con validación cruzada y se queda con <code>cv.out&#36;lambda.min</code>
+          <cite class="cita" data-fuente="islr2" data-pag="289" data-pimp="278" data-seccion="6.5.2 Ridge Regression and the Lasso" data-que="cv.glmnet elige λ por validación cruzada con bestlam &lt;- cv.out$lambda.min: un hiperparámetro de una regresión, elegido igual que k aquí." data-cuando="Al terminar este paso, si quieres verlo en R"></cite>.</p>
+          <p>En el escenario, toca una ficha y luego la caja donde va. Hay una tercera caja para lo que no es ni lo uno ni lo otro.</p>
+          <details class="profundizar">
+            <summary>¿Y los hiperparámetros del optimizador?</summary>
+            <div><p>En una red neuronal, la tasa de aprendizaje, el tamaño del lote y el número de épocas también son hiperparámetros: no los cambia el entrenamiento, deciden cómo ocurre. Se ajustan con las mismas herramientas de esta página.</p></div>
+          </details>
+          <div class="check" id="chk2"><p class="check-tit">Elige y explica</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="La rejilla">
+          <span class="etapa">Paso 3</span>
+          <h3>La rejilla: dos perillas a la vez</h3>
+          <p>kNN tiene una segunda perilla: cómo mide la distancia. Con <b>p = 1</b> mide "en cuadras", sumando lo que te mueves en horizontal y en vertical. Con <b>p = 2</b> mide en línea recta. En el plano, la zona de los vecinos con p = 1 es un rombo; con p = 2, un círculo.</p>
+          <p>Con dos perillas no basta un deslizador. Se arma una <b>rejilla</b> con todas las combinaciones: 3 valores de k por 2 distancias son 6 celdas. En cada celda se corre una validación cruzada con 3 bloques de 4 alumnos y gana la celda de mayor media:</p>
+          <div class="fbloque">
+            <div data-tex="\text{CV}(k, p) = \frac{1}{3}\sum_{b=1}^{3} \text{acierto}_b(k, p) \qquad (\hat k, \hat p) = \arg\max_{(k,p)} \text{CV}(k, p)" data-display></div>
+            <div class="vivo" id="vivo3"></div>
+          </div>
+          <p>Toca cada celda del tablero: se encienden sus tres barras, una por bloque, y la celda se pinta con su media. La celda k = 3, p = 2 ya está corrida, pero su media está tapada.</p>
+          <p>Después de elegir, el ganador se <b>reentrena con los 12 alumnos</b>: ese es el modelo que se usa. En scikit-learn lo hace solo <code>refit=True</code>, el valor por defecto de <code>GridSearchCV</code>. La UD0 lo dibuja como un modelo por combinación, cada uno evaluado con k-fold
+          <cite class="cita" data-fuente="intro3" data-pag="39" data-ancla="6/8" data-seccion="Búsqueda en rejilla" data-que="Un modelo por combinación de hiperparámetros, evaluado con validación cruzada; la Figure 17 tiene 8 modelos y gana el 2." data-cuando="Al terminar este paso"></cite>.
+          Raschka arma la rejilla con <code>param_grid</code>, <code>cv=10</code> y <code>refit=True</code>, y obtiene <code>best_score_</code> 0.9846 con C = 100 y γ = 0.001
+          <cite class="cita" data-fuente="raschka6" data-pag="16" data-pimp="186" data-seccion="Tuning hyperparameters via grid search" data-que="GridSearchCV con una rejilla de kernel lineal y RBF, cv=10 y refit=True; best_score_ 0.9846 y best_params_." data-cuando="Al terminar este paso"></cite>,
+          y en la página siguiente explica que con <code>refit=True</code> no hace falta reentrenar a mano: <code>best_estimator_</code> ya está reentrenado (él lo reentrena a mano igual, y lo aclara en el párrafo siguiente)
+          <cite class="cita" data-fuente="raschka6" data-pag="17" data-pimp="187" data-seccion="Tuning hyperparameters via grid search" data-que="best_estimator_, por qué refit=True evita reentrenar a mano, la exactitud de prueba 0.974, y la idea de la búsqueda al azar con la Figure 6.7." data-cuando="Después del chequeo de este paso y antes del paso 4"></cite>.</p>
+          <details class="profundizar">
+            <summary>¿Promedio de bloques o aciertos totales?</summary>
+            <div><p><code>best_score_</code> es el <b>promedio de las exactitudes de cada bloque</b>. Con bloques del mismo tamaño coincide con aciertos / 12. Con bloques de 5, 5 y 2 alumnos y aciertos 4, 5 y 0, el promedio de bloques es (0.8 + 1 + 0) / 3 = 0.6, pero los aciertos totales son 9 / 12 = 0.75 (verificado con scikit-learn 1.6.1, <code>PredefinedSplit([0,0,0,0,0,1,1,1,1,1,2,2])</code> y k = 3). Hay un reto sobre esto.</p></div>
+          </details>
+          <div class="check" id="chk3"><p class="check-tit">Calcula con los datos en vivo</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="La explosión combinatoria">
+          <span class="etapa">Paso 4</span>
+          <h3>La explosión combinatoria</h3>
+          <p>La rejilla de 6 celdas con 3 bloques entrenó 18 modelos, más 1 al reentrenar. El costo se multiplica: valores de la perilla 1 por valores de la perilla 2 por ... por bloques por repeticiones, más el reentreno.</p>
+          <div class="fbloque">
+            <div data-tex="\text{modelos} = \Big(\prod_{j} n_j\Big)\cdot B \cdot R + 1" data-display></div>
+            <div class="vivo" id="vivo4"></div>
+          </div>
+          <p>Agregar una perilla con 8 valores multiplica el tiempo por 8. Mueve los deslizadores del escenario y mira crecer el muro: un cuadradito por modelo. Los botones cargan ejemplos del material. En la UD3, kNN con tidymodels prueba k = 1, 3, ..., 51 con <code>vfold_cv(v = 10, repeats = 5)</code>, y deja como opcional <code>dist_power = tune()</code>, la misma perilla p de esta página
+          <cite class="cita" data-fuente="knn3" data-pag="30" data-ancla="k-nn-using-the-tidymodels-modelling-framework" data-seccion="4.6 k-NN con tidymodels" data-que="k = 1, 3, ..., 51 con vfold_cv(v = 10, repeats = 5) y select_best(&quot;roc_auc&quot;); dist_power = tune() aparece como opción." data-cuando="Al terminar este paso"></cite>.
+          El caso real de diabetes usa <code>grid_regular(neighbors(c(3, 50)), levels = 10)</code> y <code>tune_grid</code>, y elige k = 29 con AUC 0.837
+          <cite class="cita" data-fuente="knn3real" data-pag="8.3" data-ancla="aplicación-al-modelo-k-nearest-neighbors-knn" data-seccion="8.3 Aplicación al modelo kNN" data-que="grid_regular(neighbors(c(3, 50)), levels = 10) con tune_grid y validación cruzada de 10 bloques; mejor k = 29 con AUC 0.837." data-cuando="Al terminar este paso"></cite>.
+          Esos 10 valores son k = 3, 8, 13, 18, 23, 29, 34, 39, 44, 50 (comprobado con <code>dials</code> en R 4.6.1).</p>
+          <div class="check" id="chk4"><p class="check-tit">Calcula</p><div class="cuerpo"></div></div>
+          <div id="tras4" hidden>
+            <p style="margin-top:14px">Por eso existe la <b>búsqueda al azar</b> (<code>RandomizedSearchCV</code> con <code>n_iter</code>): en vez de todas las celdas, sortea un número fijo de combinaciones. Con 9 intentos, una rejilla de 3 × 3 prueba solo 3 valores distintos de cada perilla; 9 sorteos prueban 9 valores distintos de cada una. Si solo una perilla importa de verdad, el azar la explora mejor. Es la Figure 6.7 de Raschka, la de la página 187 que ya citaste. Con <code>n_iter=20</code> y <code>cv=10</code> entrena 20 × 10 = 200 modelos, más 1.</p>
+          </div>
+          <details class="profundizar">
+            <summary>Más allá del azar</summary>
+            <div><p>Raschka nombra dos ideas más. La reducción a la mitad sucesiva (<code>HalvingRandomSearchCV</code>): empieza con muchos candidatos y pocos datos, descarta la mitad peor y repite con más datos. Y la optimización bayesiana (por ejemplo, la librería hyperopt), que elige el siguiente candidato según lo que ya vio. Esta página no las desarrolla.</p></div>
+          </details>
+        </section>
+
+        <section class="paso card" data-titulo="Escala log y el borde">
+          <span class="etapa">Paso 5</span>
+          <h3>Escala logarítmica y el borde de la rejilla</h3>
+          <p>Una SVM con kernel RBF tiene dos perillas, C y γ. En una línea cada una: <b>C grande</b> castiga cada error de entrenamiento (margen angosto, riesgo de sobreajuste); <b>γ grande</b> hace que cada alumno solo influya a su alrededor (fronteras muy retorcidas). La UD2 lo resume igual
+          <cite class="cita" data-fuente="svm3" data-pag="27" data-ancla="7/2" data-seccion="C como costo y γ" data-que="C bajo da margen ancho y C alto margen angosto; γ alto sobreajusta y γ bajo subajusta." data-cuando="Al leer este paso"></cite>.
+          Qué hacen por dentro está en <a class="enl" data-tit="Margen blando y el parámetro C">Margen blando y el parámetro C</a> y en <a class="enl" data-tit="El truco del kernel">El truco del kernel</a>.</p>
+          <p>Las dos se mueven en órdenes de magnitud, de 0.001 a 1000. Por eso la rejilla se arma en <b>potencias de 10</b> y el tablero va en escala logarítmica: cada columna multiplica por 10.</p>
+          <p>El escenario muestra una rejilla <b>recortada</b>: C en 10, 100 y 1000, y γ en 0.001, 0.01 y 0.1. Los números son aciertos de 12 con los mismos 3 bloques, calculados con scikit-learn sobre los mismos doce alumnos.</p>
+          <div class="check" id="chk5"><p class="check-tit">Elige y explica</p><div class="cuerpo"></div></div>
+          <div id="tras5" hidden>
+            <p style="margin-top:14px">Al ampliar aparece la forma típica de la RBF: una diagonal de celdas buenas (C grande con γ chica, C mediano con γ mediana) y un empate en la cima, (C = 1, γ = 0.1) y (C = 10, γ = 0.001), las dos con 11 de 12. Con γ de 1 en adelante todo cae a 4 de 12: cada alumno solo se parece a sí mismo. La celda (C = 1000, γ = 10) acierta 12 de 12 sobre los mismos datos con los que aprendió y 4 de 12 en validación cruzada.</p>
+            <p>El material tiene este mismo problema. En la UD2, la rejilla del caso 1 va de C = 0.001 a C = 1000 y el C elegido es 0.001: el borde inferior. El mejor podría estar más abajo y nadie lo probó
+            <cite class="cita" data-fuente="svm3" data-pag="44" data-ancla="9/11" data-seccion="Código del caso 1 con CV" data-que="Rejilla C = 10^(−3..3) con metric = &quot;ROC&quot;; bestTune da C = 0.001, el borde inferior de la rejilla." data-cuando="Ahora, para ver la trampa del borde en el material"></cite>.
+            Otro detalle de esa unidad: en las diapositivas 14 y 15, C es un presupuesto (C = 0 es margen duro), y desde la 20 y en todo el código es un costo (C grande es margen duro). En esta página C es siempre el costo, como en <code>SVC</code> y <code>kernlab</code>.</p>
+            <p>En R, ISLR2 hace esta misma búsqueda con <code>tune(svm, ranges = list(cost = ..., gamma = ...))</code> sobre el kernel radial, con 10 bloques por defecto, y evalúa <code>best.model</code> en el test
+            <cite class="cita" data-fuente="islr2" data-pag="405" data-pimp="394" data-seccion="9.6.2 Support Vector Machine" data-que="tune() de e1071 con cost y gamma para el kernel radial: la búsqueda en rejilla de R, con validación cruzada de 10 bloques y best.model evaluado en el test." data-cuando="Al terminar este paso"></cite>.</p>
+          </div>
+          <details class="profundizar">
+            <summary>¿Por qué muestrear en escala log?</summary>
+            <div><p>En la búsqueda al azar, Raschka sortea C y γ con <code>scipy.stats.loguniform(0.0001, 1000.0)</code>: la misma cantidad de sorteos en cada década, de 0.0001 a 0.001, de 0.001 a 0.01, y así
+            <cite class="cita" data-fuente="raschka6" data-pag="18" data-pimp="188" data-seccion="Randomized search" data-que="La distribución loguniform(0.0001, 1000.0) para sortear C y γ, con una muestra de sus valores." data-cuando="Cuando abras este recuadro"></cite>.
+            Con una uniforme entre 0.0001 y 1000, nueve de cada diez sorteos caerían entre 100 y 1000, y casi nunca probarías valores chicos.</p></div>
+          </details>
+        </section>
+
+        <section class="paso card" data-titulo="El optimismo del ganador">
+          <span class="etapa">Paso 6</span>
+          <h3>El optimismo del ganador</h3>
+          <p>La puntuación de la celda ganadora, 0.917, no es una medida limpia: es el <b>máximo</b> de 6 promedios con ruido. Y el máximo de varias cosas con ruido tiende a salir alto por suerte. Para saber cuánto acierta de verdad hace falta un dato que no participó en la elección.</p>
+          <p>Aquí lo tienes: seis alumnos nuevos, el examen final que se usa una sola vez. En el escenario, toca <b>Examen final</b>: el ganador reentrenado (k = 3, p = 1) clasifica a los seis. Usar el test una sola vez es la regla de <a class="enl" data-tit="Partición de datos: train, test y fuga de datos">Partición de datos: train, test y fuga de datos</a>.</p>
+          <div class="check" id="chk6"><p class="check-tit">Calcula con los datos en vivo</p><div class="cuerpo"></div></div>
+
+          <div class="destacado" id="destacado">
+            <p class="dest-tit">Una confusión muy común</p>
+            <h4>Si la rejilla dijo 0.917, ¿por qué no creerle?</h4>
+            <p>Imagina que las etiquetas fueran al azar: 6 aprobados repartidos entre los 12 sin ningún patrón, nada que aprender. Corres la misma rejilla de 6 celdas con los mismos 3 bloques.</p>
+            <div class="check" id="chk6b"><p class="check-tit">Predice antes de seguir</p><div class="cuerpo"></div></div>
+            <div id="simulador" hidden>
+              <div class="sim-ctrl">
+                <button type="button" class="primary" id="btnRepartir">Repartir al azar</button>
+                <button type="button" id="btnTodos">Los 924 repartos</button>
+              </div>
+              <div id="simRes"></div>
+              <p style="margin-top:10px">Hay 924 formas de repartir 6 aprobados entre 12 alumnos. En <b>130</b> de ellas (14.1 %) la mejor celda llega a 0.75 o más. Una sola celda fija, k = 3 con p = 1, llega en <b>32</b> (3.5 %). Elegir la mejor de 6 multiplica por 4 las veces que la suerte parece talento. Cuatro repartos sin ningún patrón llegan a 11 de 12, igual que la ganadora real.</p>
+              <p><b>Moraleja:</b> <code>best_score_</code> sirve para <b>elegir</b>, no para <b>reportar</b>. Lo que se reporta es el examen final usado una sola vez (aquí 0.833) o la validación anidada del paso 7. Con más celdas, el optimismo crece.</p>
+              <div class="cita" id="citaHipo" hidden></div>
+            </div>
+            <details class="profundizar">
+              <summary>¿Por qué con etiquetas al azar sale menos de 0.5?</summary>
+              <div><p>Con 6 y 6, si un bloque de validación tiene más aprobados, en el entrenamiento quedan más no aprobados, y kNN (sobre todo con k grande, que vota casi la mayoría) tiende a predecir la clase contraria a la que sobra en validación. Por eso la media de una celda cualquiera es 0.424 y baja con k: 0.455 con k = 1, 0.424 con k = 3 y 0.392 con k = 5. La media de la mejor celda es 0.538.</p></div>
+            </details>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Validación anidada">
+          <span class="etapa">Paso 7</span>
+          <h3>Validación anidada: medir el procedimiento</h3>
+          <p>Si la elección es parte del modelo, hay que validarla también. La <b>validación anidada</b> tiene dos bucles:</p>
+          <ul>
+            <li><b>Bucle externo</b>: parte los datos en bloques para <b>medir</b>. Aquí, los mismos 3 bloques de siempre.</li>
+            <li><b>Bucle interno</b>: dentro de cada entrenamiento externo (8 alumnos), corre la rejilla completa con su propia validación cruzada (4 sub-bloques de 2) y <b>elige</b>.</li>
+          </ul>
+          <p>El ganador interno se reentrena con los 8 del entrenamiento externo y se evalúa en el bloque externo, que no vio nada de la elección. Se promedia. Lo que mide no es "el modelo k = 3, p = 1", sino el <b>procedimiento</b>: "elegir con esta rejilla y entrenar". Cada bloque externo puede elegir otra cosa, y aquí eligen (5, 1), (1, 1) y (1, 1).</p>
+          <p>Con tan pocos datos, la anidada da 0.5, y dice algo verdadero: con 8 alumnos y sub-bloques de 2, la rejilla interna no logra distinguir bien las celdas. Con los 569 casos de Raschka, la anidada de una SVM da 0.974 ± 0.015, cerca del 0.985 de la rejilla, y la usa para elegir entre la SVM y un árbol (0.934 ± 0.016)
+          <cite class="cita" data-fuente="raschka6" data-pag="22" data-pimp="192" data-seccion="Algorithm selection with nested cross-validation" data-que="El bucle externo y el interno con la Figure 6.8; el código sigue en la p. 193 con SVM 0.974 ± 0.015 frente a árbol 0.934 ± 0.016." data-cuando="Al terminar este paso"></cite>.
+          Un aviso al leerlo: Raschka llama "5×2 cross-validation" a una anidada con 5 bloques externos y 2 internos; en la literatura (Dietterich), "5×2 cv" suele ser otra cosa: 5 repeticiones de una validación cruzada de 2 bloques.</p>
+          <div class="fbloque"><div class="vivo">aquí: 3 × (6 celdas × 4 sub-bloques + 1) = 75 modelos · Raschka: 5 × (72 × 2 + 1) = 725 modelos</div></div>
+          <details class="profundizar">
+            <summary>¿Y el modelo final?</summary>
+            <div><p>La anidada no produce un modelo: mide. El modelo que se usa sale de correr la rejilla una vez más con todos los datos de entrenamiento y reentrenar al ganador, como en el paso 3.</p></div>
+          </details>
+          <div class="check" id="chk7"><p class="check-tit">Elige y explica</p><div class="cuerpo"></div></div>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+        </div>
+        <div id="escCuerpo"></div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>La rejilla escrita a mano: tres bucles anidados (k, distancia y bloque) y un kNN de tres líneas. Al final se compara con la librería: <code>GridSearchCV</code> en Python y <code>caret</code> en R. Mismos doce alumnos y mismos 3 bloques del recorrido, así que el tablero que se llena es el que ya corriste. Son 102 líneas ejecutadas: empieza en una velocidad alta o usa Ir al final.</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir</p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="true">Python</button>
+            <button type="button" data-lang="r" aria-pressed="false">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">1 · la rejilla a mano</span><span data-f="2">2 · la librería</span>
+        </div>
+        <h3 class="mini-tit vr-tit">El tablero</h3>
+        <div id="vrTab"></div>
+        <h3 class="mini-tit vr-tit">El bloque que se valida</h3>
+        <div id="vrPlano"></div>
+        <h3 class="mini-tit vr-tit">Salida del programa</h3>
+        <pre class="vr-sal" id="vrSal"></pre>
+      </div>
+    </div>
+
+    <p class="vr-nota">En la práctica, la rejilla es una línea: en Python, <code>GridSearchCV(KNeighborsClassifier(), {"n_neighbors": [1, 3, 5], "p": [1, 2]}, cv=...)</code>; en R base, <code>e1071::tune()</code> (ISLR2, sección 9.6) o caret con <code>tuneGrid</code>; en tidymodels, <code>tune_grid</code> con <code>grid_regular</code>, como en la UD3. Fíjate en la tabla de caret: coincide con la columna p = 2 de la rejilla a mano (0.75, 0.833, 0.667), porque <code>method = "knn"</code> solo usa la distancia en línea recta y no deja ajustar p. Lo que no se pudo correr aquí: tidymodels con el motor <code>kknn</code> (no está instalado), así que <code>dist_power = tune()</code> de la UD3 queda como texto.</p>
+
+    <details class="profundizar">
+      <summary>Con un pipeline, los nombres llevan prefijo</summary>
+      <div><p>Dentro de <code>make_pipeline(StandardScaler(), KNeighborsClassifier())</code>, la rejilla <code>{"n_neighbors": [1, 3, 5]}</code> falla con <code>ValueError: Invalid parameter 'n_neighbors'</code>. Hay que escribir <code>{"kneighborsclassifier__n_neighbors": [1, 3, 5]}</code>, y entonces da <code>{'kneighborsclassifier__n_neighbors': 3} 0.917</code> (verificado). Es el <code>svc__C</code> de Raschka en la página 186. Meter el escalado en el pipeline hace que se aprenda dentro de cada bloque: es la fuga que explica <a class="enl" data-tit="Pipeline: el preprocesado dentro del modelo">Pipeline: el preprocesado dentro del modelo</a>.</p></div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>best_score_ no es el examen final</h3><span class="estado" data-reto="codigo1"></span></div>
+        <div class="lec"><span class="lec-t">Python, con X, y y bloque de la vida real</span><pre>import numpy as np
+from sklearn.model_selection import GridSearchCV, PredefinedSplit
+from sklearn.neighbors import KNeighborsClassifier
+# X, y y bloque: los de Vida real
+rejilla = {"n_neighbors": [1, 3, 5], "p": [1, 2]}
+gs = GridSearchCV(KNeighborsClassifier(), rejilla, cv=PredefinedSplit(bloque)).fit(X, y)
+T = np.array([[8.0, 1.0], [1.5, 9.0], [8.0, 3.0], [3.5, 1.0], [1.5, 0.5], [6.0, 6.0]])
+yT = np.array([0, 1, 1, 0, 0, 1])                    # 6 alumnos nuevos
+print(round(gs.best_score_, 3))
+print(round(gs.score(T, yT), 3))
+<span class="sal">0.917
+0.833</span></pre></div>
+        <div id="codigo1"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Empate en la cima</h3><span class="estado" data-reto="codigo2"></span></div>
+        <div class="lec"><span class="lec-t">Python, con X, y y bloque de la vida real</span><pre>import numpy as np
+from sklearn.model_selection import GridSearchCV, PredefinedSplit
+from sklearn.svm import SVC
+# X, y y bloque: los de Vida real
+rejilla = {"C": [0.01, 0.1, 1, 10, 100, 1000], "gamma": [0.001, 0.01, 0.1, 1, 10]}
+gs = GridSearchCV(SVC(), rejilla, cv=PredefinedSplit(bloque)).fit(X, y)
+print(gs.best_params_, round(gs.best_score_, 3))
+print((gs.cv_results_["rank_test_score"] == 1).sum())
+<span class="sal">{'C': 1, 'gamma': 0.1} 0.917
+2</span></pre></div>
+        <div id="codigo2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>tuneLength elige los valores por ti</h3><span class="estado" data-reto="codigo3"></span></div>
+        <div class="lec"><span class="lec-t">R, con X, y y bloque de la vida real</span><pre>suppressPackageStartupMessages(library(caret))
+# X, y y bloque: los de Vida real
+ctrl &lt;- trainControl(method = "cv", index = lapply(1:3, function(b) which(bloque != b)))
+fit &lt;- train(data.frame(X), factor(y), method = "knn", tuneLength = 3, trControl = ctrl)
+print(fit$results$k)
+print(fit$bestTune)
+<span class="sal">[1] 5 7 9
+  k
+1 5</span>
+<span class="err">Warning messages: ... k = 9 exceeds number 8 of patterns</span></pre></div>
+        <p class="desc">El aviso sale tres veces, una por bloque. Y si intentas <code>tuneGrid = expand.grid(k = c(1, 3, 5), p = c(1, 2))</code>, caret responde <code>The tuning parameter grid should have columns k</code> (verificado): para <code>knn</code>, <code>getModelInfo("knn")</code> lista una sola perilla, <code>k</code>. En la UD2 hay un comentario que dice <code>tuneLength = 10 # 10 random values of C and sigma</code>: sin <code>search = "random"</code>, caret arma una rejilla, no valores al azar
+        <cite class="cita" data-fuente="svm3" data-pag="53" data-ancla="9/20" data-seccion="SVM RBF con sigest" data-que="caret con method = &quot;svmRadialSigma&quot;, tuneLength = 10 y un comentario que habla de valores al azar (es una rejilla); bestTune σ = 0.0105, C = 4." data-cuando="Después de resolver esta trampa"></cite>.</p>
+        <div id="codigo3"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: la biblioteca te avisa en el índice cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>¿Parámetro, hiperparámetro o ninguno?</h3><span class="estado" data-reto="ojo"></span></div>
+        <p class="desc">Cinco rondas al azar. Ves una pieza de scikit-learn y decides sin buscar. Apruebas con 4 de 5.</p>
+        <div id="ojo"></div>
+      </article>
+
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Construir</span><h3>Saca al ganador del borde</h3><span class="estado" data-reto="construir"></span></div>
+        <p class="desc">Empiezas con la rejilla recortada de la SVM. Agrega filas y columnas hasta cumplir los tres objetivos. Cada celda nueva cuesta 3 entrenamientos.</p>
+        <ul class="objetivos" id="objetivos"></ul>
+        <div id="construir" style="margin-top:10px"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>¿Cuántos modelos entrena?</h3><span class="estado" data-reto="mano"></span></div>
+        <p class="desc">Una búsqueda al azar cada vez. Cuenta con papel.</p>
+        <div id="mano"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>Bloques desiguales</h3><span class="estado" data-reto="mano2"></span></div>
+        <p class="desc">Tres bloques de tamaños distintos. Calcula las dos puntuaciones.</p>
+        <div id="mano2"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Una línea mal</h3><span class="estado" data-reto="error"></span></div>
+        <p class="desc">Tres versiones del código de la vida real. En cada una, una línea está mal. Tócala.</p>
+        <div id="error"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Quién fija qué</h3><span class="estado" data-reto="prop1"></span></div>
+        <div id="prop1"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>La promesa del ganador</h3><span class="estado" data-reto="prop2"></span></div>
+        <div id="prop2"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Qué mide la anidada</h3><span class="estado" data-reto="prop3"></span></div>
+        <div id="prop3"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Recordar a la fuerza es lo que fija. Arma la búsqueda en rejilla y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Código de memoria</span><h3>La rejilla en scikit-learn</h3><span class="estado" data-reto="formula"></span></div>
+        <p class="desc">Hay piezas de más que no pertenecen. No mires arriba.</p>
+        <div id="formula"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el material</h2>
+      <p class="lecturas-intro">Ya construiste la idea con las manos. Ahora ve al material del máster y a los libros y comprueba que la reconoces. Cada entrada dice qué vas a encontrar y en qué momento conviene leerla. Si abres la biblioteca con doble clic, el enlace abre el archivo en esa página.</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> Los doce alumnos y los seis alumnos nuevos son inventados, con una excepción puesta a propósito. Los bloques son fijos (el alumno i va al bloque i % 3 en Python y <code>rep(1:3, 4)</code> en R) para que Python y R den lo mismo.
+    Las salidas de código se obtuvieron en Python 3.13 con NumPy 2.1.3 y scikit-learn 1.6.1, y en R 4.6.1 con caret. El escenario calcula kNN en el navegador con las mismas reglas y reproduce esos números; los 30 valores de la SVM se calcularon con scikit-learn y están copiados tal cual. Los avisos de R salen en inglés porque así los imprime R. Tu progreso se guarda en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+(function () {
+  "use strict";
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+  var ID = "hiperparametros-rejilla";
+
+  var RETOS = ["ojo", "construir", "mano", "mano2", "error", "prop1", "prop2", "prop3", "codigo1", "codigo2", "codigo3", "formula"];
+  var C = B.concepto({ id: "hiperparametros-rejilla", retos: RETOS, pasos: 7 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  // enlaces por titulo a otros conceptos del catalogo
+  [].forEach.call(document.querySelectorAll("a.enl[data-tit]"), function (a) {
+    var c = B.buscarConcepto(a.getAttribute("data-tit"));
+    if (c && c.estado === "listo" && c.archivo) a.setAttribute("href", "../" + c.archivo);
+    else a.removeAttribute("href");
+  });
+
+  /* ---------------- utilidades ---------------- */
+  function azar(n) { return Math.floor(Math.random() * n); }
+  function eleg(a) { return a[azar(a.length)]; }
+  function barajar(a) { a = a.slice(); for (var i = a.length - 1; i > 0; i--) { var j = azar(i + 1), t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
+  function escH(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+  function f3(x) { return String(Math.round(x * 1000) / 1000); }
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+  function tt(s) {
+    var m = /^( *)(.*)$/.exec(s), sang = Math.round(m[1].length / 2);
+    var t = m[2].replace(/\\/g, "").replace(/([_#%&{}$])/g, "\\$1").replace(/\^/g, "\\textasciicircum{}").replace(/~/g, "\\textasciitilde{}");
+    return new Array(sang + 1).join("\\quad ") + "\\texttt{" + t + "}";
+  }
+  // varios campos numericos con pistas (como B.numerico, pero con mas de un valor)
+  function campos(el, cfg) {
+    var fallos = 0, nP = 0, hecho = false;
+    function v(x) { return typeof x === "function" ? x() : x; }
+    el.innerHTML = '<div class="q">' + B.conTex(v(cfg.pregunta)) + '</div><div class="campos-fila">' +
+      cfg.campos.map(function (c, i) {
+        return '<label class="campo"><span>' + (c.pre || "") + '</span><input class="num" data-k="' + i + '" inputmode="decimal" autocomplete="off" aria-label="' + escH(c.aria) + '"></label>';
+      }).join("") + '</div><div class="num-row" style="margin-top:8px"><button type="button" class="primary comprobar">Comprobar</button>' +
+      '<button type="button" class="pedir">Pista</button><button type="button" class="ver ghost" hidden>Ver solución</button></div>' +
+      '<div class="pistas"></div><div class="fb" aria-live="polite"></div>';
+    var ins = [].slice.call(el.querySelectorAll("input")), fb = el.querySelector(".fb"), ver = el.querySelector(".ver"), pedir = el.querySelector(".pedir");
+    function cerrar(ok) {
+      hecho = true;
+      ins.forEach(function (i) { i.disabled = true; });
+      el.querySelector(".comprobar").disabled = true;
+      pedir.disabled = true;
+      ver.hidden = true;
+      var r = document.createElement("button");
+      r.type = "button";
+      r.className = "reintentar ghost";
+      r.textContent = "Otro ejercicio";
+      r.addEventListener("click", function () { if (cfg.antesDeReintentar) cfg.antesDeReintentar(); campos(el, cfg); });
+      el.appendChild(r);
+      if (cfg.alResolver) cfg.alResolver(ok);
+    }
+    function comprobar() {
+      if (hecho) return;
+      var vals = ins.map(function (i) { return i.value.trim(); });
+      if (vals.some(function (x) { return x === ""; })) { fb.innerHTML = "Completa todos los espacios antes de comprobar."; return; }
+      var r = cfg.revisar(vals);
+      if (r.ok) {
+        ins.forEach(function (i) { i.classList.remove("mal"); i.classList.add("ok"); });
+        fb.innerHTML = '<span class="si">Correcto.</span> ' + B.conTex(v(cfg.solucion));
+        cerrar(true);
+        return;
+      }
+      fallos++;
+      ins.forEach(function (i) { i.classList.add("mal"); });
+      fb.innerHTML = '<span class="no">Todavía no.</span> ' + B.conTex(r.msg);
+      if (fallos >= 3) ver.hidden = false;
+    }
+    el.querySelector(".comprobar").addEventListener("click", comprobar);
+    ins.forEach(function (i) {
+      i.addEventListener("keydown", function (e) { if (e.key === "Enter") comprobar(); });
+      i.addEventListener("input", function () { ins.forEach(function (x) { x.classList.remove("mal"); }); });
+    });
+    pedir.addEventListener("click", function () {
+      if (nP >= cfg.pistas.length) return;
+      var d = document.createElement("div");
+      d.className = "pista";
+      d.innerHTML = "<b>Pista " + (nP + 1) + ".</b> " + B.conTex(v(cfg.pistas[nP]));
+      el.querySelector(".pistas").appendChild(d);
+      nP++;
+      if (nP >= cfg.pistas.length) { pedir.disabled = true; ver.hidden = false; }
+    });
+    ver.addEventListener("click", function () { fb.innerHTML = '<span class="no">Solución.</span> ' + B.conTex(v(cfg.solucion)); cerrar(false); });
+  }
+
+  /* ---------------- los datos ---------------- */
+  var X = [[6.8, 5.8], [1.8, 4.9], [0.6, 6.7], [3.3, 9.6], [4.0, 0.5], [0.1, 3.3], [3.1, 10.0], [7.8, 3.7], [1.8, 1.2], [1.2, 7.4], [0.6, 7.9], [3.9, 6.9]];
+  var Y = [1, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 1];
+  var EXCEPCION = 10;
+  var NUEVOS = [[8.0, 1.0], [1.5, 9.0], [8.0, 3.0], [3.5, 1.0], [1.5, 0.5], [6.0, 6.0]], YN = [0, 1, 1, 0, 0, 1];
+  var CELDAS = [[1, 1], [1, 2], [3, 1], [3, 2], [5, 1], [5, 2]];
+  var TODOS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+  // SVM RBF: aciertos de 12 (scikit-learn 1.6.1), filas C y columnas gamma
+  var SVM_C = ["0.01", "0.1", "1", "10", "100", "1000"], SVM_G = ["0.001", "0.01", "0.1", "1", "10"];
+  var SVM = [[6, 6, 5, 4, 4], [6, 6, 5, 4, 4], [6, 6, 11, 4, 4], [11, 10, 9, 4, 4], [9, 8, 9, 4, 4], [10, 8, 9, 4, 4]];
+
+  /* ---------------- kNN ---------------- */
+  function dist(a, b, p) { var dx = Math.abs(a[0] - b[0]), dy = Math.abs(a[1] - b[1]); return p === 1 ? dx + dy : Math.sqrt(dx * dx + dy * dy); }
+  function vecinos(tr, x, k, p) {
+    var d = tr.map(function (i) { return { i: i, d: dist(X[i], x, p) }; });
+    d.sort(function (a, b) { return a.d - b.d || a.i - b.i; });
+    return d.slice(0, k);
+  }
+  function knn(tr, lab, x, k, p) { var s = 0; vecinos(tr, x, k, p).forEach(function (o) { s += lab[o.i]; }); return s / k > 0.5 ? 1 : 0; }
+  function partir(b) { var tr = [], te = []; TODOS.forEach(function (i) { (i % 3 === b ? te : tr).push(i); }); return { tr: tr, te: te }; }
+  function bloquesCV(lab, k, p) {
+    var out = [];
+    for (var b = 0; b < 3; b++) {
+      var s = partir(b), c = 0;
+      s.te.forEach(function (i) { if (knn(s.tr, lab, X[i], k, p) === lab[i]) c++; });
+      out.push(c);
+    }
+    return out;
+  }
+  function suma(a) { return a.reduce(function (x, y) { return x + y; }, 0); }
+  function aciertosTrain(k, p) { var c = 0; TODOS.forEach(function (i) { if (knn(TODOS, Y, X[i], k, p) === Y[i]) c++; }); return c; }
+  var BARRAS = CELDAS.map(function (c) { return bloquesCV(Y, c[0], c[1]); });
+  var MEDIAS = BARRAS.map(function (b) { return suma(b) / 12; });
+  var PRED_NUEVOS = NUEVOS.map(function (x) { return knn(TODOS, Y, x, 3, 1); });
+  // validacion anidada
+  var ANIDADA = [0, 1, 2].map(function (b) {
+    var s = partir(b);
+    var sc = CELDAS.map(function (c) {
+      var tot = 0;
+      for (var f = 0; f < 4; f++) {
+        var itr = s.tr.filter(function (_, j) { return j % 4 !== f; }), ite = s.tr.filter(function (_, j) { return j % 4 === f; });
+        ite.forEach(function (i) { if (knn(itr, Y, X[i], c[0], c[1]) === Y[i]) tot++; });
+      }
+      return tot / 8;
+    });
+    var bi = 0;
+    sc.forEach(function (v, j) { if (v > sc[bi]) bi = j; });
+    var ok = 0, c = CELDAS[bi];
+    s.te.forEach(function (i) { if (knn(s.tr, Y, X[i], c[0], c[1]) === Y[i]) ok++; });
+    return { sc: sc, elegida: bi, ok: ok };
+  });
+
+  /* ---------------- dibujo: el plano ---------------- */
+  var D = 10.5;
+  function sx(x) { return 30 + x / D * 262; }
+  function sy(y) { return 8 + (D - y) / D * 262; }
+  var cacheReg = {};
+  function regiones(k, p) {
+    var key = k + "|" + p;
+    if (cacheReg[key]) return cacheReg[key];
+    var n = 30, paso = D / n, h = "";
+    for (var r = 0; r < n; r++) {
+      var y = D - (r + 0.5) * paso, ini = 0, prev = null;
+      for (var c = 0; c <= n; c++) {
+        var lab = c < n ? knn(TODOS, Y, [(c + 0.5) * paso, y], k, p) : null;
+        if (c === 0) { prev = lab; continue; }
+        if (lab !== prev) {
+          h += '<rect class="' + (prev ? "reg-pos" : "reg-neg") + '" x="' + sx(ini * paso).toFixed(1) + '" y="' + sy(D - r * paso).toFixed(1) + '" width="' + ((c - ini) * paso / D * 262 + 0.4).toFixed(1) + '" height="' + (paso / D * 262 + 0.4).toFixed(1) + '"/>';
+          ini = c; prev = lab;
+        }
+      }
+    }
+    cacheReg[key] = h;
+    return h;
+  }
+  // o: {k, p, regiones, sel, puntos (indices visibles), validar (indices), preds {i: pred}, nuevos, predNuevos, chico}
+  function plano(o) {
+    o = o || {};
+    var h = '<svg class="plano" viewBox="0 0 300 296" role="img" aria-label="Plano de tareas y prácticas con los doce alumnos">';
+    for (var t = 0; t <= 10; t += 2) {
+      h += '<line class="rej" x1="' + sx(t) + '" y1="' + sy(0) + '" x2="' + sx(t) + '" y2="' + sy(D) + '"/><line class="rej" x1="' + sx(0) + '" y1="' + sy(t) + '" x2="' + sx(D) + '" y2="' + sy(t) + '"/>';
+      h += '<text x="' + sx(t) + '" y="285" text-anchor="middle">' + t + '</text><text x="22" y="' + (sy(t) + 3) + '" text-anchor="end">' + t + "</text>";
+    }
+    if (o.regiones) h += regiones(o.k, o.p);
+    h += '<line class="eje" x1="' + sx(0) + '" y1="' + sy(0) + '" x2="' + sx(D) + '" y2="' + sy(0) + '"/><line class="eje" x1="' + sx(0) + '" y1="' + sy(0) + '" x2="' + sx(0) + '" y2="' + sy(D) + '"/>';
+    h += '<text x="290" y="266" text-anchor="end">tareas</text><text x="34" y="16">prácticas</text>';
+    if (o.sel != null) {
+      var xs = X[o.sel], v = vecinos(TODOS, xs, o.k, o.p), r = v[v.length - 1].d, cx = sx(xs[0]), cy = sy(xs[1]), rp = r / D * 262;
+      if (o.p === 1) h += '<polygon class="bola" points="' + (cx - rp) + "," + cy + " " + cx + "," + (cy - rp) + " " + (cx + rp) + "," + cy + " " + cx + "," + (cy + rp) + '"/>';
+      else h += '<circle class="bola" cx="' + cx + '" cy="' + cy + '" r="' + rp + '"/>';
+      v.forEach(function (o2) { h += '<line class="vec" x1="' + cx + '" y1="' + cy + '" x2="' + sx(X[o2.i][0]) + '" y2="' + sy(X[o2.i][1]) + '"/>'; });
+    }
+    TODOS.forEach(function (i) {
+      var cx = sx(X[i][0]), cy = sy(X[i][1]);
+      if (o.validar && o.validar.indexOf(i) >= 0) {
+        var cl = "val";
+        if (o.preds && o.preds[i] != null) cl = o.preds[i] === Y[i] ? "ok" : "mal";
+        h += '<circle class="' + cl + '" cx="' + cx + '" cy="' + cy + '" r="10"/>';
+      }
+      h += '<circle class="' + (Y[i] ? "pt-pos" : "pt-neg") + '" cx="' + cx + '" cy="' + cy + '" r="6"/>';
+      if (i === EXCEPCION && !o.chico) h += '<circle class="anillo" cx="' + cx + '" cy="' + cy + '" r="10"/><text class="etq" x="' + (cx + 12) + '" y="' + (cy - 6) + '">excepción</text>';
+      if (o.sel === i) h += '<circle class="sel" cx="' + cx + '" cy="' + cy + '" r="8.5"/>';
+      if (o.tocable) h += '<circle class="hit" data-pt="' + i + '" cx="' + cx + '" cy="' + cy + '" r="13"><title>(' + X[i][0] + ", " + X[i][1] + ")</title></circle>";
+    });
+    if (o.nuevos) NUEVOS.forEach(function (x, j) {
+      var cx = sx(x[0]), cy = sy(x[1]);
+      if (o.marcarNuevos) h += '<circle class="' + (PRED_NUEVOS[j] === YN[j] ? "ok" : "mal") + '" cx="' + cx + '" cy="' + cy + '" r="10"/>';
+      h += '<rect class="' + (YN[j] ? "nuevo-pos" : "nuevo-neg") + '" x="' + (cx - 5) + '" y="' + (cy - 5) + '" width="10" height="10"/><text class="etq" x="' + (cx + 8) + '" y="' + (cy + 12) + '">' + "N" + (j + 1) + "</text>";
+    });
+    return h + "</svg>";
+  }
+  function leyenda(extra) {
+    return '<div class="leyenda"><span><i style="background:var(--pos)"></i>aprobó</span><span><i style="background:var(--neg)"></i>no aprobó</span>' + (extra || "") + "</div>";
+  }
+
+  /* ---------------- dibujo: el tablero kNN ---------------- */
+  // datos[j] = {barras: [..] o null, encendidas: n, media: numero o null, oculta: bool}
+  function tablero(datos, o) {
+    o = o || {};
+    var h = '<div class="tablero' + (o.flash ? " flash" : "") + '" style="grid-template-columns:auto repeat(2, minmax(0, 1fr))">';
+    h += '<span class="th">k \\ p</span><span class="th">p = 1 cuadras</span><span class="th">p = 2 recta</span>';
+    [1, 3, 5].forEach(function (k, fila) {
+      h += '<span class="th">k = ' + k + "</span>";
+      [0, 1].forEach(function (col) {
+        var j = fila * 2 + col, d = datos[j], tag = o.clic ? "button" : "div";
+        var cl = "celda" + (o.chico ? " chica" : "");
+        var pint = d.media != null && !d.oculta;
+        if (pint) cl += " pintada";
+        if (o.ganadora === j) cl += " ganadora";
+        if (o.actual === j) cl += " actual";
+        h += "<" + tag + (o.clic ? ' type="button" data-c="' + j + '"' : "") + ' class="' + cl + '"' + (pint ? ' style="--s:' + Math.round(d.media * 100) + '%"' : "") + ">";
+        if (d.barras) {
+          h += '<span class="barras">';
+          for (var b = 0; b < 3; b++) {
+            var on = b < (d.encendidas || 0), val = d.barras[b];
+            h += '<i class="' + (on ? "on" : "") + '" style="height:' + (on ? Math.max(12, val / 4 * 100) : 12) + '%">' + (on ? val : "") + "</i>";
+          }
+          h += "</span>";
+        }
+        h += '<span class="cm">' + (d.oculta ? "?" : d.media != null ? f3(d.media) : (o.textoVacio || "correr")) + "</span></" + tag + ">";
+      });
+    });
+    return h + "</div>";
+  }
+
+  /* ---------------- dibujo: tablero de la SVM ---------------- */
+  function svmGanadora(st) {
+    var best = -1, br = -1, bc = -1;
+    for (var r = st.r0; r <= st.r1; r++) for (var c = st.c0; c <= st.c1; c++) if (SVM[r][c] > best) { best = SVM[r][c]; br = r; bc = c; }
+    return { r: br, c: bc, v: best };
+  }
+  function svmBordes(st, g) {
+    var lados = [];
+    if (g.r === st.r0 && st.r0 > 0) lados.push("C más chico");
+    if (g.r === st.r1 && st.r1 < 5) lados.push("C más grande");
+    if (g.c === st.c0 && st.c0 > 0) lados.push("γ más chico");
+    if (g.c === st.c1 && st.c1 < 4) lados.push("γ más grande");
+    var enBorde = g.r === st.r0 || g.r === st.r1 || g.c === st.c0 || g.c === st.c1;
+    return { lados: lados, enBorde: enBorde, fueraDatos: g.c === 0 && st.c0 === 0 };
+  }
+  function svmHtml(st, bloqueado) {
+    var g = svmGanadora(st), nc = st.c1 - st.c0 + 1;
+    var h = '<div class="tablero" style="grid-template-columns:auto repeat(' + nc + ', minmax(0, 1fr))"><span class="th">C \\ γ</span>';
+    for (var c = st.c0; c <= st.c1; c++) h += '<span class="th">' + SVM_G[c] + "</span>";
+    for (var r = st.r0; r <= st.r1; r++) {
+      h += '<span class="th">' + SVM_C[r] + "</span>";
+      for (c = st.c0; c <= st.c1; c++) {
+        var v = SVM[r][c], cl = "celda chica pintada" + (r === g.r && c === g.c ? " ganadora" : "") + (v === g.v && !(r === g.r && c === g.c) ? " actual" : "");
+        h += '<div class="' + cl + '" style="--s:' + Math.round(v / 12 * 100) + '%"><span class="cm">' + v + "/12</span></div>";
+      }
+    }
+    h += "</div>";
+    var bd = svmBordes(st, g), celdas = (st.r1 - st.r0 + 1) * nc;
+    h += '<p class="contador">' + celdas + " celdas × 3 bloques = " + celdas * 3 + " entrenamientos en esta rejilla" + (st.gasto != null ? " · gastados en total: " + st.gasto : "") + "</p>";
+    h += '<p class="esc-nota">Ganadora (la primera en el orden de <code>GridSearchCV</code>): C = ' + SVM_C[g.r] + ", γ = " + SVM_G[g.c] + ", " + g.v + "/12. " +
+      (bd.enBorde ? "<b>Está en el borde</b>" + (bd.lados.length ? ": conviene ampliar hacia " + bd.lados.join(" y ") + "." : ".") + (bd.fueraDatos ? " Hacia γ más chico no hay valores calculados para esta página: 0.001 es el mínimo que se corrió." : "") : "Está en el interior de la rejilla.") +
+      (celdas === 30 ? " Las celdas con marco punteado empatan con la ganadora." : "") + "</p>";
+    h += '<div class="esc-ctrl">' +
+      '<button type="button" data-svm="r0"' + (bloqueado || st.r0 === 0 ? " disabled" : "") + ">agregar C más chico</button>" +
+      '<button type="button" data-svm="r1"' + (bloqueado || st.r1 === 5 ? " disabled" : "") + ">agregar C más grande</button>" +
+      '<button type="button" data-svm="c0"' + (bloqueado || st.c0 === 0 ? " disabled" : "") + ">agregar γ más chico</button>" +
+      '<button type="button" data-svm="c1"' + (bloqueado || st.c1 === 4 ? " disabled" : "") + ">agregar γ más grande</button>" +
+      '<button type="button" class="ghost" data-svm="reset">recortar de nuevo</button></div>';
+    if (bloqueado) h += '<p class="esc-nota">Responde el chequeo para poder ampliar la rejilla.</p>';
+    return h;
+  }
+  function svmInicial() { return { r0: 3, r1: 5, c0: 0, c1: 2, gasto: 27 }; }
+  function svmAccion(st, a) {
+    var nc = st.c1 - st.c0 + 1, nr = st.r1 - st.r0 + 1;
+    if (a === "reset") { var s0 = svmInicial(); st.r0 = s0.r0; st.r1 = s0.r1; st.c0 = s0.c0; st.c1 = s0.c1; st.gasto = s0.gasto; return; }
+    if (a === "r0" && st.r0 > 0) { st.r0--; st.gasto += 3 * nc; }
+    if (a === "r1" && st.r1 < 5) { st.r1++; st.gasto += 3 * nc; }
+    if (a === "c0" && st.c0 > 0) { st.c0--; st.gasto += 3 * nr; }
+    if (a === "c1" && st.c1 < 4) { st.c1++; st.gasto += 3 * nr; }
+  }
+
+  /* ---------------- dibujo: termometro del optimismo ---------------- */
+  function termo(ex, an) {
+    function fila(cl, t, v) {
+      return '<div class="termo-fila ' + cl + '"><span>' + t + '</span><span class="bar"><i style="width:' + (v == null ? 0 : v * 100) + '%"></i></span><output>' + (v == null ? "?" : f3(v)) + "</output></div>";
+    }
+    return '<div class="termo">' + fila("rej", "mejor celda de la rejilla", 11 / 12) + fila("ex", "examen final, 6 nuevos", ex ? 5 / 6 : null) + fila("an", "validación anidada", an ? 0.5 : null) + "</div>";
+  }
+
+  /* ---------------- el escenario del recorrido ---------------- */
+  var est = { c1: false, c2: false, c3: false, c4: false, c5: false, c6: false, c6b: false, c7: false };
+  var ESC = {
+    k1: 1, sel: null,
+    lit: [0, 0, 0, 3, 0, 0], corriendo: false, actual: null, refit: false,
+    cost: { m: 2, n: 3, B: 3, R: 1, refit: true, preset: null },
+    azarSemilla: null,
+    svm: svmInicial(),
+    examen: false,
+    fichaSel: null, fichas: {}
+  };
+  var modo = 0, pasos;
+  var escEl = $("escCuerpo");
+
+  function datosTablero() {
+    return CELDAS.map(function (c, j) {
+      var lit = ESC.lit[j], hecha = lit >= 3;
+      return { barras: lit ? BARRAS[j] : null, encendidas: lit, media: hecha ? MEDIAS[j] : null, oculta: j === 3 && !est.c3 };
+    });
+  }
+  function todasCorridas() { return ESC.lit.every(function (l) { return l >= 3; }); }
+  function correrCelda(j, alTerminar) {
+    if (ESC.lit[j] >= 3) { if (alTerminar) alTerminar(); return; }
+    ESC.lit[j] = 0;
+    ESC.actual = j;
+    (function tic() {
+      ESC.lit[j]++;
+      if (modo === 2) render();
+      if (ESC.lit[j] < 3) setTimeout(tic, 260);
+      else if (alTerminar) setTimeout(alTerminar, 120);
+    })();
+  }
+  function vivo3() {
+    var j = ESC.actual, el = $("vivo3");
+    if (j == null || ESC.lit[j] < 3 || (j === 3 && !est.c3)) { el.textContent = "Corre una celda para ver su cuenta."; return; }
+    var b = BARRAS[j], c = CELDAS[j];
+    el.innerHTML = B.texStr("\\text{CV}(" + c[0] + ", " + c[1] + ") = \\tfrac{1}{3}\\left(\\tfrac{" + b[0] + "}{4} + \\tfrac{" + b[1] + "}{4} + \\tfrac{" + b[2] + "}{4}\\right) = \\tfrac{" + suma(b) + "}{12} = " + f3(MEDIAS[j]));
+  }
+
+  // modo 1: fichas
+  var FICHAS = [
+    ["n_neighbors de kNN", "hiper", "Se lo pasas al construir KNeighborsClassifier: lo fijas tú."],
+    ["p de kNN (la distancia)", "hiper", "Se lo pasas al construir: decide cómo se mide."],
+    ["C de SVC", "hiper", "Lo fijas tú antes de entrenar."],
+    ["gamma de SVC", "hiper", "Lo fijas tú antes de entrenar."],
+    ["alpha de Ridge (λ)", "hiper", "La fuerza de la regularización: la eliges tú."],
+    ["max_depth de un árbol", "hiper", "La profundidad máxima: la eliges tú."],
+    ["coef_ de una regresión logística", "param", "Lo calcula fit a partir de los datos."],
+    ["el umbral de cada nodo de un árbol entrenado", "param", "Lo calcula fit al construir el árbol."],
+    ["mean_ de StandardScaler", "param", "Lo aprende fit del preprocesado: es parámetro, aunque no sea del modelo."],
+    ["support_vectors_ de una SVM", "param", "Salen de fit: son los puntos que quedaron en el margen."],
+    ["cv=10", "ninguno", "Es del procedimiento de evaluación, no del modelo."],
+    ["random_state", "ninguno", "Fija el azar para repetir el resultado; no es algo que se ajuste ni se aprenda."]
+  ];
+  var CAJAS = [["param", "Parámetro"], ["hiper", "Hiperparámetro"], ["ninguno", "Ni uno ni otro"]];
+  function htmlFichas() {
+    var h = '<p class="esc-nota" style="margin-top:0">Toca una ficha y después la caja donde va.</p><div class="fichas">';
+    FICHAS.forEach(function (f, i) {
+      if (ESC.fichas[i]) return;
+      h += '<button type="button" class="ficha" data-ficha="' + i + '" aria-pressed="' + (ESC.fichaSel === i) + '">' + escH(f[0]) + "</button>";
+    });
+    h += '</div><div class="cajas">';
+    CAJAS.forEach(function (c) {
+      h += '<button type="button" class="caja" data-caja="' + c[0] + '"><b>' + c[1] + "</b>";
+      FICHAS.forEach(function (f, i) { if (ESC.fichas[i] === c[0]) h += '<span class="ficha ' + (f[1] === c[0] ? "bien" : "mal") + '">' + escH(f[0]) + "</span>"; });
+      h += "</button>";
+    });
+    h += "</div>";
+    var puestas = Object.keys(ESC.fichas), bien = puestas.filter(function (i) { return FICHAS[i][1] === ESC.fichas[i]; }).length;
+    h += '<p class="marcador">Bien ubicadas: <b>' + bien + "</b> de " + puestas.length + " puestas (" + FICHAS.length + " en total).</p>";
+    if (ESC.ultFicha != null) { var f = FICHAS[ESC.ultFicha]; h += '<p class="esc-frase">' + escH(f[0]) + ": " + escH(f[2]) + "</p>"; }
+    h += '<p class="esc-nota">kNN entrenado no guarda pesos: guarda a los 12 alumnos y hace todo el trabajo al predecir.</p>';
+    return h;
+  }
+
+  // modo 3: costo
+  function costoTotal() {
+    var c = ESC.cost, comb = c.preset ? c.preset.comb : Math.pow(c.n, c.m);
+    return { comb: comb, entren: comb * c.B * c.R, tot: comb * c.B * c.R + (c.refit ? 1 : 0) };
+  }
+  function vivo4() {
+    var c = ESC.cost, t = costoTotal();
+    var prod = c.preset ? c.preset.tex : (c.m === 1 ? String(c.n) : c.n + "^{" + c.m + "}");
+    $("vivo4").innerHTML = B.texStr("(" + prod + ") \\cdot " + c.B + " \\cdot " + c.R + (c.refit ? " + 1" : "") + " = " + t.tot + "\\ \\text{modelos}");
+  }
+  var PRESETS = [
+    { id: "raschka", t: "Raschka p. 186", comb: 72, tex: "8 + 8 \\cdot 8", B: 10, R: 1, refit: true, nota: "8 valores de C con kernel lineal más 8 × 8 de C y γ con RBF, cv=10, refit=True." },
+    { id: "ud3", t: "UD3 diap. 30", comb: 26, tex: "26", B: 10, R: 5, refit: false, nota: "k = 1, 3, ..., 51 son 26 valores; vfold_cv(v = 10, repeats = 5) son 50 remuestreos. Sin contar el ajuste final." },
+    { id: "real", t: "UD3 caso real", comb: 10, tex: "10", B: 10, R: 1, refit: false, nota: "grid_regular(neighbors(c(3, 50)), levels = 10) con 10 bloques. Sin contar el ajuste final." }
+  ];
+  function htmlCosto() {
+    var c = ESC.cost, t = costoTotal();
+    var h = '<div class="deslizadores">';
+    function desl(clave, t1, min, max) {
+      return '<label class="desl"><span>' + t1 + '</span><input type="range" data-desl="' + clave + '" min="' + min + '" max="' + max + '" value="' + c[clave] + '"' + (c.preset && (clave === "m" || clave === "n") ? " disabled" : "") + '><output>' + c[clave] + "</output></label>";
+    }
+    h += desl("m", "perillas", 1, 4) + desl("n", "valores por perilla", 2, 10) + desl("B", "bloques B", 2, 10) + desl("R", "repeticiones R", 1, 5);
+    h += '<label class="campo" style="font-size:12.5px"><input type="checkbox" data-refit' + (c.refit ? " checked" : "") + "> refit (reentrenar al ganador)</label></div>";
+    h += '<div class="esc-ctrl" style="margin-top:8px">';
+    PRESETS.forEach(function (p) {
+      var bloq = p.id === "raschka" && !est.c4;
+      h += '<button type="button" data-preset="' + p.id + '" aria-pressed="' + (c.preset === p) + '"' + (bloq ? " disabled" : "") + ">" + p.t + "</button>";
+    });
+    h += '<button type="button" class="ghost" data-preset="libre">libre</button></div>';
+    if (!est.c4) h += '<p class="esc-nota">El botón de Raschka se abre al resolver el chequeo: es justo lo que te pregunta.</p>';
+    if (c.preset) h += '<p class="esc-nota">' + c.preset.nota + "</p>";
+    h += '<div id="costoRes">' + htmlMuro() + "</div>";
+    if (est.c4) h += '<p class="esc-tit">Rejilla frente a azar, con 9 intentos</p>' + azarFig() + '<div class="esc-ctrl" style="margin-top:6px"><button type="button" data-otrosorteo>otro sorteo</button></div><p class="esc-nota">El fondo es una puntuación que solo depende de la perilla horizontal. Las marcas en el eje horizontal cuentan cuántos valores distintos de esa perilla se probaron: 3 con la rejilla, 9 con el azar.</p>';
+    return h;
+  }
+  function htmlMuro() {
+    var c = ESC.cost, t = costoTotal(), h = "";
+    var unidad = 1;
+    while (t.tot / unidad > 500) unidad *= 10;
+    var n = Math.ceil(t.tot / unidad), mur = "";
+    for (var i = 0; i < n; i++) mur += '<i class="' + (c.refit && i === n - 1 && unidad === 1 ? "re" : "") + '"></i>';
+    h += '<p class="contador">' + t.comb + " combinaciones × " + c.B + " bloques × " + c.R + (c.R === 1 ? " repetición" : " repeticiones") + " = " + (c.refit ? t.entren + " + 1 reentreno = " : "") + "<b>" + t.tot + " modelos</b></p>";
+    h += '<div class="muro' + (unidad > 1 ? " grande" : "") + '">' + mur + "</div>";
+    h += '<p class="esc-nota">' + (unidad === 1 ? "Cada cuadradito es un modelo entrenado; el morado es el reentreno." : "Cada cuadradito son " + unidad + " modelos.") + (n > 400 ? " El muro se corta: no cabe." : "") + "</p>";
+    return h;
+  }
+  function azarFig() {
+    if (!ESC.azarSemilla) ESC.azarSemilla = [0, 1, 2, 3, 4, 5, 6, 7, 8].map(function () { return [0.05 + Math.random() * 0.9, 0.05 + Math.random() * 0.9]; });
+    function panel(pts, t) {
+      var h = '<svg viewBox="0 0 140 150" role="img" aria-label="' + t + '">';
+      for (var i = 0; i < 28; i++) {
+        var x = i / 28, v = Math.exp(-Math.pow((x - 0.62) / 0.12, 2));
+        h += '<rect x="' + (10 + x * 120).toFixed(1) + '" y="10" width="4.6" height="120" fill="var(--pos)" opacity="' + (0.05 + v * 0.35).toFixed(2) + '"/>';
+      }
+      h += '<rect x="10" y="10" width="120" height="120" fill="none" stroke="var(--line)"/>';
+      pts.forEach(function (p) {
+        h += '<circle cx="' + (10 + p[0] * 120) + '" cy="' + (130 - p[1] * 120) + '" r="3.5" fill="var(--accent)"/>';
+        h += '<line x1="' + (10 + p[0] * 120) + '" y1="131" x2="' + (10 + p[0] * 120) + '" y2="137" stroke="var(--accent)" stroke-width="1.5"/>';
+      });
+      return h + '<text x="70" y="148" text-anchor="middle">' + t + "</text></svg>";
+    }
+    var g = [];
+    [0.2, 0.5, 0.8].forEach(function (a) { [0.2, 0.5, 0.8].forEach(function (b) { g.push([a, b]); }); });
+    return '<div class="azar-fig">' + panel(g, "rejilla 3 × 3") + panel(ESC.azarSemilla, "9 sorteos") + "</div>";
+  }
+
+  function render() {
+    var h = "";
+    var hints = [
+      est.c1 ? "Compara entrenamiento y validación cruzada" : "Mueve k y toca un alumno",
+      "Ubica cada ficha",
+      todasCorridas() ? (ESC.refit ? "El ganador, reentrenado con los 12" : "Reentrena al ganador") : "Toca cada celda para correrla",
+      "Mueve los deslizadores",
+      est.c5 ? "Amplía la rejilla" : "Responde antes de ampliar",
+      "Toca Examen final",
+      "Tres bloques externos, tres elecciones"
+    ];
+    $("escHint").textContent = hints[modo];
+    if (modo === 0) {
+      h += '<div class="esc-ctrl"><span class="lab">k =</span>' + [1, 3, 5, 7].map(function (k) { return '<button type="button" data-k1="' + k + '" aria-pressed="' + (ESC.k1 === k) + '">' + k + "</button>"; }).join("") + '<span class="lab">· distancia en línea recta</span></div>';
+      h += plano({ k: ESC.k1, p: 2, regiones: true, sel: ESC.sel, tocable: true });
+      h += leyenda('<span>toca un alumno: líneas a sus ' + ESC.k1 + " vecinos</span>");
+      h += '<p class="marcador">Aciertos sobre estos mismos 12 con k = ' + ESC.k1 + ": <b>" + (est.c1 ? aciertosTrain(ESC.k1, 2) + " de 12" : "?") + "</b></p>";
+      if (est.c1) {
+        h += '<table class="tsim"><tr><th>k</th><th>entrenamiento</th><th>validación cruzada</th></tr>';
+        [1, 3, 5, 7].forEach(function (k) { h += "<tr><td>" + k + "</td><td>" + aciertosTrain(k, 2) + "/12</td><td" + (k === 3 ? ' class="hi"' : "") + ">" + suma(bloquesCV(Y, k, 2)) + "/12</td></tr>"; });
+        h += '</table><p class="esc-nota">Con entrenamiento ganaría k = 1; con validación cruzada gana k = 3. Con k = 7 y solo 8 alumnos para entrenar, el voto es casi la mayoría de la clase.</p>';
+      }
+    } else if (modo === 1) {
+      h += htmlFichas();
+    } else if (modo === 2) {
+      var listas = todasCorridas(), gan = listas && est.c3 ? 2 : -1;
+      h += tablero(datosTablero(), { clic: true, ganadora: gan, actual: ESC.actual });
+      var corridas = ESC.lit.filter(function (l) { return l >= 3; }).length;
+      h += '<p class="contador">' + corridas + " celdas × 3 bloques" + (ESC.refit ? " + 1 reentreno" : "") + " = " + (corridas * 3 + (ESC.refit ? 1 : 0)) + " modelos entrenados</p>";
+      h += '<div class="esc-ctrl" style="margin-top:8px"><button type="button" data-todo' + (listas ? " disabled" : "") + ">correr toda la rejilla</button>";
+      if (listas && est.c3) h += '<button type="button" class="primary" data-refit2' + (ESC.refit ? " disabled" : "") + ">reentrenar con los 12</button>";
+      h += "</div>";
+      if (listas && !est.c3) h += '<p class="esc-nota">Resuelve el chequeo para destapar la última celda y ver a la ganadora.</p>';
+      if (gan >= 0) h += '<p class="esc-frase">Ganadora: k = 3, p = 1, con 11 de 12. El marco morado la señala.</p>';
+      var kp = ESC.refit ? [3, 1] : (ESC.actual != null && !(ESC.actual === 3 && !est.c3) ? CELDAS[ESC.actual] : [3, 1]);
+      h += '<p class="esc-tit">' + (ESC.refit ? "El modelo final: k = 3, p = 1, entrenado con los 12" : "Regiones de k = " + kp[0] + ", p = " + kp[1] + " con los 12 (solo para ver la forma)") + "</p>";
+      h += plano({ k: kp[0], p: kp[1], regiones: true, sel: ESC.sel, tocable: true });
+      h += leyenda("<span>toca un alumno: con p = 1 sus vecinos caben en un rombo; con p = 2, en un círculo</span>");
+    } else if (modo === 3) {
+      h += htmlCosto();
+    } else if (modo === 4) {
+      h += svmHtml(ESC.svm, !est.c5);
+    } else if (modo === 5) {
+      h += termo(est.c6, false);
+      h += '<div class="esc-ctrl" style="margin-top:10px"><button type="button" class="primary" data-examen' + (ESC.examen ? " disabled" : "") + ">Examen final</button></div>";
+      h += plano({ k: 3, p: 1, regiones: true, nuevos: ESC.examen, marcarNuevos: est.c6 && ESC.examen, chico: false });
+      h += leyenda(ESC.examen ? "<span>cuadrados N1 a N6: los alumnos nuevos con su etiqueta real</span>" : "");
+      if (ESC.examen) {
+        h += '<table class="tsim"><tr><th>alumno</th><th>tareas</th><th>prácticas</th><th>real</th><th>predice</th></tr>';
+        NUEVOS.forEach(function (x, j) {
+          var cl = est.c6 ? (PRED_NUEVOS[j] === YN[j] ? ' class="bien"' : ' class="mal"') : "";
+          h += "<tr><td>N" + (j + 1) + "</td><td>" + x[0].toFixed(1) + "</td><td>" + x[1].toFixed(1) + "</td><td>" + YN[j] + "</td><td" + cl + ">" + PRED_NUEVOS[j] + "</td></tr>";
+        });
+        h += "</table>";
+        if (est.c6) h += '<p class="esc-nota">Falla N1, (8.0, 1.0): entre sus 3 vecinos más cercanos en cuadras está (7.8, 3.7), que aprobó.</p>';
+      }
+    } else if (modo === 6) {
+      h += '<div class="anid">';
+      ANIDADA.forEach(function (a, b) {
+        var datos = a.sc.map(function (v) { return { barras: null, media: v }; });
+        h += "<div><p class=\"esc-tit\" style=\"margin-top:0\">bloque externo " + (b + 1) + "</p>" + tablero(datos, { chico: true, ganadora: a.elegida }) +
+          '<p class="anid-res">elige k = ' + CELDAS[a.elegida][0] + ", p = " + CELDAS[a.elegida][1] + "<br>acierta " + a.ok + " de 4</p></div>";
+      });
+      h += "</div>";
+      h += '<p class="esc-nota">Cada tablero chico es la rejilla interna: puntuación media en 4 sub-bloques de 2 alumnos, con los 8 del entrenamiento externo. Ante un empate gana la primera celda, como en <code>GridSearchCV</code>.</p>';
+      h += '<p class="contador">anidada = (1 + 3 + 2) / 12 = 6/12 = 0.5</p>';
+      h += termo(true, true);
+    }
+    escEl.innerHTML = h;
+    if (modo === 2) vivo3();
+    if (modo === 3) vivo4();
+  }
+
+  escEl.addEventListener("click", function (e) {
+    var t = e.target.closest("[data-k1],[data-pt],[data-c],[data-todo],[data-refit2],[data-preset],[data-otrosorteo],[data-svm],[data-examen],[data-ficha],[data-caja]");
+    if (!t || t.disabled) return;
+    if (t.hasAttribute("data-k1")) { ESC.k1 = +t.getAttribute("data-k1"); render(); }
+    else if (t.hasAttribute("data-pt")) { var i = +t.getAttribute("data-pt"); ESC.sel = ESC.sel === i ? null : i; render(); }
+    else if (t.hasAttribute("data-c")) {
+      var j = +t.getAttribute("data-c");
+      ESC.actual = j;
+      if (ESC.lit[j] < 3) correrCelda(j, render); else render();
+    } else if (t.hasAttribute("data-todo")) {
+      var pend = [0, 1, 2, 3, 4, 5].filter(function (j2) { return ESC.lit[j2] < 3; });
+      (function sig() { if (!pend.length) { render(); return; } correrCelda(pend.shift(), sig); })();
+    } else if (t.hasAttribute("data-refit2")) { ESC.refit = true; render(); }
+    else if (t.hasAttribute("data-preset")) {
+      var id = t.getAttribute("data-preset"), p = PRESETS.filter(function (x) { return x.id === id; })[0] || null;
+      ESC.cost.preset = p;
+      if (p) { ESC.cost.B = p.B; ESC.cost.R = p.R; ESC.cost.refit = p.refit; }
+      render();
+    } else if (t.hasAttribute("data-otrosorteo")) { ESC.azarSemilla = null; render(); }
+    else if (t.hasAttribute("data-svm")) { svmAccion(ESC.svm, t.getAttribute("data-svm")); render(); }
+    else if (t.hasAttribute("data-examen")) { ESC.examen = true; render(); }
+    else if (t.hasAttribute("data-ficha")) { var f = +t.getAttribute("data-ficha"); ESC.fichaSel = ESC.fichaSel === f ? null : f; render(); }
+    else if (t.hasAttribute("data-caja")) {
+      if (ESC.fichaSel == null) return;
+      ESC.fichas[ESC.fichaSel] = t.getAttribute("data-caja");
+      ESC.ultFicha = ESC.fichaSel;
+      ESC.fichaSel = null;
+      render();
+    }
+  });
+  escEl.addEventListener("input", function (e) {
+    var t = e.target;
+    if (t.hasAttribute("data-desl")) {
+      ESC.cost[t.getAttribute("data-desl")] = +t.value;
+      t.nextElementSibling.textContent = t.value;
+      // solo se repinta el muro, para no cortar el arrastre del deslizador
+      $("costoRes").innerHTML = htmlMuro();
+      vivo4();
+    }
+  });
+  escEl.addEventListener("change", function (e) {
+    if (e.target.hasAttribute("data-refit")) { ESC.cost.refit = e.target.checked; render(); }
+  });
+
+  function entrar(i) { modo = i; render(); }
+
+  /* ---------------- chequeos ---------------- */
+  B.opcionMultiple(cuerpo("chk1"), {
+    pregunta: "Con k = 1, le pides al modelo que clasifique a los mismos 12 alumnos con los que aprendió. ¿Cuántos acierta?",
+    opciones: ["12 de 12", "11 de 12", "6 de 12", "Depende de la distancia que uses."],
+    correcta: 0,
+    pistas: [null,
+      "11 de 12 es lo que da k = 3. Con k = 1, ¿quién es el vecino más cercano de cada alumno?",
+      "Eso sería adivinar. Piensa en quién es el alumno más cercano a cada alumno.",
+      "Con cualquier distancia, la distancia de un punto a sí mismo es 0."],
+    explicacion: "Cada alumno es su propio vecino más cercano, a distancia 0: se copia a sí mismo. Incluso la excepción. Por eso medir sobre los mismos datos siempre premia a k = 1. <b>Mira el escenario:</b> ya está el barrido completo.",
+    alResolver: function () { est.c1 = true; $("tras1").hidden = false; if (pasos.actual() === 0) entrar(0); pasos.completar(0); }
+  });
+
+  B.opcionMultiple(cuerpo("chk2"), {
+    pregunta: "kNN ya entrenado con los 12 alumnos: ¿qué parámetros aprendió?",
+    opciones: [
+      "Ninguno en sentido estricto: guarda los datos de entrenamiento y calcula todo al predecir. Sus perillas, k y la distancia, son hiperparámetros.",
+      "k",
+      "La distancia media entre los alumnos.",
+      "Un peso para tareas y otro para prácticas."
+    ],
+    correcta: 0,
+    pistas: [null,
+      "k no lo calcula <code>fit</code>: se lo pasas tú al construir el modelo.",
+      "Al entrenar kNN no se calcula nada: las distancias se miden recién al predecir.",
+      "Eso es de una regresión. kNN no pondera las variables."],
+    explicacion: "kNN es un método <b>perezoso</b>: entrenar es guardar a los 12 alumnos. Todo el trabajo ocurre al predecir. Sus dos perillas, k y la distancia, son hiperparámetros, y eso es lo que hay que elegir.",
+    alResolver: function () { est.c2 = true; pasos.completar(1); }
+  });
+
+  B.numerico(cuerpo("chk3"), {
+    pregunta: "La celda k = 3, p = 2 ya corrió y acertó 4, 3 y 3 alumnos en sus tres bloques de 4. ¿Cuánto vale su media? Escríbela con decimales o como fracción.",
+    respuesta: 10 / 12,
+    tolerancia: 0.004,
+    pistas: ["Suma los aciertos de los tres bloques y divide entre los 12 alumnos validados."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 0.75) < 0.004) return "Son 10 aciertos de 12, no 9.";
+      if (Math.abs(v - 10 / 3) < 0.01 || Math.abs(v - 10) < 0.01) return "Esos son aciertos, no una proporción. Divide entre 12.";
+      return null;
+    },
+    explicacion: "(4 + 3 + 3) / 12 = 10/12 = <b>0.833</b>. Es lo mismo que promediar 4/4, 3/4 y 3/4, porque los bloques son del mismo tamaño. <b>Mira el escenario:</b> con la celda destapada, el marco señala a la ganadora, k = 3 con p = 1, que acierta 11 de 12.",
+    alResolver: function () { est.c3 = true; if (pasos.actual() === 2) entrar(2); pasos.completar(2); }
+  });
+
+  B.numerico(cuerpo("chk4"), {
+    pregunta: "La rejilla de Raschka (p. 186) prueba 8 valores de C con kernel lineal, y 8 × 8 combinaciones de C y γ con kernel RBF, con <code>cv=10</code> y <code>refit=True</code>. ¿Cuántos modelos entrena?",
+    respuesta: 721,
+    tolerancia: 0,
+    pistas: ["Primero cuenta las combinaciones: las lineales y las RBF se suman, porque son dos rejillas en una lista.", "Cada combinación se entrena una vez por bloque. Y al final falta algo."],
+    diagnostico: function (v) {
+      if (v === 720) return "Falta el reentreno final del ganador: <code>refit=True</code>.";
+      if (v === 640 || v === 641) return "El kernel lineal también cuenta: 8 + 64 = 72 combinaciones.";
+      if (v === 72 || v === 73) return "Cada combinación se entrena una vez por bloque: 10 veces.";
+      if (v === 5121 || v === 5120) return "8 × 8 × 8 multiplica las perillas de las dos rejillas, pero son dos rejillas separadas que se suman.";
+      return null;
+    },
+    explicacion: "(8 + 64) × 10 + 1 = 720 + 1 = <b>721</b> modelos (verificado con un estimador que cuenta sus <code>fit</code>). Con <code>refit=False</code> serían 720. <b>Mira el escenario:</b> el botón de Raschka ya está abierto, y abajo aparece la comparación con el azar.",
+    alResolver: function () { est.c4 = true; $("tras4").hidden = false; if (pasos.actual() === 3) entrar(3); pasos.completar(3); }
+  });
+
+  B.opcionMultiple(cuerpo("chk5"), {
+    pregunta: "La mejor celda de la rejilla recortada está en la esquina C = 10, γ = 0.001. ¿Qué haces?",
+    opciones: [
+      "Amplío la rejilla hacia C más chico y γ más chico (y reviso la otra esquina): el óptimo puede estar afuera.",
+      "Me quedo con ella: es la mejor.",
+      "Pruebo valores entre 10 y 100.",
+      "Cambio de modelo."
+    ],
+    correcta: 0,
+    pistas: [null,
+      "Es la mejor de lo que probaste, no necesariamente de lo posible.",
+      "Refinar por dentro no explora lo que está del otro lado del borde.",
+      "Antes de cambiar de modelo, termina de explorar este."],
+    explicacion: "Si la ganadora toca el borde, la puntuación podría seguir subiendo más allá. Se amplía en esa dirección hasta que la ganadora quede adentro. <b>Ahora amplía</b> en el escenario: agrega C más chico y γ más grande hasta tener la rejilla completa.",
+    alResolver: function () { est.c5 = true; $("tras5").hidden = false; if (pasos.actual() === 4) entrar(4); pasos.completar(4); }
+  });
+
+  B.numerico(cuerpo("chk6"), {
+    pregunta: "Toca <b>Examen final</b> en el escenario. Compara las predicciones con las etiquetas reales: ¿qué exactitud tiene el ganador en los 6 alumnos nuevos?",
+    respuesta: 5 / 6,
+    tolerancia: 0.004,
+    pistas: ["Cuenta en cuántas filas coinciden real y predice, y divide entre 6."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 11 / 12) < 0.004) return "Ese es el 0.917 de la rejilla. Aquí cuentan solo los 6 alumnos nuevos.";
+      if (Math.abs(v - 5) < 0.01) return "Son 5 aciertos; la exactitud es una proporción.";
+      return null;
+    },
+    explicacion: "Acierta 5 de 6: <b>0.833</b>. La rejilla prometía 0.917. Falla el primero, (8.0, 1.0). <b>Mira el escenario:</b> el error ya está marcado, y el termómetro muestra las dos medidas.",
+    alResolver: function () { est.c6 = true; ESC.examen = true; if (pasos.actual() === 5) entrar(5); cerrar6(); }
+  });
+  B.opcionMultiple(cuerpo("chk6b"), {
+    pregunta: "¿Con qué frecuencia la mejor de las 6 celdas llega a 0.75 o más, con etiquetas puestas al azar?",
+    opciones: ["Nunca: no hay nada que aprender.", "Alrededor de 3 de cada 100.", "Alrededor de 14 de cada 100.", "La mitad de las veces."],
+    correcta: 2,
+    pistas: [
+      "Con 12 alumnos y 3 bloques, la suerte alcanza para aciertos altos. Y eliges la mejor de 6.",
+      "Eso es lo que logra una sola celda fija. Pero tú te quedas con la mejor de 6.",
+      null,
+      "No tanto: la media de la mejor celda es 0.538."],
+    explicacion: "Alrededor de <b>14 de cada 100</b>. Compruébalo con el simulador: reparte al azar varias veces y después recorre los 924 repartos.",
+    alResolver: function () { est.c6b = true; $("simulador").hidden = false; cerrar6(); }
+  });
+  function cerrar6() { if (est.c6 && est.c6b) pasos.completar(5); }
+
+  B.opcionMultiple(cuerpo("chk7"), {
+    pregunta: "Cada bloque externo eligió su propio (k, p) y la media externa es 0.5. ¿Qué número reportas como lo que esperas de este procedimiento con datos nuevos?",
+    opciones: [
+      "0.5, la media de los bloques externos: es la única medida en la que ningún dato evaluado participó en la elección.",
+      "0.917",
+      "0.75, el mejor bloque externo.",
+      "Ninguno: como cada bloque eligió distinto, la anidada no sirve."
+    ],
+    correcta: 0,
+    mezclar: true,
+    pistas: [null,
+      "Es el máximo de la rejilla: optimista, como viste en el paso 6.",
+      "Elegir el mejor bloque repite el error del ganador.",
+      "Que elijan distinto es información: con 8 alumnos, elegir es casi una lotería."],
+    explicacion: "Se reporta <b>0.5</b>. Es bajo, y es honesto: con tan pocos alumnos, la rejilla no sabe elegir bien, y eso también es parte de lo que vas a obtener.",
+    alResolver: function () { est.c7 = true; pasos.completar(6); }
+  });
+
+  pasos = B.pasos($("recorrido"), {
+    concepto: C,
+    alEntrar: entrar,
+    alTerminar: function () { location.hash = "retos"; }
+  });
+  est.c1 = pasos.hecho(0);
+  est.c2 = pasos.hecho(1);
+  est.c3 = pasos.hecho(2);
+  est.c4 = pasos.hecho(3);
+  est.c5 = pasos.hecho(4);
+  est.c6 = est.c6b = pasos.hecho(5);
+  est.c7 = pasos.hecho(6);
+  $("tras1").hidden = !est.c1;
+  $("tras4").hidden = !est.c4;
+  $("tras5").hidden = !est.c5;
+  $("simulador").hidden = !est.c6b;
+  if (est.c6) ESC.examen = true;
+  entrar(pasos.actual());
+
+  /* ---------------- simulador del destacado ---------------- */
+  var TODOS924 = null;
+  function puntuar(lab) { return CELDAS.map(function (c) { return suma(bloquesCV(lab, c[0], c[1])); }); }
+  function repartos() {
+    if (TODOS924) return TODOS924;
+    var res = [];
+    (function comb(ini, el) {
+      if (el.length === 6) { var lab = TODOS.map(function (i) { return el.indexOf(i) >= 0 ? 1 : 0; }); res.push(puntuar(lab)); return; }
+      for (var i = ini; i < 12; i++) { el.push(i); comb(i + 1, el); el.pop(); }
+    })(0, []);
+    TODOS924 = res;
+    return res;
+  }
+  $("btnRepartir").addEventListener("click", function () {
+    var unos = barajar(TODOS).slice(0, 6), lab = TODOS.map(function (i) { return unos.indexOf(i) >= 0 ? 1 : 0; });
+    var sc = puntuar(lab), mx = Math.max.apply(null, sc), bi = sc.indexOf(mx);
+    var datos = sc.map(function (s) { return { barras: null, media: s / 12 }; });
+    $("simRes").innerHTML = '<p class="esc-nota" style="margin-top:0">Etiquetas al azar de los 12 alumnos, en su orden:</p><div class="etiquetas">' +
+      lab.map(function (l) { return '<i style="background:var(' + (l ? "--pos" : "--neg") + ')"></i>'; }).join("") + "</div>" +
+      tablero(datos, { chico: true, ganadora: bi }) +
+      '<p class="marcador">La mejor celda: <b>' + mx + "/12 = " + f3(mx / 12) + "</b>" + (mx >= 9 ? ". Llega a 0.75 sin que haya nada que aprender." : ". No llega a 0.75 esta vez. Repite.") + "</p>";
+  });
+  $("btnTodos").addEventListener("click", function () {
+    var res = repartos(), hist = {}, b75 = 0, f75 = 0, sb = 0, sa = 0;
+    res.forEach(function (sc) {
+      var mx = Math.max.apply(null, sc);
+      hist[mx] = (hist[mx] || 0) + 1;
+      if (mx >= 9) b75++;
+      if (sc[2] >= 9) f75++;
+      sb += mx / 12;
+      sc.forEach(function (s) { sa += s / 12 / 6; });
+    });
+    var max = 0, k;
+    for (k = 0; k <= 12; k++) max = Math.max(max, hist[k] || 0);
+    var h = '<div class="hist">', e = '<div class="hist-eje">';
+    for (k = 0; k <= 12; k++) {
+      var n = hist[k] || 0;
+      h += '<div class="' + (k >= 9 ? "alto" : "") + '"><span>' + (n || "") + '</span><i style="height:' + (n / max * 85) + '%"></i></div>';
+      e += "<span>" + k + "</span>";
+    }
+    $("simRes").innerHTML = '<p class="esc-nota" style="margin-top:0">Aciertos de la mejor celda (de 12) en los ' + res.length + " repartos. En morado, 9 o más: 0.75 o más.</p>" + h + "</div>" + e + "</div>" +
+      '<p class="marcador">mejor celda con 0.75 o más: <b>' + b75 + " de " + res.length + " (" + (b75 / res.length * 100).toFixed(1) + " %)</b> · celda fija k = 3, p = 1: <b>" + f75 + " (" + (f75 / res.length * 100).toFixed(1) + " %)</b><br>media de la mejor celda: <b>" + (sb / res.length).toFixed(3) + "</b> · media de una celda cualquiera: <b>" + (sa / res.length).toFixed(3) + "</b></p>";
+  });
+
+  /* ---------------- hipotesis inicial ---------------- */
+  (function () {
+    var ta = $("hipotesis"), t = null;
+    ta.value = B.nota(ID, "hipotesis");
+    function cita() {
+      var v = ta.value.trim(), e = $("citaHipo");
+      e.hidden = !v;
+      if (v) { e.textContent = ""; e.appendChild(document.createTextNode("Al principio escribiste: «" + v + "». Ahora lo sabes: la mejor celda acertó 11 de 12, con alumnos nuevos acertó 5 de 6, y con etiquetas sin ningún patrón la mejor celda llega a 0.75 en 14 de cada 100 repartos.")); }
+    }
+    cita();
+    ta.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { B.nota(ID, "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; cita(); }, 500);
+    });
+  })();
+
+  /* ---------------- marcadores de estado de retos ---------------- */
+  function pintarEstados() {
+    [].forEach.call(document.querySelectorAll("[data-reto]"), function (e) {
+      var ok = C.retoOk(e.getAttribute("data-reto"));
+      e.textContent = ok ? "resuelto" : "pendiente";
+      e.classList.toggle("ok", ok);
+    });
+  }
+  C.alCambiar(pintarEstados);
+
+  /* ---------------- reto: ojo clinico ---------------- */
+  (function () {
+    var BANCO = [
+      ["n_neighbors", "hiper", "kNN"], ["p", "hiper", "kNN"], ["C", "hiper", "SVC"], ["gamma", "hiper", "SVC"], ["alpha", "hiper", "Ridge"],
+      ["max_depth", "hiper", "DecisionTreeClassifier"], ["n_estimators", "hiper", "RandomForestClassifier"],
+      ["coef_", "param", "LogisticRegression"], ["intercept_", "param", "LogisticRegression"], ["support_vectors_", "param", "SVC"],
+      ["mean_", "param", "StandardScaler"], ["cluster_centers_", "param", "KMeans"],
+      ["cv=10", "ninguno", "GridSearchCV"], ['scoring="accuracy"', "ninguno", "GridSearchCV"], ["n_iter", "ninguno", "RandomizedSearchCV"]
+    ];
+    var EXPL = { hiper: "se lo pasas al construir: es hiperparámetro.", param: "lo calcula <code>fit</code>: es parámetro.", ninguno: "es de cómo evalúas o buscas: ni uno ni otro." };
+    var cont = $("ojo");
+    cont.innerHTML = '<div class="ronda"></div><div class="ojo-pieza"></div><div class="ojo-opts">' +
+      [["param", "Parámetro"], ["hiper", "Hiperparámetro"], ["ninguno", "Ninguno de los dos"]].map(function (o) { return '<button type="button" class="opt" data-a="' + o[0] + '">' + o[1] + "</button>"; }).join("") +
+      '</div><div class="fb" aria-live="polite"></div><div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    var ronda, aciertos, resp, lista, actual;
+    function nueva() { ronda = 0; aciertos = 0; lista = barajar(BANCO).slice(0, 5); mostrar(); }
+    function mostrar() {
+      resp = false;
+      actual = lista[ronda];
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 5 · aciertos " + aciertos;
+      cont.querySelector(".ojo-pieza").innerHTML = "<code>" + escH(actual[0]) + "</code> de <code>" + actual[2] + "</code>";
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (b) { b.disabled = false; b.className = "opt"; });
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+    }
+    cont.querySelector(".ojo-opts").addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || resp) return;
+      resp = true;
+      var ok = b.getAttribute("data-a") === actual[1];
+      if (ok) aciertos++;
+      b.classList.add(ok ? "ok" : "mal");
+      if (!ok) cont.querySelector('.ojo-opts [data-a="' + actual[1] + '"]').classList.add("ok");
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (x) { x.disabled = true; });
+      cont.querySelector(".fb").innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No.</span> ') + "<code>" + escH(actual[0]) + "</code> " + EXPL[actual[1]];
+      var sig = cont.querySelector(".sig");
+      sig.hidden = false;
+      if (ronda === 4) {
+        var aprobo = aciertos >= 4;
+        C.reto("ojo", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertos + " de 5" + (aprobo ? ". Aprobado." : ". Necesitas 4 para aprobar.");
+        sig.textContent = "Otra tanda";
+      } else sig.textContent = "Siguiente ronda";
+    });
+    cont.querySelector(".sig").addEventListener("click", function () { if (ronda === 4) nueva(); else { ronda++; mostrar(); } });
+    nueva();
+  })();
+
+  /* ---------------- reto: construir ---------------- */
+  (function () {
+    var st = svmInicial(), hechos = [false, false, false], listo = false, ul = $("objetivos");
+    var OBJ = [
+      { t: "Que la ganadora no quede en el borde de la rejilla.", ok: function () { return !svmBordes(st, svmGanadora(st)).enBorde; } },
+      { t: "Que se vean las dos celdas con 11 de 12.", ok: function () { return st.r0 <= 2 && st.r1 >= 3 && st.c0 <= 0 && st.c1 >= 2; } },
+      { t: "Gastar como mucho 90 entrenamientos en total (30 celdas × 3 bloques).", ok: function () { return st.gasto <= 90; } }
+    ];
+    OBJ.forEach(function (o) { var li = document.createElement("li"); li.innerHTML = '<span class="m"></span><span>' + o.t + "</span>"; ul.appendChild(li); });
+    function pintar() {
+      $("construir").innerHTML = svmHtml(st, false);
+      var ahora = OBJ.map(function (o) { return o.ok(); });
+      [].forEach.call(ul.children, function (li, i) { li.classList.toggle("hecho", ahora[i]); });
+      if (ahora.every(Boolean) && !listo) { listo = true; C.reto("construir", true); }
+      return hechos;
+    }
+    $("construir").addEventListener("click", function (e) {
+      var b = e.target.closest("[data-svm]");
+      if (!b || b.disabled) return;
+      svmAccion(st, b.getAttribute("data-svm"));
+      pintar();
+    });
+    pintar();
+  })();
+
+  /* ---------------- reto: a mano, contar modelos ---------------- */
+  (function () {
+    var NOMBRES = ["k", "p", "peso", "C", "gamma", "profundidad"];
+    var T;
+    function gen() {
+      var m = 2 + azar(2), noms = barajar(NOMBRES).slice(0, m), n = noms.map(function () { return 2 + azar(5); });
+      var prod = n.reduce(function (a, b) { return a * b; }, 1);
+      if (Math.random() < 0.5) {
+        var Bx = eleg([3, 5]), Bi = eleg([2, 3]);
+        T = { anid: true, noms: noms, n: n, prod: prod, Bx: Bx, Bi: Bi, r: Bx * (prod * Bi + 1) };
+      } else {
+        var Bb = eleg([3, 5, 10]), R = eleg([1, 2, 3]), rf = Math.random() < 0.5;
+        T = { anid: false, noms: noms, n: n, prod: prod, B: Bb, R: R, refit: rf, r: prod * Bb * R + (rf ? 1 : 0) };
+      }
+    }
+    gen();
+    function lista() { return T.noms.map(function (x, i) { return "<code>" + x + "</code> con " + T.n[i] + " valores"; }).join(", "); }
+    B.numerico($("mano"), {
+      pregunta: function () {
+        return T.anid
+          ? "Validación anidada. Rejilla: " + lista() + ". Bucle externo con " + T.Bx + " bloques; dentro, la rejilla con <code>cv=" + T.Bi + "</code> y <code>refit=True</code>. ¿Cuántos modelos se entrenan en total?"
+          : "Rejilla: " + lista() + ". Con <code>cv=" + T.B + "</code>, repetida " + T.R + (T.R === 1 ? " vez" : " veces") + " y <code>refit=" + (T.refit ? "True" : "False") + "</code>. ¿Cuántos modelos entrena?";
+      },
+      respuesta: function () { return T.r; },
+      tolerancia: 0,
+      reintentable: true,
+      pistas: [
+        "Cuenta primero las celdas: multiplica los valores de cada perilla.",
+        function () { return T.anid ? "Dentro de cada bloque externo, cada celda se entrena una vez por sub-bloque, y el ganador interno se reentrena una vez." : "Cada celda se entrena una vez por bloque y por repetición."; },
+        function () { return "Las celdas son " + T.n.join(" × ") + " = " + T.prod + "."; }
+      ],
+      diagnostico: function (v) {
+        if (T.anid && v === T.Bx * T.prod * T.Bi) return "Falta el reentreno del ganador interno, uno por cada bloque externo.";
+        if (T.anid && v === T.prod * T.Bi + 1) return "Eso es lo de un solo bloque externo. Hay " + T.Bx + ".";
+        if (!T.anid && T.refit && v === T.r - 1) return "Falta el reentreno: <code>refit=True</code>.";
+        if (!T.anid && !T.refit && v === T.r + 1) return "Con <code>refit=False</code> no hay reentreno.";
+        if (v === T.prod) return "Esas son las celdas. Cada una se entrena varias veces.";
+        return null;
+      },
+      explicacion: function () {
+        return T.anid
+          ? T.Bx + " × (" + T.prod + " × " + T.Bi + " + 1) = <b>" + T.r + "</b> modelos."
+          : T.prod + " × " + T.B + " × " + T.R + (T.refit ? " + 1" : "") + " = <b>" + T.r + "</b> modelos.";
+      },
+      antesDeReintentar: gen,
+      alResolver: function (ok) { C.reto("mano", ok); }
+    });
+  })();
+
+  /* ---------------- reto: a mano, bloques desiguales ---------------- */
+  (function () {
+    var T;
+    function gen() {
+      do {
+        var s = [0, 1, 2].map(function () { return 2 + azar(5); }), a = s.map(function (x) { return azar(x + 1); });
+        var prom = (a[0] / s[0] + a[1] / s[1] + a[2] / s[2]) / 3, tot = suma(a) / suma(s);
+        T = { s: s, a: a, prom: prom, tot: tot };
+      } while (Math.abs(T.prom - T.tot) < 0.02);
+    }
+    gen();
+    function tabla() {
+      return '<table class="mini-t"><tr><th>bloque</th><th>alumnos</th><th>aciertos</th></tr>' + T.s.map(function (x, i) { return "<tr><td>" + (i + 1) + "</td><td>" + x + "</td><td>" + T.a[i] + "</td></tr>"; }).join("") + "</table>";
+    }
+    campos($("mano2"), {
+      pregunta: function () { return tabla() + "<p>¿Qué puntuación reporta <code>GridSearchCV</code> (<code>best_score_</code>) y cuál es la exactitud con los aciertos totales? Usa 3 decimales o fracciones.</p>"; },
+      campos: [{ pre: "best_score_ =", aria: "Puntuación de GridSearchCV" }, { pre: "aciertos totales =", aria: "Exactitud con aciertos totales" }],
+      revisar: function (v) {
+        var p = B.aNumero(v[0]), t = B.aNumero(v[1]);
+        var okP = Math.abs(p - T.prom) < 0.0015, okT = Math.abs(t - T.tot) < 0.0015;
+        if (okP && okT) return { ok: true };
+        if (Math.abs(p - T.tot) < 0.0015 && Math.abs(t - T.prom) < 0.0015) return { msg: "Las pusiste al revés: <code>best_score_</code> promedia bloques, no alumnos." };
+        if (okP) return { msg: "<code>best_score_</code> está bien. Para la otra, suma todos los aciertos y divide entre todos los alumnos." };
+        if (okT) return { msg: "Los aciertos totales están bien. <code>best_score_</code> promedia la exactitud de cada bloque." };
+        return { msg: "Calcula la exactitud de cada bloque por separado; después compara con aciertos totales sobre alumnos totales." };
+      },
+      pistas: [
+        "<code>best_score_</code> promedia bloques, no alumnos: calcula aciertos / alumnos en cada bloque.",
+        function () { return "Exactitudes por bloque: " + T.a.map(function (x, i) { return x + "/" + T.s[i]; }).join(", ") + ". Promédialas."; },
+        function () { return "Aciertos totales: " + suma(T.a) + " de " + suma(T.s) + "."; }
+      ],
+      solucion: function () {
+        return "<code>best_score_</code> = (" + T.a.map(function (x, i) { return x + "/" + T.s[i]; }).join(" + ") + ") / 3 = <b>" + T.prom.toFixed(3) + "</b>; aciertos totales = " + suma(T.a) + "/" + suma(T.s) + " = <b>" + T.tot.toFixed(3) + "</b>. Con bloques desiguales, un bloque chico pesa lo mismo que uno grande. Ejemplo verificado con scikit-learn: tamaños 5, 5 y 2 con aciertos 4, 5 y 0 dan 0.6 frente a 0.75.";
+      },
+      antesDeReintentar: gen,
+      alResolver: function (ok) { C.reto("mano2", ok); }
+    });
+  })();
+
+  /* ---------------- reto: cazar el error ---------------- */
+  B.cazarError($("error"), {
+    variantes: [
+      {
+        intro: "Python. La salida real es <code>1 1 1.0</code>, <code>1 2 1.0</code>, <code>3 1 0.917</code>, <code>3 2 0.917</code>, <code>5 1 0.917</code>, <code>5 2 0.917</code> y <code>rejilla a mano: (1, 1) 1.0</code>. Gana k = 1 con exactitud perfecta.",
+        lineas: [tt("mejor, mejor_kp = -1, None"), tt("for k in [1, 3, 5]:"), tt("    for p in [1, 2]:"), tt("        aciertos = 0"), tt("        for b in range(3):"),
+          tt("            pred = [knn(X, y, x, k, p) for x in X[bloque == b]]"), tt("            aciertos += np.sum(pred == y[bloque == b])"), tt("        media = aciertos / 12"),
+          tt("        if media > mejor:"), tt("            mejor, mejor_kp = media, (k, p)")],
+        erronea: 5,
+        explicacion: "Entrena con <b>todos</b> los alumnos, también con el bloque que evalúa. Cada alumno se encuentra a sí mismo y k = 1 acierta todo: es el error del paso 1. Va <code>knn(X[bloque != b], y[bloque != b], x, k, p)</code>."
+      },
+      {
+        intro: "Python. La salida real es <code>1 1 0.667</code>, <code>1 2 1.417</code>, <code>3 1 2.333</code>, <code>3 2 3.167</code>, <code>5 1 3.75</code>, <code>5 2 4.417</code> y <code>rejilla a mano: (5, 2) 4.417</code>. Hay exactitudes mayores que 1.",
+        lineas: [tt("mejor, mejor_kp = -1, None"), tt("aciertos = 0"), tt("for k in [1, 3, 5]:"), tt("    for p in [1, 2]:"), tt("        for b in range(3):"),
+          tt("            pred = [knn(X[bloque != b], y[bloque != b], x, k, p) for x in X[bloque == b]]"), tt("            aciertos += np.sum(pred == y[bloque == b])"), tt("        media = aciertos / 12"),
+          tt("        if media > mejor:"), tt("            mejor, mejor_kp = media, (k, p)")],
+        erronea: 1,
+        explicacion: "<code>aciertos = 0</code> quedó fuera de los bucles: los aciertos se acumulan de una celda a la siguiente, la última siempre gana y la exactitud pasa de 1. Va justo después de <code>for p in [1, 2]:</code>, una vez por celda."
+      },
+      {
+        intro: "R. La salida real es <code>1 1 0.417</code>, <code>1 2 0.083</code>, <code>3 1 0.25</code>, <code>3 2 0.167</code>, <code>5 1 0.25</code>, <code>5 2 0.25</code> y <code>rejilla a mano: 1 1 0.417</code>. Todo da peor que adivinar.",
+        lineas: [tt("knn_a_mano <- function(Xtr, ytr, x, k, p) {"), tt("  d <- rowSums(abs(sweep(Xtr, 2, x)) ^ p) ^ (1 / p)"), tt("  vecinos <- order(-d)[1:k]"), tt("  as.integer(mean(ytr[vecinos]) > 0.5)"), tt("}")],
+        erronea: 2,
+        explicacion: "<code>order(-d)</code> ordena de la distancia más grande a la más chica: el modelo vota con los alumnos <b>más lejanos</b>. Va <code>order(d)[1:k]</code>."
+      }
+    ],
+    alResolver: function (ok) { C.reto("error", ok); }
+  });
+
+  /* ---------------- retos: propiedades ---------------- */
+  function prop(id, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple($(id), cfg);
+  }
+  prop("prop1", {
+    pregunta: "¿Qué distingue a un hiperparámetro de un parámetro?",
+    opciones: [
+      "El hiperparámetro se fija antes de entrenar y controla cómo aprende el modelo; el parámetro lo calcula el entrenamiento a partir de los datos.",
+      "El hiperparámetro es más importante.",
+      "Los hiperparámetros son los que tienen nombre en griego.",
+      "El parámetro se elige con validación cruzada."
+    ],
+    correcta: 0,
+    pistas: [null,
+      "Los dos importan; la diferencia es quién los fija.",
+      "λ es hiperparámetro y β es parámetro: el nombre no decide.",
+      "Eso se hace con los hiperparámetros; los parámetros los calcula <code>fit</code>."],
+    explicacion: "Lo que decide es quién lo fija: tú, antes de <code>fit</code> (hiperparámetro), o <code>fit</code>, a partir de los datos (parámetro)."
+  });
+  prop("prop2", {
+    pregunta: "¿Por qué <code>best_score_</code> suele salir más alto que la exactitud en datos nuevos?",
+    opciones: [
+      "Porque es el máximo de varias medias con ruido: la celda ganadora ganó en parte por suerte.",
+      "Porque se mide sobre el entrenamiento.",
+      "Porque <code>refit</code> cambia el modelo.",
+      "No suele pasar."
+    ],
+    correcta: 0,
+    pistas: [null,
+      "Se mide en validación; el problema es quedarse con el máximo.",
+      "Reentrenar con más datos suele ayudar, no perjudicar.",
+      "Con etiquetas al azar, la mejor de 6 celdas llegó a 0.75 en el 14 % de los repartos."],
+    explicacion: "Elegir el máximo selecciona también la suerte. Aquí: 0.917 en la rejilla, 0.833 en los 6 alumnos nuevos y 0.5 en la anidada."
+  });
+  prop("prop3", {
+    pregunta: "¿Qué mide la validación anidada?",
+    opciones: [
+      "El rendimiento esperado del procedimiento completo: buscar con la rejilla y entrenar al ganador.",
+      "El rendimiento del mejor (k, p).",
+      "Elige los hiperparámetros finales.",
+      "Lo mismo que la validación cruzada simple, pero más rápido."
+    ],
+    correcta: 0,
+    pistas: [null,
+      "Cada bloque externo puede elegir otro (k, p): aquí eligieron (5, 1), (1, 1) y (1, 1).",
+      "Mide; el modelo final sale de una rejilla con todo el entrenamiento.",
+      "Es mucho más cara: 725 modelos en el ejemplo de Raschka."],
+    explicacion: "La anidada mide el procedimiento, con la elección adentro. No produce un modelo ni elige un (k, p) final."
+  });
+
+  /* ---------------- formula de memoria ---------------- */
+  B.ordenar($("formula"), {
+    pregunta: "Arma la búsqueda en rejilla de kNN con scikit-learn, de construirla a leer la mejor combinación.",
+    piezas: [tt("gs = GridSearchCV("), tt("KNeighborsClassifier(),"), tt('{"n_neighbors": [1, 3, 5], "p": [1, 2]},'), tt("cv=5)"), tt("gs.fit(X_train, y_train)"), tt("gs.best_params_")],
+    distractores: [tt("gs.fit(X_test, y_test)"), tt("gs.best_score_  # informe final"), tt('{"k": [1, 3, 5]},')],
+    soluciones: [[0, 1, 2, 3, 4, 5]],
+    explicacion: "La rejilla se ajusta con el entrenamiento: el test no se toca para elegir. <code>best_score_</code> sirve para elegir, no como informe final: es optimista. Y en scikit-learn la perilla k se llama <code>n_neighbors</code>.",
+    alResolver: function (ok) { C.reto("formula", ok); }
+  });
+
+  /* ---------------- vida real ---------------- */
+  (function () {
+    var CODIGO = {
+      py: [
+        ["imp", "import numpy as np"],
+        ["datos", "X = np.array([[6.8, 5.8], [1.8, 4.9], [0.6, 6.7], [3.3, 9.6],"],
+        [null, "              [4.0, 0.5], [0.1, 3.3], [3.1, 10.0], [7.8, 3.7],"],
+        [null, "              [1.8, 1.2], [1.2, 7.4], [0.6, 7.9], [3.9, 6.9]])"],
+        ["etiq", "y = np.array([1, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 1])   # inventados"],
+        ["bloque", "bloque = np.array([0, 1, 2] * 4)                     # 3 bloques fijos"],
+        ["def", "def knn(Xtr, ytr, x, k, p):"],
+        [null, "    d = (np.abs(Xtr - x) ** p).sum(axis=1) ** (1 / p)"],
+        [null, "    vecinos = np.argsort(d)[:k]"],
+        [null, "    return int(ytr[vecinos].mean() > 0.5)"],
+        ["ini", "mejor, mejor_kp = -1, None"],
+        ["fork", "for k in [1, 3, 5]:"],
+        ["forp", "    for p in [1, 2]:"],
+        ["cero", "        aciertos = 0"],
+        ["forb", "        for b in range(3):"],
+        ["pred", "            pred = [knn(X[bloque != b], y[bloque != b], x, k, p) for x in X[bloque == b]]"],
+        ["suma", "            aciertos += np.sum(pred == y[bloque == b])"],
+        ["media", "        media = aciertos / 12"],
+        ["muestra", "        print(k, p, round(media, 3))"],
+        ["si", "        if media > mejor:"],
+        ["upd", "            mejor, mejor_kp = media, (k, p)"],
+        ["fin", "print(\"rejilla a mano:\", mejor_kp, round(mejor, 3))"],
+        ["lib0", "from sklearn.model_selection import GridSearchCV, PredefinedSplit"],
+        [null, "from sklearn.neighbors import KNeighborsClassifier"],
+        ["ctrl", "cv = PredefinedSplit(bloque)                         # los mismos 3 bloques"],
+        ["rej", "rejilla = {\"n_neighbors\": [1, 3, 5], \"p\": [1, 2]}"],
+        ["gs", "gs = GridSearchCV(KNeighborsClassifier(), rejilla, cv=cv).fit(X, y)"],
+        ["lib", "print(\"GridSearchCV:\", gs.best_params_, round(gs.best_score_, 3))"]
+      ],
+      r: [
+        ["datos", "X <- matrix(c(6.8, 5.8, 1.8, 4.9, 0.6, 6.7, 3.3, 9.6,"],
+        [null, "              4.0, 0.5, 0.1, 3.3, 3.1, 10.0, 7.8, 3.7,"],
+        [null, "              1.8, 1.2, 1.2, 7.4, 0.6, 7.9, 3.9, 6.9), ncol = 2, byrow = TRUE)"],
+        ["etiq", "y <- c(1, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 1)   # inventados"],
+        ["bloque", "bloque <- rep(1:3, 4)                        # 3 bloques fijos"],
+        ["def", "knn_a_mano <- function(Xtr, ytr, x, k, p) {"],
+        [null, "  d <- rowSums(abs(sweep(Xtr, 2, x)) ^ p) ^ (1 / p)"],
+        [null, "  vecinos <- order(d)[1:k]"],
+        [null, "  as.integer(mean(ytr[vecinos]) > 0.5)"],
+        [null, "}"],
+        ["ini", "mejor <- -1; mejor_kp <- NULL"],
+        ["fork", "for (k in c(1, 3, 5)) {"],
+        ["forp", "  for (p in c(1, 2)) {"],
+        ["cero", "    aciertos <- 0"],
+        ["forb", "    for (b in 1:3) {"],
+        ["pred", "      pred <- apply(X[bloque == b, ], 1, function(x) knn_a_mano(X[bloque != b, ], y[bloque != b], x, k, p))"],
+        ["suma", "      aciertos <- aciertos + sum(pred == y[bloque == b])"],
+        [null, "    }"],
+        ["media", "    media <- aciertos / 12"],
+        ["muestra", "    cat(k, p, round(media, 3), fill = TRUE)"],
+        ["si", "    if (media > mejor) {"],
+        ["upd", "      mejor <- media; mejor_kp <- c(k, p)"],
+        [null, "    }"],
+        [null, "  }"],
+        [null, "}"],
+        ["fin", "cat(\"rejilla a mano:\", mejor_kp, round(mejor, 3), fill = TRUE)"],
+        ["lib0", "suppressPackageStartupMessages(library(caret))"],
+        ["ctrl", "ctrl <- trainControl(method = \"cv\", index = lapply(1:3, function(b) which(bloque != b)))"],
+        ["rej", "rejilla <- data.frame(k = c(1, 3, 5))                # caret no tiene p para knn"],
+        ["gs", "fit <- train(data.frame(X), factor(y), method = \"knn\", tuneGrid = rejilla, trControl = ctrl)"],
+        ["lib", "print(fit$results[, c(\"k\", \"Accuracy\")])"]
+      ]
+    };
+    var SAL = {
+      py: ["1 1 0.667", "1 2 0.75", "3 1 0.917", "3 2 0.833", "5 1 0.583", "5 2 0.667", "rejilla a mano: (3, 1) 0.917", "GridSearchCV: {'n_neighbors': 3, 'p': 1} 0.917"],
+      r: ["1 1 0.667", "1 2 0.75", "3 1 0.917", "3 2 0.833", "5 1 0.583", "5 2 0.667", "rejilla a mano: 3 1 0.917", "  k  Accuracy", "1 1 0.7500000", "2 3 0.8333333", "3 5 0.6666667"]
+    };
+
+    function simular(lang) {
+      var ev = [], py = lang === "py";
+      var lit = [0, 0, 0, 0, 0, 0], med = [null, null, null, null, null, null];
+      var st = { fase: 1, j: null, k: null, p: null, b: null, aciertos: null, media: null, mejor: -1, mejorKp: null, gan: -1, sal: 0 };
+      function foto(id, x) {
+        ev.push(Object.assign({ id: id }, st, { lit: lit.slice(), med: med.slice() }, x || {}));
+      }
+      if (py) foto("imp");
+      foto("datos"); foto("etiq"); foto("bloque"); foto("def"); foto("ini");
+      CELDAS.forEach(function (c, j) {
+        st.j = j; st.k = c[0];
+        if (c[1] === 1) { st.p = null; st.b = null; st.aciertos = null; st.media = null; foto("fork"); }
+        st.p = c[1]; st.b = null; st.media = null;
+        foto("forp");
+        st.aciertos = 0; foto("cero");
+        for (var b = 0; b < 3; b++) {
+          st.b = b; foto("forb");
+          var s = partir(b), preds = {};
+          s.te.forEach(function (i) { preds[i] = knn(s.tr, Y, X[i], c[0], c[1]); });
+          foto("pred", { validar: s.te, preds: preds, nBloque: BARRAS[j][b] });
+          st.aciertos += BARRAS[j][b]; lit[j] = b + 1;
+          foto("suma", { validar: s.te, preds: preds, nBloque: BARRAS[j][b] });
+        }
+        st.b = null;
+        st.media = MEDIAS[j]; med[j] = MEDIAS[j];
+        foto("media");
+        st.sal++; foto("muestra");
+        var mejora = st.media > st.mejor;
+        foto("si", { mejora: mejora });
+        if (mejora) { st.mejor = st.media; st.mejorKp = c; st.gan = j; foto("upd"); }
+      });
+      st.fase = 2; st.j = null;
+      st.sal++; foto("fin");
+      foto("lib0"); foto("ctrl"); foto("rej");
+      foto("gs", { flash: true });
+      st.sal = SAL[lang].length; foto("lib", { fin: true });
+      return ev;
+    }
+    var EVS = { py: simular("py"), r: simular("r") };
+    var EV = EVS.py.slice();
+
+    function kpTxt(kp, py) { return kp ? (py ? "(" + kp[0] + ", " + kp[1] + ")" : "c(" + kp[0] + ", " + kp[1] + ")") : (py ? "None" : "NULL"); }
+    function narrar(e, ctx) {
+      var py = ctx.lang() === "py";
+      switch (e.id) {
+        case "imp": return "Carga NumPy. Esta línea solo existe en Python: R trae <code>matrix</code>, <code>order</code> y <code>apply</code> sin cargar nada.";
+        case "datos": return "Los doce alumnos: una fila por alumno, tareas y prácticas. " + (py ? "Un arreglo de 12 × 2." : "Una matriz de 12 × 2 llenada por filas (<code>byrow = TRUE</code>).");
+        case "etiq": return "Las etiquetas: 1 si aprobó, 0 si no. Seis y seis. El alumno de (0.6, 7.9) es el " + ctx.ix(10) + " y es la excepción.";
+        case "bloque": return "Bloques fijos, no al azar: el alumno " + ctx.ix(0) + " va al bloque " + ctx.ix(0) + ", el " + ctx.ix(1) + " al " + ctx.ix(1) + ", el " + ctx.ix(2) + " al " + ctx.ix(2) + ", y se repite. Así Python y R dan lo mismo.";
+        case "def": return "Define el kNN de tres líneas: distancias de Minkowski con exponente p, los k índices más cercanos y el voto (la media de sus etiquetas, mayor que 0.5). Aquí solo se define; cada línea de adentro corre al llamarla.";
+        case "ini": return "Todavía no hay ganador: <code>mejor</code> empieza en −1 para que cualquier media lo supere.";
+        case "fork": return "Fila del tablero: <b>k = " + e.k + "</b>.";
+        case "forp": return "Celda <b>k = " + e.k + ", p = " + e.p + "</b> (" + (e.p === 1 ? "en cuadras" : "en línea recta") + ").";
+        case "cero": return "Los aciertos de esta celda vuelven a 0. Esta línea va dentro de los dos bucles: una vez por celda.";
+        case "forb": return "Bloque <b>" + ctx.ix(e.b) + "</b>: se valida con sus 4 alumnos y se entrena con los otros 8.";
+        case "pred": return "Predice los 4 alumnos del bloque " + ctx.ix(e.b) + " (" + e.validar.map(function (i) { return ctx.ix(i); }).join(", ") + "), cada uno con sus " + e.k + " vecinos entre los 8 de entrenamiento. Acierta <b>" + e.nBloque + " de 4</b>.";
+        case "suma": return "Suma " + e.nBloque + ": <code>aciertos</code> = " + e.aciertos + ". Se enciende la barra del bloque " + ctx.ix(e.b) + ".";
+        case "media": return "Media de la celda: " + e.aciertos + " / 12 = <b>" + f3(e.media) + "</b>. La celda se pinta.";
+        case "muestra": return "Imprime <code>" + e.k + " " + e.p + " " + f3(e.media) + "</code>.";
+        case "si": return f3(e.media) + (e.mejora ? " supera a " + (e.mejor < 0 ? "−1" : f3(e.mejor)) + ": hay nuevo ganador." : " no supera a " + f3(e.mejor) + ": no cambia nada. Un empate tampoco cambiaría al ganador: hace falta mayor estricto.");
+        case "upd": return "Nuevo ganador: <code>mejor_kp</code> = " + kpTxt(e.mejorKp, py) + " con " + f3(e.mejor) + ". El marco morado se mueve.";
+        case "fin": return "La rejilla a mano termina: gana " + kpTxt(e.mejorKp, py) + " con <b>0.917</b>, igual que en el recorrido.";
+        case "lib0": return py ? "Carga lo que hace falta de scikit-learn." : "Carga caret sin sus mensajes de inicio.";
+        case "ctrl": return py ? "<code>PredefinedSplit</code> usa exactamente los mismos 3 bloques. Con <code>cv=3</code> serían bloques consecutivos y los números cambiarían." : "<code>index</code> le da a caret las filas de entrenamiento de cada bloque: los mismos 3 bloques.";
+        case "rej": return py ? "La rejilla: un diccionario con los valores de cada perilla. Son 6 combinaciones." : "La rejilla de caret: solo k. Para <code>method = \"knn\"</code>, caret no tiene la perilla p.";
+        case "gs": return py ? "<code>GridSearchCV</code> hace los tres bucles por dentro y reentrena al ganador con los 12 (<code>refit=True</code>)." : "<code>train</code> corre la rejilla con los mismos bloques, siempre en línea recta.";
+        case "lib": return py ? "La librería da lo mismo: <code>{'n_neighbors': 3, 'p': 1} 0.917</code>." : "caret da 0.75, 0.833 y 0.667: la columna p = 2 de la rejilla a mano. Su mejor k sería 3, pero no puede ver la celda p = 1, que es la mejor.";
+      }
+      return "";
+    }
+    function visual(e, anterior, ctx) {
+      var py = ctx.lang() === "py";
+      var datos = CELDAS.map(function (c, j) {
+        var l = e ? e.lit[j] : 0;
+        return { barras: l ? BARRAS[j] : null, encendidas: l, media: e ? e.med[j] : null };
+      });
+      $("vrTab").innerHTML = tablero(datos, { ganadora: e ? e.gan : -1, actual: e && e.fase === 1 ? e.j : null, flash: e && e.flash, textoVacio: "" }) +
+        (e && e.id === "lib" ? '<p class="vr-res">' + (py ? "GridSearchCV elige k = 3, p = 1: la misma celda." : "caret solo recorre la columna p = 2.") + "</p>" : "");
+      $("vrPlano").innerHTML = plano({ validar: e && e.validar ? e.validar : null, preds: e && e.id === "suma" ? e.preds : (e && e.id === "pred" ? e.preds : null), chico: true }) +
+        '<p class="esc-nota">' + (e && e.validar ? "Contorno verde: acierto; rojo: fallo. Bloque " + ctx.ix(e.b) + "." : "Aquí se marca el bloque que se está validando.") + "</p>";
+      $("vrSal").textContent = SAL[ctx.lang()].slice(0, e ? e.sal : 0).join("\n");
+    }
+    // al cambiar de lenguaje, cambia la lista de eventos (Python tiene una linea mas)
+    $("vrLang").addEventListener("click", function (ev) {
+      var b = ev.target.closest("button[data-lang]");
+      if (!b) return;
+      var nuevos = EVS[b.getAttribute("data-lang")];
+      EV.length = 0;
+      nuevos.forEach(function (x) { EV.push(x); });
+    });
+    var motor = B.vidaReal($("vidareal"), {
+      codigo: CODIGO,
+      eventos: EV,
+      narrar: narrar,
+      vars: function (e, ctx) {
+        var py = ctx.lang() === "py", v = [];
+        if (!e) return v;
+        if (e.k != null && e.fase === 1) v.push('<span class="vk">k = <b>' + e.k + "</b></span>");
+        if (e.p != null && e.fase === 1) v.push("<span>p = <b>" + e.p + "</b></span>");
+        if (e.b != null) v.push("<span>b = <b>" + ctx.ix(e.b) + "</b></span>");
+        if (e.aciertos != null && e.fase === 1) v.push("<span>aciertos = <b>" + e.aciertos + "</b></span>");
+        if (e.media != null && e.fase === 1) v.push("<span>media = <b>" + f3(e.media) + "</b></span>");
+        if (e.id !== "imp" && e.id !== "datos" && e.id !== "etiq" && e.id !== "bloque" && e.id !== "def") v.push("<span>mejor = <b>" + (e.mejor < 0 ? "-1" : f3(e.mejor)) + "</b></span><span>mejor_kp = <b>" + kpTxt(e.mejorKp, py) + "</b></span>");
+        return v;
+      },
+      visual: visual,
+      demora: function (e) { return !e ? 500 : e.id === "pred" ? 900 : e.id === "media" || e.id === "upd" || e.id === "lib" || e.id === "gs" ? 1100 : 450; }
+    });
+    $("vrLang").addEventListener("click", function (ev) {
+      if (!ev.target.closest("button[data-lang]")) return;
+      motor.parar();
+      motor.ir(-1);
+    });
+    // empieza rapido: son 102 lineas
+    var vel = $("vrVel");
+    [].forEach.call(vel.children, function (b) { if (b.textContent === "4x") b.click(); });
+
+    B.numerico(cuerpo("vrPred"), {
+      pregunta: "¿Cuántas veces se ejecuta la línea <code>pred = ...</code>, la que predice un bloque entero?",
+      respuesta: 18,
+      tolerancia: 0,
+      pistas: ["La línea está dentro de los tres bucles, pero predice 4 alumnos de una vez."],
+      diagnostico: function (v) {
+        if (v === 6) return "Esas son las celdas. Dentro de cada celda hay otro bucle.";
+        if (v === 3) return "Esos son los bloques de una sola celda.";
+        if (v === 72) return "Esas son las llamadas a <code>knn</code>, una por alumno validado. La línea <code>pred</code> predice 4 de una vez.";
+        return null;
+      },
+      explicacion: "<b>18 veces</b>: 6 celdas × 3 bloques. Dentro de cada una se llama 4 veces a <code>knn</code>, 72 llamadas en total. Ahora dale a reproducir."
+    });
+
+    prop("codigo1", {
+      pregunta: "¿Por qué el segundo número es más bajo que el primero?",
+      opciones: [
+        "<code>best_score_</code> es el máximo de 6 medias de validación cruzada y salió alto en parte por suerte; <code>gs.score</code> usa al ganador reentrenado con los 12 sobre alumnos que no participaron en la elección.",
+        "<code>gs.score</code> usa el modelo sin reentrenar.",
+        "El examen tiene un error de datos.",
+        "<code>best_score_</code> se mide sobre el entrenamiento."
+      ],
+      correcta: 0,
+      pistas: [null,
+        "Con <code>refit=True</code>, <code>gs.score</code> usa <code>best_estimator_</code>, que ya está reentrenado con los 12.",
+        "No: el alumno (8.0, 1.0) está cerca de (7.8, 3.7), que aprobó. El modelo se equivoca de verdad.",
+        "Se mide en los bloques de validación; el problema es que es el máximo."],
+      explicacion: "Es el paso 6 en código: <code>best_score_</code> sirve para elegir; lo que se reporta es <code>gs.score</code> sobre datos que se usan una sola vez."
+    });
+    prop("codigo2", {
+      pregunta: "Hay dos celdas con rango 1. ¿Por qué <code>best_params_</code> dice C = 1, γ = 0.1 y no C = 10, γ = 0.001?",
+      opciones: [
+        "Ante un empate, <code>GridSearchCV</code> se queda con la primera combinación en su orden de recorrido (C por fuera, γ por dentro, de menor a mayor).",
+        "Porque C = 1 es más chico y regulariza más.",
+        "Porque γ = 0.1 tiene mejor puntuación con más decimales.",
+        "Es al azar."
+      ],
+      correcta: 0,
+      pistas: [null,
+        "No hay ningún criterio de simplicidad en <code>GridSearchCV</code>.",
+        "Las dos son 11/12 exactos.",
+        "Es determinista: siempre da la misma."],
+      explicacion: "El orden decide el empate, no la calidad. Moraleja: mira <code>cv_results_</code>, no solo <code>best_params_</code>."
+    });
+    prop("codigo3", {
+      pregunta: "La rejilla a mano dice que el mejor k en línea recta es 3. ¿Por qué caret elige 5?",
+      opciones: [
+        "<code>tuneLength = 3</code> arma por su cuenta 3 valores, k = 5, 7 y 9: el 3 nunca se probó, y k = 9 ni siquiera cabe con 8 alumnos de entrenamiento.",
+        "caret usa otra distancia.",
+        "caret desempata hacia k grande.",
+        "Los bloques son otros."
+      ],
+      correcta: 0,
+      pistas: [null,
+        "Usa la de línea recta, como p = 2.",
+        "No hubo empate: el 3 no estaba en la rejilla.",
+        "Se pasaron con <code>index</code>: son los mismos."],
+      explicacion: "Con <code>tuneLength</code>, caret decide los valores. Para controlar qué se prueba, pásale <code>tuneGrid</code>."
+    });
+  })();
+
+  /* ---------------- tarjetas ---------------- */
+  B.tarjetas($("tarjetas"), [
+    ["¿Parámetro o hiperparámetro?", "Parámetro: lo calcula <code>fit</code> (pesos, umbrales). Hiperparámetro: lo fijas tú antes (k, C, γ, λ, profundidad)."],
+    ["¿Por qué no elegir k mirando el entrenamiento?", "Porque k = 1 acierta siempre el 100 % sobre los mismos datos: cada punto es su propio vecino."],
+    ["¿Qué hace <code>GridSearchCV</code>?", "Una validación cruzada por cada combinación de la rejilla, elige la de mayor media y, con <code>refit=True</code>, reentrena al ganador con todo el entrenamiento."],
+    ["¿Cuántos modelos entrena una rejilla?", "(producto de los valores de cada perilla) × bloques × repeticiones, más 1 si reentrena. Raschka p. 186: 72 × 10 + 1 = 721."],
+    ["¿Por qué C y γ en potencias de 10?", "Se mueven en órdenes de magnitud; una rejilla lineal gastaría casi todo en valores grandes."],
+    ["¿Qué haces si el mejor queda en el borde?", "Ampliar la rejilla en esa dirección: el óptimo puede estar afuera (UD2, diap. 44: C = 0.001 era el borde)."],
+    ["¿Por qué <code>best_score_</code> es optimista?", "Es el máximo de varias medias con ruido. Con etiquetas al azar, la mejor de 6 celdas llegó a 0.75 en el 14 % de los repartos."],
+    ["¿Qué es la validación anidada?", "Un bucle externo mide y uno interno elige; estima el procedimiento completo (aquí 0.5 frente al 0.917 de la rejilla)."]
+  ]);
+
+  /* ---------------- conexiones ---------------- */
+  B.conexiones(ID);
+})();
+</script>
+</body>
+</html>

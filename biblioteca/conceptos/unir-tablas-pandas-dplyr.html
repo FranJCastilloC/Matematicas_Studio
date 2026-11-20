@@ -1,0 +1,1652 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Unir tablas en pandas y dplyr</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+/* ---------- escenario ---------- */
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.esc-head .hint { font-size: 12.5px; color: var(--ink-2); }
+.esc-ctrl { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin: 0 0 10px; }
+.esc-ctrl button { font-family: var(--f-mono); font-size: 12px; padding: 6px 9px; }
+.esc-ctrl button[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.esc-ctrl label { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--ink-2); }
+.esc-ctrl select { font-family: var(--f-mono); font-size: 12.5px; padding: 5px 4px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); max-width: 100%; }
+.esc-ctrl .chk input { accent-color: var(--accent); }
+.esc-nota { font-size: 12.5px; color: var(--ink-3); margin: 8px 0 0; }
+.esc-info { font-family: var(--f-mono); font-size: 12px; color: var(--ink-2); margin: 8px 0 0; line-height: 1.6; overflow-wrap: anywhere; }
+.esc-info b { color: var(--ink); font-weight: 600; }
+.leyenda { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--ink-2); margin: 0 0 6px; }
+.leyenda .lj { color: var(--j); font-weight: 600; }
+.leyenda .lk { color: var(--k); font-weight: 600; }
+.leyenda .la { color: var(--accent); font-weight: 600; }
+
+/* los hilos: dos tablas en un svg */
+.hilos { width: 100%; height: auto; display: block; }
+.hilos text { font-family: var(--f-mono); font-size: 11px; fill: var(--ink); }
+.hilos .t-col { font-size: 9px; fill: var(--ink-3); }
+.hilos .t-l { font-size: 10px; fill: var(--j); font-weight: 600; }
+.hilos .t-r { font-size: 10px; fill: var(--k); font-weight: 600; }
+.hilos .cel-l { fill: var(--j-soft); stroke: var(--j); stroke-width: 1; }
+.hilos .cel-r { fill: var(--k-soft); stroke: var(--k); stroke-width: 1; }
+.hilos .cel-key { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.6; }
+.hilos .cel-hot { stroke: var(--accent); stroke-width: 2.2; stroke-dasharray: 3 2; }
+.hilos .apag { opacity: .25; }
+.hilos .cur rect { stroke: var(--ink); stroke-width: 2.2; }
+.hilos .hilo { stroke: var(--ink-2); stroke-width: 1.6; fill: none; }
+.hilos .hilo.anim { stroke-dasharray: 1; stroke-dashoffset: 1; animation: trazo .45s ease forwards; }
+.hilos .hilo.si { stroke: var(--ok); stroke-width: 2.6; }
+.hilos .hilo.no { stroke: var(--bad); stroke-width: 1.4; stroke-dasharray: 3 3; }
+.hilos .hilo.tenue { stroke: var(--line); }
+.hilos .hueco { fill: var(--surface); stroke: var(--bad); stroke-width: 1.2; }
+.hilos .hueco-t { font-size: 9px; fill: var(--bad); }
+@keyframes trazo { to { stroke-dashoffset: 0; } }
+@media (prefers-reduced-motion: reduce) { .hilos .hilo.anim { animation: none; stroke-dashoffset: 0; } }
+
+/* editor de claves de clientes */
+.editor { display: grid; gap: 5px; margin: 8px 0 0; }
+.ed-fila { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; font-family: var(--f-mono); font-size: 12px; color: var(--ink-2); padding: 3px 6px; border-left: 3px solid var(--k); background: var(--surface-2); border-radius: 0 6px 6px 0; }
+.ed-fila button { font-family: var(--f-mono); font-size: 12px; padding: 3px 8px; min-width: 30px; }
+.ed-fila .ed-id { display: inline-block; min-width: 1.6em; text-align: center; font-weight: 600; color: var(--ink); background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 4px; padding: 2px 4px; }
+.ed-fila .ed-nom { flex: 1 1 auto; min-width: 7em; }
+
+/* tabla resultado */
+.bandeja { margin-top: 12px; border-top: 1px dashed var(--line); padding-top: 10px; min-width: 0; }
+.b-tit { font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 6px; }
+.b-err { margin: 0; font-family: var(--f-mono); font-size: 12px; color: var(--bad); white-space: pre-wrap; overflow-wrap: anywhere; }
+.b-msg { margin: 6px 0 0; font-family: var(--f-mono); font-size: 11.5px; color: var(--ink-2); white-space: pre-wrap; overflow-wrap: anywhere; }
+.b-msg.aviso { color: var(--bad); }
+.expr-linea { font-family: var(--f-mono); font-size: 12.5px; padding: 8px 10px; border: 2px solid var(--accent); background: var(--accent-soft); border-radius: 8px; margin: 10px 0; overflow-wrap: anywhere; color: var(--ink); }
+.expr-linea .lj, .expr-linea .lk { font-weight: 600; font-size: 11px; margin-right: 6px; }
+.expr-linea .lj { color: var(--j); }
+.expr-linea .lk { color: var(--k); }
+.df-wrap { overflow-x: auto; max-width: 100%; }
+.df { display: grid; gap: 2px; font-family: var(--f-mono); font-size: 11.5px; min-width: 0; }
+.df > span { padding: 4px 2px; text-align: center; border-radius: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; color: var(--ink); }
+.df .th { font-weight: 600; font-size: 10.5px; border-bottom: 2px solid var(--line); border-radius: 3px 3px 0 0; }
+.df .th.de-l { color: var(--j); border-bottom-color: var(--j); }
+.df .th.de-r { color: var(--k); border-bottom-color: var(--k); }
+.df .th.hot { background: var(--accent-soft); }
+.df .de-l:not(.th) { box-shadow: inset 0 0 0 1px var(--j); background: var(--j-soft); }
+.df .de-r:not(.th) { box-shadow: inset 0 0 0 1px var(--k); background: var(--k-soft); }
+.df .nulo:not(.th) { color: var(--bad); background: var(--bad-soft); box-shadow: inset 0 0 0 1px var(--bad); }
+.df .rn { color: var(--ink-3); font-size: 10.5px; background: transparent; }
+.contador { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 0; }
+.contador span { font-family: var(--f-mono); font-size: 13px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink-2); }
+.contador span b { color: var(--ink); font-size: 16px; }
+.marcador { font-family: var(--f-mono); font-size: 12.5px; color: var(--ink-2); margin: 8px 0 0; overflow-wrap: anywhere; }
+.marcador b { color: var(--ink); }
+
+/* ---------- chequeos con campos ---------- */
+.campos-fila { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-top: 6px; }
+.campo { display: inline-flex; align-items: center; gap: 4px; font-family: var(--f-mono); font-size: 14px; color: var(--ink-2); }
+.campo input.num { width: 72px; }
+
+/* ---------- retos ---------- */
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.codigo-linea { font-family: var(--f-mono); font-size: 13px; padding: 8px 10px; background: var(--surface-2); border-radius: 8px; margin: 6px 0 10px; overflow-wrap: anywhere; white-space: pre-wrap; }
+.codigo-linea .lj { color: var(--j); font-weight: 600; }
+.codigo-linea .lk { color: var(--k); font-weight: 600; }
+.claves { display: grid; gap: 6px; margin: 6px 0; }
+.claves-fila { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; font-family: var(--f-mono); font-size: 12px; color: var(--ink-2); }
+.claves-fila .k { display: inline-block; min-width: 1.9em; text-align: center; padding: 3px 5px; border-radius: 5px; font-size: 13px; color: var(--ink); }
+.claves-fila.izq .k { background: var(--j-soft); border: 1px solid var(--j); }
+.claves-fila.der .k { background: var(--k-soft); border: 1px solid var(--k); }
+.claves-fila .nom { min-width: 5.6em; }
+.ojo-opts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
+.ojo-opts .opt { text-align: center; }
+.objetivos { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.objetivos li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.objetivos .m { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.objetivos li.actual { color: var(--ink); font-weight: 500; }
+.objetivos li.hecho { color: var(--ink); }
+.objetivos li.hecho .m { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 3px var(--surface); }
+.mini-tabla { display: inline-grid; gap: 2px; font-family: var(--f-mono); font-size: 12.5px; margin: 4px 14px 8px 0; vertical-align: top; }
+.mini-tabla span { padding: 3px 8px; text-align: center; border-radius: 3px; }
+.mini-tabla .th { font-size: 11px; font-weight: 600; }
+.mini-tabla.izq .th { color: var(--j); } .mini-tabla.izq span:not(.th) { background: var(--j-soft); }
+.mini-tabla.der .th { color: var(--k); } .mini-tabla.der span:not(.th) { background: var(--k-soft); }
+.lec { border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); overflow: hidden; margin: 6px 0 10px; }
+.lec-t { display: block; font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); padding: 5px 10px 0; }
+.lec pre { margin: 0; padding: 4px 10px 8px; font-family: var(--f-mono); font-size: 12px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink-2); }
+.lec pre .sal { color: var(--ink); font-weight: 500; }
+.lec pre .err { color: var(--bad); font-weight: 500; }
+.lec-par { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 520px) { .lec-par { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- vida real ---------- */
+.acum { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.acum span { font-family: var(--f-mono); font-size: 13px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink-2); }
+.acum span b { color: var(--ink); }
+.acum span.on { border: 2px solid var(--accent); background: var(--accent-soft); }
+.acum span.si { border: 2px solid var(--ok); background: var(--ok-soft); }
+.acum span.no { border: 2px solid var(--bad); background: var(--bad-soft); }
+.vr-sal { margin: 4px 0 0; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); font-family: var(--f-mono); font-size: 11.5px; line-height: 1.5; white-space: pre; overflow-x: auto; min-height: 3em; color: var(--ink); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ Unir tablas en pandas y dplyr</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Programación con datos · Programación y entorno de trabajo (SM142002) · UD2 y UD5 · Hoja de referencia de pandas</p>
+    <h1>Unir tablas en pandas y dplyr: qué filas sobreviven</h1>
+    <p class="lede">
+      En las páginas de SQL ya viste el JOIN: parejas que cumplen una condición, y filas sin pareja que se quedan o se van según el tipo de unión.
+      Aquí lo escribes en Python con <code>pd.merge</code> y en R con <code>left_join</code> y su familia. Lo nuevo no es la idea, son los detalles que cada librería decide por ti:
+      cómo se llaman las columnas que salen, qué pasa si la clave tiene otro nombre, cómo quedarte solo con las filas que tienen pareja, y la trampa más cara de todas:
+      una clave repetida por error que multiplica filas sin que nadie te avise.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> Tienes una tabla de 5 pedidos y una de clientes. Si a cada pedido le pegas los datos de su cliente con un <i>left join</i>, ¿la tabla que sale puede tener más de 5 filas? ¿Cuándo? Escribe tu idea, aunque no estés seguro.</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: creo que siempre salen 5 filas porque..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>Hilos entre dos tablas</h2>
+      <p>Siete pasos. Cada uno termina con un chequeo: hasta que no lo resuelves, el siguiente queda cerrado y los controles nuevos del escenario también. Equivocarte aquí no resta nada. Los pedidos y los clientes de la tienda son inventados.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="Hilos entre filas">
+          <span class="etapa">Paso 1</span>
+          <h3>Hilos entre filas</h3>
+          <p>A la derecha hay dos tablas de una tienda pequeña. A la izquierda, cinco <b>pedidos</b>: cada uno dice qué número de cliente lo hizo, cuánto pagó y a qué ciudad se envió. A la derecha, cuatro <b>clientes</b>, cada uno con su número, su nombre y la ciudad donde vive.</p>
+          <p>Unir las dos tablas es buscar, para cada pedido, al cliente que tiene <b>el mismo número</b>. Si lo encuentra, se pegan sus datos en la misma fila. Si no, el pedido se queda solo. Imagina un hilo entre cada pedido y su cliente: unir es tender esos hilos.</p>
+          <p>Es exactamente el JOIN que ya construiste en <a href="join-sql.html">Producto cartesiano y JOIN</a> y en <a href="outer-join.html">LEFT, RIGHT y FULL JOIN</a>. Esta vez no hay SQL: las tablas viven dentro de Python o de R. El material de la UD1 define un join justo así, como la combinación de filas de dos tablas según una condición, y lo dibuja con cuatro diagramas
+          <cite class="cita" data-fuente="prog1" data-pag="31" data-pimp="31" data-seccion="5.5 Joins" data-que="Qué es un join (combinar filas de dos tablas según una condición) y la Imagen 5 con los diagramas de inner, full, left y right." data-cuando="Al terminar este paso"></cite>.</p>
+          <div class="check" id="chk1">
+            <p class="check-tit">Predice antes de ver los hilos</p>
+            <div class="cuerpo"></div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="merge y left_join">
+          <span class="etapa">Paso 2</span>
+          <h3><code>merge</code> y <code>left_join</code>: pegar a la izquierda</h3>
+          <p>Aquí entra el código. La tabla <b>izquierda</b> es la que escribes primero. Para pegar a cada pedido los datos de su cliente:</p>
+          <div class="codigo-linea"><span class="lj">pandas</span>
+pd.merge(pedidos, clientes, left_on="cliente", right_on="id", how="left")
+<span class="lk">dplyr</span>
+left_join(pedidos, clientes, by = c("cliente" = "id"))</div>
+          <p><code>how="left"</code> en pandas y <code>left_join</code> en dplyr dicen lo mismo: <b>conserva todos los pedidos</b>, tengan cliente o no. El que no encuentra pareja sale igual, con huecos en las columnas que venían de <code>clientes</code>: <code>NaN</code> en pandas y <code>NA</code> en R. Por ahora la clave está fija en <code>cliente = id</code>; en el paso 4 verás por qué se escribe así.</p>
+          <p>Es el LEFT JOIN de SQL: todas las filas de la izquierda y NULL donde no hay pareja
+          <cite class="cita" data-fuente="prog1" data-pag="32" data-pimp="32" data-seccion="LEFT JOIN" data-que="Todas las filas de la tabla izquierda y NULL donde no hay pareja, con empleados y departamentos." data-cuando="Al terminar este paso"></cite>.
+          La hoja de referencia de pandas lo resume en una línea, <code>pd.merge(adf, bdf, how='left', on='x1')</code>, con el <code>NaN</code> dibujado
+          <cite class="cita" data-fuente="hojapandas" data-pag="2" data-pimp="2" data-seccion="Combine Data Sets: Standard Joins" data-que="pd.merge con los cuatro how (left, right, inner, outer) dibujados con dos tablas pequeñas adf y bdf; el NaN aparece donde falta pareja." data-cuando="Al terminar este paso; vuelve en el paso 3"></cite>,
+          y el material de R crea <code>df_A</code> y <code>df_B</code> con <code>tribble</code> y hace <code>left_join(x = df_A, y = df_B, by = "ID")</code>
+          <cite class="cita" data-fuente="eda5" data-pag="13" data-pimp="13" data-seccion="Joins en dplyr" data-que="Las tablas df_A y df_B creadas con tribble y el left_join por ID; en la página siguiente la fila F sale con NA." data-cuando="Al terminar este paso"></cite>.</p>
+          <p>El cuaderno de clase UAX_20251028 hace lo mismo con los 1000 pedidos del curso en su celda 30: <code>pd.merge(ordenes, clientes, on='CustomerID', how='left')</code>, y después filtra los de China.</p>
+          <div class="check" id="chk2"><p class="check-tit">Calcula con lo que ves</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Los cuatro how">
+          <span class="etapa">Paso 3</span>
+          <h3>Los cuatro <code>how</code>: qué filas sobreviven</h3>
+          <p>pandas elige el tipo de unión con un argumento, <code>how="inner"</code>, <code>"left"</code>, <code>"right"</code> u <code>"outer"</code>. dplyr tiene una función para cada uno: <code>inner_join</code>, <code>left_join</code>, <code>right_join</code> y <code>full_join</code>.</p>
+          <p>La cuenta de filas sale siempre igual, sin mirar el código: <b>las parejas</b> (los hilos), más <b>los huérfanos del lado que conservas</b>. Aquí hay 4 parejas, un pedido huérfano (el 105) y un cliente huérfano (Dani). Inner se queda solo con las parejas; left suma el 105; right suma a Dani.</p>
+          <div class="fbloque"><div class="vivo" id="vivo3"></div></div>
+          <p>El material de R hace los cuatro con <code>df_A</code> y <code>df_B</code> y muestra cuántas filas da cada uno
+          <cite class="cita" data-fuente="eda5" data-pag="14" data-pimp="14" data-seccion="Joins en dplyr" data-que="right_join, inner_join y full_join con df_A y df_B: 5, 4 y 6 filas, con NA donde falta pareja." data-cuando="Al terminar este paso"></cite>,
+          y el de SQL describe el FULL JOIN como un LEFT y un RIGHT a la vez; en la misma página está el CROSS JOIN, el producto cartesiano sin condición
+          <cite class="cita" data-fuente="prog1" data-pag="33" data-pimp="33" data-seccion="FULL JOIN y CROSS JOIN" data-que="El FULL JOIN combina los resultados de un LEFT y un RIGHT; el CROSS JOIN es el producto cartesiano." data-cuando="Al terminar este paso"></cite>.</p>
+          <details class="profundizar">
+            <summary>¿Por qué <code>101</code> se vuelve <code>101.0</code> en pandas?</summary>
+            <div>
+              <p>Prueba <code>right</code> u <code>outer</code> con pandas en el escenario: la columna <code>pedido</code> pasa a decimales. En esas uniones aparece un hueco en <code>pedido</code> (la fila de Dani, que no tiene pedidos). Una columna de enteros de pandas no puede guardar <code>NaN</code>, así que la columna entera pasa a decimal. Salida real de <code>outer</code>, con <code>[["pedido", "cliente", "id", "nombre"]]</code>:</p>
+              <div class="lec"><span class="lec-t">pandas</span><pre><span class="sal">   pedido  cliente   id nombre
+0   101.0      1.0  1.0    Ana
+1   103.0      1.0  1.0    Ana
+2   102.0      2.0  2.0   Beto
+3   104.0      3.0  3.0   Cris
+4     NaN      NaN  4.0   Dani
+5   105.0      5.0  NaN    NaN</span></pre></div>
+              <p>R no tiene ese problema: sus números ya son decimales (<code>double</code>) aunque se impriman sin punto, y su <code>NA</code> existe para todos los tipos. Fíjate también en el <b>orden</b>: pandas ordena <code>outer</code> por la clave (Dani, con clave 4, va antes que el 105, con clave 5); dplyr deja primero el orden de la izquierda y añade al final lo que solo está a la derecha. El escenario usa el orden real de cada librería.</p>
+            </div>
+          </details>
+          <div class="check" id="chk3"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Clave con otro nombre">
+          <span class="etapa">Paso 4</span>
+          <h3>Cuando la clave se llama distinto</h3>
+          <p>En <code>pedidos</code> la clave se llama <code>cliente</code> y en <code>clientes</code> se llama <code>id</code>. Es lo normal: nadie se pone de acuerdo con los nombres. Cada librería lo resuelve a su manera:</p>
+          <ul>
+            <li><b>pandas</b>: <code>left_on="cliente", right_on="id"</code>. El resultado <b>conserva las dos columnas</b>, <code>cliente</code> e <code>id</code>, aunque digan lo mismo (y <code>id</code> queda en decimal si hay huecos).</li>
+            <li><b>dplyr</b>: <code>by = c("cliente" = "id")</code>, o la forma nueva <code>by = join_by(cliente == id)</code>. El resultado <b>conserva solo la de la izquierda</b>, <code>cliente</code>.</li>
+          </ul>
+          <p>Si las dos se llamaran igual bastaría <code>on="cliente"</code> o <code>by = "cliente"</code>. El material de R se hace la misma pregunta, "¿qué ocurre si las columnas tienen nombres distintos?": renombra la clave de <code>df_B</code> a <code>KL</code> y escribe <code>by = c("ID"="KL")</code>; el resultado se queda con <code>ID</code>, el nombre de la izquierda
+          <cite class="cita" data-fuente="eda5" data-pag="14" data-pimp="14" data-seccion="¿Qué ocurre si las columnas tienen nombres distintos?" data-que="La clave de df_B renombrada a KL y la unión con by = c(&quot;ID&quot;=&quot;KL&quot;); sigue en la página 15, donde el resultado conserva ID." data-cuando="Al terminar este paso"></cite>.</p>
+          <p>Un aviso sobre el cuaderno de clase UAX_20251028: en su celda 34 encadena dos <code>merge</code> y el segundo usa <code>left_on='OrderID', right_on='ProductID'</code>. La sintaxis es correcta, pero la unión no tiene sentido: empareja el número de pedido con el número de producto, que no significan lo mismo. Tómalo como una demostración de cómo se escribe, no como un análisis.</p>
+          <div class="check" id="chk4"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Sufijos">
+          <span class="etapa">Paso 5</span>
+          <h3>Columnas que chocan: sufijos</h3>
+          <p>Las dos tablas tienen una columna <code>ciudad</code>, y no significan lo mismo: en <code>pedidos</code> es adónde se envió; en <code>clientes</code>, dónde vive la persona. Como no es la clave, el resultado necesita las dos y no pueden llamarse igual.</p>
+          <p>pandas les pone un sufijo: <code>_x</code> a la de la izquierda y <code>_y</code> a la de la derecha. dplyr hace lo mismo con punto: <code>.x</code> y <code>.y</code>. Esos nombres no dicen nada, así que conviene elegirlos tú: <code>suffixes=("_envio", "_cliente")</code> en pandas y <code>suffix = c("_envio", "_cliente")</code> en dplyr. La casilla del escenario lo prueba.</p>
+          <p>El cuaderno UAX_20251028, en su celda 31, une <code>ordenes</code> consigo misma por <code>CustomerID</code>: como todas las columnas chocan, trabaja con nombres como <code>ShipCountry_x</code>, <code>OrderID_x</code> y <code>PaymentMethod_y</code> (197 filas de China). Es el caso extremo de este paso.</p>
+          <div class="check" id="chk5"><p class="check-tit">Elige y explica</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Clave repetida">
+          <span class="etapa">Paso 6</span>
+          <h3>Una clave repetida multiplica filas</h3>
+          <p>La regla de los hilos tiene una consecuencia: cada pedido sale <b>una vez por cada pareja</b> que encuentra. Si en <code>clientes</code> una clave aparece dos veces, los pedidos de esa clave salen dos veces, aunque la unión sea <i>left</i> y "left" suene a "quedarse con la izquierda".</p>
+          <div class="cita" id="citaHipo" hidden></div>
+
+          <div class="destacado" id="destacado">
+            <p class="dest-tit">La confusión de este concepto</p>
+            <h4>¿Un left join puede tener más filas que la tabla de la izquierda?</h4>
+            <p>Beto se mudó de Quito a Cali y alguien agregó una fila nueva, <code>2, Beto, Cali</code>, sin borrar la vieja. Ahora <code>clientes</code> tiene a Beto dos veces. Predice antes de tocar el botón.</p>
+            <div class="check" id="chk6a"><p class="check-tit">Predice antes de seguir</p><div class="cuerpo"></div></div>
+            <p class="dest-fila" style="margin-top:12px">En la página de SQL, en "Filas que se multiplican", la multiplicación era correcta: un pedido con dos líneas tiene que salir dos veces. Aquí es un error de los datos. <b>La unión hace lo mismo en los dos casos</b>; lo que cambia es si la repetición tiene sentido. Por eso, antes de unir, comprueba que la clave de la tabla de búsqueda sea única: <code>clientes["id"].duplicated().sum()</code> da <code>1</code> con Beto repetido, y en R <code>count(clientes, id) |&gt; filter(n &gt; 1)</code> da <code>id 2, n 2</code>. O pide que lo compruebe la propia unión: <code>validate="many_to_one"</code> en pandas lanza un <code>MergeError</code>, y <code>relationship = "many-to-one"</code> en dplyr lanza un error.</p>
+          </div>
+
+          <div class="destacado">
+            <p class="dest-tit">Trampa</p>
+            <h4>pandas no avisa nunca; dplyr, solo a veces</h4>
+            <p>pandas une en silencio. dplyr 1.2 avisa con <code>Detected an unexpected many-to-many relationship</code>, pero <b>solo si hay repeticiones en los dos lados</b>: aquí avisa porque Ana tiene dos pedidos y Beto dos filas. Si unes solo los pedidos 102 y 104 con la misma tabla de clientes, salen 3 filas (el 102 dos veces) <b>sin ningún aviso</b> (verificado). No confíes en el aviso: comprueba la clave.</p>
+          </div>
+          <p>El material de la materia no muestra este caso en ningún archivo: ni los apuntes de R, ni la hoja de pandas, ni los cuadernos. Por eso está aquí.</p>
+          <details class="profundizar">
+            <summary>¿Muchos a uno, uno a muchos, muchos a muchos?</summary>
+            <div>
+              <p>Cada unión tiene una forma esperada. De pedidos a clientes es <b>muchos a uno</b>: muchos pedidos pueden apuntar al mismo cliente, pero cada pedido tiene como mucho un cliente. Al revés, de clientes a pedidos, es <b>uno a muchos</b>, y que Ana salga dos veces es correcto. <b>Uno a uno</b> sería, por ejemplo, unir cada cliente con su ficha de dirección. <b>Muchos a muchos</b> casi siempre es un error.</p>
+              <p>pandas acepta <code>validate="one_to_one"</code>, <code>"one_to_many"</code>, <code>"many_to_one"</code> y <code>"many_to_many"</code>; dplyr acepta <code>relationship = "one-to-one"</code>, <code>"one-to-many"</code>, <code>"many-to-one"</code> y <code>"many-to-many"</code>. Escribirlo cuesta una línea y convierte un error silencioso en uno que se ve: <code>MergeError: Merge keys are not unique in right dataset; not a many-to-one merge</code> (salida real).</p>
+            </div>
+          </details>
+          <div class="check" id="chk6"><p class="check-tit">Calcula con los datos en vivo</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="semi y anti">
+          <span class="etapa">Paso 7</span>
+          <h3>Uniones que filtran: <code>semi</code> y <code>anti</code></h3>
+          <p>A veces no quieres pegar columnas: solo quieres <b>quedarte con las filas que tienen pareja</b>, o con las que no. dplyr tiene dos funciones para eso:</p>
+          <ul>
+            <li><code>semi_join(clientes, pedidos, by = c("id" = "cliente"))</code>: los clientes con algún pedido. Ana, Beto y Cris, <b>una vez cada uno</b> y solo con sus columnas.</li>
+            <li><code>anti_join(clientes, pedidos, by = c("id" = "cliente"))</code>: los que no tienen ninguno. Dani.</li>
+          </ul>
+          <p>pandas no tiene <code>how="semi"</code>. Se escribe con una máscara: <code>clientes[clientes["id"].isin(pedidos["cliente"])]</code>, y su negación con <code>~</code> para el anti. Otra salida es <code>indicator=True</code>, que agrega la columna <code>_merge</code> con <code>both</code>, <code>left_only</code> o <code>right_only</code>. Y un inner <b>no</b> sirve como semi: Ana saldría dos veces.</p>
+          <p>La hoja de pandas los llama "Filtering Joins" y usa justo <code>isin</code> y <code>~isin</code>; en "Set-like Operations" está el truco del <code>indicator</code>
+          <cite class="cita" data-fuente="hojapandas" data-pag="2" data-pimp="2" data-seccion="Filtering Joins y Set-like Operations" data-que="adf[adf.x1.isin(bdf.x1)] y su negación con ~ para semi y anti; indicator=True con _merge == &quot;left_only&quot;." data-cuando="Al terminar este paso"></cite>.
+          Los apuntes de R nombran las seis funciones de join, <code>semi_join</code> y <code>anti_join</code> incluidas, pero estas dos solo las nombran, sin ejemplo
+          <cite class="cita" data-fuente="eda5" data-pag="12" data-pimp="12" data-seccion="Joins en dplyr" data-que="La lista de las seis funciones: left_join, right_join, inner_join, full_join, anti_join y semi_join." data-cuando="Antes del chequeo"></cite>.
+          El documento de clase sí los usa con datos: <code>pacientes</code> y <code>laboratorio</code>
+          <cite class="cita" data-fuente="eda5doc" data-ancla="joins" data-seccion="Joins" data-que="pacientes y laboratorio: inner, left, right y full, y después semi_join y anti_join explicados con los datos." data-cuando="Al terminar este paso"></cite>.</p>
+          <details class="profundizar">
+            <summary>Buscar con un diccionario en lugar de recorrer</summary>
+            <div>
+              <p>El programa de la vida real compara cada pedido con cada cliente: 5 × 4 = 20 comparaciones. Con un millón de pedidos y cien mil clientes serían cien mil millones. Las librerías no lo hacen así: construyen primero un <b>diccionario</b> de la tabla de búsqueda, <code>{1: "Ana", 2: "Beto", 3: "Cris", 4: "Dani"}</code>, y cada pedido busca a su cliente de un golpe, sin recorrer los demás. Think Python lo define como un mapeo de claves a valores
+              <cite class="cita" data-fuente="thinpython" data-pag="146" data-pimp="125" data-seccion="Cap. 11: A Dictionary Is a Mapping" data-que="Un diccionario va de claves a valores: la búsqueda directa que usan merge y los joins de dplyr por dentro." data-cuando="Cuando abras este recuadro"></cite>.
+              Con una clave repetida el diccionario tendría que guardar una lista de filas por clave: ahí está, por dentro, la multiplicación del paso 6.</p>
+            </div>
+          </details>
+          <div class="check" id="chk7"><p class="check-tit">Elige y explica</p><div class="cuerpo"></div></div>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+        </div>
+        <div id="escCuerpo"></div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>El left join escrito a mano con dos bucles: cada pedido recorre todos los clientes buscando su número. Después, la misma unión con la librería. Son los mismos pedidos y clientes del recorrido. Elige Python o R y dale a reproducir.</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir</p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="true">Python</button>
+            <button type="button" data-lang="r" aria-pressed="false">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">1 · dos bucles</span><span data-f="2">2 · la librería</span>
+        </div>
+        <h3 class="mini-tit vr-tit">Los hilos que va encontrando</h3>
+        <div id="vrHilos"></div>
+        <div class="acum" id="vrAcum"></div>
+        <h3 class="mini-tit vr-tit">La tabla que sale</h3>
+        <div id="vrRes"></div>
+        <h3 class="mini-tit vr-tit">Salida del programa</h3>
+        <pre class="vr-sal" id="vrSal"></pre>
+      </div>
+    </div>
+
+    <p class="vr-nota">En la práctica se escribe en una línea, y conviene añadir la comprobación de la clave: <code>pd.merge(pedidos, clientes, left_on="cliente", right_on="id", how="left", validate="many_to_one")</code> en pandas y <code>left_join(pedidos, clientes, by = join_by(cliente == id), relationship = "many-to-one")</code> en dplyr. Unes y, de paso, exiges que cada pedido tenga como mucho un cliente. En R base también existe <code>merge(pedidos, clientes, by.x = "cliente", by.y = "id", all.x = TRUE)</code>, que da las mismas 5 filas pero ordenadas por la clave y con <code>cliente</code> como primera columna.</p>
+
+    <details class="profundizar">
+      <summary>La versión sin bucles</summary>
+      <div>
+        <p>El bucle doble es el producto cartesiano de la página de SQL hecho a mano: prueba las 20 parejas y se queda con las que cumplen. <code>merge</code> y <code>left_join</code> dan el mismo resultado sin probar todas: indexan la clave de la tabla derecha (un diccionario de clave a filas) y cada pedido va directo a sus filas. Por eso el código de la librería no tiene ningún <code>for</code>, y por eso tarda casi lo mismo con 5 pedidos que con 50000.</p>
+      </div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Beto, dos veces</h3><span class="estado" data-reto="codigo1"></span></div>
+        <div class="lec-par">
+          <div class="lec"><span class="lec-t">Python, con las mismas tablas</span><pre>extra = pd.DataFrame({"id": [2], "nombre": ["Beto"], "ciudad": ["Cali"]})
+clientes2 = pd.concat([clientes, extra], ignore_index=True)   # Beto, dos veces
+m = pd.merge(pedidos, clientes2, left_on="cliente", right_on="id", how="left")
+print(len(m), m["importe"].sum())
+print(m[["pedido", "nombre", "importe", "ciudad_y"]])
+try:
+    pd.merge(pedidos, clientes2, left_on="cliente", right_on="id",
+             how="left", validate="many_to_one")
+except pd.errors.MergeError as e:
+    print("MergeError:", e)
+<span class="sal">6 180
+   pedido nombre  importe ciudad_y
+0     101    Ana       50     Lima
+1     102   Beto       30    Quito
+2     102   Beto       30     Cali
+3     103    Ana       20     Lima
+4     104   Cris       40   Bogotá
+5     105    NaN       10      NaN</span>
+<span class="err">MergeError: Merge keys are not unique in right dataset; not a many-to-one merge</span></pre></div>
+          <div class="lec"><span class="lec-t">R, con las mismas tablas</span><pre>suppressMessages(library(dplyr))
+clientes2 &lt;- rbind(clientes, data.frame(id = 2, nombre = "Beto", ciudad = "Cali"))
+m &lt;- left_join(pedidos, clientes2, by = c("cliente" = "id"))
+print(nrow(m))
+print(sum(m$importe))
+<span class="err">Warning message:
+In left_join(pedidos, clientes2, by = c(cliente = "id")) :
+  Detected an unexpected many-to-many relationship between `x` and `y`.
+ℹ Row 2 of `x` matches multiple rows in `y`.
+ℹ Row 1 of `y` matches multiple rows in `x`.
+ℹ If a many-to-many relationship is expected, set `relationship =
+  "many-to-many"` to silence this warning.</span>
+<span class="sal">[1] 6
+[1] 180</span></pre></div>
+        </div>
+        <p class="desc">El aviso de R sale en inglés y antes de <code>[1] 6</code>: R imprime los avisos al terminar la línea que los produjo, y fue la del <code>left_join</code>. Con <code>relationship = "many-to-one"</code>, dplyr da un error: <code>Each row in `x` must match at most 1 row in `y`.</code></p>
+        <div id="codigo1"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Unir sin decir por qué columna</h3><span class="estado" data-reto="codigo2"></span></div>
+        <div class="lec-par">
+          <div class="lec"><span class="lec-t">Python</span><pre>m = pd.merge(pedidos, clientes)          # sin on: une por TODAS las columnas comunes
+print(m)
+<span class="sal">   pedido  cliente  importe  ciudad  id nombre
+0     101        1       50    Lima   1    Ana
+1     101        1       50    Lima   4   Dani
+2     102        2       30   Quito   2   Beto
+3     104        3       40  Bogotá   3   Cris
+4     105        5       10    Lima   1    Ana
+5     105        5       10    Lima   4   Dani</span></pre></div>
+          <div class="lec"><span class="lec-t">R</span><pre>suppressMessages(library(dplyr))
+m &lt;- left_join(pedidos, clientes)
+print(nrow(m))
+<span class="sal">Joining with `by = join_by(ciudad)`</span>
+<span class="err">Warning message:
+In left_join(pedidos, clientes) :
+  Detected an unexpected many-to-many relationship between `x` and `y`.
+ℹ Row 1 of `x` matches multiple rows in `y`.
+ℹ Row 1 of `y` matches multiple rows in `x`.
+ℹ If a many-to-many relationship is expected, set `relationship =
+  "many-to-many"` to silence this warning.</span>
+<span class="sal">[1] 7</span></pre></div>
+        </div>
+        <p class="desc">pandas une sin <code>how</code>, es decir, con <code>inner</code>: 6 filas, y el 103 (enviado a Cusco) desaparece. <code>left_join</code> lo conserva con <code>NA</code>: 7 filas. dplyr al menos dice por qué columna unió; pandas no dice nada.</p>
+        <div id="codigo2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Los nombres de las columnas que salen</h3><span class="estado" data-reto="codigo3"></span></div>
+        <div class="lec-par">
+          <div class="lec"><span class="lec-t">Python</span><pre>m = pd.merge(pedidos, clientes, left_on="cliente", right_on="id")
+print(m.columns.tolist())
+m = pd.merge(pedidos, clientes, left_on="cliente", right_on="id",
+             suffixes=("_envio", "_cliente"))
+print(m.columns.tolist())
+<span class="sal">['pedido', 'cliente', 'importe', 'ciudad_x', 'id', 'nombre', 'ciudad_y']
+['pedido', 'cliente', 'importe', 'ciudad_envio', 'id', 'nombre', 'ciudad_cliente']</span></pre></div>
+          <div class="lec"><span class="lec-t">R</span><pre>suppressMessages(library(dplyr))
+m &lt;- inner_join(pedidos, clientes, by = c("cliente" = "id"))
+print(names(m))
+m &lt;- inner_join(pedidos, clientes, by = c("cliente" = "id"),
+                suffix = c("_envio", "_cliente"))
+print(names(m))
+<span class="sal">[1] "pedido"   "cliente"  "importe"  "ciudad.x" "nombre"   "ciudad.y"
+[1] "pedido"         "cliente"        "importe"        "ciudad_envio"
+[5] "nombre"         "ciudad_cliente"</span></pre></div>
+        </div>
+        <div id="codigo3"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: la biblioteca te avisa en el índice cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>¿Menos, igual o más filas?</h3><span class="estado" data-reto="ojo"></span></div>
+        <p class="desc">Ocho uniones al azar entre dos tablas pequeñas. Solo ves las claves. Sin escribir nada, decide si el resultado tiene <b>menos</b>, <b>igual</b> o <b>más</b> filas que la tabla izquierda. Apruebas con 7 de 8.</p>
+        <div id="ojo"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Construir</span><h3>Mueve las claves</h3><span class="estado" data-reto="construir"></span></div>
+        <p class="desc">Cambia los <code>id</code> de los clientes, duplica filas o quítalas hasta cumplir cada objetivo. Los importes no se tocan. Se marcan solos, en orden; usa <b>Volver a los datos</b> entre uno y otro.</p>
+        <ul class="objetivos" id="objetivos"></ul>
+        <div id="construir" style="margin-top:12px"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>Cuenta los hilos</h3><span class="estado" data-reto="mano"></span></div>
+        <p class="desc">Dos tablas nuevas al azar, unidas por <code>k</code>. Con papel: cuenta filas y suma importes.</p>
+        <div id="mano"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Una línea mal</h3><span class="estado" data-reto="error"></span></div>
+        <p class="desc">Tres programas con las tablas de la página. En cada uno, una línea está mal. Tócala.</p>
+        <div id="error"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>¿Cuántas filas puede dar un left?</h3><span class="estado" data-reto="prop1"></span></div>
+        <div id="prop1"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>semi frente a inner</h3><span class="estado" data-reto="prop2"></span></div>
+        <div id="prop2"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>El punto decimal que aparece</h3><span class="estado" data-reto="prop3"></span></div>
+        <div id="prop3"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Recordar a la fuerza es lo que fija. Arma la línea de memoria y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Línea de memoria</span><h3>El left join seguro en pandas</h3><span class="estado" data-reto="formula"></span></div>
+        <p class="desc">Hay piezas de más que no pertenecen. No mires arriba.</p>
+        <div id="formula"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el material</h2>
+      <p class="lecturas-intro">Ya construiste la idea con las manos. Ahora ve a los libros y al material del máster y comprueba que la reconoces. Cada entrada dice qué vas a encontrar y en qué momento conviene leerla. Si abres la biblioteca con doble clic, el enlace abre el archivo en esa página. El cuaderno de clase UAX_20251028 no está enlazado aquí, pero vale la pena abrirlo: la celda 30 hace un <code>merge</code> con <code>how='left'</code>, la 31 una auto-unión con sufijos <code>_x</code> e <code>_y</code> y la 34 encadena dos uniones. La celda 29 intenta lo mismo en SQL, con un <code>LEFT JOIN</code> seguido de <code>WHERE clientes.Country = 'China'</code> (no llega a correr: da <code>UsageError: Cell magic %%sql not found</code>). Si corriera, ese <code>WHERE</code> sobre la tabla derecha descartaría las filas sin pareja y el left se volvería un inner: es la trampa "ON o WHERE" de <a href="outer-join.html">la página de outer join</a>.</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> Los cinco pedidos y los cuatro clientes (Ana, Beto, Cris y Dani) son inventados, y los retos generan otras tablas al azar. Todas las salidas de código de esta página
+    se obtuvieron ejecutando el código en Python 3.13 con pandas 2.2.3 y en R 4.6 con dplyr 1.2.1. Los mensajes y avisos de R aparecen en inglés porque así los imprime R en esta máquina. Tu progreso se guarda solo en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+(function () {
+  "use strict";
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var RETOS = ["ojo", "construir", "mano", "error", "prop1", "prop2", "prop3", "codigo1", "codigo2", "codigo3", "formula"];
+  var C = B.concepto({ id: "unir-tablas-pandas-dplyr", retos: RETOS, pasos: 7 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  /*LIB*/
+  var PED = [
+    { pedido: 101, cliente: 1, importe: 50, ciudad: "Lima" },
+    { pedido: 102, cliente: 2, importe: 30, ciudad: "Quito" },
+    { pedido: 103, cliente: 1, importe: 20, ciudad: "Cusco" },
+    { pedido: 104, cliente: 3, importe: 40, ciudad: "Bogotá" },
+    { pedido: 105, cliente: 5, importe: 10, ciudad: "Lima" }
+  ];
+  var CLI0 = [
+    { id: 1, nombre: "Ana", ciudad: "Lima" },
+    { id: 2, nombre: "Beto", ciudad: "Quito" },
+    { id: 3, nombre: "Cris", ciudad: "Bogotá" },
+    { id: 4, nombre: "Dani", ciudad: "Lima" }
+  ];
+  var NUMERICAS = { pedido: true, cliente: true, importe: true, id: true, k: true };
+  var MAXCLI = 6;
+  function azar(n) { return Math.floor(Math.random() * n); }
+  function eleg(a) { return a[azar(a.length)]; }
+  function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+  function copiaCli(a) { return a.map(function (o) { return Object.assign({}, o); }); }
+  function suma(a) { return a.reduce(function (s, x) { return s + x; }, 0); }
+
+  /* Une L con R por L[kl] == R[kr]. Devuelve filas {l, r} (indices o null) en el orden real de cada libreria.
+     how: inner, left, right, outer, semi, anti. lang: "py" (pandas) o "r" (dplyr). */
+  function unir(L, R, kl, kr, how, lang) {
+    var filas = [];
+    if (how === "semi" || how === "anti") {
+      L.forEach(function (x, i) {
+        var hay = R.some(function (y) { return y[kr] === x[kl]; });
+        if (how === "semi" ? hay : !hay) filas.push({ l: i, r: null });
+      });
+      return filas;
+    }
+    if (how === "right" && lang === "py") {
+      R.forEach(function (y, j) {
+        var hay = false;
+        L.forEach(function (x, i) { if (x[kl] === y[kr]) { filas.push({ l: i, r: j }); hay = true; } });
+        if (!hay) filas.push({ l: null, r: j });
+      });
+      return filas;
+    }
+    var usada = R.map(function () { return false; });
+    L.forEach(function (x, i) {
+      var hay = false;
+      R.forEach(function (y, j) { if (x[kl] === y[kr]) { filas.push({ l: i, r: j }); hay = true; usada[j] = true; } });
+      if (!hay && (how === "left" || how === "outer")) filas.push({ l: i, r: null });
+    });
+    if (how === "right" || how === "outer") R.forEach(function (y, j) { if (!usada[j]) filas.push({ l: null, r: j }); });
+    if (how === "outer" && lang === "py") {
+      var conPos = filas.map(function (f, p) { return { f: f, p: p, k: f.l !== null ? L[f.l][kl] : R[f.r][kr] }; });
+      conPos.sort(function (a, b) { return a.k < b.k ? -1 : a.k > b.k ? 1 : a.p - b.p; });
+      filas = conPos.map(function (o) { return o.f; });
+    }
+    return filas;
+  }
+  /* parejas y huerfanos, sin importar el tipo de union */
+  function contarHilos(L, R, kl, kr) {
+    var conL = L.map(function () { return 0; }), conR = R.map(function () { return 0; }), pares = [];
+    L.forEach(function (x, i) { R.forEach(function (y, j) { if (x[kl] === y[kr]) { pares.push({ i: i, j: j }); conL[i]++; conR[j]++; } }); });
+    return {
+      pares: pares, conL: conL, conR: conR,
+      huerfL: conL.filter(function (c) { return c === 0; }).length,
+      huerfR: conR.filter(function (c) { return c === 0; }).length,
+      muchosAMuchos: conL.some(function (c) { return c > 1; }) && conR.some(function (c) { return c > 1; })
+    };
+  }
+  function nFilas(L, R, kl, kr, how) { return unir(L, R, kl, kr, how, "r").length; }
+  function totalLeft(L, R, kl, kr) {
+    return suma(unir(L, R, kl, kr, "left", "r").map(function (f) { return L[f.l].importe; }));
+  }
+  function hayRepetida(R, kr) {
+    var vistos = {};
+    return R.some(function (y) { if (vistos[y[kr]]) return true; vistos[y[kr]] = true; return false; });
+  }
+
+  /* columnas del resultado. src: L (de la izquierda), R (de la derecha), K (la clave: de L si hay, si no de R) */
+  function columnas(lang, key, suf) {
+    if (key === "ciudad") return [["pedido", "L", "pedido"], ["cliente", "L", "cliente"], ["importe", "L", "importe"], ["ciudad", "K", "ciudad"], ["id", "R", "id"], ["nombre", "R", "nombre"]];
+    var sx = suf ? "_envio" : lang === "py" ? "_x" : ".x", sy = suf ? "_cliente" : lang === "py" ? "_y" : ".y";
+    if (lang === "py") return [["pedido", "L", "pedido"], ["cliente", "L", "cliente"], ["importe", "L", "importe"], ["ciudad" + sx, "L", "ciudad"], ["id", "R", "id"], ["nombre", "R", "nombre"], ["ciudad" + sy, "R", "ciudad"]];
+    return [["pedido", "L", "pedido"], ["cliente", "K", "cliente"], ["importe", "L", "importe"], ["ciudad" + sx, "L", "ciudad"], ["nombre", "R", "nombre"], ["ciudad" + sy, "R", "ciudad"]];
+  }
+  /* resultado de una union de la pagina como tabla de valores: {cols: [nombre, origen], filas: [[v...]], etiquetas, total} */
+  function resultado(o) {
+    var cli = o.cli, lang = o.lang;
+    if (o.how === "semi" || o.how === "anti") {
+      var T = o.lado === "cli" ? cli : PED, O = o.lado === "cli" ? PED : cli;
+      var kt = o.lado === "cli" ? "id" : "cliente", ko = o.lado === "cli" ? "cliente" : "id";
+      var campos = o.lado === "cli" ? ["id", "nombre", "ciudad"] : ["pedido", "cliente", "importe", "ciudad"];
+      var fs = unir(T, O, kt, ko, o.how, lang);
+      return {
+        cols: campos.map(function (c) { return [c, o.lado === "cli" ? "R" : "L"]; }),
+        filas: fs.map(function (f) { return campos.map(function (c) { return T[f.l][c]; }); }),
+        etiquetas: fs.map(function (f, p) { return lang === "py" ? f.l : p + 1; }),
+        total: o.lado === "cli" ? null : suma(fs.map(function (f) { return T[f.l].importe; }))
+      };
+    }
+    var kl = o.key === "ciudad" ? "ciudad" : "cliente", kr = o.key === "ciudad" ? "ciudad" : "id";
+    var cols = columnas(lang, o.key, o.suf), filas = unir(PED, cli, kl, kr, o.how, lang);
+    return {
+      cols: cols.map(function (c) { return [c[0], c[1] === "K" ? "L" : c[1]]; }),
+      filas: filas.map(function (f) {
+        return cols.map(function (c) {
+          if (c[1] === "L") return f.l === null ? null : PED[f.l][c[2]];
+          if (c[1] === "R") return f.r === null ? null : cli[f.r][c[2]];
+          return f.l !== null ? PED[f.l][kl] : cli[f.r][kr];
+        });
+      }),
+      etiquetas: filas.map(function (f, p) { return lang === "py" ? p : p + 1; }),
+      total: suma(filas.map(function (f) { return f.l === null ? 0 : PED[f.l].importe; }))
+    };
+  }
+  /* como imprime cada libreria un valor: pandas pasa a decimal una columna entera con huecos */
+  function celdaTxt(v, campo, lang, colConNulo) {
+    var num = !!NUMERICAS[campo.replace(/[._].*$/, "")];
+    if (v === null) return lang === "py" ? "NaN" : num ? "NA" : "<NA>";
+    if (num && lang === "py" && colConNulo) return v + ".0";
+    return String(v);
+  }
+
+  /* ojo clinico: tablas al azar y la respuesta por la regla de los hilos */
+  var HOWS = ["inner", "left", "right", "outer", "semi", "anti"];
+  function genRonda(forzarMas) {
+    for (;;) {
+      var nl = 3 + azar(3), nr = 2 + azar(3), L = [], R = [], i;
+      for (i = 0; i < nl; i++) L.push({ k: 1 + azar(5) });
+      var libres = B.mezclar([1, 2, 3, 4, 5]);
+      for (i = 0; i < nr; i++) R.push({ k: libres[i] });
+      if (Math.random() < 0.5) R[azar(nr)].k = R[azar(nr)].k;
+      var how = forzarMas ? eleg(["left", "inner", "left", "right", "outer"]) : eleg(HOWS);
+      var n = nFilas(L, R, "k", "k", how);
+      var resp = n < nl ? "menos" : n === nl ? "igual" : "mas";
+      if (forzarMas && resp !== "mas") continue;
+      return { L: L, R: R, how: how, n: n, nl: nl, resp: resp, lang: Math.random() < 0.5 ? "py" : "r" };
+    }
+  }
+  function genOjo() {
+    var mas = B.mezclar([0, 1, 2, 3, 4, 5, 6, 7]).slice(0, 2);
+    var t = [];
+    for (var r = 0; r < 8; r++) t.push(genRonda(mas.indexOf(r) >= 0));
+    return t;
+  }
+  /* a mano: dos tablas de 4 filas, claves 1..4, importes multiplos de 10 */
+  function genMano() {
+    var L = [], R = [];
+    for (var i = 0; i < 4; i++) {
+      L.push({ k: 1 + azar(4), importe: 10 * (1 + azar(9)) });
+      R.push({ k: 1 + azar(4), nombre: ["Eva", "Fede", "Gala", "Hugo"][i] });
+    }
+    return { L: L, R: R, inner: nFilas(L, R, "k", "k", "inner"), left: nFilas(L, R, "k", "k", "left"), total: totalLeft(L, R, "k", "k") };
+  }
+  /*FIN-LIB*/
+
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+
+  /* ---------------- campos de numeros con pistas (chequeo del paso 2 y reto a mano) ---------------- */
+  function campos(el, cfg) {
+    var fallos = 0, nP = 0, hecho = false;
+    var hayP = cfg.pistas && cfg.pistas.length;
+    function v(x) { return typeof x === "function" ? x() : x; }
+    el.innerHTML = '<p class="q">' + B.conTex(v(cfg.pregunta)) + '</p><div class="campos-fila">' +
+      cfg.campos.map(function (c, i) {
+        return '<label class="campo"><span>' + (c.pre || "") + '</span><input class="num" inputmode="decimal" data-k="' + i + '" autocomplete="off" aria-label="' + esc(c.aria) + '"><span>' + (c.post || "") + "</span></label>";
+      }).join("") + '</div><div class="num-row" style="margin-top:8px"><button type="button" class="primary comprobar">Comprobar</button>' +
+      (hayP ? '<button type="button" class="pedir">Pista</button>' : "") + '<button type="button" class="ver ghost" hidden>Ver solución</button></div>' +
+      '<div class="pistas"></div><div class="fb" aria-live="polite"></div>';
+    var ins = [].slice.call(el.querySelectorAll("input")), fb = el.querySelector(".fb"), ver = el.querySelector(".ver"), pedir = el.querySelector(".pedir");
+    function cerrar(ok) {
+      hecho = true;
+      ins.forEach(function (i) { i.disabled = true; });
+      el.querySelector(".comprobar").disabled = true;
+      if (pedir) pedir.disabled = true;
+      ver.hidden = true;
+      if (cfg.reintentable) {
+        var r = document.createElement("button");
+        r.type = "button";
+        r.className = "reintentar ghost";
+        r.textContent = "Otro ejercicio";
+        r.addEventListener("click", function () { if (cfg.antesDeReintentar) cfg.antesDeReintentar(); campos(el, cfg); });
+        el.appendChild(r);
+      }
+      if (cfg.alResolver) cfg.alResolver(ok);
+    }
+    function comprobar() {
+      if (hecho) return;
+      var vals = ins.map(function (i) { return B.aNumero(i.value); });
+      if (vals.some(function (x) { return !isFinite(x); })) { fb.innerHTML = "Escribe un número en cada espacio."; return; }
+      var r = cfg.revisar(vals);
+      if (r.ok) {
+        ins.forEach(function (i) { i.classList.remove("mal"); i.classList.add("ok"); });
+        fb.innerHTML = '<span class="si">Correcto.</span> ' + B.conTex(v(cfg.solucion));
+        cerrar(true);
+        return;
+      }
+      fallos++;
+      ins.forEach(function (i) { i.classList.add("mal"); });
+      fb.innerHTML = '<span class="no">Todavía no.</span> ' + B.conTex(r.msg || "Vuelve a contar los hilos.");
+      if (fallos >= 3) ver.hidden = false;
+    }
+    el.querySelector(".comprobar").addEventListener("click", comprobar);
+    ins.forEach(function (i) {
+      i.addEventListener("keydown", function (e) { if (e.key === "Enter") comprobar(); });
+      i.addEventListener("input", function () { ins.forEach(function (x) { x.classList.remove("mal"); }); });
+    });
+    if (pedir) pedir.addEventListener("click", function () {
+      if (nP >= cfg.pistas.length) return;
+      var d = document.createElement("div");
+      d.className = "pista";
+      d.innerHTML = "<b>Pista " + (nP + 1) + ".</b> " + B.conTex(v(cfg.pistas[nP]));
+      el.querySelector(".pistas").appendChild(d);
+      nP++;
+      if (nP >= cfg.pistas.length) { pedir.disabled = true; ver.hidden = false; }
+    });
+    ver.addEventListener("click", function () { fb.innerHTML = '<span class="no">Solución.</span> ' + B.conTex(v(cfg.solucion)); cerrar(false); });
+  }
+
+  /* ---------------- dibujo: los hilos ---------------- */
+  var CL = [["pedido", 0, 34], ["cliente", 36, 40], ["importe", 78, 40], ["ciudad", 120, 50]];
+  var CR = [["id", 214, 24], ["nombre", 240, 46], ["ciudad", 288, 50]];
+  var Y0 = 34, FH = 24, XL = 170, XR = 214;
+  function yFila(k) { return Y0 + k * FH + 10; }
+  /* o: L, R, kl, kr (campos clave o null), pares [{i, j, cls}], stubL [{i, txt}], stubR [{j, txt}],
+        litL(i), litR(j) (true/false/undefined), curL, curR, hot (campo resaltado en las dos), anim */
+  function hilosSvg(o) {
+    var n = Math.max(o.L.length, o.R.length), H = Y0 + n * FH + 4;
+    var h = '<svg class="hilos" viewBox="0 0 340 ' + H + '" role="img" aria-label="Tabla pedidos a la izquierda, clientes a la derecha, con un hilo entre las filas que comparten clave">';
+    h += '<text class="t-l" x="0" y="11">pedidos (izquierda)</text><text class="t-r" x="338" y="11" text-anchor="end">clientes (derecha)</text>';
+    CL.forEach(function (c) { h += '<text class="t-col" x="' + (c[1] + c[2] / 2) + '" y="26" text-anchor="middle">' + c[0] + "</text>"; });
+    CR.forEach(function (c) { h += '<text class="t-col" x="' + (c[1] + c[2] / 2) + '" y="26" text-anchor="middle">' + c[0] + "</text>"; });
+    function fila(obj, k, cols, lado, lit, cur, key) {
+      var y = Y0 + k * FH, s = '<g class="' + (lit === false ? "apag" : "") + (cur ? " cur" : "") + '">';
+      cols.forEach(function (c) {
+        var cls = c[0] === key ? "cel-key" : lado === "l" ? "cel-l" : "cel-r";
+        if (o.hot && c[0] === o.hot) cls += " cel-hot";
+        s += '<rect class="' + cls + '" x="' + c[1] + '" y="' + y + '" width="' + c[2] + '" height="20" rx="3"></rect>';
+        s += '<text x="' + (c[1] + c[2] / 2) + '" y="' + (y + 14) + '" text-anchor="middle">' + esc(obj[c[0]]) + "</text>";
+      });
+      return s + "</g>";
+    }
+    (o.pares || []).forEach(function (p, q) {
+      var y1 = yFila(p.i), y2 = yFila(p.j);
+      h += '<line class="hilo' + (p.cls ? " " + p.cls : "") + (o.anim ? " anim" : "") + '" pathLength="1" x1="' + XL + '" y1="' + y1 + '" x2="' + XR + '" y2="' + y2 + '"' + (o.anim ? ' style="animation-delay:' + (q * 260) + 'ms"' : "") + "></line>";
+    });
+    (o.stubL || []).forEach(function (s) {
+      var y = yFila(s.i);
+      h += '<line class="hilo no" x1="' + XL + '" y1="' + y + '" x2="' + (XL + 10) + '" y2="' + y + '"></line><rect class="hueco" x="' + (XL + 10) + '" y="' + (y - 4) + '" width="8" height="8"></rect>';
+      if (s.txt) h += '<text class="hueco-t" x="' + (XL + 21) + '" y="' + (y + 3) + '">' + s.txt + "</text>";
+    });
+    (o.stubR || []).forEach(function (s) {
+      var y = yFila(s.j);
+      h += '<line class="hilo no" x1="' + XR + '" y1="' + y + '" x2="' + (XR - 10) + '" y2="' + y + '"></line><rect class="hueco" x="' + (XR - 18) + '" y="' + (y - 4) + '" width="8" height="8"></rect>';
+      if (s.txt) h += '<text class="hueco-t" x="' + (XR - 21) + '" y="' + (y + 3) + '" text-anchor="end">' + s.txt + "</text>";
+    });
+    o.L.forEach(function (x, i) { h += fila(x, i, CL, "l", o.litL ? o.litL(i) : undefined, o.curL === i, o.kl); });
+    o.R.forEach(function (y, j) { h += fila(y, j, CR, "r", o.litR ? o.litR(j) : undefined, o.curR === j, o.kr); });
+    return h + "</svg>";
+  }
+  /* hilos de una union de la pagina: que se enciende y que se apaga segun el tipo */
+  function hilosUnion(cli, key, how, lang, extra) {
+    var kl = key === "cid" ? "cliente" : key === "ciudad" ? "ciudad" : null;
+    var kr = key === "cid" ? "id" : key === "ciudad" ? "ciudad" : key === "idmal" ? "id" : null;
+    var cnt = kl ? contarHilos(PED, cli, kl, kr) : { pares: [], conL: PED.map(function () { return 0; }), conR: cli.map(function () { return 0; }) };
+    var nulo = lang === "r" ? "NA" : "NaN";
+    var o = { L: PED, R: cli, kl: kl, kr: kr, pares: kl ? cnt.pares.slice() : [], stubL: [], stubR: [] };
+    if (kl) {
+      cnt.conL.forEach(function (c, i) { if (!c) o.stubL.push({ i: i, txt: how === "left" || how === "outer" ? nulo : "" }); });
+      cnt.conR.forEach(function (c, j) { if (!c) o.stubR.push({ j: j, txt: how === "right" || how === "outer" ? nulo : "" }); });
+    }
+    if (how === "inner") { o.litL = function (i) { return cnt.conL[i] > 0; }; o.litR = function (j) { return cnt.conR[j] > 0; }; }
+    else if (how === "left") { o.litR = function (j) { return cnt.conR[j] > 0; }; }
+    else if (how === "right") { o.litL = function (i) { return cnt.conL[i] > 0; }; }
+    else if (how === "semi" || how === "anti") {
+      var quiere = how === "semi";
+      if (extra && extra.lado === "ped") { o.litL = function (i) { return (cnt.conL[i] > 0) === quiere; }; o.litR = function () { return false; }; }
+      else { o.litR = function (j) { return (cnt.conR[j] > 0) === quiere; }; o.litL = function () { return false; }; }
+    }
+    if (extra) Object.keys(extra).forEach(function (k) { if (k !== "lado") o[k] = extra[k]; });
+    return o;
+  }
+
+  /* ---------------- dibujo: la tabla que sale ---------------- */
+  function codigoTxt(lang, key, how, suf, lado) {
+    if (how === "semi" || how === "anti") {
+      if (lang === "py") return lado === "cli" ? "clientes[" + (how === "anti" ? "~" : "") + 'clientes["id"].isin(pedidos["cliente"])]' : "pedidos[" + (how === "anti" ? "~" : "") + 'pedidos["cliente"].isin(clientes["id"])]';
+      return how + "_join(" + (lado === "cli" ? 'clientes, pedidos, by = c("id" = "cliente"))' : 'pedidos, clientes, by = c("cliente" = "id"))');
+    }
+    if (lang === "py") {
+      var arg = key === "cid" ? ', left_on="cliente", right_on="id"' : key === "idmal" ? ', on="id"' : "";
+      return "pd.merge(pedidos, clientes" + arg + ', how="' + how + '"' + (suf && key === "cid" ? ', suffixes=("_envio", "_cliente")' : "") + ")";
+    }
+    var fn = (how === "outer" ? "full" : how) + "_join";
+    var by = key === "cid" ? ', by = c("cliente" = "id")' : key === "idmal" ? ', by = "id"' : "";
+    return fn + "(pedidos, clientes" + by + (suf && key === "cid" ? ', suffix = c("_envio", "_cliente")' : "") + ")";
+  }
+  /* o: lang, key, how, suf, lado, cli, mascara (tapa los nombres con sufijo), oculta (texto en lugar de la tabla) */
+  function tablaResHtml(o) {
+    var lang = o.lang, h = '<div class="expr-linea"><span class="' + (lang === "py" ? "lj" : "lk") + '">' + (lang === "py" ? "pandas" : "dplyr") + "</span>" + esc(codigoTxt(lang, o.key, o.how, o.suf, o.lado)) + "</div>";
+    if (o.oculta) return h + '<p class="esc-nota">' + o.oculta + "</p>";
+    if (o.key === "idmal" && o.how !== "semi" && o.how !== "anti") {
+      return h + '<div class="bandeja"><div class="b-tit">resultado</div><pre class="b-err">' + (lang === "py" ? "KeyError: 'id'" : "Error in `" + (o.how === "outer" ? "full" : o.how) + "_join()`:\n! Join columns in `x` must be present in the data.\n\u2716 Problem with `id`.") + "</pre></div>";
+    }
+    var res = resultado(o), nc = res.cols.length;
+    var conNulo = res.cols.map(function (_, c) { return res.filas.some(function (f) { return f[c] === null; }); });
+    var t = '<div class="df-wrap"><div class="df" style="grid-template-columns:minmax(1.6em, auto) repeat(' + nc + ', minmax(0, 1fr))"><span class="rn"></span>';
+    res.cols.forEach(function (c) {
+      var nom = c[0];
+      if (o.mascara && /^ciudad[._]/.test(nom)) nom = lang === "py" ? "ciudad_?" : "ciudad.?";
+      t += '<span class="th de-' + c[1].toLowerCase() + (o.hot && /^ciudad/.test(c[0]) ? " hot" : "") + '">' + esc(nom) + "</span>";
+    });
+    res.filas.forEach(function (f, p) {
+      t += '<span class="rn">' + res.etiquetas[p] + "</span>";
+      f.forEach(function (v, c) { t += '<span class="de-' + res.cols[c][1].toLowerCase() + (v === null ? " nulo" : "") + '">' + esc(celdaTxt(v, res.cols[c][0], lang, conNulo[c])) + "</span>"; });
+    });
+    t += "</div></div>";
+    var msgs = "";
+    if (lang === "r" && o.key === "ciudad" && o.how !== "semi" && o.how !== "anti") msgs += '<p class="b-msg">Joining with `by = join_by(ciudad)`</p>';
+    if (lang === "r" && o.how !== "semi" && o.how !== "anti") {
+      var kl = o.key === "ciudad" ? "ciudad" : "cliente", kr = o.key === "ciudad" ? "ciudad" : "id";
+      if (contarHilos(PED, o.cli, kl, kr).muchosAMuchos) msgs += '<p class="b-msg aviso">Warning: Detected an unexpected many-to-many relationship between `x` and `y`.</p>';
+    }
+    var cont = '<div class="contador"><span><b>' + res.filas.length + "</b> fila" + (res.filas.length === 1 ? "" : "s") + "</span>" +
+      (res.total !== null ? "<span>total de importe <b>" + res.total + "</b></span>" : "<span>sin columna importe</span>") + "</div>";
+    return h + '<div class="bandeja"><div class="b-tit">la tabla que sale</div>' + t + msgs + cont + "</div>";
+  }
+
+  /* ---------------- editor de claves de clientes ---------------- */
+  function editorHtml(cli, bloq, conBeto) {
+    var dis = bloq ? " disabled" : "";
+    var h = '<div class="editor">' + cli.map(function (y, j) {
+      return '<div class="ed-fila"><span>id</span><button type="button" data-ed="menos" data-j="' + j + '" aria-label="Bajar el id de ' + y.nombre + '"' + dis + (y.id <= 1 ? " disabled" : "") + '>&#8722;</button><span class="ed-id">' + y.id + '</span><button type="button" data-ed="mas" data-j="' + j + '" aria-label="Subir el id de ' + y.nombre + '"' + dis + (y.id >= 6 ? " disabled" : "") + '>+</button>' +
+        '<span class="ed-nom">' + esc(y.nombre) + " · " + esc(y.ciudad) + "</span>" +
+        '<button type="button" data-ed="dup" data-j="' + j + '"' + dis + (cli.length >= MAXCLI ? " disabled" : "") + ">Duplicar</button>" +
+        (y.copia ? '<button type="button" class="ghost" data-ed="quitar" data-j="' + j + '"' + dis + ">Quitar</button>" : "") + "</div>";
+    }).join("") + "</div>";
+    h += '<div class="esc-ctrl" style="margin-top:8px">' + (conBeto ? '<button type="button" data-ed="beto"' + dis + (cli.length >= MAXCLI || cli.some(function (y) { return y.ciudad === "Cali"; }) ? " disabled" : "") + ">Beto se mudó a Cali</button>" : "") +
+      '<button type="button" class="ghost" data-ed="volver"' + dis + ">Volver a los datos</button></div>";
+    return h;
+  }
+  /* aplica un boton del editor sobre la lista; devuelve la lista nueva */
+  function editar(cli, act, j) {
+    cli = copiaCli(cli);
+    if (act === "menos" && cli[j].id > 1) cli[j].id--;
+    else if (act === "mas" && cli[j].id < 6) cli[j].id++;
+    else if (act === "dup" && cli.length < MAXCLI) { var c = Object.assign({}, cli[j], { copia: true }); cli.splice(j + 1, 0, c); }
+    else if (act === "quitar" && cli[j] && cli[j].copia) cli.splice(j, 1);
+    else if (act === "beto" && cli.length < MAXCLI) {
+      var b = cli.map(function (y) { return y.nombre; }).indexOf("Beto");
+      cli.splice(b >= 0 ? b + 1 : cli.length, 0, { id: 2, nombre: "Beto", ciudad: "Cali", copia: true });
+    } else if (act === "volver") cli = copiaCli(CLI0);
+    return cli;
+  }
+
+  /* ---------------- escenario del recorrido ---------------- */
+  var est = { c1: false, c2: false, c3: false, c4: false, c5: false, c6a: false, c6: false, c7: false };
+  var ESC = { lang: "py", how: "left", key: "cid", suf: false, semi: "semi", lado: "cli", cli: copiaCli(CLI0), anim: false };
+  var modo = 0, pasos;
+
+  function langSeg(bloq) {
+    var d = bloq ? " disabled" : "";
+    return '<div class="seg" role="group" aria-label="Librería"><button type="button" data-lang="py" aria-pressed="' + (ESC.lang === "py") + '"' + d + '>pandas</button><button type="button" data-lang="r" aria-pressed="' + (ESC.lang === "r") + '"' + d + ">dplyr</button></div>";
+  }
+  function howBotones(lista, bloq) {
+    return lista.map(function (x) {
+      var et = ESC.lang === "py" ? 'how="' + x + '"' : (x === "outer" ? "full" : x) + "_join";
+      return '<button type="button" data-how="' + x + '" aria-pressed="' + (ESC.how === x) + '"' + (bloq ? " disabled" : "") + ">" + et + "</button>";
+    }).join("");
+  }
+  function leyenda() {
+    return '<div class="leyenda"><span><span class="lj">pedidos</span>: izquierda</span><span><span class="lk">clientes</span>: derecha</span><span><span class="la">clave</span> resaltada</span></div>';
+  }
+  function marcador(how) {
+    var c = contarHilos(PED, CLI0, "cliente", "id"), p = c.pares.length, a = c.huerfL, b = c.huerfR;
+    var partes = ["<b>" + p + "</b> parejas"], tot = p;
+    if (how === "left" || how === "outer") { partes.push("<b>" + a + "</b> huérfano de pedidos (105)"); tot += a; }
+    if (how === "right" || how === "outer") { partes.push("<b>" + b + "</b> huérfana de clientes (Dani)"); tot += b; }
+    return '<p class="marcador">' + partes.join(" + ") + " = <b>" + tot + "</b> filas</p>";
+  }
+
+  function render() {
+    var h = "", cli = modo === 5 ? ESC.cli : CLI0;
+    if (modo === 0) {
+      h = leyenda();
+      h += hilosSvg(est.c1 ? hilosUnion(CLI0, "cid", null, "py", { anim: ESC.anim }) : { L: PED, R: CLI0, kl: "cliente", kr: "id" });
+      h += est.c1 ? '<p class="esc-nota">Cuatro hilos. El 105 busca un cliente 5 que no existe: hilo corto, cuadrito vacío. Dani no tiene pedidos: lo mismo del otro lado. Ana recibe dos hilos.</p>'
+        : '<p class="esc-nota">Todavía sin hilos. Responde el chequeo y se dibujan uno por uno.</p>';
+      ESC.anim = false;
+    } else if (modo === 1) {
+      h = '<div class="esc-ctrl">' + langSeg(false) + "</div>" + leyenda();
+      h += hilosSvg(hilosUnion(CLI0, "cid", "left", ESC.lang));
+      h += tablaResHtml({ lang: ESC.lang, key: "cid", how: "left", suf: false, cli: CLI0, oculta: est.c2 ? null : "La tabla que sale aparece al resolver el chequeo. Cuenta con los hilos." });
+    } else if (modo === 2) {
+      h = '<div class="esc-ctrl">' + langSeg(false) + "</div>" + '<div class="esc-ctrl">' + howBotones(["inner", "left", "right", "outer"], !est.c3) + "</div>" + leyenda();
+      h += hilosSvg(hilosUnion(CLI0, "cid", ESC.how, ESC.lang));
+      h += marcador(ESC.how);
+      h += tablaResHtml({ lang: ESC.lang, key: "cid", how: ESC.how, suf: false, cli: CLI0 });
+      if (!est.c3) h += '<p class="esc-nota">Los cuatro botones se abren al resolver la predicción.</p>';
+    } else if (modo === 3) {
+      var b4 = !est.c4, d4 = b4 ? " disabled" : "";
+      var opts = [["cid", ESC.lang === "py" ? 'left_on="cliente", right_on="id"' : 'by = c("cliente" = "id")'], ["ciudad", "sin decir la clave"], ["idmal", ESC.lang === "py" ? 'on="id"' : 'by = "id"']];
+      h = '<div class="esc-ctrl">' + langSeg(false) + '<label>clave <select data-act="key"' + d4 + ">" + opts.map(function (x) { return '<option value="' + x[0] + '"' + (ESC.key === x[0] ? " selected" : "") + ">" + esc(x[1]) + "</option>"; }).join("") + "</select></label></div>";
+      h += '<div class="esc-ctrl">' + howBotones(["inner", "left", "right", "outer"], b4) + "</div>" + leyenda();
+      h += hilosSvg(hilosUnion(CLI0, ESC.key, ESC.how, ESC.lang));
+      h += tablaResHtml({ lang: ESC.lang, key: ESC.key, how: ESC.how, suf: false, cli: CLI0 });
+      if (b4) h += '<p class="esc-nota">El selector de clave se abre al resolver la predicción.</p>';
+      else if (ESC.key === "ciudad") h += '<p class="esc-nota">Sin decir la clave, las dos librerías unen por las columnas que se llaman igual: <code>ciudad</code>. Mira con quién quedó el 105.</p>';
+    } else if (modo === 4) {
+      var b5 = !est.c5;
+      h = '<div class="esc-ctrl">' + langSeg(false) + '<label class="chk"><input type="checkbox" data-act="suf"' + (ESC.suf ? " checked" : "") + (b5 ? " disabled" : "") + "> poner sufijos con significado</label></div>";
+      h += '<div class="esc-ctrl">' + howBotones(["inner", "left", "right", "outer"], b5) + "</div>" + leyenda();
+      h += hilosSvg(hilosUnion(CLI0, "cid", ESC.how, ESC.lang, { hot: "ciudad" }));
+      h += tablaResHtml({ lang: ESC.lang, key: "cid", how: ESC.how, suf: ESC.suf && !b5, cli: CLI0, mascara: b5, hot: true });
+      if (b5) h += '<p class="esc-nota">Los nombres de las dos ciudades se ven al resolver el chequeo.</p>';
+    } else if (modo === 5) {
+      var b6 = !est.c6a;
+      h = '<div class="esc-ctrl">' + langSeg(false) + "</div>" + '<div class="esc-ctrl">' + howBotones(["inner", "left", "right", "outer"], !est.c6) + "</div>" + leyenda();
+      h += hilosSvg(hilosUnion(cli, "cid", ESC.how, ESC.lang));
+      h += editorHtml(cli, b6, true);
+      h += tablaResHtml({ lang: ESC.lang, key: "cid", how: ESC.how, suf: false, cli: cli, oculta: est.c6 ? null : (b6 ? "Responde la predicción del destacado para editar las claves." : "La tabla que sale y su total aparecen al resolver el chequeo del paso. Cuenta con los hilos.") });
+    } else if (modo === 6) {
+      var b7 = !est.c7, d7 = b7 ? " disabled" : "";
+      h = '<div class="esc-ctrl">' + langSeg(false) + "</div>";
+      h += '<div class="esc-ctrl">' + ["semi", "anti"].map(function (x) { return '<button type="button" data-semi="' + x + '" aria-pressed="' + (ESC.semi === x) + '"' + d7 + ">" + x + "</button>"; }).join("") +
+        '<label>a la izquierda <select data-act="lado"' + d7 + '><option value="cli"' + (ESC.lado === "cli" ? " selected" : "") + '>clientes</option><option value="ped"' + (ESC.lado === "ped" ? " selected" : "") + ">pedidos</option></select></label></div>" + leyenda();
+      h += hilosSvg(hilosUnion(CLI0, "cid", ESC.semi, ESC.lang, { lado: ESC.lado }));
+      h += tablaResHtml({ lang: ESC.lang, key: "cid", how: ESC.semi, lado: ESC.lado, cli: CLI0 });
+      h += '<p class="esc-nota">' + (b7 ? "Los botones se abren al resolver el chequeo." : "Solo salen columnas de la tabla que pusiste a la izquierda, y cada fila una vez.") + "</p>";
+    }
+    $("escCuerpo").innerHTML = h;
+    vivos();
+  }
+  function vivos() {
+    var c = contarHilos(PED, CLI0, "cliente", "id");
+    $("vivo3").textContent = est.c3
+      ? "inner = " + c.pares.length + "   left = " + c.pares.length + " + " + c.huerfL + " = " + (c.pares.length + c.huerfL) + "   right = " + c.pares.length + " + " + c.huerfR + " = " + (c.pares.length + c.huerfR) + "   outer = " + c.pares.length + " + " + c.huerfL + " + " + c.huerfR + " = " + (c.pares.length + c.huerfL + c.huerfR)
+      : "filas = parejas + huérfanos del lado que conservas   (inner = " + c.pares.length + ", left = " + (c.pares.length + c.huerfL) + ", outer = ?)";
+  }
+  $("escCuerpo").addEventListener("click", function (e) {
+    var b = e.target.closest("button");
+    if (!b || b.disabled) return;
+    if (b.hasAttribute("data-lang")) ESC.lang = b.getAttribute("data-lang");
+    else if (b.hasAttribute("data-how")) ESC.how = b.getAttribute("data-how");
+    else if (b.hasAttribute("data-semi")) ESC.semi = b.getAttribute("data-semi");
+    else if (b.hasAttribute("data-ed") && modo === 5) ESC.cli = editar(ESC.cli, b.getAttribute("data-ed"), +b.getAttribute("data-j"));
+    else return;
+    render();
+  });
+  $("escCuerpo").addEventListener("change", function (e) {
+    var t = e.target, a = t.getAttribute("data-act");
+    if (a === "key") ESC.key = t.value;
+    else if (a === "suf") ESC.suf = t.checked;
+    else if (a === "lado") ESC.lado = t.value;
+    else return;
+    render();
+  });
+
+  function entrar(i) {
+    modo = i;
+    if (i === 1 || i === 4 || i === 5 || i === 6 || (i === 2 && !est.c3)) ESC.key = "cid";
+    if (i === 1 || (i === 2 && !est.c3) || (i === 3 && !est.c4) || (i === 4 && !est.c5) || (i === 5 && !est.c6)) ESC.how = "left";
+    if (["inner", "left", "right", "outer"].indexOf(ESC.how) < 0) ESC.how = "left";
+    if (i === 3 && !est.c4) ESC.key = "cid";
+    var hints = [
+      est.c1 ? "Cada hilo es una pareja" : "Mira las claves y responde",
+      est.c2 ? "Cambia entre pandas y dplyr" : "Cuenta con los hilos",
+      est.c3 ? "Prueba los cuatro tipos" : "Responde la predicción",
+      est.c4 ? "Cambia la clave" : "Responde la predicción",
+      est.c5 ? "Prueba los sufijos" : "Fíjate en las dos ciudades",
+      est.c6a ? "Repite claves y mira los hilos" : "Responde la predicción del destacado",
+      est.c7 ? "semi o anti, y cuál va a la izquierda" : "Responde el chequeo"
+    ];
+    $("escHint").textContent = hints[i];
+    render();
+  }
+
+  /* ---------------- chequeos de cada paso ---------------- */
+  B.opcionMultiple(cuerpo("chk1"), {
+    pregunta: "Cada pedido busca a su cliente por el número de cliente. ¿Qué afirmación es cierta?",
+    opciones: [
+      "Cuatro pedidos encuentran cliente; el 105 no tiene cliente; Dani no tiene pedidos.",
+      "Cada cliente encuentra exactamente un pedido.",
+      "Hay cinco hilos, uno por pedido.",
+      "Ana sale una sola vez porque es un solo cliente."
+    ],
+    correcta: 0,
+    pistas: [null,
+      "Mira la columna <code>cliente</code> de los pedidos: el 1 aparece dos veces y el 4 ninguna.",
+      "El pedido 105 apunta al cliente 5. ¿Hay algún cliente con <code>id</code> 5?",
+      "Ana tiene los pedidos 101 y 103: sale una vez por cada pedido suyo."],
+    explicacion: "Cuatro hilos: 101 y 103 van a Ana, 102 a Beto y 104 a Cris. El 105 apunta a un cliente 5 que no existe, y Dani no recibe ningún hilo. <b>Mira el escenario:</b> los hilos se dibujan uno por uno.",
+    alResolver: function () { est.c1 = true; ESC.anim = true; if (pasos.actual() === 0) entrar(0); pasos.completar(0); }
+  });
+
+  campos(cuerpo("chk2"), {
+    pregunta: "Con el <code>left</code> del escenario, ¿cuántas filas tiene la tabla que sale y cuántas celdas vacías hay en la columna <code>nombre</code>?",
+    campos: [{ pre: "filas:", aria: "Filas del resultado" }, { pre: "vacías en nombre:", aria: "Celdas vacías en la columna nombre" }],
+    revisar: function (v) {
+      if (v[0] === 5 && v[1] === 1) return { ok: true };
+      if (v[0] === 4 && v[1] === 0) return { msg: "Eso sería un inner: solo las parejas. El left conserva también al pedido sin cliente." };
+      if (v[0] === 5 && v[1] === 0) return { msg: "Las filas están bien. El pedido 105 no tiene cliente: ¿qué nombre le pegas?" };
+      if (v[0] === 6) return { msg: "Seis serían las parejas más los dos huérfanos. Dani no tiene pedido: en un left, ¿se queda?" };
+      if (v[0] === 5) return { msg: "Las filas están bien. Cuenta los pedidos sin hilo: cada uno deja un hueco en <code>nombre</code>." };
+      return { msg: "El left conserva cada pedido una vez por cada pareja, o una vez sin pareja." };
+    },
+    pistas: ["Cada pedido sale una vez por cada hilo que tiene, o una vez si no tiene ninguno.", "Solo el 105 se queda sin hilo."],
+    solucion: "<b>5 filas</b> y <b>1 hueco</b>: los cuatro pedidos con cliente y el 105, con <code>NaN</code> en pandas o <code>NA</code> en R en <code>nombre</code>, <code>ciudad_y</code> (o <code>ciudad.y</code>) y, en pandas, <code>id</code>. Dani no aparece: el left solo conserva la izquierda. <b>Mira el escenario:</b> ya ves la tabla real de cada librería.",
+    alResolver: function () { est.c2 = true; if (pasos.actual() === 1) entrar(1); pasos.completar(1); }
+  });
+
+  B.numerico(cuerpo("chk3"), {
+    pregunta: "¿Cuántas filas da <code>how=\"outer\"</code> (o <code>full_join</code>) con las tablas de la página?",
+    respuesta: 6,
+    tolerancia: 0,
+    pistas: ["outer conserva todo: las parejas y los huérfanos de los dos lados.", "Parejas: 4. Huérfanos: el pedido 105 y Dani."],
+    diagnostico: function (v) {
+      if (v === 9) return "Sumaste las dos tablas, 5 + 4. Pero Ana tiene dos pedidos y las parejas ocupan una sola fila cada una.";
+      if (v === 20) return "Eso es el producto cartesiano de la página de SQL, 5 × 4, sin condición. Aquí solo cuentan los hilos.";
+      if (v === 5) return "Eso da left o right. outer conserva a los dos huérfanos.";
+      return null;
+    },
+    explicacion: "4 parejas + 1 huérfano de pedidos + 1 huérfana de clientes = <b>6</b>. <b>Ahora prueba los cuatro botones</b> en el escenario: cambia también a dplyr y mira cómo cambia el orden de las filas.",
+    alResolver: function () { est.c3 = true; if (pasos.actual() === 2) entrar(2); pasos.completar(2); }
+  });
+
+  B.opcionMultiple(cuerpo("chk4"), {
+    pregunta: "En pandas escribes <code>pd.merge(pedidos, clientes, on=\"id\")</code>. ¿Qué pasa?",
+    opciones: [
+      "<code>KeyError: 'id'</code>: <code>pedidos</code> no tiene ninguna columna <code>id</code>.",
+      "Une bien, porque <code>id</code> existe en <code>clientes</code>.",
+      "Une por <code>cliente</code> automáticamente.",
+      "Une por <code>ciudad</code>."
+    ],
+    correcta: 0,
+    pistas: [null,
+      "<code>on</code> exige que la columna esté en las dos tablas.",
+      "pandas no adivina que <code>cliente</code> e <code>id</code> significan lo mismo.",
+      "Eso pasa si no escribes <code>on</code> en absoluto. Lo verás en una trampa de la vida real."],
+    explicacion: "<code>KeyError: 'id'</code> (salida real). En dplyr, <code>left_join(pedidos, clientes, by = \"id\")</code> también falla: <code>Join columns in `x` must be present in the data.</code> <b>Ahora usa el selector de clave</b> del escenario y prueba las tres opciones en las dos librerías.",
+    alResolver: function () { est.c4 = true; if (pasos.actual() === 3) entrar(3); pasos.completar(3); }
+  });
+
+  B.opcionMultiple(cuerpo("chk5"), {
+    pregunta: "En el resultado de pandas, sin <code>suffixes</code>, ¿cómo se llama la columna con la ciudad donde vive el cliente?",
+    opciones: ["<code>ciudad_y</code>", "<code>ciudad_x</code>", "<code>ciudad.y</code>", "<code>ciudad_cliente</code>"],
+    correcta: 0,
+    pistas: [null,
+      "<code>_x</code> es para la tabla izquierda, <code>pedidos</code>: esa es la ciudad de envío.",
+      "Así la llama dplyr, con punto. pandas usa guion bajo.",
+      "Ese nombre solo existe si lo escribes tú con <code>suffixes</code>."],
+    explicacion: "La ciudad del cliente viene de la tabla derecha, <code>clientes</code>, así que recibe <code>_y</code>: <b>ciudad_y</b>. En dplyr sería <code>ciudad.y</code>. <b>Ahora marca la casilla</b> del escenario y mira los nombres que eliges tú.",
+    alResolver: function () { est.c5 = true; if (pasos.actual() === 4) entrar(4); pasos.completar(4); }
+  });
+
+  B.opcionMultiple(cuerpo("chk6a"), {
+    pregunta: "Con Beto dos veces en <code>clientes</code>, ¿cuántas filas da el left de pedidos con clientes y cuánto suma <code>importe</code>?",
+    opciones: ["5 filas y 150", "6 filas y 180", "6 filas y 150", "5 filas y 180"],
+    correcta: 1,
+    pistas: ["Eso pasaría si cada pedido saliera siempre una vez. ¿Cuántos hilos salen ahora del pedido 102?", null,
+      "La fila extra es una copia del pedido 102, con su importe.", "Si el total cambia, es porque algún importe se contó dos veces: eso necesita una fila más."],
+    explicacion: "El pedido 102 encuentra dos Betos y sale dos veces: <b>6 filas</b>, y su importe de 30 se cuenta dos veces: 150 + 30 = <b>180</b>. Nada se rompe y no hay error. El número de filas solo es el de la izquierda cuando la clave de la derecha es única. <b>Ahora toca Beto se mudó a Cali</b> en el escenario y míralo.",
+    alResolver: function () { est.c6a = true; if (pasos.actual() === 5) entrar(5); cerrar6(); }
+  });
+
+  B.numerico(cuerpo("chk6"), {
+    pregunta: "Repite al menos una clave en <code>clientes</code> (con el botón de Beto, con Duplicar o cambiando un <code>id</code>). Con las tablas como están ahora en el escenario, ¿cuántas filas da el left?",
+    respuesta: function () { return hayRepetida(ESC.cli, "id") ? nFilas(PED, ESC.cli, "cliente", "id", "left") : NaN; },
+    tolerancia: 0,
+    pistas: ["Para cada pedido, cuenta sus hilos. Si no tiene ninguno, cuenta 1.", function () {
+      var c = contarHilos(PED, ESC.cli, "cliente", "id");
+      return "Hilos por pedido, del 101 al 105: " + c.conL.join(", ") + ". Cambia cada 0 por 1 y suma.";
+    }],
+    diagnostico: function (v) {
+      if (!hayRepetida(ESC.cli, "id")) return "Primero repite una clave en <code>clientes</code>: toca <b>Beto se mudó a Cali</b> o <b>Duplicar</b> en el escenario.";
+      if (v === 5) return "5 sería si cada pedido tuviera un solo hilo o ninguno. Mira si algún pedido tiene dos.";
+      return null;
+    },
+    explicacion: function () {
+      var c = contarHilos(PED, ESC.cli, "cliente", "id"), n = c.conL.map(function (x) { return Math.max(x, 1); });
+      return "Del 101 al 105: " + n.join(" + ") + " = <b>" + suma(n) + "</b>. Cada pedido sale una vez por pareja, y una vez si no tiene ninguna. <b>Mira el escenario:</b> ya aparecen la tabla y su total.";
+    },
+    alResolver: function () { est.c6 = true; if (pasos.actual() === 5) entrar(5); cerrar6(); }
+  });
+  function cerrar6() { if (est.c6a && est.c6) pasos.completar(5); }
+
+  B.opcionMultiple(cuerpo("chk7"), {
+    pregunta: "¿Qué devuelve <code>anti_join(pedidos, clientes, by = c(\"cliente\" = \"id\"))</code>?",
+    opciones: [
+      "El pedido 105, con sus cuatro columnas.",
+      "Dani.",
+      "Los pedidos 101 a 104.",
+      "Una tabla vacía."
+    ],
+    correcta: 0,
+    pistas: [null,
+      "Dani sale con <code>anti_join(clientes, pedidos, ...)</code>. Aquí la izquierda es <code>pedidos</code>: el orden importa.",
+      "Esos son los pedidos con pareja: eso es <code>semi_join</code>.",
+      "Hay un pedido cuyo cliente no existe."],
+    explicacion: "Salida real: <code>105 5 10 Lima</code>. anti se queda con las filas de la <b>izquierda</b> que no tienen pareja, y solo con sus columnas. <b>Ahora prueba los botones</b> del escenario y cambia qué tabla va a la izquierda.",
+    alResolver: function () { est.c7 = true; if (pasos.actual() === 6) entrar(6); pasos.completar(6); }
+  });
+
+  pasos = B.pasos($("recorrido"), {
+    concepto: C,
+    alEntrar: entrar,
+    alTerminar: function () { location.hash = "retos"; }
+  });
+  est.c1 = pasos.hecho(0);
+  est.c2 = pasos.hecho(1);
+  est.c3 = pasos.hecho(2);
+  est.c4 = pasos.hecho(3);
+  est.c5 = pasos.hecho(4);
+  est.c6 = est.c6a = pasos.hecho(5);
+  est.c7 = pasos.hecho(6);
+  entrar(pasos.actual());
+
+  /* ---------------- hipotesis inicial ---------------- */
+  (function () {
+    var ta = $("hipotesis"), t = null;
+    ta.value = B.nota("unir-tablas-pandas-dplyr", "hipotesis");
+    function cita() {
+      var v = ta.value.trim(), e = $("citaHipo");
+      e.hidden = !v;
+      if (v) { e.textContent = ""; e.appendChild(document.createTextNode("Al principio escribiste: «" + v + "». Ahora lo ves: un left join tiene más filas que la izquierda en cuanto la tabla de la derecha repite una clave que tienen los pedidos. ¿Lo habías intuido?")); }
+    }
+    cita();
+    ta.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { B.nota("unir-tablas-pandas-dplyr", "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; cita(); }, 500);
+    });
+  })();
+
+  /* ---------------- marcadores de estado de retos ---------------- */
+  function pintarEstados() {
+    [].forEach.call(document.querySelectorAll("[data-reto]"), function (e) {
+      var ok = C.retoOk(e.getAttribute("data-reto"));
+      e.textContent = ok ? "resuelto" : "pendiente";
+      e.classList.toggle("ok", ok);
+    });
+  }
+  C.alCambiar(pintarEstados);
+
+  /* ---------------- reto: ojo clinico ---------------- */
+  (function () {
+    var cont = $("ojo");
+    cont.innerHTML = '<div class="ronda"></div><div id="ojoTab"></div><div class="codigo-linea" id="ojoCod"></div>' +
+      '<div class="ojo-opts"><button type="button" class="opt" data-a="menos">Menos</button><button type="button" class="opt" data-a="igual">Igual</button><button type="button" class="opt" data-a="mas">Más</button></div>' +
+      '<div class="fb" aria-live="polite"></div><div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    var tanda, ronda, aciertos, respondida, actual;
+    function codigo(r) {
+      if (r.how === "semi" || r.how === "anti") return r.lang === "py" ? "izq[" + (r.how === "anti" ? "~" : "") + 'izq["k"].isin(der["k"])]' : r.how + '_join(izq, der, by = "k")';
+      return r.lang === "py" ? 'pd.merge(izq, der, on="k", how="' + r.how + '")' : (r.how === "outer" ? "full" : r.how) + '_join(izq, der, by = "k")';
+    }
+    function nueva() { tanda = genOjo(); ronda = 0; aciertos = 0; mostrar(); }
+    function mostrar() {
+      respondida = false;
+      actual = tanda[ronda];
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 8 · aciertos " + aciertos;
+      $("ojoTab").innerHTML = '<div class="claves"><div class="claves-fila izq"><span class="nom">izq, k:</span>' + actual.L.map(function (x) { return '<span class="k">' + x.k + "</span>"; }).join("") +
+        '</div><div class="claves-fila der"><span class="nom">der, k:</span>' + actual.R.map(function (x) { return '<span class="k">' + x.k + "</span>"; }).join("") + "</div></div>";
+      $("ojoCod").innerHTML = (actual.lang === "py" ? '<span class="lj">pandas</span>' : '<span class="lk">dplyr</span>') + "\n" + esc(codigo(actual));
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (b) { b.disabled = false; b.className = "opt"; });
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+    }
+    function razon(r) {
+      var c = contarHilos(r.L, r.R, "k", "k");
+      var base = "La izquierda tiene " + r.nl + " filas; hay " + c.pares.length + " hilos, " + c.huerfL + " huérfanas a la izquierda y " + c.huerfR + " a la derecha. ";
+      var txt = { inner: "inner = solo los hilos", left: "left = hilos + huérfanas de la izquierda", right: "right = hilos + huérfanas de la derecha", outer: "outer = hilos + todas las huérfanas", semi: "semi = filas de la izquierda con al menos un hilo, una vez cada una", anti: "anti = filas de la izquierda sin ningún hilo" }[r.how];
+      return base + txt + ": <b>" + r.n + "</b>.";
+    }
+    cont.querySelector(".ojo-opts").addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || respondida) return;
+      respondida = true;
+      var ok = b.getAttribute("data-a") === actual.resp;
+      if (ok) aciertos++;
+      b.classList.add(ok ? "ok" : "mal");
+      if (!ok) cont.querySelector('.ojo-opts [data-a="' + actual.resp + '"]').classList.add("ok");
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (x) { x.disabled = true; });
+      cont.querySelector(".fb").innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No.</span> ') + razon(actual);
+      var sig = cont.querySelector(".sig");
+      sig.hidden = false;
+      if (ronda === 7) {
+        var aprobo = aciertos >= 7;
+        C.reto("ojo", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertos + " de 8" + (aprobo ? ". Aprobado." : ". Necesitas 7 para aprobar.");
+        sig.textContent = "Otra tanda";
+      } else sig.textContent = "Siguiente ronda";
+    });
+    cont.querySelector(".sig").addEventListener("click", function () { if (ronda === 7) nueva(); else { ronda++; mostrar(); } });
+    nueva();
+  })();
+
+  /* ---------------- reto: construir con las claves ---------------- */
+  (function () {
+    var cliC = copiaCli(CLI0), k = 0, ul = $("objetivos");
+    var OBJ = [
+      { t: "Que el left de pedidos con clientes tenga exactamente 7 filas.", ok: function (c) { return nFilas(PED, c, "cliente", "id", "left") === 7; } },
+      { t: "Que el inner tenga 3 filas.", ok: function (c) { return nFilas(PED, c, "cliente", "id", "inner") === 3; } },
+      { t: "Que anti_join(clientes, pedidos) quede vacío: todos los clientes con algún pedido.", ok: function (c) { return unir(c, PED, "id", "cliente", "anti", "r").length === 0; } },
+      { t: "Que el total de importe del left sea 190, sin cambiar ningún importe.", ok: function (c) { return totalLeft(PED, c, "cliente", "id") === 190; } }
+    ];
+    OBJ.forEach(function (o) { var li = document.createElement("li"); li.innerHTML = '<span class="m"></span><span>' + esc(o.t) + "</span>"; ul.appendChild(li); });
+    function pintarObj() { [].forEach.call(ul.children, function (li, i) { li.classList.toggle("hecho", i < k); li.classList.toggle("actual", i === k); }); }
+    function pintar() {
+      $("construir").innerHTML = hilosSvg(hilosUnion(cliC, "cid", null, "py")) + editorHtml(cliC, false, false) +
+        (k >= OBJ.length ? '<p class="esc-nota">Los cuatro objetivos cumplidos. La página revisa el resultado, no el camino: hay varias formas de llegar a cada uno.</p>' : "");
+    }
+    function revisar() {
+      if (k < OBJ.length && OBJ[k].ok(cliC)) {
+        k++;
+        pintarObj();
+        if (k === OBJ.length) C.reto("construir", true);
+      }
+    }
+    $("construir").addEventListener("click", function (e) {
+      var b = e.target.closest("[data-ed]");
+      if (!b || b.disabled) return;
+      cliC = editar(cliC, b.getAttribute("data-ed"), +b.getAttribute("data-j"));
+      revisar();
+      pintar();
+    });
+    pintarObj();
+    pintar();
+  })();
+
+  /* ---------------- reto: a mano ---------------- */
+  (function () {
+    var T = genMano();
+    $("mano").innerHTML = '<div id="manoTabla"></div><div id="manoCampos"></div>';
+    function tablaMano() {
+      var izq = '<div class="mini-tabla izq" style="grid-template-columns:auto auto"><span class="th">k</span><span class="th">importe</span>' + T.L.map(function (x) { return "<span>" + x.k + "</span><span>" + x.importe + "</span>"; }).join("") + "</div>";
+      var der = '<div class="mini-tabla der" style="grid-template-columns:auto auto"><span class="th">k</span><span class="th">nombre</span>' + T.R.map(function (x) { return "<span>" + x.k + "</span><span>" + x.nombre + "</span>"; }).join("") + "</div>";
+      $("manoTabla").innerHTML = '<p class="esc-nota" style="margin:0 0 4px">izq (izquierda) y der (derecha)</p>' + izq + der;
+    }
+    tablaMano();
+    campos($("manoCampos"), {
+      pregunta: "Une <code>izq</code> con <code>der</code> por <code>k</code>. ¿Cuántas filas da el inner, cuántas el left, y cuánto suma <code>importe</code> en el left?",
+      campos: [{ pre: "inner:", aria: "Filas del inner" }, { pre: "left:", aria: "Filas del left" }, { pre: "suma left:", aria: "Suma de importe del left" }],
+      revisar: function (v) {
+        var okI = v[0] === T.inner, okL = v[1] === T.left, okS = v[2] === T.total;
+        if (okI && okL && okS) return { ok: true };
+        if (!okI) return { msg: "El inner cuenta solo hilos: para cada fila de izq, cuántas filas de der tienen su misma k." };
+        if (!okL) return { msg: v[1] === T.inner ? "Ese es el inner. El left suma 1 por cada fila de izq sin pareja." : "El left: cada fila de izq sale una vez por hilo, o una vez si no tiene ninguno." };
+        var simple = suma(T.L.map(function (x) { return x.importe; }));
+        return { msg: v[2] === simple ? "Sumaste los importes de izq una vez cada uno. Una fila con dos hilos sale dos veces, y su importe también." : "Suma el importe de cada fila de izq tantas veces como sale en el left." };
+      },
+      pistas: ["Para cada fila de izq, cuenta sus parejas en der (misma k).", "Si no tiene pareja, en el left cuenta 1 (y su importe una vez).", function () {
+        var x = T.L[0], m = T.R.filter(function (y) { return y.k === x.k; }).length;
+        return "Primera fila de izq: k = " + x.k + ", importe " + x.importe + ". Tiene " + m + " pareja" + (m === 1 ? "" : "s") + " en der: aporta " + m + " al inner, " + Math.max(m, 1) + " al left y " + (x.importe * Math.max(m, 1)) + " a la suma.";
+      }],
+      solucion: function () {
+        var det = T.L.map(function (x) { var m = T.R.filter(function (y) { return y.k === x.k; }).length; return "k " + x.k + ": " + m + " hilo" + (m === 1 ? "" : "s"); }).join("; ");
+        return det + ". Inner <b>" + T.inner + "</b>, left <b>" + T.left + "</b>, suma del left <b>" + T.total + "</b>.";
+      },
+      reintentable: true,
+      antesDeReintentar: function () { T = genMano(); tablaMano(); },
+      alResolver: function (ok) { C.reto("mano", ok); }
+    });
+  })();
+
+  /* ---------------- reto: cazar el error ---------------- */
+  B.cazarError($("error"), {
+    variantes: [
+      {
+        intro: "En Python. Quieres pegar el nombre del cliente a cada pedido. La salida real tiene 6 filas: el 101 sale con Ana y con Dani, y el 103 desaparece.",
+        lineas: ["\\texttt{import pandas as pd}", "\\texttt{r = pd.merge(pedidos, clientes)}", "\\texttt{print(len(r))  \\# 6}", "\\texttt{print(r[[\"pedido\", \"nombre\"]])}"],
+        erronea: 1,
+        explicacion: "Sin <code>on</code>, pandas une por todas las columnas que se llaman igual: <code>ciudad</code>. El 101 se envía a Lima, donde viven Ana y Dani; el 103 va a Cusco y, como el <code>how</code> por defecto es <code>inner</code>, desaparece. Debía ser <code>pd.merge(pedidos, clientes, left_on=\"cliente\", right_on=\"id\", how=\"left\")</code>."
+      },
+      {
+        intro: "En R. Quieres el left de pedidos con clientes. La salida real es <code>Join columns in `x` must be present in the data.</code> y <code>Problem with `id`.</code>",
+        lineas: ["\\texttt{suppressMessages(library(dplyr))}", "\\texttt{r <- left\\_join(pedidos, clientes, by = \"id\")}", "\\texttt{print(nrow(r))}"],
+        erronea: 1,
+        explicacion: "<code>by = \"id\"</code> pide una columna <code>id</code> en las dos tablas, y <code>pedidos</code> la llama <code>cliente</code>. Debía ser <code>by = c(\"cliente\" = \"id\")</code>: primero el nombre de la izquierda, después el de la derecha."
+      },
+      {
+        intro: "En Python. Quieres los clientes que tienen al menos un pedido. La salida real es <code>4</code> y <code>['Ana', 'Ana', 'Beto', 'Cris']</code>.",
+        lineas: ["\\texttt{m = pd.merge(clientes, pedidos,}", "\\texttt{\\quad left\\_on=\"id\", right\\_on=\"cliente\")}", "\\texttt{print(len(m))  \\# 4}", "\\texttt{print(m[\"nombre\"].tolist())}"],
+        erronea: 0,
+        explicacion: "Un inner no es un semi: Ana tiene dos pedidos y sale dos veces. Para quedarte con cada cliente una vez es <code>clientes[clientes[\"id\"].isin(pedidos[\"cliente\"])]</code> (3 filas: Ana, Beto y Cris), o <code>semi_join(clientes, pedidos, by = c(\"id\" = \"cliente\"))</code> en R (3 filas, verificado)."
+      }
+    ],
+    alResolver: function (ok) { C.reto("error", ok); }
+  });
+
+  /* ---------------- retos: propiedades ---------------- */
+  function prop(id, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple($(id), cfg);
+  }
+  prop("prop1", {
+    pregunta: "Haces un left join de <code>pedidos</code> (5 filas) con otra tabla. ¿Cuántas filas puede tener el resultado?",
+    opciones: ["5 o más; más solo si la otra tabla repite alguna clave que tienen los pedidos.", "Exactamente 5, siempre.", "5 o menos.", "El producto de las filas de las dos tablas."],
+    correcta: 0,
+    pistas: [null, "Mira el paso 6: Beto dos veces.", "El left nunca pierde filas de la izquierda: un pedido sin pareja sale igual.", "Eso es el producto cartesiano, sin condición."],
+    explicacion: "Cada pedido sale una vez por pareja, o una vez si no tiene ninguna. Nunca menos de 5; más cuando una clave de los pedidos aparece repetida en la otra tabla."
+  });
+  prop("prop2", {
+    pregunta: "¿En qué se diferencian <code>semi_join(clientes, pedidos)</code> e <code>inner_join(clientes, pedidos)</code> (unidos por la clave)?",
+    opciones: ["<code>semi</code> deja cada cliente con pedido una sola vez y solo con sus columnas; <code>inner</code> repite al cliente por cada pedido y pega las columnas de pedidos.", "Son iguales.", "<code>semi</code> deja los clientes que no tienen pareja.", "<code>semi</code> trae las columnas de las dos tablas."],
+    correcta: 0,
+    pistas: [null, "Cuenta cuántas veces sale Ana en cada uno.", "Eso es <code>anti</code>.", "Solo trae las de la izquierda: filtra, no pega."],
+    explicacion: "semi da 3 filas (Ana, Beto, Cris) con <code>id, nombre, ciudad</code>; inner da 4 (Ana dos veces) con las columnas de las dos tablas."
+  });
+  prop("prop3", {
+    pregunta: "¿Por qué en un <code>how=\"right\"</code> de pandas el pedido 101 aparece como <code>101.0</code>?",
+    opciones: ["La columna recibió un <code>NaN</code> (la fila de Dani) y una columna de enteros de pandas no puede guardarlo, así que pasa a decimal.", "Porque <code>merge</code> divide los números.", "Porque R lo hace igual.", "Porque 101 era texto."],
+    correcta: 0,
+    pistas: [null, "No hay ninguna cuenta: solo se copian valores.", "R muestra <code>101</code>: sus números ya son <code>double</code> y tiene <code>NA</code> para todos los tipos.", "Era un entero; mira el <code>dtype</code> de la columna."],
+    explicacion: "Con <code>NaN</code> en la columna, pandas la convierte a <code>float64</code> entera. En el left pasa lo mismo con <code>id</code>, por el hueco del 105."
+  });
+
+  /* ---------------- formula de memoria ---------------- */
+  B.ordenar($("formula"), {
+    pregunta: "Arma el left join de pedidos con clientes en pandas que, además, comprueba que cada pedido tenga como mucho un cliente.",
+    piezas: ["\\texttt{pd.merge(pedidos, clientes,}", "\\texttt{left\\_on=\"cliente\", right\\_on=\"id\",}", "\\texttt{how=\"left\",}", "\\texttt{validate=\"many\\_to\\_one\")}"],
+    distractores: ["\\texttt{on=\"id\",}", "\\texttt{how=\"semi\",}", "\\texttt{by = c(\"cliente\" = \"id\"),}"],
+    soluciones: [[0, 1, 2, 3]],
+    explicacion: "<code>pd.merge(pedidos, clientes, left_on=\"cliente\", right_on=\"id\", how=\"left\", validate=\"many_to_one\")</code>. En dplyr: <code>left_join(pedidos, clientes, by = c(\"cliente\" = \"id\"), relationship = \"many-to-one\")</code>. <code>on=\"id\"</code> falla porque <code>pedidos</code> no tiene <code>id</code>; <code>how=\"semi\"</code> no existe en pandas; <code>by =</code> es de dplyr.",
+    alResolver: function (ok) { C.reto("formula", ok); }
+  });
+
+  /* ---------------- vida real: el algoritmo en codigo ---------------- */
+  (function () {
+    var CODIGO = {
+      py: [
+        ["import", "import pandas as pd"],
+        ["clientes", 'clientes = pd.DataFrame({"id": [1, 2, 3, 4],'],
+        ["clientes", '                         "nombre": ["Ana", "Beto", "Cris", "Dani"],'],
+        ["clientes", '                         "ciudad": ["Lima", "Quito", "Bogotá", "Lima"]})'],
+        ["pedidos", 'pedidos = pd.DataFrame({"pedido": [101, 102, 103, 104, 105],'],
+        ["pedidos", '                        "cliente": [1, 2, 1, 3, 5],'],
+        ["pedidos", '                        "importe": [50, 30, 20, 40, 10],'],
+        ["pedidos", '                        "ciudad": ["Lima", "Quito", "Cusco", "Bogotá", "Lima"]})   # inventado'],
+        ["filas0", "filas = 0"],
+        ["fori", "for i in range(len(pedidos)):               # cada pedido (izquierda)"],
+        ["parejas0", "    parejas = 0"],
+        ["forj", "    for j in range(len(clientes)):          # busca en clientes (derecha)"],
+        ["si", '        if pedidos["cliente"].iloc[i] == clientes["id"].iloc[j]:'],
+        ["imprime", '            print(pedidos["pedido"].iloc[i], clientes["nombre"].iloc[j])'],
+        ["parejas", "            parejas = parejas + 1"],
+        ["filas", "            filas = filas + 1"],
+        ["sinpareja", "    if parejas == 0:                        # sin pareja: se queda con NaN"],
+        ["imprimeNA", '        print(pedidos["pedido"].iloc[i], "NaN")'],
+        ["filasNA", "        filas = filas + 1"],
+        ["imp1", "print(filas)"],
+        ["merge", 'r = pd.merge(pedidos, clientes, left_on="cliente", right_on="id", how="left")'],
+        ["imp2", "print(r)"]
+      ],
+      r: [
+        ["clientes", "clientes <- data.frame(id = c(1, 2, 3, 4),"],
+        ["clientes", '                       nombre = c("Ana", "Beto", "Cris", "Dani"),'],
+        ["clientes", '                       ciudad = c("Lima", "Quito", "Bogotá", "Lima"))'],
+        ["pedidos", "pedidos <- data.frame(pedido = c(101, 102, 103, 104, 105),"],
+        ["pedidos", "                      cliente = c(1, 2, 1, 3, 5),"],
+        ["pedidos", "                      importe = c(50, 30, 20, 40, 10),"],
+        ["pedidos", '                      ciudad = c("Lima", "Quito", "Cusco", "Bogotá", "Lima"))   # inventado'],
+        ["filas0", "filas <- 0"],
+        ["fori", "for (i in 1:nrow(pedidos)) {                # cada pedido (izquierda)"],
+        ["parejas0", "  parejas <- 0"],
+        ["forj", "  for (j in 1:nrow(clientes)) {             # busca en clientes (derecha)"],
+        ["si", "    if (pedidos$cliente[i] == clientes$id[j]) {"],
+        ["imprime", "      cat(pedidos$pedido[i], clientes$nombre[j], fill = TRUE)"],
+        ["parejas", "      parejas <- parejas + 1"],
+        ["filas", "      filas <- filas + 1"],
+        [null, "    }"],
+        [null, "  }"],
+        ["sinpareja", "  if (parejas == 0) {                       # sin pareja: se queda con NA"],
+        ["imprimeNA", '    cat(pedidos$pedido[i], "NA", fill = TRUE)'],
+        ["filasNA", "    filas <- filas + 1"],
+        [null, "  }"],
+        [null, "}"],
+        ["imp1", "print(filas)"],
+        ["lib", "suppressMessages(library(dplyr))"],
+        ["merge", 'r <- left_join(pedidos, clientes, by = c("cliente" = "id"))'],
+        ["imp2", "print(r)"]
+      ]
+    };
+    var SALIDA = {
+      py: ["101 Ana", "102 Beto", "103 Ana", "104 Cris", "105 NaN", "5",
+        "   pedido  cliente  importe ciudad_x   id nombre ciudad_y\n" +
+        "0     101        1       50     Lima  1.0    Ana     Lima\n" +
+        "1     102        2       30    Quito  2.0   Beto    Quito\n" +
+        "2     103        1       20    Cusco  1.0    Ana     Lima\n" +
+        "3     104        3       40   Bogotá  3.0   Cris   Bogotá\n" +
+        "4     105        5       10     Lima  NaN    NaN      NaN"],
+      r: ["101 Ana", "102 Beto", "103 Ana", "104 Cris", "105 NA", "[1] 5",
+        "  pedido cliente importe ciudad.x nombre ciudad.y\n" +
+        "1    101       1      50     Lima    Ana     Lima\n" +
+        "2    102       2      30    Quito   Beto    Quito\n" +
+        "3    103       1      20    Cusco    Ana     Lima\n" +
+        "4    104       3      40   Bogotá   Cris   Bogotá\n" +
+        "5    105       5      10     Lima   <NA>     <NA>"]
+    };
+    var EV = [];
+    (function () {
+      var filas = null, parejas = null, sal = 0, fase = 1, pares = [], huerf = [], hayCli = false, hayPed = false;
+      function foto(id, extra) {
+        EV.push(Object.assign({ id: id, fase: fase, filas: filas, parejas: parejas, sal: sal, pares: pares.slice(), huerf: huerf.slice(), hayCli: hayCli, hayPed: hayPed, i: null, j: null, cmp: null, tabla: false, fin: false }, extra || {}));
+      }
+      foto("import");
+      hayCli = true; foto("clientes");
+      hayPed = true; foto("pedidos");
+      filas = 0; foto("filas0");
+      for (var i = 0; i < PED.length; i++) {
+        foto("fori", { i: i });
+        parejas = 0; foto("parejas0", { i: i });
+        for (var j = 0; j < CLI0.length; j++) {
+          foto("forj", { i: i, j: j });
+          var ok = PED[i].cliente === CLI0[j].id;
+          foto("si", { i: i, j: j, cmp: ok });
+          if (ok) {
+            pares.push({ i: i, j: j });
+            sal++; foto("imprime", { i: i, j: j, cmp: true });
+            parejas++; foto("parejas", { i: i, j: j, cmp: true });
+            filas++; foto("filas", { i: i, j: j, cmp: true });
+          }
+        }
+        foto("sinpareja", { i: i, sin: parejas === 0 });
+        if (parejas === 0) {
+          huerf.push(i);
+          sal++; foto("imprimeNA", { i: i });
+          filas++; foto("filasNA", { i: i });
+        }
+      }
+      sal++; foto("imp1");
+      fase = 2;
+      foto("lib");
+      foto("merge", { tabla: true });
+      sal++; foto("imp2", { tabla: true, fin: true });
+    })();
+
+    function narrar(e, ctx) {
+      var py = ctx.lang() === "py", ix = ctx.ix;
+      switch (e.id) {
+        case "import": return py ? "Carga pandas, la librería de tablas de Python." : "Esta línea solo existe en Python. En R, <code>data.frame</code> viene de fábrica; dplyr se carga más abajo, justo antes de usarlo.";
+        case "clientes": return "Crea la tabla de búsqueda, <code>clientes</code>: cuatro filas con <code>id</code>, <code>nombre</code> y <code>ciudad</code>.";
+        case "pedidos": return "Crea la tabla izquierda, <code>pedidos</code>. La clave se llama <code>cliente</code> aquí e <code>id</code> allá, y las dos tablas tienen <code>ciudad</code>.";
+        case "filas0": return "Un contador de filas del resultado, en 0.";
+        case "fori": return "Pedido de la fila <b>" + ix(e.i) + "</b>" + (py ? " (Python cuenta desde 0)" : " (R cuenta desde 1)") + ": el " + PED[e.i].pedido + ", del cliente " + PED[e.i].cliente + ".";
+        case "parejas0": return "Todavía no encontró a nadie: parejas = 0.";
+        case "forj": return "Mira la fila " + ix(e.j) + " de clientes: " + CLI0[e.j].nombre + ", con id " + CLI0[e.j].id + ".";
+        case "si": return "¿" + PED[e.i].cliente + " == " + CLI0[e.j].id + "? " + (e.cmp ? "<b>Sí</b>: es su cliente." : "<b>No</b>: las tres líneas de adentro no corren.");
+        case "imprime": return "Imprime la pareja: <b>" + PED[e.i].pedido + " " + CLI0[e.j].nombre + "</b>. En la tabla de verdad sería una fila con los datos de los dos.";
+        case "parejas": return "Este pedido ya tiene " + e.parejas + " pareja" + (e.parejas === 1 ? "" : "s") + ".";
+        case "filas": return "Una fila más en el resultado: filas = <b>" + e.filas + "</b>.";
+        case "sinpareja": return e.sin ? "Ningún cliente tenía ese número: el left join lo conserva igual, con huecos en las columnas de clientes." : "Tuvo pareja, así que esta línea no hace nada: el pedido ya está en el resultado.";
+        case "imprimeNA": return "Imprime el pedido solo: <b>" + PED[e.i].pedido + " " + (py ? "NaN" : "NA") + "</b>.";
+        case "filasNA": return "También cuenta como fila: filas = <b>" + e.filas + "</b>. Eso es lo que hace <i>left</i>.";
+        case "imp1": return "<b>5</b> filas: 4 parejas y el 105 solo. La comparación corrió 20 veces.";
+        case "lib": return py ? "Esta línea solo existe en R: carga dplyr sin sus mensajes de bienvenida. En Python, pandas ya se cargó en la primera línea." : "Carga dplyr. <code>suppressMessages</code> calla los mensajes que imprime al cargarse.";
+        case "merge": return "La librería hace los mismos cuatro hilos y el hueco del 105, pero no compara 20 veces: busca cada clave con un índice (lo ves en el profundizar del paso 7).";
+        case "imp2": return py ? "La misma tabla, con nombres reales: <code>ciudad_x</code>, <code>ciudad_y</code> y la columna <code>id</code>, que pasó a decimal por el <code>NaN</code> del 105." : "La misma tabla en R: <code>ciudad.x</code> y <code>ciudad.y</code>, sin columna <code>id</code> (dplyr se queda con la clave de la izquierda), y <code>&lt;NA&gt;</code> en los textos del 105.";
+      }
+      return "";
+    }
+    function visual(e, anterior, ctx) {
+      var lang = ctx.lang();
+      if (!e || !e.hayCli) {
+        $("vrHilos").innerHTML = '<p class="esc-nota">Las tablas todavía no existen.</p>';
+      } else {
+        var pares = e.pares.map(function (p) { return { i: p.i, j: p.j }; });
+        if (e.cmp !== null && e.j !== null && !(e.cmp && e.pares.some(function (p) { return p.i === e.i && p.j === e.j; }))) pares.push({ i: e.i, j: e.j, cls: e.cmp ? "si" : "no" });
+        else if (e.cmp && e.j !== null) pares.forEach(function (p) { if (p.i === e.i && p.j === e.j) p.cls = "si"; });
+        $("vrHilos").innerHTML = hilosSvg({
+          L: e.hayPed ? PED : [], R: CLI0, kl: "cliente", kr: "id", pares: pares,
+          stubL: e.huerf.map(function (i) { return { i: i, txt: lang === "r" ? "NA" : "NaN" }; }),
+          curL: e.i, curR: e.j
+        });
+      }
+      var a = "";
+      if (e && e.filas !== null) a += "<span" + (e.id === "filas" || e.id === "filasNA" ? ' class="on"' : "") + ">filas = <b>" + e.filas + "</b></span>";
+      if (e && e.parejas !== null && e.i !== null) a += "<span" + (e.id === "parejas" ? ' class="on"' : "") + ">parejas = <b>" + e.parejas + "</b></span>";
+      if (e && e.id === "si") a += '<span class="' + (e.cmp ? "si" : "no") + '">' + (lang === "py" ? 'pedidos["cliente"].iloc[' + e.i + '] == clientes["id"].iloc[' + e.j + "]" : "pedidos&#36;cliente[" + (e.i + 1) + "] == clientes&#36;id[" + (e.j + 1) + "]") + ": " + PED[e.i].cliente + " == " + CLI0[e.j].id + " → <b>" + (e.cmp ? (lang === "py" ? "True" : "TRUE") : (lang === "py" ? "False" : "FALSE")) + "</b></span>";
+      $("vrAcum").innerHTML = a;
+      $("vrRes").innerHTML = e && e.tabla ? tablaResHtml({ lang: lang, key: "cid", how: "left", suf: false, cli: CLI0 }) : '<p class="esc-nota">Aparece cuando corre la línea de la librería.</p>';
+      $("vrSal").textContent = SALIDA[lang].slice(0, e ? e.sal : 0).join("\n");
+    }
+    B.vidaReal($("vidareal"), {
+      codigo: CODIGO,
+      eventos: EV,
+      narrar: narrar,
+      vars: function (e, ctx) {
+        var v = [];
+        if (e && e.i !== null) v.push('<span class="vk">i = <b>' + ctx.ix(e.i) + "</b></span>");
+        if (e && e.j !== null) v.push('<span class="vk">j = <b>' + ctx.ix(e.j) + "</b></span>");
+        v.push("<span>parejas = <b>" + (e && e.parejas !== null ? e.parejas : "(no existe)") + "</b></span>");
+        v.push("<span>filas = <b>" + (e && e.filas !== null ? e.filas : "(no existe)") + "</b></span>");
+        return v;
+      },
+      visual: visual,
+      demora: function (e) { return !e ? 600 : e.id === "forj" ? 300 : e.id === "si" ? (e.cmp ? 1000 : 500) : e.id === "merge" || e.id === "imp2" || e.id === "clientes" || e.id === "pedidos" ? 1400 : 700; }
+    });
+
+    B.numerico(cuerpo("vrPred"), {
+      pregunta: "¿Cuántas veces se ejecuta la comparación <code>if pedidos... == clientes...</code>?",
+      respuesta: 20,
+      tolerancia: 0,
+      pistas: ["Está dentro de dos bucles.", "El bucle de fuera da 5 vueltas; en cada una, el de dentro da 4."],
+      diagnostico: function (v) {
+        if (v === 5) return "Esas son las vueltas del bucle de fuera. La comparación está dentro del de dentro.";
+        if (v === 4) return "4 son las parejas que encuentra. La comparación corre haya o no pareja.";
+        if (v === 9) return "No se suman: por cada pedido se recorren todos los clientes.";
+        return null;
+      },
+      explicacion: "<b>20</b> veces: 5 pedidos × 4 clientes, haya o no pareja. Solo 4 dan verdadero. Dale a reproducir y mira el rayo verde o rojo de cada comparación."
+    });
+
+    prop("codigo1", {
+      pregunta: "¿Por qué el total pasó de 150 a 180?",
+      opciones: ["El pedido 102 (30) encontró dos clientes con id 2 y salió dos veces.", "Porque el left agrega el pedido 105.", "Porque Ana tiene dos pedidos.", "Por el aviso de R."],
+      correcta: 0,
+      pistas: [null, "El 105 ya estaba en el left normal, que suma 150.", "Los dos pedidos de Ana ya estaban en los 150: son dos pedidos distintos.", "El aviso no cambia ningún número: solo avisa."],
+      explicacion: "150 + 30 = 180: el importe del 102 se cuenta dos veces. pandas no avisa; dplyr avisa aquí solo porque también Ana se repite en <code>pedidos</code>. La defensa es <code>validate=\"many_to_one\"</code> o <code>relationship = \"many-to-one\"</code>."
+    });
+    prop("codigo2", {
+      pregunta: "¿Por qué el pedido 105 aparece unido a Ana y a Dani?",
+      opciones: ["Sin <code>on</code> ni <code>by</code>, las dos librerías unen por las columnas que se llaman igual, <code>ciudad</code>: el 105 se envía a Lima y Ana y Dani viven en Lima.", "Porque el 105 no tiene cliente y la librería elige uno al azar.", "Porque <code>merge</code> hace el producto cartesiano si no le das clave.", "Porque Ana y Dani tienen el mismo id."],
+      correcta: 0,
+      pistas: [null, "Nada es al azar: mira la columna que comparten las dos tablas.", "El producto daría 20 filas, y salen 6 en pandas y 7 en R.", "Tienen ids 1 y 4."],
+      explicacion: "La única columna con el mismo nombre en las dos tablas es <code>ciudad</code>, y significan cosas distintas. pandas además usa <code>inner</code> por defecto (6 filas); <code>left_join</code> conserva el 103 con <code>NA</code> (7 filas)."
+    });
+    prop("codigo3", {
+      pregunta: "¿Qué columna tiene el resultado de pandas que el de dplyr no tiene?",
+      opciones: ["<code>id</code>: pandas conserva las dos claves cuando se llaman distinto; dplyr se queda con la de la izquierda.", "<code>ciudad_y</code>", "<code>nombre</code>", "Ninguna."],
+      correcta: 0,
+      pistas: [null, "dplyr también la tiene, como <code>ciudad.y</code>.", "Las dos la tienen.", "Cuenta: pandas da 7 nombres y dplyr 6."],
+      explicacion: "pandas: 7 columnas con <code>cliente</code> e <code>id</code>. dplyr: 6, con <code>cliente</code> solamente. Los sufijos cambian de <code>_x</code>/<code>_y</code> a <code>.x</code>/<code>.y</code>, y con <code>suffixes</code> o <code>suffix</code> los eliges tú."
+    });
+  })();
+
+  /* ---------------- tarjetas ---------------- */
+  B.tarjetas($("tarjetas"), [
+    ["<code>how=\"left\"</code> en pandas", "<code>left_join</code> en dplyr: conserva todas las filas de la izquierda y rellena con <code>NaN</code> o <code>NA</code>."],
+    ["¿Qué filas da cada unión?", "inner: las parejas. left: parejas + huérfanos de la izquierda. right: parejas + huérfanos de la derecha. outer o full: todo."],
+    ["La clave se llama distinto en cada tabla", "pandas: <code>left_on=</code> y <code>right_on=</code> (conserva las dos columnas). dplyr: <code>by = c(\"cliente\" = \"id\")</code> o <code>join_by(cliente == id)</code> (conserva la de la izquierda)."],
+    ["<code>_x</code>, <code>_y</code> y <code>.x</code>, <code>.y</code>", "Sufijos para columnas que no son clave y se llaman igual en las dos tablas; <code>_x</code> o <code>.x</code> es la izquierda. Se cambian con <code>suffixes=</code> o <code>suffix =</code>."],
+    ["¿Por qué un left join tiene más filas que la izquierda?", "La otra tabla repite una clave: cada fila sale una vez por pareja."],
+    ["¿Cómo compruebo que una clave es única?", "<code>df[\"id\"].duplicated().sum()</code> o <code>count(df, id) |&gt; filter(n &gt; 1)</code>; o <code>validate=\"many_to_one\"</code> y <code>relationship = \"many-to-one\"</code> en la propia unión."],
+    ["<code>semi_join</code> y <code>anti_join</code>", "Filtran sin pegar columnas: filas con pareja o sin pareja. En pandas: <code>isin</code> y <code>~isin</code>."],
+    ["¿Qué pasa si no pones <code>on</code> ni <code>by</code>?", "Se une por todas las columnas con el mismo nombre (aquí <code>ciudad</code>). pandas además usa inner por defecto."]
+  ]);
+
+  /* ---------------- conexiones ---------------- */
+  B.conexiones("unir-tablas-pandas-dplyr");
+})();
+</script>
+</body>
+</html>

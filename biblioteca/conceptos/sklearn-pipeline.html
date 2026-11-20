@@ -1,0 +1,1649 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pipeline: el preprocesado dentro del modelo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+/* ---------- escenario ---------- */
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.esc-head .hint { font-size: 12.5px; color: var(--ink-2); }
+.esc-ctrl { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin: 0 0 10px; }
+.esc-ctrl button { font-family: var(--f-mono); font-size: 12px; padding: 6px 9px; }
+.esc-ctrl button[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.esc-ctrl .lab { font-family: var(--f-mono); font-size: 11px; color: var(--ink-3); letter-spacing: .05em; text-transform: uppercase; }
+.esc-nota { font-size: 12.5px; color: var(--ink-3); margin: 8px 0 0; }
+.esc-frase { font-size: 13.5px; color: var(--ink); margin: 10px 0 0; padding: 8px 10px; border-left: 3px solid var(--ok); background: var(--ok-soft); border-radius: 0 6px 6px 0; }
+.esc-error { margin: 8px 0 0; padding: 8px 10px; border-left: 3px solid var(--bad); background: var(--bad-soft); border-radius: 0 6px 6px 0; font-family: var(--f-mono); font-size: 11.5px; color: var(--bad); white-space: pre-wrap; overflow-wrap: anywhere; }
+.esc-sub { font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-3); margin: 12px 0 4px; }
+
+/* la cinta del pipeline: cajas con memoria */
+.cinta { display: flex; gap: 6px; align-items: stretch; flex-wrap: wrap; }
+.caja { flex: 1 1 150px; min-width: 0; border: 2px solid var(--line); border-radius: 10px; padding: 7px 9px 8px; background: var(--surface); }
+.caja.vacia { border-style: dashed; }
+.caja.fuga { border-color: var(--bad); background: var(--bad-soft); }
+.caja.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.caja.entrada { flex: 0 1 auto; border-color: var(--ink-3); }
+.caja-t { font-weight: 600; font-size: 13.5px; color: var(--ink); }
+.caja-n { font-family: var(--f-mono); font-size: 11px; color: var(--ink-2); overflow-wrap: anywhere; }
+.memo { font-family: var(--f-mono); font-size: 11.5px; color: var(--ink-2); margin-top: 5px; line-height: 1.55; overflow-wrap: anywhere; }
+.memo b { color: var(--ink); font-weight: 600; }
+.memo .oc { color: var(--accent); font-weight: 600; }
+.fichas { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 6px; min-height: 20px; }
+.ficha { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 3px; border-radius: 5px; font-family: var(--f-mono); font-size: 10.5px; background: var(--j-soft); color: var(--j); border: 1.5px solid var(--j); animation: entra .45s ease-out both; }
+.ficha.te { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+.ficha.mala { background: var(--bad-soft); color: var(--bad); border-color: var(--bad); }
+@keyframes entra { 0% { opacity: 0; transform: translateY(-12px); } 100% { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .ficha { animation: none; } }
+.flecha { flex: none; align-self: center; font-family: var(--f-mono); font-size: 13px; font-weight: 600; color: var(--accent); }
+.banda { margin-top: 6px; font-family: var(--f-mono); font-size: 10.5px; font-weight: 600; color: var(--bad); letter-spacing: .04em; }
+.ramas { display: grid; gap: 6px; margin-top: 6px; }
+.rama { border: 1px solid var(--line); border-radius: 8px; padding: 5px 7px; background: var(--surface-2); min-width: 0; }
+.flujo { font-family: var(--f-mono); font-size: 12px; line-height: 1.7; margin: 8px 0 0; padding: 8px 10px; background: var(--surface-2); border-radius: 8px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); }
+.flujo .sal { color: var(--accent); font-weight: 600; }
+.flujo .mal { color: var(--bad); font-weight: 600; }
+.flujo .bien { color: var(--ok); font-weight: 600; }
+@media (max-width: 520px) { .cinta { flex-direction: column; } .flecha { align-self: flex-start; padding-left: 14px; } }
+
+/* plano y recta */
+.plano { width: 100%; height: auto; display: block; margin-top: 8px; }
+.plano .eje { stroke: var(--line); stroke-width: 1; }
+.plano .eje0 { stroke: var(--ink-3); stroke-width: 1; }
+.plano text { fill: var(--ink-3); font-family: var(--f-mono); font-size: 10px; }
+.plano .lab { fill: var(--ink-2); font-size: 9px; }
+.plano .tr { fill: var(--j); }
+.plano .te { fill: var(--accent); }
+.plano .nu { fill: var(--accent); stroke: var(--ink); stroke-width: 1.2; }
+.plano .r-ok { fill: none; stroke: var(--ok); stroke-width: 2.5; }
+.plano .r-mal { fill: none; stroke: var(--bad); stroke-width: 2.5; }
+.plano .vec { stroke: var(--accent); stroke-width: 1.6; stroke-dasharray: 4 3; }
+.plano .barra { stroke: var(--accent); stroke-width: 2.5; transition: all .4s; }
+.plano .barra-t { fill: var(--accent); font-weight: 600; font-size: 11px; }
+.plano .ap0 { fill: none; stroke: var(--ink-3); stroke-width: 1.4; }
+
+/* marcador de la validacion cruzada */
+.marc { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 8px; }
+.marc-t { font-family: var(--f-mono); font-size: 11px; color: var(--ink-2); flex: 1 0 100%; }
+.casilla { display: inline-grid; justify-items: center; gap: 0; min-width: 44px; padding: 3px 6px; border: 1.5px solid var(--line); border-radius: 7px; background: var(--surface); font-family: var(--f-mono); font-size: 13px; color: var(--ink); }
+.casilla small { font-size: 9.5px; color: var(--ink-3); }
+.casilla.res { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.casilla.nan { color: var(--bad); }
+button.casilla { cursor: pointer; font-weight: 400; }
+.marc-m { font-family: var(--f-mono); font-size: 12.5px; color: var(--ink-2); margin-left: 4px; }
+.marc-m b { color: var(--ink); }
+
+/* constructor de nombres */
+.armado { min-height: 34px; padding: 6px 8px; border: 1.5px dashed var(--line); border-radius: 8px; font-family: var(--f-mono); font-size: 12.5px; overflow-wrap: anywhere; color: var(--ink); }
+.armado.bien { border-color: var(--ok); border-style: solid; background: var(--ok-soft); }
+.armado.mal { border-color: var(--bad); border-style: solid; background: var(--bad-soft); }
+.piezas7 { display: flex; flex-wrap: wrap; gap: 5px; margin: 6px 0; }
+.piezas7 button { font-family: var(--f-mono); font-size: 12px; padding: 5px 8px; }
+
+/* chequeos y retos */
+.trampa { margin: 12px 0; padding: 10px 12px; border-left: 3px solid var(--bad); background: var(--bad-soft); border-radius: 0 8px 8px 0; font-size: 14.5px; }
+.trampa b.t { font-family: var(--f-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--bad); display: block; margin-bottom: 3px; }
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.codigo-linea { font-family: var(--f-mono); font-size: 12.5px; padding: 8px 10px; background: var(--surface-2); border-radius: 8px; margin: 6px 0 10px; overflow-wrap: anywhere; white-space: pre-wrap; }
+.ojo-opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
+.ojo-opts .opt { text-align: center; font-family: var(--f-mono); }
+.objetivos { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.objetivos li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.objetivos .m { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.objetivos li.hecho { color: var(--ink); }
+.objetivos li.hecho .m { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 3px var(--surface); }
+.bandeja { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.bandeja button, .cinta-c button { font-family: var(--f-mono); font-size: 12px; padding: 6px 9px; }
+.cinta-c { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-height: 40px; padding: 6px 8px; border: 1.5px dashed var(--line); border-radius: 8px; margin: 6px 0; }
+.cinta-c .ph { font-size: 12.5px; color: var(--ink-3); }
+.opciones-c { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 8px 0; font-size: 13px; color: var(--ink-2); }
+.opciones-c label { display: inline-flex; gap: 5px; align-items: center; }
+.opciones-c input { accent-color: var(--accent); }
+.lec { border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); overflow: hidden; margin: 6px 0 10px; }
+.lec-t { display: block; font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); padding: 5px 10px 0; }
+.lec pre { margin: 0; padding: 4px 10px 8px; font-family: var(--f-mono); font-size: 12px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink-2); }
+.lec pre .sal { color: var(--ink); font-weight: 500; }
+.lec pre .err { color: var(--bad); font-weight: 500; }
+.mano-d { font-family: var(--f-mono); font-size: 13px; margin: 6px 0 10px; padding: 8px 10px; background: var(--surface-2); border-radius: 8px; overflow-wrap: anywhere; }
+.mano-parte { margin-top: 12px; }
+
+/* vida real */
+.vr-sal { margin: 4px 0 0; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); font-family: var(--f-mono); font-size: 12px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; min-height: 3em; color: var(--ink); }
+.chip { max-width: 100%; white-space: normal; text-align: left; }
+.chip .katex-html { white-space: normal; }
+.chip .mord.texttt { white-space: normal; overflow-wrap: anywhere; }
+.linea .katex-html { white-space: normal; }
+.linea .mord.texttt { white-space: normal; overflow-wrap: anywhere; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ Pipeline: el preprocesado dentro del modelo</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Programación con datos · scikit-learn · Raschka cap. 6 y SM142003 (UD1 y UD3)</p>
+    <h1>Pipeline: el preprocesado dentro del modelo</h1>
+    <p class="lede">
+      Antes de entrenar un modelo casi siempre preparas los datos: escalas columnas, conviertes textos en números, rellenas huecos.
+      Cada una de esas preparaciones <b>aprende algo de los datos</b>: una media, una desviación, una lista de categorías. Si lo aprende mirando también
+      las filas del examen, el examen se cuela en el entrenamiento y la nota sale inflada. Un <b>pipeline</b> es una cadena de cajas con memoria:
+      escalador y modelo en un solo objeto, que aprende solo con lo que le toca. La unidad de scikit-learn de Programación (SM142002, UD3) todavía no
+      está publicada; esto es lo que dicen el libro y las otras materias.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> Vas a medir qué tan bien predice un modelo con validación cruzada. Antes de empezar, estandarizas todas las columnas con la media y la desviación de la tabla entera, y después partes en pliegues. ¿Crees que eso le da alguna ventaja injusta al modelo? ¿Por qué sí o por qué no?</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: creo que..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>Una cadena con memoria</h2>
+      <p>Siete pasos. Cada uno termina con un chequeo: hasta que no lo resuelves, el siguiente queda cerrado. Equivocarte aquí no resta nada, es parte del método. Los diez estudiantes son inventados: horas de estudio por semana, distancia de su casa a la universidad en metros y si aprobó. Están pensados para que la distancia, sin escalar, aplaste a las horas.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="La escala se aprende">
+          <span class="etapa">Paso 1</span>
+          <h3>La escala se aprende de los datos</h3>
+          <p>Quieres un modelo que prediga si un estudiante aprueba a partir de dos cosas: cuántas horas estudia y qué tan lejos vive. Una se mide en horas (de 1 a 10) y la otra en metros (de 1000 a 6000).</p>
+          <p>Para compararlas hay que ponerlas en la misma escala. Esa escala no viene de fábrica: <b>se calcula con los datos</b>, con el centro (la media) y la dispersión de cada columna. Así que quien calcula la escala decide qué datos "ve".</p>
+          <p>En el escenario están las diez distancias sobre una recta. Dos estudiantes, los que viven a 5500 y 6000 m, son <b>el examen</b>: con ellos se va a evaluar el modelo (morado). Los otros ocho son <b>el entrenamiento</b> (azul). La barra marca la media de los ocho.</p>
+          <div class="check" id="chk1">
+            <p class="check-tit">Predice antes de tocar</p>
+            <div class="cuerpo"></div>
+          </div>
+          <p>Si la escala se calcula contando a los del examen, el examen ya influyó en cómo se preparan los datos de entrenamiento. Eso tiene nombre: <b>fuga de datos</b> (en inglés, <i>data leakage</i>). Raschka lo dice para el método de retención: si usas el test una y otra vez para decidir, el test se vuelve parte del entrenamiento
+          <cite class="cita" data-fuente="raschka6" data-pag="5" data-pimp="175" data-seccion="The holdout method" data-que="Por qué reusar el conjunto de prueba para elegir el modelo lo vuelve parte del entrenamiento y hace la estimación demasiado optimista." data-cuando="Al terminar este paso"></cite>.
+          Con el escalado pasa lo mismo, en pequeño.</p>
+        </section>
+
+        <section class="paso card" data-titulo="Por qué escalar">
+          <span class="etapa">Paso 2</span>
+          <h3>Por qué hace falta escalar aquí</h3>
+          <p>El modelo de esta página es kNN con un solo vecino: para predecir a un estudiante busca al estudiante de entrenamiento más parecido y copia su resultado. "Más parecido" quiere decir "más cerca", y la cercanía se mide sumando diferencias al cuadrado de las dos columnas.</p>
+          <p>Si las columnas van en sus unidades, una diferencia de 500 metros pesa en esa suma como 500 horas. En el escenario, con <b>Sin escalar</b>, los dos ejes están dibujados con la misma unidad, como los ve el kNN. Cambia a <b>Escalado</b> para ver los mismos puntos con cada columna en su escala (qué es esa escala lo ves en "Estandarización y normalización"; cómo decide kNN, en "kNN y regiones de decisión").</p>
+          <p>Las diapositivas de kNN de SM142003 lo cuentan con frutas: dulzor y crocancia van de 1 a 10 y el picante hasta 1 000 000; sin escalar, la distancia sería solo picante
+          <cite class="cita" data-fuente="knn3" data-pag="13" data-ancla="feature-scaling" data-seccion="3.3.1 Feature scaling" data-que="El ejemplo de dulzor, crocancia y picante: una columna con números enormes decide sola la distancia." data-cuando="Al leer este paso"></cite>.
+          Aquí el picante son los metros.</p>
+          <div class="check" id="chk2"><p class="check-tit">Elige y explica</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="fit y transform">
+          <span class="etapa">Paso 3</span>
+          <h3><code>fit</code> en el entrenamiento, <code>transform</code> en los dos</h3>
+          <p>Escalar tiene dos momentos. <code>fit</code> <b>aprende</b>: calcula la media y la desviación de cada columna con las filas que le das. <code>transform</code> <b>aplica</b> lo aprendido a cualquier fila, sin aprender nada nuevo. Aquí entra la notación:</p>
+          <div class="fbloque">
+            <div data-tex="z = \dfrac{x - \mu_{\text{train}}}{\sigma_{\text{train}}}" data-display></div>
+            <div class="vivo" id="vivo3"></div>
+          </div>
+          <p>En el escenario hay una sola caja, el <b>Escalador</b>, con la memoria vacía. Toca <code>fit(X_train)</code>: entran las fichas de los ocho de entrenamiento y aparecen la media y la desviación. Después toca <code>transform(X_test)</code>: los dos del examen pasan por la caja <b>sin dejar fichas</b>, con la escala del entrenamiento.</p>
+          <p>Las diapositivas de kNN piden exactamente esto: la misma transformación en entrenamiento y prueba, con los parámetros del entrenamiento. Avisan además que min-max falla si un dato nuevo cae fuera del rango que se vio, como el 6000 de aquí
+          <cite class="cita" data-fuente="knn3" data-pag="15" data-ancla="4/7" data-seccion="3.3.3 Consideraciones prácticas" data-que="La misma transformación en train y test; min-max se rompe con datos nuevos fuera del rango; z-score supone medias y desvíos parecidos." data-cuando="Después de tocar transform"></cite>.</p>
+          <details class="profundizar">
+            <summary>¿Y si el test es una sola fila?</summary>
+            <div>
+              <p>Con la escala del entrenamiento no hay problema: una fila se transforma igual que ocho. El problema aparece si a esa fila le haces <code>fit</code>. Una sola fila es su propia media y su desviación es 0, así que <code>StandardScaler</code> la deja en z = (0, 0): el estudiante promedio, sea quien sea. Lo vas a ver en el paso 5 y en la primera trampa real de la vida real.</p>
+            </div>
+          </details>
+          <p>Raschka abre el capítulo con esta idea: los parámetros que se aprendieron en el entrenamiento se reusan para transformar los datos nuevos, y para no tener que acordarse de hacerlo a mano existe la clase <code>Pipeline</code>
+          <cite class="cita" data-fuente="raschka6" data-pag="1" data-pimp="171" data-seccion="Streamlining workflows with pipelines" data-que="Reusar los parámetros aprendidos en el entrenamiento (escala, componentes) para transformar datos nuevos, y la clase Pipeline que lo hace por ti." data-cuando="Al terminar este paso"></cite>.</p>
+          <div class="check" id="chk3"><p class="check-tit">Calcula con los datos en vivo</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Un escalador por pliegue">
+          <span class="etapa">Paso 4</span>
+          <h3>Dentro de la validación cruzada: un escalador por pliegue</h3>
+          <p>En validación cruzada con 5 pliegues, la tabla se parte en cinco bloques de dos estudiantes. Cada bloque es el examen una vez y los otros ocho entrenan
+          <cite class="cita" data-fuente="raschka6" data-pag="6" data-pimp="176" data-seccion="K-fold cross-validation" data-que="k − 1 pliegues para entrenar y 1 para evaluar, repetido k veces: k modelos y k notas que se promedian." data-cuando="Al leer este paso"></cite>.
+          Aquí los bloques van seguidos y sin barajar: el pliegue 1 deja de examen las filas 0 y 1 (en R, 1 y 2), el pliegue 2 las 2 y 3, y así.</p>
+          <p>Cada pliegue es un examen distinto, así que <b>cada pliegue necesita su propio <code>fit</code></b> del escalador, con sus ocho filas. Escalar una sola vez antes de partir mete en la memoria las fichas de los diez, incluidas las del examen de cada pliegue. Las diapositivas de feature engineering lo llaman fuga de información y piden estimar las medias y los desvíos dentro de cada partición de entrenamiento
+          <cite class="cita" data-fuente="fe1" data-pag="83" data-ancla="data-leakage" data-seccion="8.3 Data leakage" data-que="Qué es usar información de fuera del pliegue de entrenamiento, y la Figure 12 con las medias y desvíos estimados en cada split." data-cuando="Al terminar este paso"></cite>.
+          La validación cruzada como estimador está en "Validación cruzada"; aquí importa qué aprende cada pliegue.</p>
+          <p>En el escenario, elige un pliegue y cambia entre <b>Pipeline</b> (un escalador por pliegue) y <b>Escalar antes de partir</b>.</p>
+          <div class="check" id="chk4"><p class="check-tit">Calcula con los datos en vivo</p><div class="cuerpo"></div></div>
+          <div id="res4" hidden>
+            <p class="esc-frase">El marcador ya está encendido. Con la fuga, los cinco pliegues dan 1 y la media es <b>1.0</b>. Con el pipeline, <b>0.9</b>. Solo cambia el pliegue 3: el estudiante de la fila 5 (en R, la 6), con 3 h y 6000 m, no aprobó. Con el pipeline la desviación de la distancia se aprende sin los dos que viven lejos (1317 m), la distancia pesa más y su vecino es la fila 0 (10 h, 5500 m, aprobó): falla. Con la fuga la desviación ya "sabe" que hay gente a 6 km (1795 m), la distancia pesa menos y su vecino es la fila 3 (1 h, 3000 m, no aprobó): acierta. <b>La fuga acertó porque había visto el examen.</b></p>
+          </div>
+
+          <div class="destacado" id="destacado">
+            <p class="dest-tit">Una confusión muy común</p>
+            <h4>"Pero es solo una media... ¿de verdad importa?"</h4>
+            <div class="cita" id="citaHipo" hidden></div>
+            <p>Aquí la diferencia es 1.0 frente a 0.9: un punto de diez. La fuga del escalado suele ser pequeña, y por eso se subestima. Con un paso que mira la <b>respuesta</b>, la etiqueta que quieres predecir, la fuga puede ser enorme.</p>
+            <div class="check" id="chk4b"><p class="check-tit">Predice antes de seguir</p><div class="cuerpo"></div></div>
+            <div id="dest4" hidden>
+              <p>Salidas reales (NumPy con semilla 3): eligiendo las columnas antes de partir, la validación cruzada da <b>0.9</b>. La misma selección dentro de un pipeline, <code>make_pipeline(SelectKBest(f_classif, k=5), LogisticRegression())</code>, da <b>0.475</b>. Repetido con 100 semillas: 0.845 de media con fuga y 0.5 con pipeline; el peor resultado con fuga fue 0.625 y el mejor con pipeline 0.75. Con 1000 columnas de ruido, alguna separa las 40 etiquetas por pura casualidad. Si se eligió mirando las filas del examen, el examen sale bien.</p>
+              <p class="dest-fila"><b>La regla:</b> todo lo que aprende de los datos va dentro del pipeline: la media y la desviación, la media para imputar, qué columnas elegir, las categorías del one-hot, el λ de Box-Cox. Lo que no aprende nada (pasar metros a kilómetros, <code>log1p</code>) puede ir fuera. Las diapositivas de feature engineering lo piden también para imputar: con la media o la mediana, pero dentro de la validación cruzada
+              <cite class="cita" data-fuente="fe1" data-pag="20" data-ancla="4/6" data-seccion="3.4.1 Imputación estadística" data-que="Imputar con la media o la mediana, sus efectos sobre la varianza, y que hay que hacerlo dentro de la validación cruzada." data-cuando="Después de esta predicción"></cite>.</p>
+              <p>El libro de Raschka pasa el pipeline entero a <code>cross_val_score</code> y obtiene 0.950 +/- 0.014
+              <cite class="cita" data-fuente="raschka6" data-pag="9" data-pimp="179" data-seccion="K-fold cross-validation (cross_val_score)" data-que="cross_val_score(estimator=pipe_lr, X=X_train, y=y_train, cv=10): el pipeline va entero a la validación, y la nota 0.950 +/- 0.014." data-cuando="Después de esta predicción"></cite>,
+              pero no dice que eso es justo lo que impide la fuga: en el capítulo no aparece la palabra. Las diapositivas de SM142003 sí lo dicen. Ahora lo sabes tú.</p>
+              <details class="profundizar">
+                <summary>¿Por qué la media sola no hizo daño aquí?</summary>
+                <div>
+                  <p>Para kNN, restar una media no cambia ninguna distancia: a todos los puntos se les resta lo mismo, y las diferencias quedan iguales. Lo que movió el vecino fue la desviación. Comprobado con el programa de la vida real: cambiando solo la línea de la media a <code>X.mean(axis=0)</code> la validación cruzada sigue en 0.9; cambiando solo la de la desviación a <code>X.std(axis=0)</code>, sube a 1.0. En un modelo lineal con regularización, o al imputar con la media, la media sí importa.</p>
+                </div>
+              </details>
+            </div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="El Pipeline">
+          <span class="etapa">Paso 5</span>
+          <h3>El <code>Pipeline</code>: un solo objeto que no se puede usar mal</h3>
+          <p>Escribir el bucle de los pliegues a mano funciona, pero es fácil equivocarse de filas. <code>make_pipeline(StandardScaler(), KNeighborsClassifier(n_neighbors=1))</code> encadena los dos pasos en un objeto:</p>
+          <ul>
+            <li><code>pipe.fit(X, y)</code> hace <code>fit_transform</code> en el escalador y <code>fit</code> en el kNN con lo ya escalado.</li>
+            <li><code>pipe.predict(X_nuevo)</code> pasa los datos nuevos por los dos pasos. Qué hace cada paso con ellos lo decides tú en el chequeo.</li>
+          </ul>
+          <p>Como <code>cross_val_score</code> llama a <code>fit</code> en cada pliegue, el pipeline se reajusta completo en cada uno: es el bucle del paso 4 sin escribirlo. Raschka arma uno con tres pasos (escalar, PCA y regresión logística) y obtiene 0.956 en el test; en la página siguiente dibuja la Figure 6.1, con lo que hace cada paso en <code>fit</code> y en <code>predict</code>
+          <cite class="cita" data-fuente="raschka6" data-pag="3" data-pimp="173" data-seccion="Combining transformers and estimators in a pipeline" data-que="make_pipeline(StandardScaler(), PCA(n_components=2), LogisticRegression()): transformadores con fit y transform y un estimador final con fit y predict. La Figure 6.1 está en la página 175." data-cuando="Al terminar este paso"></cite>.
+          Un detalle si sigues leyendo ese capítulo: en el ejemplo de la curva ROC (página 198) el pipeline deja <code>PCA(n_components=2)</code> sobre datos que ya tienen solo dos columnas. Ahí el PCA solo rota, no reduce nada. No es un error de cálculo, pero confunde si lo lees como reducción.</p>
+          <p>En el escenario toca <code>pipe.fit(X, y)</code> con los diez estudiantes: mira qué guarda cada caja.</p>
+          <div class="check" id="chk5"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+          <div class="trampa" id="trampa5" hidden><b class="t">Trampa</b>
+            La más común en código real: preparar a un estudiante nuevo con <code>StandardScaler().fit_transform(nuevo)</code> en vez de <code>esc.transform(nuevo)</code>. Una sola fila tiene desviación 0, queda en z = (0, 0), "el estudiante promedio", y su vecino es siempre la fila 1 (7 h, 2500 m, aprobó): <b>todo estudiante nuevo sale aprobado</b>. Con el pipeline esto no puede pasar: <code>pipe.predict</code> nunca vuelve a ajustar. Cuando resuelvas el chequeo, prueba la trampa en el escenario.
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="ColumnTransformer">
+          <span class="etapa">Paso 6</span>
+          <h3><code>ColumnTransformer</code>: cada columna con su preparación</h3>
+          <p>Ahora la tabla tiene una tercera columna, <code>turno</code>: mañana, tarde o noche. Los números se escalan; el texto se convierte en columnas de 0 y 1 (one-hot). <code>ColumnTransformer</code> aplica a cada grupo de columnas su transformador, junta los resultados y va como primer paso del pipeline:</p>
+          <div class="codigo-linea">prep = ColumnTransformer([("num", StandardScaler(), ["horas", "dist"]),
+                          ("cat", OneHotEncoder(), ["turno"])])
+pipe = make_pipeline(prep, KNeighborsClassifier(n_neighbors=1))</div>
+          <p>El one-hot <b>también aprende</b>: guarda qué categorías existen. Así que también va dentro. Las diapositivas de feature engineering dan un orden para los pasos de preparación: quitar columnas sin varianza, imputar, corregir asimetría, estandarizar, PCA y al final las variables indicadoras
+          <cite class="cita" data-fuente="fe1" data-pag="82" data-ancla="sequential-steps" data-seccion="8.2 Orden de los pasos" data-que="El orden recomendado de los pasos de preparación, de quitar varianza cero a crear dummies." data-cuando="Al leer este paso"></cite>.
+          <code>ColumnTransformer</code> no aparece en el capítulo 6 de Raschka ni en el material publicado de las materias; en R, la receta hace lo mismo con selectores: <code>step_normalize(all_numeric_predictors())</code> y <code>step_dummy(all_nominal_predictors())</code>.</p>
+          <div class="trampa"><b class="t">Trampa</b>
+            "noche" aparece una sola vez, en la fila 3, y esa fila cae en el examen del pliegue 2. El one-hot de ese pliegue aprendió solo "mañana" y "tarde". En el escenario, elige el pliegue 2 y piensa qué pasa cuando llega el estudiante de la noche.
+          </div>
+          <div class="check" id="chk6"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+          <p>El arreglo en Python es <code>OneHotEncoder(handle_unknown="ignore")</code>: la categoría nueva queda en ceros. En R, la receta trae <code>step_novel()</code>, que reserva un lugar para categorías que no se vieron al entrenar
+          <cite class="cita" data-fuente="fe1" data-pag="60" data-ancla="7/10" data-seccion="Label encoding: cuidado" data-que="Por qué no codificar categorías nominales con números para kNN o SVM, y step_novel() para categorías nuevas." data-cuando="Después del chequeo"></cite>.</p>
+        </section>
+
+        <section class="paso card" data-titulo="Nombres y R">
+          <span class="etapa">Paso 7</span>
+          <h3>Los nombres de los pasos, y la misma idea en R</h3>
+          <p><code>make_pipeline</code> nombra cada paso con el nombre de su clase en minúsculas: <code>standardscaler</code>, <code>kneighborsclassifier</code>. Para tocar un parámetro de un paso se escribe <code>paso__parametro</code>, con <b>doble guion bajo</b>. Así lo usa la búsqueda en rejilla ("Ajuste de hiperparámetros y búsqueda en rejilla"). Con <code>ColumnTransformer</code> se encadenan: <code>columntransformer__cat__handle_unknown</code>.
+          Raschka explica por qué escribe <code>'logisticregression__C'</code>: es la forma de llegar al objeto que está dentro del pipeline
+          <cite class="cita" data-fuente="raschka6" data-pag="15" data-pimp="185" data-seccion="Addressing over- and underfitting with validation curves" data-que="Por qué el parámetro se escribe 'logisticregression__C': para llegar al paso LogisticRegression dentro del pipeline. En la página siguiente usa svc__C y svc__gamma." data-cuando="Al leer este paso"></cite>.</p>
+          <p>En R, el pipeline es la <b>receta</b>: <code>recipe(aprobo ~ horas + dist, data = entreno) |&gt; step_normalize(all_numeric_predictors())</code>. <code>prep</code> es el <code>fit</code> (estima medias y desviaciones con <code>entreno</code>) y <code>bake</code> es el <code>transform</code>. Las diapositivas de feature engineering lo juntan así, y añaden que caret lo hace dentro de cada pliegue
+          <cite class="cita" data-fuente="fe1" data-pag="84" data-ancla="putting-the-process-together" data-seccion="8.4 Putting the process together" data-que="recipe() más step_*(): prep() estima, bake() aplica; caret repite la receta dentro de cada fold." data-cuando="Al terminar este paso"></cite>,
+          y las de kNN arman el flujo completo en tidymodels con <code>step_normalize</code> y <code>vfold_cv</code>
+          <cite class="cita" data-fuente="knn3" data-pag="30" data-ancla="k-nn-using-the-tidymodels-modelling-framework" data-seccion="4.6 k-NN con tidymodels" data-que="Receta con step_zv y step_normalize, vfold_cv(v = 10, repeats = 5) y tune(). Es un script sin salida." data-cuando="Al terminar este paso"></cite>.
+          La versión completa está en "Un flujo de modelado reproducible en R".</p>
+          <p>Dos detalles al leer ese material. En la diapositiva 79 de feature engineering, <code>step_pca(all_numeric())</code> no excluye la respuesta: <code>Sale_Price</code> entra al PCA, una fuga del target, la peor de todas. Las diapositivas 85 y 86 lo corrigen con <code>-all_outcomes()</code>. Y en las de kNN, la normalización min-max de las diapositivas 23 y 24 se aplica a las 569 filas <b>antes</b> de partir en 469 y 100: es la fuga de esta página, pequeña pero fuga. La versión con tidymodels de la diapositiva 30 la corrige con la receta.</p>
+          <div class="check" id="chk7"><p class="check-tit">Elige y explica</p><div class="cuerpo"></div></div>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+        </div>
+        <div id="escCuerpo"></div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>El programa hace la validación cruzada de 5 pliegues <b>con el escalado dentro de cada pliegue</b>, escrita a mano: media y desviación del entrenamiento, transformar los dos lados con ellas y buscar un vecino. Al final la librería hace lo mismo: <code>cross_val_score</code> con un pipeline en Python y <code>caret::train</code> con <code>preProcess</code> en R, que preprocesa dentro de cada remuestreo. Mismos diez estudiantes del recorrido. Elige Python o R y dale a reproducir.</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir</p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="true">Python</button>
+            <button type="button" data-lang="r" aria-pressed="false">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">datos</span><span data-f="2">pliegue 1</span><span data-f="3">pliegue 2</span><span data-f="4">pliegue 3</span><span data-f="5">pliegue 4</span><span data-f="6">pliegue 5</span><span data-f="7">librería</span>
+        </div>
+        <h3 class="mini-tit vr-tit">La memoria del escalador</h3>
+        <div id="vrCaja"></div>
+        <h3 class="mini-tit vr-tit">El plano en z</h3>
+        <div id="vrPlano"></div>
+        <h3 class="mini-tit vr-tit">Aciertos por pliegue</h3>
+        <div id="vrMarc"></div>
+        <h3 class="mini-tit vr-tit">Salida del programa</h3>
+        <pre class="vr-sal" id="vrSal"></pre>
+      </div>
+    </div>
+
+    <p class="vr-nota">En la práctica nadie escribe el bucle: en Python es una línea, <code>cross_val_score(make_pipeline(StandardScaler(), KNeighborsClassifier(n_neighbors=1)), X, y, cv=KFold(5))</code>; en R, <code>train(..., preProcess = c("center", "scale"))</code> de caret, o un <code>workflow</code> con la receta y <code>fit_resamples</code>. En R la desviación divide entre n − 1 y en Python entre n: las z no son iguales, pero los vecinos sí, porque las dos columnas se encogen en la misma proporción. Por eso los cinco números coinciden. El <code>suppressWarnings</code> de R tapa un aviso real y sin importancia, <code>There were missing values in resampled performance measures.</code>: es el Kappa, que no se puede calcular en los pliegues cuyo examen tiene una sola clase. La accuracy no se ve afectada.</p>
+
+    <details class="profundizar">
+      <summary>La misma receta en R, paso por paso</summary>
+      <div>
+        <p>Con el pliegue 3 como examen (filas 5 y 6 de R). <code>prep</code> aprende con <code>entreno</code> y <code>bake</code> aplica:</p>
+        <div class="lec"><span class="lec-t">R con recipes 1.4.0</span><pre>suppressMessages(library(recipes))
+datos &lt;- data.frame(horas = c(10, 7, 9, 1, 2, 3, 7, 5, 1, 1),
+                    dist = c(5500, 2500, 2000, 3000, 5500, 6000, 1000, 1500, 1500, 2000),
+                    aprobo = factor(c(1, 1, 1, 0, 0, 0, 1, 1, 0, 0)))
+entreno &lt;- datos[-c(5, 6), ]
+prueba &lt;- datos[c(5, 6), ]
+receta &lt;- recipe(aprobo ~ horas + dist, data = entreno) |&gt;
+  step_normalize(all_numeric_predictors())
+ajustada &lt;- prep(receta, training = entreno)
+print(tidy(ajustada, number = 1))
+print(bake(ajustada, new_data = prueba))
+<span class="sal"># A tibble: 4 × 4
+  terms statistic   value id
+  &lt;chr&gt; &lt;chr&gt;       &lt;dbl&gt; &lt;chr&gt;
+1 horas mean         5.12 normalize_OofVU
+2 dist  mean      2375    normalize_OofVU
+3 horas sd           3.72 normalize_OofVU
+4 dist  sd        1408.   normalize_OofVU
+# A tibble: 2 × 3
+   horas  dist aprobo
+   &lt;dbl&gt; &lt;dbl&gt; &lt;fct&gt;
+1 -0.840  2.22 0
+2 -0.571  2.57 0     </span></pre></div>
+        <p>Las medias son las del paso 3 (5.125 y 2375). Las desviaciones, 3.72 y 1408, son mayores que las de Python (3.48 y 1317) porque R divide entre n − 1; por eso el 6000 queda en 2.57 y no en 2.75. El sufijo <code>OofVU</code> del <code>id</code> es aleatorio: cambia en cada ejecución.</p>
+      </div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>fit_transform a un estudiante nuevo</h3><span class="estado" data-reto="codigo1"></span></div>
+        <div class="lec"><span class="lec-t">Python</span><pre>import numpy as np
+from sklearn.preprocessing import StandardScaler
+from sklearn.neighbors import KNeighborsClassifier
+X = np.array([[10, 5500], [7, 2500], [9, 2000], [1, 3000], [2, 5500],
+              [3, 6000], [7, 1000], [5, 1500], [1, 1500], [1, 2000]], dtype=float)
+y = np.array([1, 1, 1, 0, 0, 0, 1, 1, 0, 0])
+esc = StandardScaler().fit(X)
+knn = KNeighborsClassifier(n_neighbors=1).fit(esc.transform(X), y)
+nuevo = np.array([[1.0, 6000.0]])                   # 1 hora, 6 km
+print(knn.predict(esc.transform(nuevo)))
+print(knn.predict(StandardScaler().fit_transform(nuevo)))
+<span class="sal">[0]
+[1]</span></pre></div>
+        <div id="codigo1"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>cv=5 no es KFold(5)</h3><span class="estado" data-reto="codigo2"></span></div>
+        <div class="lec"><span class="lec-t">Python</span><pre>import numpy as np
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.model_selection import KFold, cross_val_score
+X = np.array([[10, 5500], [7, 2500], [9, 2000], [1, 3000], [2, 5500],
+              [3, 6000], [7, 1000], [5, 1500], [1, 1500], [1, 2000]], dtype=float)
+y = np.array([1, 1, 1, 0, 0, 0, 1, 1, 0, 0])
+pipe = make_pipeline(StandardScaler(), KNeighborsClassifier(n_neighbors=1))
+print(cross_val_score(pipe, X, y, cv=KFold(5)).mean())
+print(cross_val_score(pipe, X, y, cv=5).mean())
+<span class="sal">0.9
+1.0</span></pre></div>
+        <div id="codigo2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>La categoría que el pliegue no vio</h3><span class="estado" data-reto="codigo3"></span></div>
+        <div class="lec"><span class="lec-t">Python</span><pre>import numpy as np
+import pandas as pd
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.model_selection import KFold, cross_val_score
+df = pd.DataFrame({"horas": [10, 7, 9, 1, 2, 3, 7, 5, 1, 1],
+                   "dist": [5500, 2500, 2000, 3000, 5500, 6000, 1000, 1500, 1500, 2000],
+                   "turno": ["mañana", "tarde", "tarde", "noche", "mañana",
+                             "tarde", "mañana", "mañana", "tarde", "tarde"]})
+y = np.array([1, 1, 1, 0, 0, 0, 1, 1, 0, 0])
+prep = ColumnTransformer([("num", StandardScaler(), ["horas", "dist"]),
+                          ("cat", OneHotEncoder(), ["turno"])])
+pipe = make_pipeline(prep, KNeighborsClassifier(n_neighbors=1))
+print(cross_val_score(pipe, df, y, cv=KFold(5)))
+pipe.set_params(columntransformer__cat__handle_unknown="ignore")
+print(cross_val_score(pipe, df, y, cv=KFold(5)))
+<span class="sal">[ 1. nan  0.  1.  1.]
+[1. 1. 0. 1. 1.]</span>
+<span class="err">UserWarning: Scoring failed. The score on this train-test partition for these parameters will be set to nan. Details:
+...
+ValueError: Found unknown categories ['noche'] in column 0 during transform</span></pre></div>
+        <p class="desc">El aviso sale por la salida de errores, con una traza larga en medio; aquí van la primera y la última línea. Fíjate también en el pliegue 3: con <code>turno</code> da 0 (antes 0.5). La columna nueva cambia las distancias; no es parte de la pregunta.</p>
+        <div id="codigo3"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: la biblioteca te avisa en el índice cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>¿Fuga o sin fuga?</h3><span class="estado" data-reto="ojo"></span></div>
+        <p class="desc">Ocho rondas al azar. Lee el fragmento y decide sin ejecutar nada si hay fuga de datos. Pregúntate: ¿qué aprende cada paso, y con qué filas? Apruebas con 7 de 8.</p>
+        <div id="ojo"></div>
+      </article>
+
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Construir</span><h3>Arma la cinta</h3><span class="estado" data-reto="construir"></span></div>
+        <p class="desc">Toca bloques de la bandeja para ponerlos en la cinta, en orden; toca un bloque de la cinta para quitarlo. Consigue los tres objetivos, en cualquier orden. Se marcan solos.</p>
+        <ul class="objetivos" id="objetivos"></ul>
+        <div id="construir"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>La media que se cuela</h3><span class="estado" data-reto="mano"></span></div>
+        <p class="desc">Distancias nuevas al azar. Con papel: cinco de entrenamiento y una de prueba.</p>
+        <div id="mano"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Una línea mal</h3><span class="estado" data-reto="error"></span></div>
+        <p class="desc">Tres versiones del programa de la vida real. En cada una, una línea está mal. Tócala.</p>
+        <div id="error"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Qué hace pipe.fit</h3><span class="estado" data-reto="prop1"></span></div>
+        <div id="prop1"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Fuera del pipeline</h3><span class="estado" data-reto="prop2"></span></div>
+        <div id="prop2"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>El nombre del parámetro</h3><span class="estado" data-reto="prop3"></span></div>
+        <div id="prop3"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Recordar a la fuerza es lo que fija. Arma la línea de memoria y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Línea de memoria</span><h3>Evaluar sin fuga</h3><span class="estado" data-reto="formula"></span></div>
+        <p class="desc">Hay piezas de más que no pertenecen. No mires arriba.</p>
+        <div id="formula"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el material</h2>
+      <p class="lecturas-intro">Ya construiste la idea con las manos. Ahora ve al libro y a las diapositivas del máster y comprueba que la reconoces. Cada entrada dice qué vas a encontrar y en qué momento conviene leerla. Si abres la biblioteca con doble clic, el enlace abre el archivo en esa página. La unidad de scikit-learn de Programación (SM142002, UD3) no está en la lista porque todavía no está publicada.</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> Los diez estudiantes, sus horas, sus distancias, sus turnos y si aprobaron son inventados. Están elegidos para que la distancia en metros aplaste a las horas y para que un pliegue tenga a los dos que viven más lejos. Los retos generan otras distancias al azar.
+    Todas las salidas de código de esta página se obtuvieron ejecutando el código en Python 3.13 con NumPy 2.1.3, pandas 2.2.3 y scikit-learn 1.6.1, y en R 4.6.1 con caret 7.0.1 y recipes 1.4.0. El escenario no ejecuta Python: calcula las medias, las desviaciones y los vecinos en el navegador con las mismas reglas, y sus resultados coinciden con los de scikit-learn. Tu progreso se guarda solo en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+(function () {
+  "use strict";
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var RETOS = ["ojo", "construir", "mano", "error", "prop1", "prop2", "prop3", "codigo1", "codigo2", "codigo3", "formula"];
+  var C = B.concepto({ id: "sklearn-pipeline", retos: RETOS, pasos: 7 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  /*LIB*/
+  function azar(n) { return Math.floor(Math.random() * n); }
+  function barajar(a) { a = a.slice(); for (var i = a.length - 1; i > 0; i--) { var j = azar(i + 1), t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
+  function escH(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+  // numero con a lo sumo d decimales y signo menos tipografico
+  function fx(v, d) {
+    if (typeof v !== "number" || isNaN(v)) return "nan";
+    var s = String(+v.toFixed(d == null ? 2 : d));
+    return s.charAt(0) === "-" ? "−" + s.slice(1) : s;
+  }
+  function suma(a) { return a.reduce(function (t, x) { return t + x; }, 0); }
+
+  /* ---------------- los datos (inventados) ---------------- */
+  var H = [10, 7, 9, 1, 2, 3, 7, 5, 1, 1];
+  var D = [5500, 2500, 2000, 3000, 5500, 6000, 1000, 1500, 1500, 2000];
+  var Y = [1, 1, 1, 0, 0, 0, 1, 1, 0, 0];
+  var TU = ["mañana", "tarde", "tarde", "noche", "mañana", "tarde", "mañana", "mañana", "tarde", "tarde"];
+  var TODAS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+
+  function media(idx, v) { return suma(idx.map(function (i) { return v[i]; })) / idx.length; }
+  function desv(idx, v, ddof) {
+    var m = media(idx, v);
+    return Math.sqrt(suma(idx.map(function (i) { return (v[i] - m) * (v[i] - m); })) / (idx.length - (ddof || 0)));
+  }
+  function escalaDe(idx, ddof) { return { mu: [media(idx, H), media(idx, D)], sd: [desv(idx, H, ddof), desv(idx, D, ddof)] }; }
+  function pruebaDe(f) { return [2 * f - 2, 2 * f - 1]; }
+  function entrenoDe(f) { var p = pruebaDe(f); return TODAS.filter(function (i) { return p.indexOf(i) < 0; }); }
+
+  // Un pliegue de la validacion cruzada con kNN de un vecino.
+  // modo: "pipe" (escala con su entreno), "fuga" (escala con las diez), "crudo" (sin escalar)
+  // turno: false, "error" (OneHotEncoder por defecto) o "ignore" (handle_unknown="ignore"); ddof: 0 en Python, 1 en R
+  function pliegue(f, modo, turno, ddof) {
+    var pr = pruebaDe(f), en = entrenoDe(f);
+    var base = modo === "fuga" ? TODAS : en;
+    var e = modo === "crudo" ? { mu: [0, 0], sd: [1, 1] } : escalaDe(base, ddof || 0);
+    var cats = null, error = false;
+    if (turno) {
+      cats = [];
+      base.forEach(function (i) { if (cats.indexOf(TU[i]) < 0) cats.push(TU[i]); });
+      cats.sort();
+    }
+    var Z = TODAS.map(function (i) {
+      var v = [(H[i] - e.mu[0]) / e.sd[0], (D[i] - e.mu[1]) / e.sd[1]];
+      if (cats) {
+        if (cats.indexOf(TU[i]) < 0 && turno === "error" && pr.indexOf(i) >= 0) error = true;
+        cats.forEach(function (c) { v.push(TU[i] === c ? 1 : 0); });
+      }
+      return v;
+    });
+    var vecinos = pr.map(function (i) {
+      var mejor = -1, dm = Infinity, d2 = [];
+      en.forEach(function (j, p) {
+        var s = 0;
+        for (var k = 0; k < Z[i].length; k++) s += (Z[j][k] - Z[i][k]) * (Z[j][k] - Z[i][k]);
+        d2.push(s);
+        if (s < dm - 1e-12) { dm = s; mejor = p; }
+      });
+      return { i: i, pos: mejor, fila: en[mejor], ok: Y[en[mejor]] === Y[i], d2: d2 };
+    });
+    var acc = error ? NaN : vecinos.filter(function (v) { return v.ok; }).length / 2;
+    return { f: f, pr: pr, en: en, e: e, cats: cats, Z: Z, vecinos: vecinos, acc: acc, error: error };
+  }
+  function cv(modo, turno) { return [1, 2, 3, 4, 5].map(function (f) { return pliegue(f, modo, turno).acc; }); }
+  function prom(a) { return suma(a) / a.length; }
+  /*FIN-LIB*/
+
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+  function tt(s) {
+    var m = /^( *)(.*)$/.exec(s), sang = Math.round(m[1].length / 2);
+    var t = m[2].replace(/\\/g, "").replace(/([_#%&{}$])/g, "\\$1").replace(/\^/g, "\\textasciicircum{}").replace(/~/g, "\\textasciitilde{}");
+    return new Array(sang + 1).join("\\quad ") + "\\texttt{" + t + "}";
+  }
+
+  /* ---------------- dibujo: plano y recta ---------------- */
+  // cfg: pts [{x, y, c, lab, ring}], lineas [{a: [x, y], b: [x, y]}], dom {x0, x1, y0, y1}, ejeX, ejeY, ticksX, ticksY, alto
+  function plano(cfg) {
+    var W = 320, Hh = cfg.alto || 250, m = { l: cfg.ml || 36, r: 10, t: 10, b: 30 }, d = cfg.dom;
+    function sx(x) { return m.l + (x - d.x0) / (d.x1 - d.x0) * (W - m.l - m.r); }
+    function sy(y) { return Hh - m.b - (y - d.y0) / (d.y1 - d.y0) * (Hh - m.t - m.b); }
+    var h = '<svg class="plano" viewBox="0 0 ' + W + " " + Hh + '" role="img" aria-label="' + escH(cfg.aria || "Plano") + '">';
+    (cfg.ticksX || []).forEach(function (t) { h += '<line class="' + (t === 0 ? "eje0" : "eje") + '" x1="' + sx(t) + '" y1="' + m.t + '" x2="' + sx(t) + '" y2="' + (Hh - m.b) + '"/><text x="' + sx(t) + '" y="' + (Hh - m.b + 12) + '" text-anchor="middle">' + fx(t, 1) + "</text>"; });
+    (cfg.ticksY || []).forEach(function (t) { h += '<line class="' + (t === 0 ? "eje0" : "eje") + '" x1="' + m.l + '" y1="' + sy(t) + '" x2="' + (W - m.r) + '" y2="' + sy(t) + '"/><text x="' + (m.l - 4) + '" y="' + (sy(t) + 3) + '" text-anchor="end">' + fx(t, 1) + "</text>"; });
+    h += '<text x="' + (W - m.r) + '" y="' + (Hh - 3) + '" text-anchor="end">' + escH(cfg.ejeX || "") + "</text>";
+    h += '<text x="4" y="' + (m.t + 2) + '" transform="rotate(-90 4 ' + (m.t + 2) + ')" text-anchor="end" dy="8">' + escH(cfg.ejeY || "") + "</text>";
+    (cfg.lineas || []).forEach(function (l) { h += '<line class="vec" x1="' + sx(l.a[0]) + '" y1="' + sy(l.a[1]) + '" x2="' + sx(l.b[0]) + '" y2="' + sy(l.b[1]) + '"/>'; });
+    cfg.pts.forEach(function (p) {
+      var x = sx(p.x), y = sy(p.y);
+      if (p.ring) h += '<circle class="' + (p.ring === "ok" ? "r-ok" : "r-mal") + '" cx="' + x + '" cy="' + y + '" r="9"/>';
+      if (p.c === "nu") h += '<rect class="nu" x="' + (x - 6) + '" y="' + (y - 6) + '" width="12" height="12" transform="rotate(45 ' + x + " " + y + ')"/>';
+      else h += '<circle class="' + p.c + '" cx="' + x + '" cy="' + y + '" r="5.5"/>';
+      if (p.ap0) h += '<circle class="ap0" cx="' + x + '" cy="' + y + '" r="2"/>';
+      if (p.lab != null) h += '<text class="lab" x="' + (x + 7) + '" y="' + (y - 5) + '">' + escH(p.lab) + "</text>";
+    });
+    return h + "</svg>";
+  }
+  var DOMZ = { x0: -2, x1: 2.6, y0: -1.8, y1: 3.1 };
+  var TKX = [-1, 0, 1, 2], TKY = [-1, 0, 1, 2, 3];
+  // plano z de un pliegue: entreno azul, prueba morado, lineas al vecino
+  function planoPliegue(P, o) {
+    o = o || {};
+    var pts = [], lineas = [];
+    P.en.forEach(function (i) { pts.push({ x: P.Z[i][0], y: P.Z[i][1], c: "tr", lab: o.etiq ? o.etiq(i) : i, ap0: Y[i] === 0 }); });
+    if (o.prueba !== false) P.vecinos.forEach(function (v, k) {
+      if (o.hasta != null && k > o.hasta) return;
+      if (o.lineas !== false && !(o.lineasHasta != null && k > o.lineasHasta)) lineas.push({ a: P.Z[v.i], b: P.Z[v.fila] });
+      pts.push({ x: P.Z[v.i][0], y: P.Z[v.i][1], c: "te", lab: o.etiq ? o.etiq(v.i) : v.i, ring: o.res && !(o.resHasta != null && k > o.resHasta) ? (v.ok ? "ok" : "mal") : null, ap0: Y[v.i] === 0 });
+    });
+    return plano({ pts: pts, lineas: lineas, dom: DOMZ, ticksX: TKX, ticksY: TKY, ejeX: "horas (z)", ejeY: "distancia (z)", aria: "Plano de los estudiantes en z" });
+  }
+  var LEYENDA = '<p class="esc-nota">Azul: entrenamiento. Morado: examen. Un punto hueco en el centro: no aprobó. La línea punteada une cada estudiante del examen con su vecino; el anillo dice si acertó (verde) o falló (rojo).</p>';
+
+  // la caja del escalador con su memoria y sus fichas
+  function cajaEsc(o) {
+    var cl = "caja" + (o.vacia ? " vacia" : "") + (o.fuga ? " fuga" : "") + (o.on ? " on" : "");
+    var h = '<div class="' + cl + '"><div class="caja-t">' + (o.titulo || "Escalador") + '</div><div class="caja-n">' + (o.nombre || "StandardScaler") + "</div>";
+    if (o.vacia) h += '<div class="memo">memoria: <b>vacía</b></div>';
+    else {
+      var e = o.e, dd = o.d == null ? 2 : o.d;
+      h += '<div class="memo">μ = (<b>' + fx(e.mu[0], 3) + "</b>, " + (o.ocultarMuD ? '<span class="oc">?</span>' : "<b>" + fx(e.mu[1], 2) + "</b>") + ")<br>σ = " + (o.sinSd ? "<b>(todavía no)</b>" : "(<b>" + fx(e.sd[0], dd) + "</b>, <b>" + fx(e.sd[1], dd) + "</b>)") + (o.extra || "") + "</div>";
+    }
+    if (o.fichas) h += '<div class="fichas">' + o.fichas.map(function (i, k) { return '<span class="ficha' + (o.malas && o.malas.indexOf(i) >= 0 ? " mala" : "") + '" style="animation-delay:' + (k * 60) + 'ms">' + (o.etiq ? o.etiq(i) : i) + "</span>"; }).join("") + "</div>";
+    if (o.banda) h += '<div class="banda">' + o.banda + "</div>";
+    return h + "</div>";
+  }
+  function marcador(vals, o) {
+    o = o || {};
+    var h = '<div class="marc">' + (o.tit ? '<span class="marc-t">' + o.tit + "</span>" : "");
+    vals.forEach(function (v, k) {
+      var cl = "casilla" + (o.res === k + 1 ? " res" : "") + (!o.oculto && isNaN(v) ? " nan" : "");
+      var tag = o.clic ? "button" : "span";
+      h += "<" + tag + (o.clic ? ' type="button" data-casilla="' + (k + 1) + '"' : "") + ' class="' + cl + '"><small>pliegue ' + (k + 1) + "</small>" + (o.oculto ? "?" : fx(v, 2)) + "</" + tag + ">";
+    });
+    var m = prom(vals);
+    return h + '<span class="marc-m">media <b>' + (o.oculto ? "?" : fx(m, 3)) + "</b></span></div>";
+  }
+
+  /* ---------------- estado del escenario ---------------- */
+  var S = { modo: 0, contar: false, escalar: false, fit3: false, tr3: false, fold: 3, fuga: false, fit5: false, pred5: false, trampa5: false, fold6: 2, ignore6: false, nombre7: [], k7: 1 };
+  var est = { c1: false, c2: false, c3: false, c4: false, c4b: false, c5: false, c6: false, c7: false };
+  var pasos;
+  var CV_PIPE = cv("pipe"), CV_FUGA = cv("fuga"), CV_CRUDO = cv("crudo");
+
+  function boton(acc, txt, o) {
+    o = o || {};
+    return '<button type="button" data-acc="' + acc + '"' + (o.v != null ? ' data-v="' + o.v + '"' : "") + (o.pres != null ? ' aria-pressed="' + (o.pres ? "true" : "false") + '"' : "") + (o.dis ? " disabled" : "") + ">" + txt + "</button>";
+  }
+  function filaTxt(i) { return "fila " + i + " (R " + (i + 1) + ")"; }
+
+  /* modo 1: la recta de las distancias */
+  function modo1() {
+    var mu = S.contar ? media(TODAS, D) : media(entrenoDe(3), D);
+    var W = 320, Hh = 120, l = 14, r = 14;
+    function sx(x) { return l + x / 6500 * (W - l - r); }
+    var h = "";
+    if (est.c1) h += '<div class="esc-ctrl">' + boton("contar", "Contar a los del examen", { pres: S.contar }) + "</div>";
+    h += '<svg class="plano" viewBox="0 0 ' + W + " " + Hh + '" role="img" aria-label="Recta de las distancias">';
+    h += '<line class="eje0" x1="' + l + '" y1="88" x2="' + (W - r) + '" y2="88"/>';
+    for (var t = 0; t <= 6000; t += 1000) h += '<line class="eje" x1="' + sx(t) + '" y1="84" x2="' + sx(t) + '" y2="92"/><text x="' + sx(t) + '" y="104" text-anchor="middle">' + t + "</text>";
+    h += '<text x="' + (W - r) + '" y="117" text-anchor="end">distancia (m)</text>';
+    var vistos = {};
+    TODAS.forEach(function (i) {
+      var n = vistos[D[i]] || 0; vistos[D[i]] = n + 1;
+      var te = i === 4 || i === 5;
+      h += '<circle class="' + (te ? "te" : "tr") + '" cx="' + sx(D[i]) + '" cy="' + (76 - n * 13) + '" r="5.5"/>';
+    });
+    h += '<line class="barra" x1="' + sx(mu) + '" y1="22" x2="' + sx(mu) + '" y2="92"/><text class="barra-t" x="' + sx(mu) + '" y="16" text-anchor="middle">media ' + fx(mu, 0) + " m</text>";
+    h += "</svg>";
+    h += '<p class="esc-nota">Azul: los ocho de entrenamiento. Morado: los dos del examen (5500 y 6000 m). ' +
+      (S.contar ? "La barra cuenta a los diez: <b>3050 m</b>. Se movió 675 m hacia los del examen." : "La barra es la media de los ocho de entrenamiento: <b>2375 m</b>.") + "</p>";
+    if (!est.c1) h += '<p class="esc-nota">Resuelve el chequeo y aparecerá un botón para contar también a los del examen.</p>';
+    return h;
+  }
+
+  /* modo 2: sin escalar frente a escalado */
+  function modo2() {
+    var h = '<div class="esc-ctrl">' + boton("escalar", "Sin escalar", { v: 0, pres: !S.escalar }) + boton("escalar", "Escalado (toda la tabla)", { v: 1, pres: S.escalar }) + "</div>";
+    var P = pliegue(3, S.escalar ? "fuga" : "crudo");
+    if (!S.escalar) {
+      var ancho = 6500 * (320 - 46) / (250 - 40);
+      var pts = TODAS.map(function (i) { return { x: H[i], y: D[i], c: P.pr.indexOf(i) >= 0 ? "te" : "tr", ap0: Y[i] === 0 }; });
+      h += plano({ ml: 46, pts: pts, lineas: [], dom: { x0: 5 - ancho / 2, x1: 5 + ancho / 2, y0: 0, y1: 6500 }, ticksX: [], ticksY: [0, 2000, 4000, 6000], ejeX: "horas: de 1 a 10, caben en este hilo", ejeY: "distancia (m)", aria: "Plano sin escalar" });
+      h += '<p class="esc-nota">Los dos ejes tienen la misma unidad: una hora mide lo mismo que un metro. Así ve el kNN los datos sin escalar. Todos los puntos caen en una línea vertical: las horas, de 1 a 10, no alcanzan a separarse.</p>';
+    } else {
+      h += planoPliegue(P, { etiq: function (i) { return i; } });
+      h += '<p class="esc-nota">Cada columna en su escala (con la media y la desviación de los diez, solo para mirar; en el paso 4 verás por qué así no se evalúa). Ahora las horas sí separan a los estudiantes. ' + "Las etiquetas son el número de fila en Python.</p>";
+    }
+    if (est.c2) h += marcador(CV_CRUDO, { tit: "Validación cruzada sin escalar (5 pliegues, kNN con 1 vecino)" }) + '<p class="esc-nota">0.5, 0, 0, 0, 0: media <b>0.1</b>. Peor que tirar una moneda: el vecino por distancia suele tener la etiqueta contraria.</p>';
+    return h;
+  }
+
+  /* modo 3: fit y transform con el pliegue 3 */
+  function modo3() {
+    var P = pliegue(3, "pipe");
+    var h = '<div class="esc-ctrl">' + boton("fit3", "fit(X_train)", { dis: S.fit3 }) + boton("tr3", "transform(X_test)", { dis: !S.fit3 || S.tr3 }) + boton("reset3", "Vaciar la memoria", { dis: !S.fit3 }) + "</div>";
+    h += '<div class="cinta"><div class="caja entrada"><div class="caja-t">X_train</div><div class="caja-n">8 filas</div></div><span class="flecha">→</span>' +
+      (S.fit3 ? cajaEsc({ e: P.e, fichas: P.en, on: !S.tr3 }) : cajaEsc({ vacia: true })) + "</div>";
+    if (S.tr3) {
+      h += '<div class="flujo">' + P.pr.map(function (i) {
+        return filaTxt(i) + ": " + H[i] + " h, " + D[i] + " m  →  transform  →  <span class=\"sal\">z = (" + fx(P.Z[i][0]) + ", " + fx(P.Z[i][1]) + ")</span>";
+      }).join("\n") + "\nEl examen pasó por la caja sin dejar fichas.</div>";
+    }
+    // recta de las z de la distancia
+    var W = 320, Hh = 90, l = 14, r = 14, x0 = -1.5, x1 = 3;
+    function sx(x) { return l + (x - x0) / (x1 - x0) * (W - l - r); }
+    if (S.fit3) {
+      h += '<p class="esc-sub">z de la distancia</p><svg class="plano" viewBox="0 0 ' + W + " " + Hh + '" role="img" aria-label="Recta de las z de la distancia">';
+      h += '<line class="eje0" x1="' + l + '" y1="60" x2="' + (W - r) + '" y2="60"/>';
+      for (var t = -1; t <= 3; t++) h += '<line class="eje" x1="' + sx(t) + '" y1="56" x2="' + sx(t) + '" y2="64"/><text x="' + sx(t) + '" y="76" text-anchor="middle">' + fx(t, 0) + "</text>";
+      var vistos = {};
+      P.en.forEach(function (i) { var z = fx(P.Z[i][1]); var n = vistos[z] || 0; vistos[z] = n + 1; h += '<circle class="tr" cx="' + sx(P.Z[i][1]) + '" cy="' + (50 - n * 12) + '" r="5"/>'; });
+      if (S.tr3) P.pr.forEach(function (i) { var z = fx(P.Z[i][1]); var n = vistos[z] || 0; vistos[z] = n + 1; h += '<circle class="te" cx="' + sx(P.Z[i][1]) + '" cy="' + (50 - n * 12) + '" r="5"/>'; });
+      h += "</svg>";
+      h += '<p class="esc-nota">Las z del entrenamiento van de ' + fx(P.Z[6][1]) + " (1000 m) a " + fx(P.Z[0][1]) + " (5500 m) y tienen media 0." + (S.tr3 ? " El 5500 del examen cae en el mismo " + fx(P.Z[4][1]) + " que el 5500 de la fila 0, y el 6000 queda por encima de todos." : "") + "</p>";
+    } else h += '<p class="esc-nota">Toca <code>fit(X_train)</code>.</p>';
+    return h;
+  }
+  function vivo3() {
+    var P = pliegue(3, "pipe");
+    if (!S.fit3) return "μ_train = ?   σ_train = ?   (toca fit en el escenario)";
+    var s = "dist: μ_train = " + fx(P.e.mu[1]) + ",  σ_train = " + fx(P.e.sd[1]);
+    if (S.tr3) s += "\nz(5500) = (5500 − " + fx(P.e.mu[1]) + ") / " + fx(P.e.sd[1]) + " = " + fx(P.Z[4][1]) + "\nz(6000) = (6000 − " + fx(P.e.mu[1]) + ") / " + fx(P.e.sd[1]) + " = " + fx(P.Z[5][1]);
+    else s += "\n(toca transform para escalar el examen)";
+    return escH(s).replace(/\n/g, "<br>");
+  }
+
+  /* modo 4: los cinco pliegues, fuga o pipeline */
+  function selPliegue(acc, actual) {
+    var h = '<span class="lab">pliegue</span>';
+    for (var f = 1; f <= 5; f++) h += boton(acc, String(f), { v: f, pres: actual === f });
+    return h;
+  }
+  function modo4() {
+    var P = pliegue(S.fold, S.fuga ? "fuga" : "pipe");
+    var h = '<div class="esc-ctrl">' + selPliegue("fold", S.fold) + "</div>" +
+      '<div class="esc-ctrl">' + boton("fuga", "Pipeline", { v: 0, pres: !S.fuga }) + boton("fuga", "Escalar antes de partir (fuga)", { v: 1, pres: S.fuga }) + "</div>";
+    h += '<div class="cinta">' + cajaEsc({
+      e: P.e, fichas: S.fuga ? TODAS : P.en, malas: S.fuga ? P.pr : null, fuga: S.fuga,
+      ocultarMuD: !S.fuga && !est.c4,
+      banda: S.fuga ? "FUGA: esta memoria vio el test (fichas rojas)" : "Solo las 8 fichas de su entrenamiento"
+    }) + '<span class="flecha">→</span><div class="caja"><div class="caja-t">kNN</div><div class="caja-n">KNeighborsClassifier(n_neighbors=1)</div><div class="memo">memoria: los 8 puntos de entrenamiento, ya escalados</div></div></div>';
+    h += '<p class="esc-nota">Examen del pliegue ' + S.fold + ": filas " + P.pr.join(" y ") + " (en R, " + P.pr.map(function (i) { return i + 1; }).join(" y ") + ").</p>";
+    h += planoPliegue(P, { res: est.c4 }) + LEYENDA;
+    if (est.c4) {
+      h += marcador(CV_FUGA, { tit: "Escalar antes de partir (fuga)", res: 3 }) + marcador(CV_PIPE, { tit: "Pipeline: un escalador por pliegue", res: 3 });
+    } else h += marcador(CV_PIPE, { tit: "Validación cruzada", oculto: true }) + '<p class="esc-nota">El marcador se enciende al resolver el chequeo.</p>';
+    return h;
+  }
+
+  /* modo 5: la cinta completa con fit y predict */
+  var NUEVO = [1, 6000];
+  function predNuevo(trampa) {
+    var e = escalaDe(TODAS, 0);
+    var z = trampa ? [0, 0] : [(NUEVO[0] - e.mu[0]) / e.sd[0], (NUEVO[1] - e.mu[1]) / e.sd[1]];
+    var mejor = -1, dm = Infinity;
+    TODAS.forEach(function (j) {
+      var zj = [(H[j] - e.mu[0]) / e.sd[0], (D[j] - e.mu[1]) / e.sd[1]];
+      var s = (zj[0] - z[0]) * (zj[0] - z[0]) + (zj[1] - z[1]) * (zj[1] - z[1]);
+      if (s < dm - 1e-12) { dm = s; mejor = j; }
+    });
+    return { z: z, vecino: mejor, pred: Y[mejor], e: e };
+  }
+  function modo5() {
+    var e = escalaDe(TODAS, 0);
+    var h = '<div class="esc-ctrl">' + boton("fit5", "pipe.fit(X, y)", { dis: S.fit5 }) + boton("pred5", "pipe.predict(nuevo)", { dis: !S.fit5 || !est.c5 }) + (est.c5 ? boton("trampa5", "Trampa: fit_transform del nuevo", { pres: S.trampa5, dis: !S.fit5 }) : "") + "</div>";
+    if (!est.c5) h += '<p class="esc-nota">predict se abre al resolver el chequeo.</p>';
+    h += '<div class="cinta">' + (S.fit5 ? cajaEsc({ e: e, fichas: TODAS, nombre: "StandardScaler: fit_transform", on: S.pred5 }) : cajaEsc({ vacia: true })) +
+      '<span class="flecha">→</span><div class="caja' + (S.fit5 ? "" : " vacia") + (S.pred5 ? " on" : "") + '"><div class="caja-t">kNN</div><div class="caja-n">KNeighborsClassifier: fit</div><div class="memo">memoria: ' + (S.fit5 ? "<b>10 puntos</b> escalados, con su etiqueta" : "<b>vacía</b>") + "</div>" +
+      (S.fit5 ? '<div class="fichas">' + TODAS.map(function (i, k) { return '<span class="ficha' + (Y[i] ? "" : " te") + '" style="animation-delay:' + (300 + k * 60) + 'ms">' + Y[i] + "</span>"; }).join("") + "</div>" : "") + "</div></div>";
+    if (S.fit5) h += '<p class="esc-nota">Salida real: <code>pipe.named_steps["standardscaler"].mean_</code> da <code>[   4.6 3050. ]</code> y <code>scale_</code> da <code>[   3.29241553 1795.1323071 ]</code>: la media y la desviación (dividida entre n) de los diez.</p>';
+    var pts = TODAS.map(function (i) { return { x: (H[i] - e.mu[0]) / e.sd[0], y: (D[i] - e.mu[1]) / e.sd[1], c: "tr", lab: i, ap0: Y[i] === 0 }; });
+    var lineas = [];
+    if (S.pred5) {
+      var p = predNuevo(S.trampa5);
+      h += '<div class="flujo">nuevo: 1 h, 6000 m\n  → ' + (S.trampa5 ? '<span class="mal">StandardScaler().fit_transform(nuevo)</span>' : "escalador: transform (no aprende nada)") +
+        "\n  → <span class=\"sal\">z = (" + fx(p.z[0]) + ", " + fx(p.z[1]) + ")</span>\n  → kNN: predict, vecino " + filaTxt(p.vecino) + " (" + H[p.vecino] + " h, " + D[p.vecino] + " m)\n  → <span class=\"" + (S.trampa5 ? "mal" : "bien") + "\">[" + p.pred + "]</span> " + (p.pred ? "aprueba" : "no aprueba") + "</div>";
+      if (S.trampa5) h += '<p class="esc-nota">Una fila sola es su propia media y su desviación es 0: queda en (0, 0), el estudiante promedio, cuyo vecino aprobó. Pasa con cualquier estudiante nuevo.</p>';
+      pts.push({ x: p.z[0], y: p.z[1], c: "nu", lab: "nuevo" });
+      lineas.push({ a: p.z, b: [(H[p.vecino] - e.mu[0]) / e.sd[0], (D[p.vecino] - e.mu[1]) / e.sd[1]] });
+    }
+    if (S.fit5) h += plano({ pts: pts, lineas: lineas, dom: DOMZ, ticksX: TKX, ticksY: TKY, ejeX: "horas (z)", ejeY: "distancia (z)", aria: "Plano con el estudiante nuevo" }) + '<p class="esc-nota">Los diez de entrenamiento con la escala de los diez. El rombo es el estudiante nuevo.</p>';
+    return h;
+  }
+
+  /* modo 6: ColumnTransformer */
+  function modo6() {
+    var P = pliegue(S.fold6, "pipe", S.ignore6 ? "ignore" : "error");
+    var h = '<div class="esc-ctrl">' + selPliegue("fold6", S.fold6) + "</div>";
+    if (est.c6) h += '<div class="esc-ctrl">' + boton("ignore6", 'handle_unknown="ignore"', { pres: S.ignore6 }) + "</div>";
+    h += '<div class="cinta"><div class="caja"><div class="caja-t">ColumnTransformer</div><div class="caja-n">columntransformer</div><div class="ramas">' +
+      '<div class="rama"><div class="caja-n">num: horas, dist → StandardScaler</div><div class="memo">μ = (<b>' + fx(P.e.mu[0], 3) + "</b>, <b>" + fx(P.e.mu[1]) + "</b>)<br>σ = (<b>" + fx(P.e.sd[0]) + "</b>, <b>" + fx(P.e.sd[1]) + "</b>)</div></div>" +
+      '<div class="rama"><div class="caja-n">cat: turno → OneHotEncoder' + (S.ignore6 ? '(handle_unknown="ignore")' : "") + '</div><div class="memo">categorías: <b>' + P.cats.join(", ") + "</b></div></div>" +
+      '</div></div><span class="flecha">→</span><div class="caja"><div class="caja-t">kNN</div><div class="caja-n">' + (P.cats.length + 2) + " columnas por estudiante</div></div></div>";
+    h += '<div class="flujo">examen del pliegue ' + S.fold6 + ":\n" + P.pr.map(function (i) {
+      var nueva = P.cats.indexOf(TU[i]) < 0;
+      return "  " + filaTxt(i) + ": turno " + TU[i] + (nueva && est.c6 ? (S.ignore6 ? '  <span class="sal">→ categoría nueva: todo ceros</span>' : '  <span class="mal">→ categoría nueva</span>') : "");
+    }).join("\n") + "</div>";
+    if (P.error && est.c6) h += '<div class="esc-error">ValueError: Found unknown categories [\'noche\'] in column 0 during transform\ncross_val_score lo captura: avisa con un UserWarning y pone nan en este pliegue.</div>';
+    if (est.c6) {
+      h += marcador(cv("pipe", S.ignore6 ? "ignore" : "error"), { tit: S.ignore6 ? 'Con handle_unknown="ignore"' : "OneHotEncoder() por defecto", res: S.fold6 });
+      if (!S.ignore6) h += '<p class="esc-nota">La media de una lista con un nan es nan: el número de la validación se pierde entero.</p>';
+    } else h += marcador([1, 1, 1, 1, 1], { tit: "Validación cruzada con turno", oculto: true });
+    h += '<p class="esc-sub">Con los diez</p><div class="flujo">get_feature_names_out():\n[\'num__horas\' \'num__dist\' \'cat__turno_mañana\' \'cat__turno_noche\' \'cat__turno_tarde\']\nfila 3 transformada:\n[[-1.093 -0.028  0.     1.     0.   ]]</div>';
+    return h;
+  }
+
+  /* modo 7: nombres y receta */
+  var PIEZAS7 = ["kneighborsclassifier", "standardscaler", "__", "_", "n_neighbors", "with_mean"];
+  var CV_K = { 1: "[1.  1.  0.5 1.  1. ]  media 0.9", 3: "[1.  1.  0.5 1.  0.5]  media 0.8", 5: "[1.  1.  0.5 0.  0. ]  media 0.5" };
+  function modo7() {
+    var h = '<div class="cinta"><div class="caja"><div class="caja-t">standardscaler</div><div class="caja-n">StandardScaler()</div></div><span class="flecha">→</span><div class="caja"><div class="caja-t">kneighborsclassifier</div><div class="caja-n">KNeighborsClassifier(n_neighbors=1)</div></div></div>';
+    h += '<div class="flujo">pipe.steps\n[(\'standardscaler\', StandardScaler()), (\'kneighborsclassifier\', KNeighborsClassifier(n_neighbors=1))]</div>';
+    if (est.c7) {
+      var nom = S.nombre7.join(""), ok = nom === "kneighborsclassifier__n_neighbors";
+      h += '<p class="esc-sub">Arma el nombre del parámetro</p><div class="piezas7">' + PIEZAS7.map(function (p) { return boton("pieza", escH(p), { v: p }); }).join("") + boton("borrar7", "Borrar") + "</div>";
+      h += '<div class="armado' + (ok ? " bien" : nom && S.nombre7.length >= 3 ? " mal" : "") + '">pipe.set_params(' + escH(nom || "...") + "=k)</div>";
+      if (ok) {
+        h += '<div class="esc-ctrl" style="margin-top:8px"><span class="lab">k</span>' + [1, 3, 5].map(function (k) { return boton("k7", String(k), { v: k, pres: S.k7 === k }); }).join("") + "</div>";
+        h += '<div class="flujo">cross_val_score(pipe, X, y, cv=KFold(5))\n<span class="sal">' + CV_K[S.k7] + "</span></div>";
+        h += '<p class="esc-nota">Salidas reales. Elegir k mirando estos números es la búsqueda en rejilla, y también tiene que ir dentro de otra validación.</p>';
+      } else if (nom && S.nombre7.length >= 3) h += '<p class="esc-nota">Con ese nombre, scikit-learn responde <code>ValueError: Invalid parameter ... for estimator Pipeline(...)</code>.</p>';
+    } else h += '<p class="esc-nota">Al resolver el chequeo podrás armar el nombre del parámetro y probar 1, 3 y 5 vecinos.</p>';
+    h += '<p class="esc-sub">La misma cinta en R, pliegue 3</p><div class="cinta">' +
+      '<div class="caja"><div class="caja-t">recipe</div><div class="caja-n">step_normalize(all_numeric_predictors())</div><div class="memo">solo la receta: todavía no aprendió nada</div></div><span class="flecha">→</span>' +
+      '<div class="caja"><div class="caja-t">prep</div><div class="caja-n">el fit, con entreno</div><div class="memo">μ = (<b>5.12</b>, <b>2375</b>)<br>σ = (<b>3.72</b>, <b>1408</b>)</div></div><span class="flecha">→</span>' +
+      '<div class="caja"><div class="caja-t">bake</div><div class="caja-n">el transform, con prueba</div><div class="memo">fila 5: (<b>−0.840</b>, <b>2.22</b>)<br>fila 6: (<b>−0.571</b>, <b>2.57</b>)</div></div><span class="flecha">→</span>' +
+      '<div class="caja"><div class="caja-t">modelo</div><div class="caja-n">kNN</div></div></div>' +
+      '<p class="esc-nota">Salida real de <code>tidy</code> y <code>bake</code>. R divide entre n − 1: σ = 3.72 y 1408, no 3.48 y 1317. Filas numeradas como en R.</p>';
+    return h;
+  }
+
+  var HINTS = [
+    function () { return est.c1 ? "Cuenta y descuenta a los del examen" : "Predice antes de tocar"; },
+    function () { return "Cambia entre sin escalar y escalado"; },
+    function () { return S.tr3 ? "El examen ya pasó por la caja" : S.fit3 ? "Ahora transforma el examen" : "Toca fit"; },
+    function () { return "Elige pliegue y modo"; },
+    function () { return S.fit5 ? (est.c5 ? "Prueba predict y la trampa" : "Resuelve el chequeo") : "Toca pipe.fit"; },
+    function () { return "Elige el pliegue 2"; },
+    function () { return est.c7 ? "Arma el nombre y prueba k" : "Mira los nombres de los pasos"; }
+  ];
+  var MODOS = [modo1, modo2, modo3, modo4, modo5, modo6, modo7];
+  function render() {
+    $("escHint").textContent = HINTS[S.modo]();
+    $("escCuerpo").innerHTML = MODOS[S.modo]();
+    $("vivo3").innerHTML = vivo3();
+  }
+  function entrar(i) { S.modo = i; render(); }
+
+  $("escCuerpo").addEventListener("click", function (ev) {
+    var b = ev.target.closest("button[data-acc]");
+    if (!b || b.disabled) return;
+    var a = b.getAttribute("data-acc"), v = b.getAttribute("data-v");
+    if (a === "contar") S.contar = !S.contar;
+    else if (a === "escalar") S.escalar = v === "1";
+    else if (a === "fit3") S.fit3 = true;
+    else if (a === "tr3") S.tr3 = true;
+    else if (a === "reset3") { S.fit3 = false; S.tr3 = false; }
+    else if (a === "fold") { S.fold = +v; if (chk4) chk4.refrescar(); }
+    else if (a === "fuga") S.fuga = v === "1";
+    else if (a === "fit5") S.fit5 = true;
+    else if (a === "pred5") S.pred5 = true;
+    else if (a === "trampa5") { S.trampa5 = !S.trampa5; S.pred5 = true; }
+    else if (a === "fold6") S.fold6 = +v;
+    else if (a === "ignore6") S.ignore6 = !S.ignore6;
+    else if (a === "pieza") { if (S.nombre7.length < 4) S.nombre7.push(v); }
+    else if (a === "borrar7") S.nombre7 = [];
+    else if (a === "k7") S.k7 = +v;
+    render();
+  });
+
+  /* ---------------- chequeos de cada paso ---------------- */
+  B.opcionMultiple(cuerpo("chk1"), {
+    pregunta: "La distancia media de los 8 de entrenamiento es 2375 m. Si también cuentas a los 2 del examen (5500 y 6000 m), la media...",
+    opciones: [
+      "sube: los del examen tiran de ella hacia arriba.",
+      "no cambia: solo son 2 de 10.",
+      "baja.",
+      "depende de las horas que estudian."
+    ],
+    correcta: 0,
+    pistas: [null,
+      "Dos valores lejanos bastan para mover una media. Piensa cuánto se alejan 5500 y 6000 de 2375.",
+      "Los dos viven más lejos que la media de los otros ocho: al sumarlos, el centro se va hacia ellos.",
+      "La media de la distancia solo usa distancias: las horas no entran en esta cuenta."],
+    explicacion: "La suma de los diez es 30 500 m, y 30 500 / 10 = <b>3050 m</b>: sube 675 m. Quien calcula la escala con los diez ya dejó que el examen la mueva. <b>Ahora prueba</b> el botón del escenario.",
+    alResolver: function () { est.c1 = true; render(); pasos.completar(0); }
+  });
+
+  B.opcionMultiple(cuerpo("chk2"), {
+    pregunta: "Sin escalar, ¿qué columna decide quién es el vecino más cercano?",
+    opciones: [
+      "La distancia en metros: sus diferencias son de cientos o miles; las de horas, de 1 a 9.",
+      "Las horas, porque importan más para aprobar.",
+      "Las dos por igual.",
+      "Ninguna: kNN no usa las columnas."],
+    correcta: 0,
+    mezclar: true,
+    pistas: [null,
+      "Importar para aprobar no es lo mismo que pesar en la cuenta de la distancia. La cuenta solo ve números.",
+      "Compara 500 m con 1 h en el plano sin escalar: ¿cuál de las dos diferencias se nota?",
+      "kNN mide distancias entre estudiantes con sus columnas: no hay otra cosa que pueda usar."],
+    explicacion: "Una diferencia de 500 m entra en la suma como 500² = 250 000; una de 9 horas, como 81. El vecino es el que vive más cerca, no el que se parece. La validación cruzada sin escalar da <b>0.1</b>: mira el marcador en el escenario.",
+    alResolver: function () { est.c2 = true; render(); pasos.completar(1); }
+  });
+
+  B.numerico(cuerpo("chk3"), {
+    pregunta: "Con el pliegue 3 (examen: 5500 y 6000 m), ¿cuánto vale la media de las z de la distancia de los dos estudiantes del examen? Haz <code>fit</code> y <code>transform</code> en el escenario y usa lo que ves.",
+    respuesta: function () { var P = pliegue(3, "pipe"); return (+P.Z[4][1].toFixed(2) + +P.Z[5][1].toFixed(2)) / 2; },
+    tolerancia: 0.02,
+    pistas: ["Las dos z las ves en el escenario después de <code>transform</code>.", "Suma las dos y divide entre 2."],
+    diagnostico: function (v) {
+      if (Math.abs(v) < 0.05) return "Las z del entrenamiento tienen media 0, pero las del examen no: se calcularon con la μ y la σ de otros.";
+      if (Math.abs(v - 1.5) < 0.05) return "Esa sería la media con la escala de los diez. Aquí la escala es la del entrenamiento.";
+      return null;
+    },
+    explicacion: "(2.37 + 2.75) / 2 = <b>2.56</b>. No es 0: el examen se escaló con la media y la desviación del entrenamiento, que no son las suyas. Así tiene que ser.",
+    alResolver: function () { est.c3 = true; pasos.completar(2); }
+  });
+
+  var chk4 = B.numerico(cuerpo("chk4"), {
+    pregunta: function () { return "Con el <b>pipeline</b>, ¿cuál es la media de la distancia que aprende el escalador en el pliegue que tienes elegido en el escenario (ahora, el <b>pliegue " + S.fold + "</b>)?"; },
+    respuesta: function () { return media(entrenoDe(S.fold), D); },
+    tolerancia: 0.5,
+    pistas: ["Suma las 8 distancias que no son del examen de ese pliegue.", "Y divide entre 8, no entre 10."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 3050) < 0.5) return "3050 es la media de los diez: la de la fuga. El pipeline aprende solo con las 8 del entrenamiento.";
+      if (Math.abs(v - suma(entrenoDe(S.fold).map(function (i) { return D[i]; })) / 10) < 0.5) return "Sumaste bien, pero son 8 distancias: divide entre 8.";
+      return null;
+    },
+    explicacion: function () {
+      var en = entrenoDe(S.fold);
+      return "(" + en.map(function (i) { return D[i]; }).join(" + ") + ") / 8 = <b>" + fx(media(en, D)) + "</b>. Cada pliegue tiene la suya: 2812.5, 3187.5, 2375, 3500 y 3375. <b>Mira el escenario:</b> el marcador ya está encendido.";
+    },
+    alResolver: function () { est.c4 = true; $("res4").hidden = false; render(); cerrar4(); }
+  });
+  B.opcionMultiple(cuerpo("chk4b"), {
+    pregunta: "Tienes 40 filas con <b>1000 columnas de puro ruido</b> (números al azar) y etiquetas 0 y 1 que no tienen nada que ver con ellas. Antes de la validación cruzada eliges las 5 columnas que mejor separan las etiquetas (<code>SelectKBest</code>) usando las 40 filas, y después evalúas una regresión logística con 5 pliegues. ¿Qué accuracy esperas?",
+    opciones: ["Alrededor de 0.5: es ruido.", "Alrededor de 0.9.", "Exactamente 0.5.", "1.0."],
+    correcta: 1,
+    pistas: ["Eso pasaría si elegir las columnas no hubiera mirado las etiquetas del examen. Pero las miró.", null, "Con 40 filas la accuracy salta de 0.025 en 0.025; y además la selección mira las etiquetas del examen.", "Casi: la fuga empuja muy arriba, pero sobre ruido rara vez lo acierta todo."],
+    explicacion: "Sale <b>0.9</b> sobre puro ruido. Con 1000 columnas, alguna separa las 40 etiquetas por casualidad, y como se eligió mirando también las filas del examen, el examen sale bien.",
+    alResolver: function () { est.c4b = true; $("dest4").hidden = false; cerrar4(); }
+  });
+  function cerrar4() { if (est.c4 && est.c4b) pasos.completar(3); }
+
+  B.opcionMultiple(cuerpo("chk5"), {
+    pregunta: "Llamas a <code>pipe.predict(X_test)</code>. ¿Qué hace el escalador con <code>X_test</code>?",
+    opciones: [
+      "Solo <code>transform</code>, con la μ y la σ que aprendió en <code>fit</code>.",
+      "<code>fit_transform</code>: se ajusta al test y lo transforma.",
+      "Nada: el escalador solo actúa en <code>fit</code>.",
+      "<code>fit</code> con el test y el entrenamiento juntos."],
+    correcta: 0,
+    mezclar: true,
+    pistas: [null,
+      "Esa es justo la trampa de abajo: <code>predict</code> nunca ajusta.",
+      "También transforma en <code>predict</code>; si no, el kNN recibiría metros y horas crudos.",
+      "Nadie junta nada: la memoria es la del último <code>fit</code>."],
+    explicacion: "<code>predict</code> pasa por cada paso con <code>transform</code> y llama a <code>predict</code> en el último. La memoria del escalador no cambia. <b>Ahora prueba</b> <code>pipe.predict(nuevo)</code> y la trampa en el escenario.",
+    alResolver: function () { est.c5 = true; $("trampa5").hidden = false; render(); pasos.completar(4); }
+  });
+
+  B.opcionMultiple(cuerpo("chk6"), {
+    pregunta: "En el pliegue 2, el estudiante de turno noche está en el examen. ¿Qué pasa al evaluar con <code>cross_val_score</code>?",
+    opciones: [
+      "Ese pliegue sale <code>nan</code>, con un aviso, y la validación sigue.",
+      "Todo se detiene con un error.",
+      "Lo codifica como mañana.",
+      "Nada, porque el one-hot no aprende."],
+    correcta: 0,
+    mezclar: true,
+    pistas: [null,
+      "El error ocurre dentro, pero <code>cross_val_score</code> lo captura: por defecto pone <code>error_score=np.nan</code>.",
+      "El one-hot no adivina: solo conoce las categorías que vio en <code>fit</code>.",
+      "Sí aprende: guarda la lista de categorías que vio en <code>fit</code>."],
+    explicacion: "Salida real: <code>[ 1. nan  0.  1.  1.]</code>, y un <code>UserWarning</code> que dice <code>Found unknown categories ['noche']</code>. La media de eso es <code>nan</code>. <b>Ahora prueba</b> <code>handle_unknown=\"ignore\"</code> en el escenario.",
+    alResolver: function () { est.c6 = true; render(); pasos.completar(5); }
+  });
+
+  B.opcionMultiple(cuerpo("chk7"), {
+    pregunta: "¿Cómo le pides al pipeline que use 3 vecinos?",
+    opciones: [
+      "<code>pipe.set_params(kneighborsclassifier__n_neighbors=3)</code>",
+      "<code>pipe.set_params(n_neighbors=3)</code>",
+      "<code>pipe.set_params(kneighborsclassifier_n_neighbors=3)</code>",
+      "<code>pipe.n_neighbors = 3</code>"],
+    correcta: 0,
+    mezclar: true,
+    pistas: [null,
+      "El pipeline no sabe de qué paso hablas. Error real: <code>ValueError: Invalid parameter 'n_neighbors' for estimator Pipeline(...). Valid parameters are: ['memory', 'steps', 'transform_input', 'verbose'].</code>",
+      "Un solo guion bajo no separa el paso del parámetro: da el mismo <code>ValueError</code>, con <code>'kneighborsclassifier_n_neighbors'</code>.",
+      "Eso crea un atributo suelto que nadie lee: <code>pipe[-1].n_neighbors</code> sigue en 1."],
+    explicacion: "<code>paso__parametro</code>, con dos guiones bajos: el nombre del paso en minúsculas y el parámetro de ese paso. <b>Ahora arma el nombre</b> en el escenario y prueba 1, 3 y 5 vecinos.",
+    alResolver: function () { est.c7 = true; render(); pasos.completar(6); }
+  });
+
+  pasos = B.pasos($("recorrido"), {
+    concepto: C,
+    alEntrar: entrar,
+    alTerminar: function () { location.hash = "retos"; }
+  });
+  est.c1 = pasos.hecho(0);
+  est.c2 = pasos.hecho(1);
+  est.c3 = pasos.hecho(2);
+  est.c4 = est.c4b = pasos.hecho(3);
+  est.c5 = pasos.hecho(4);
+  est.c6 = pasos.hecho(5);
+  est.c7 = pasos.hecho(6);
+  if (est.c4) { $("res4").hidden = false; $("dest4").hidden = false; }
+  if (est.c5) $("trampa5").hidden = false;
+  entrar(pasos.actual());
+
+  /* ---------------- hipotesis inicial ---------------- */
+  (function () {
+    var ta = $("hipotesis"), t = null;
+    ta.value = B.nota("sklearn-pipeline", "hipotesis");
+    function cita() {
+      var v = ta.value.trim(), e = $("citaHipo");
+      e.hidden = !v;
+      if (v) { e.textContent = ""; e.appendChild(document.createTextNode("Al principio escribiste: «" + v + "». Compáralo con el marcador del escenario cuando se encienda: escalar antes de partir le da al modelo una ventaja que no se ganó. Aquí abajo ves cuánto puede crecer.")); }
+    }
+    cita();
+    ta.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { B.nota("sklearn-pipeline", "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; cita(); }, 500);
+    });
+  })();
+
+  /* ---------------- marcadores de estado de retos ---------------- */
+  function pintarEstados() {
+    [].forEach.call(document.querySelectorAll("[data-reto]"), function (e) {
+      var ok = C.retoOk(e.getAttribute("data-reto"));
+      e.textContent = ok ? "resuelto" : "pendiente";
+      e.classList.toggle("ok", ok);
+    });
+  }
+  C.alCambiar(pintarEstados);
+
+  /* ---------------- reto: ojo clinico ---------------- */
+  var BANCO_OJO = [
+    { c: "X = StandardScaler().fit_transform(X)\nprint(cross_val_score(knn, X, y, cv=5))", f: true, e: "El escalador aprende μ y σ con <b>todas</b> las filas antes de partir: cada pliegue evalúa con una escala que ya vio su examen." },
+    { c: "pipe = make_pipeline(StandardScaler(), knn)\nprint(cross_val_score(pipe, X, y, cv=5))", f: false, e: "El escalador va dentro del pipeline: <code>cross_val_score</code> lo ajusta en cada pliegue solo con su entrenamiento." },
+    { c: "esc.fit(X_train)\nknn.fit(esc.transform(X_train), y_train)\nknn.score(esc.transform(X_test), y_test)", f: false, e: "Es el pipeline escrito a mano: <code>fit</code> solo con <code>X_train</code> y <code>transform</code> en los dos." },
+    { c: "esc.fit(X)\nX_train, X_test, y_train, y_test = train_test_split(\n    esc.transform(X), y)", f: true, e: "μ y σ salen de todas las filas, incluidas las que después serán test." },
+    { c: "X = SelectKBest(k=5).fit_transform(X, y)\nprint(cross_val_score(modelo, X, y, cv=5))", f: true, e: "Elige columnas mirando <code>y</code> en todas las filas, también las del examen: la fuga más grave." },
+    { c: "df[\"edad\"] = df[\"edad\"].fillna(df[\"edad\"].mean())\nX_train, X_test = train_test_split(df)", f: true, e: "La media con la que se rellenan los huecos incluye a las filas del test." },
+    { c: "X[:, 1] = X[:, 1] / 1000      # metros a km\nprint(cross_val_score(pipe, X, y, cv=5))", f: false, e: "Dividir entre 1000 no aprende nada de los datos: es la misma cuenta para cualquier fila, vista o no." },
+    { c: "X = np.log1p(X)\nprint(cross_val_score(pipe, X, y, cv=5))", f: false, e: "<code>log1p</code> es una transformación fija: no tiene nada que estimar." },
+    { c: "datos$dist <- scale(datos$dist)\npliegues <- vfold_cv(datos, v = 5)", f: true, e: "<code>scale</code> sin argumentos calcula la media y la desviación con todas las filas, antes de partir." },
+    { c: "flujo <- workflow() |> add_recipe(receta) |> add_model(modelo)\nfit_resamples(flujo, resamples = pliegues)", f: false, e: "La receta va dentro del workflow: <code>fit_resamples</code> hace <code>prep</code> en cada pliegue." },
+    { c: "ajustada <- prep(receta, training = datos)\npartir <- initial_split(bake(ajustada, datos))", f: true, e: "<code>prep</code> con todos los datos es un <code>fit</code> con el test incluido." },
+    { c: "make_pipeline(StandardScaler(), knn).fit(X_train, y_train).predict(X_test)", f: false, e: "<code>fit</code> solo ve <code>X_train</code>; <code>predict</code> solo transforma <code>X_test</code>." }
+  ];
+  (function () {
+    var cont = $("ojo");
+    cont.innerHTML = '<div class="ronda"></div><div class="codigo-linea" id="ojoCod"></div>' +
+      '<div class="ojo-opts"><button type="button" class="opt" data-a="1">fuga</button><button type="button" class="opt" data-a="0">sin fuga</button></div>' +
+      '<div class="fb" aria-live="polite"></div><div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    var ronda, aciertos, respondida, orden;
+    function nueva() { ronda = 0; aciertos = 0; orden = barajar(BANCO_OJO).slice(0, 8); mostrar(); }
+    function mostrar() {
+      respondida = false;
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 8 · aciertos " + aciertos;
+      $("ojoCod").textContent = orden[ronda].c;
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (b) { b.disabled = false; b.className = "opt"; });
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+    }
+    cont.querySelector(".ojo-opts").addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || respondida) return;
+      respondida = true;
+      var r = orden[ronda], ok = (b.getAttribute("data-a") === "1") === r.f;
+      if (ok) aciertos++;
+      b.classList.add(ok ? "ok" : "mal");
+      if (!ok) cont.querySelector('.ojo-opts [data-a="' + (r.f ? "1" : "0") + '"]').classList.add("ok");
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (x) { x.disabled = true; });
+      cont.querySelector(".fb").innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No.</span> ') + (r.f ? "Fuga. " : "Sin fuga. ") + r.e;
+      var sig = cont.querySelector(".sig");
+      sig.hidden = false;
+      if (ronda === 7) {
+        var aprobo = aciertos >= 7;
+        C.reto("ojo", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertos + " de 8" + (aprobo ? ". Aprobado." : ". Necesitas 7 para aprobar.");
+        sig.textContent = "Otra tanda";
+      } else sig.textContent = "Siguiente ronda";
+    });
+    cont.querySelector(".sig").addEventListener("click", function () { if (ronda === 7) nueva(); else { ronda++; mostrar(); } });
+    nueva();
+  })();
+
+  /* ---------------- reto: construir ---------------- */
+  (function () {
+    var BLOQUES = { esc: "StandardScaler", ohe: "OneHotEncoder", ct: "ColumnTransformer", knn: "KNeighborsClassifier", sel: "SelectKBest" };
+    var st = { cinta: [], turno: false, ignore: false, fuga: false, casilla: null };
+    var OBJ = [
+      "La validación cruzada con horas y dist en <b>0.9</b>, sin fuga.",
+      "Con <code>turno</code> incluido, que <b>ningún pliegue salga nan</b>.",
+      "Con la fuga encendida, toca en el marcador el <b>único pliegue</b> cuyo número cambia."
+    ];
+    var hechos = [false, false, false], ul = $("objetivos");
+    OBJ.forEach(function (o) { var li = document.createElement("li"); li.innerHTML = '<span class="m"></span><span>' + o + "</span>"; ul.appendChild(li); });
+    function evaluar() {
+      var c = st.cinta, n = c.length;
+      if (!n) return { msg: "La cinta está vacía: toca bloques de la bandeja." };
+      var ik = c.indexOf("knn");
+      if (ik < 0) return { msg: "Falta el modelo: un pipeline termina en un estimador, aquí <code>KNeighborsClassifier</code>." };
+      if (ik !== n - 1) return { msg: c.indexOf("esc") > ik ? "El kNN recibiría metros: el escalador va primero." : "El kNN va al final: es el único paso que predice." };
+      if (n > 2) return { msg: "Sobra un bloque: este reto se resuelve con uno o dos." };
+      var pre = n === 2 ? c[0] : null;
+      if (!pre) {
+        if (st.turno) return { msg: "El kNN no sabe medir distancias con texto: <code>turno</code> tiene que convertirse antes en números." };
+        return { vals: CV_CRUDO, msg: "Sin escalar: los metros deciden solos." };
+      }
+      if (pre === "sel") return { msg: "<code>SelectKBest</code> elige columnas mirando <code>y</code>; con dos columnas no hay nada que elegir, y no escala nada." };
+      if (pre === "ohe") return { msg: "<code>OneHotEncoder</code> solo convertiría también horas y distancia en categorías. Para dar a cada columna lo suyo está <code>ColumnTransformer</code>." };
+      if (pre === "esc" && st.turno) return { msg: "<code>StandardScaler</code> no sabe escalar texto: falla al convertir <code>turno</code> en número. Para mezclar números y texto usa <code>ColumnTransformer</code>." };
+      if (st.turno) {
+        if (st.fuga) return { msg: "En este reto la fuga se prueba sin <code>turno</code>: apaga una de las dos casillas." };
+        return { vals: cv("pipe", st.ignore ? "ignore" : "error"), turno: true, msg: st.ignore ? 'ColumnTransformer con <code>handle_unknown="ignore"</code>: la noche queda en ceros.' : "ColumnTransformer con <code>OneHotEncoder()</code> por defecto: el pliegue 2 no vio la noche." };
+      }
+      return { vals: st.fuga ? CV_FUGA : CV_PIPE, escala: true, msg: pre === "ct" ? "ColumnTransformer con solo la rama numérica: es un escalador." : "Escalador y kNN." };
+    }
+    function pintar() {
+      var r = evaluar();
+      var h = '<p class="esc-sub">Bandeja</p><div class="bandeja">' + Object.keys(BLOQUES).map(function (k) { return '<button type="button" data-poner="' + k + '">' + BLOQUES[k] + "</button>"; }).join("") + "</div>";
+      h += '<p class="esc-sub">La cinta</p><div class="cinta-c">' + (st.cinta.length ? st.cinta.map(function (k, i) { return (i ? '<span class="flecha">→</span>' : "") + '<button type="button" data-quitar="' + i + '">' + BLOQUES[k] + (k === "ct" && st.turno ? (st.ignore ? ' (num, cat ignore)' : " (num, cat)") : "") + "</button>"; }).join("") : '<span class="ph">vacía</span>') + "</div>";
+      h += '<div class="opciones-c"><label><input type="checkbox" data-op="turno"' + (st.turno ? " checked" : "") + "> incluir la columna turno</label>" +
+        '<label><input type="checkbox" data-op="ignore"' + (st.ignore ? " checked" : "") + '> handle_unknown="ignore" en el one-hot</label>' +
+        '<label><input type="checkbox" data-op="fuga"' + (st.fuga ? " checked" : "") + "> escalar antes de partir (fuga)</label></div>";
+      h += '<p class="esc-nota">' + r.msg + "</p>";
+      if (r.vals) h += marcador(r.vals, { tit: "Validación cruzada (KFold(5), un vecino)", clic: true, res: st.casilla });
+      if (r.vals && st.casilla) {
+        var dif = r.escala && st.fuga ? (st.casilla === 3 ? "Este es: con el pipeline da 0.5 y con la fuga 1. La desviación aprendida con los diez acercó al estudiante de 6000 m a un vecino que no aprobó." : "Este pliegue da lo mismo con y sin fuga.") : "Enciende la fuga y compara.";
+        h += '<p class="esc-nota">Pliegue ' + st.casilla + ": " + dif + "</p>";
+      }
+      $("construir").innerHTML = h;
+      if (r.vals && r.escala && !st.fuga && !st.turno && Math.abs(prom(r.vals) - 0.9) < 1e-9) hechos[0] = true;
+      if (r.vals && r.turno && r.vals.every(function (v) { return !isNaN(v); })) hechos[1] = true;
+      if (r.vals && r.escala && st.fuga && st.casilla === 3) hechos[2] = true;
+      [].forEach.call(ul.children, function (li, i) { li.classList.toggle("hecho", hechos[i]); });
+      if (hechos.every(Boolean) && !pintar.listo) { pintar.listo = true; C.reto("construir", true); }
+    }
+    $("construir").addEventListener("click", function (e) {
+      var b = e.target.closest("button");
+      if (!b) return;
+      if (b.hasAttribute("data-poner")) { if (st.cinta.length < 4) st.cinta.push(b.getAttribute("data-poner")); }
+      else if (b.hasAttribute("data-quitar")) st.cinta.splice(+b.getAttribute("data-quitar"), 1);
+      else if (b.hasAttribute("data-casilla")) st.casilla = +b.getAttribute("data-casilla");
+      else return;
+      pintar();
+    });
+    $("construir").addEventListener("change", function (e) {
+      var t = e.target, op = t.getAttribute("data-op");
+      if (!op) return;
+      st[op] = t.checked;
+      pintar();
+    });
+    pintar();
+  })();
+
+  /* ---------------- reto: a mano ---------------- */
+  (function () {
+    var T;
+    function generar() {
+      var tr, te, mu, sd;
+      do {
+        tr = [0, 1, 2, 3, 4].map(function () { return 500 * (1 + azar(12)); });
+        te = 500 * (1 + azar(12));
+        mu = suma(tr) / 5;
+        sd = Math.sqrt(suma(tr.map(function (x) { return (x - mu) * (x - mu); })) / 5);
+      } while (sd < 400 || Math.abs(te - mu) < 800);
+      T = { tr: tr, te: te, mu: mu, sd: sd, muF: (suma(tr) + te) / 6, z: (te - mu) / sd };
+    }
+    var res, cajas;
+    function armar() {
+      generar();
+      res = [null, null, null];
+      $("mano").innerHTML = '<div class="mano-d">entrenamiento: ' + T.tr.join(", ") + " m\nprueba: " + T.te + ' m</div>' +
+        '<div class="mano-parte" id="mano1"></div><div class="mano-parte" id="mano2"></div><div class="mano-parte" id="mano3"></div>' +
+        '<div class="btn-row" style="margin-top:10px"><button type="button" class="ghost" id="manoOtro">Otro ejercicio</button></div>';
+      $("mano").querySelector(".mano-d").style.whiteSpace = "pre-wrap";
+      function cerrar(k) { return function (ok) { res[k] = ok; if (res.every(function (x) { return x !== null; })) C.reto("mano", res.every(Boolean)); }; }
+      B.numerico($("mano1"), {
+        pregunta: "1. La media de las 5 distancias de entrenamiento (lo que aprende <code>fit</code>).",
+        respuesta: T.mu, tolerancia: 0.01,
+        pistas: ["Suma las 5 y divide entre 5."],
+        diagnostico: function (v) { return Math.abs(v - T.muF) < 0.02 ? "Contaste también la de prueba: esa es la media con fuga." : null; },
+        explicacion: "(" + T.tr.join(" + ") + ") / 5 = <b>" + fx(T.mu) + "</b>.",
+        alResolver: cerrar(0)
+      });
+      B.numerico($("mano2"), {
+        pregunta: "2. La media que saldría si también contaras la de prueba (la fuga). Redondea a 2 decimales.",
+        respuesta: +T.muF.toFixed(2), tolerancia: 0.01,
+        pistas: ["Para la fuga son 6 valores: las 5 de entrenamiento y la de prueba.", "Suma la de la parte 1 por 5, súmale la de prueba y divide entre 6."],
+        diagnostico: function (v) { return Math.abs(v - (suma(T.tr) + T.te) / 5) < 0.02 ? "Son 6 valores: divide entre 6." : null; },
+        explicacion: "(" + T.tr.join(" + ") + " + " + T.te + ") / 6 = <b>" + fx(T.muF) + "</b>. Se movió " + fx(Math.abs(T.muF - T.mu)) + " m hacia la de prueba.",
+        alResolver: cerrar(1)
+      });
+      B.numerico($("mano3"), {
+        pregunta: "3. La desviación de las 5 de entrenamiento (dividiendo entre n, como <code>StandardScaler</code>) es σ = " + fx(T.sd) + ". ¿Cuánto vale la z de la prueba con la escala del entrenamiento? Redondea a 2 decimales.",
+        respuesta: +T.z.toFixed(2), tolerancia: 0.01,
+        pistas: ["z = (prueba − media del entrenamiento) / σ.", "Usa la media de la parte 1, no la de la parte 2.", "(" + T.te + " − " + fx(T.mu) + ") / " + fx(T.sd) + "."],
+        diagnostico: function (v) {
+          var zf = (T.te - T.muF) / T.sd;
+          if (Math.abs(v - zf) < 0.02) return "Usaste la media con fuga. La escala sale solo del entrenamiento.";
+          if (Math.abs(v + T.z) < 0.02) return "El signo está al revés: es prueba menos media.";
+          return null;
+        },
+        explicacion: "(" + T.te + " − " + fx(T.mu) + ") / " + fx(T.sd) + " = <b>" + fx(T.z) + "</b>.",
+        alResolver: cerrar(2)
+      });
+      $("manoOtro").addEventListener("click", armar);
+    }
+    armar();
+  })();
+
+  /* ---------------- reto: cazar el error ---------------- */
+  B.cazarError($("error"), {
+    variantes: [
+      {
+        intro: "Python. La salida real es <code>[1.0, 1.0, 1.0, 1.0, 1.0]</code> y <code>1.0</code>, no 0.9.",
+        lineas: [tt("for f in range(5):"), tt("    prueba = [2 * f, 2 * f + 1]"), tt("    entreno = [i for i in range(10) if i not in prueba]"), tt("    media = X[entreno].mean(axis=0)"), tt("    desv = X.std(axis=0)"), tt("    Ze = (X[entreno] - media) / desv"), tt("    Zp = (X[prueba] - media) / desv")],
+        erronea: 4,
+        explicacion: "<code>X.std(axis=0)</code> usa las diez filas: la desviación vio el examen, y la nota sube a 1.0, la fuga del paso 4. Dato curioso: si el error estuviera solo en la media (<code>media = X.mean(axis=0)</code>), la salida seguiría en 0.9, porque restar una media no cambia distancias. Por eso esta fuga se esconde."
+      },
+      {
+        intro: "Python. La salida real empieza con <code>RuntimeWarning: invalid value encountered in divide</code> y sigue con <code>[0.0, 1.0, 0.5, 0.5, 0.0]</code> y <code>0.4</code>.",
+        lineas: [tt("    media = X[entreno].mean(axis=0)"), tt("    desv = X[entreno].std(axis=0)"), tt("    Ze = (X[entreno] - media) / desv"), tt("    Zp = (X[prueba] - X[prueba].mean(axis=0)) / X[prueba].std(axis=0)"), tt("    bien = 0"), tt("    for i in range(2):"), tt("        d2 = ((Ze - Zp[i]) ** 2).sum(axis=1)")],
+        erronea: 3,
+        explicacion: "Ajusta la escala con el propio examen: es <code>fit_transform</code> sobre el test. Con dos filas, cada z queda en +1 o −1, y en el pliegue 5 las dos tienen 1 hora: desviación 0, división entre 0 y <code>nan</code>."
+      },
+      {
+        intro: "R. La salida real es <code>[1] 1 1 1 1 1</code> y <code>[1] 1</code>, no 0.9.",
+        lineas: [tt("for (f in 1:5) {"), tt("  prueba <- c(2 * f - 1, 2 * f)"), tt("  entreno <- setdiff(1:10, prueba)"), tt("  media <- colMeans(X[entreno, ])"), tt("  desv <- apply(X, 2, sd)"), tt("  Ze <- scale(X[entreno, ], media, desv)"), tt("  Zp <- scale(X[prueba, ], media, desv)")],
+        erronea: 4,
+        explicacion: "<code>apply(X, 2, sd)</code> calcula la desviación con las diez filas. Es la misma fuga que en Python: la nota sube a 1 porque la escala ya conocía a los del examen."
+      }
+    ],
+    alResolver: function (ok) { C.reto("error", ok); }
+  });
+
+  /* ---------------- retos: propiedades ---------------- */
+  function prop(id, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple($(id), cfg);
+  }
+  prop("prop1", {
+    pregunta: "¿Qué hace <code>pipe.fit(X_train, y_train)</code> con <code>make_pipeline(StandardScaler(), KNeighborsClassifier())</code>?",
+    opciones: [
+      "<code>fit_transform</code> en el escalador con <code>X_train</code>, y <code>fit</code> en el kNN con lo transformado.",
+      "<code>fit</code> en los dos con <code>X_train</code> sin escalar.",
+      "<code>transform</code> en el escalador y <code>fit</code> en el kNN.",
+      "<code>fit_transform</code> en los dos."],
+    correcta: 0,
+    pistas: [null,
+      "El kNN tiene que recibir los datos ya escalados: si no, aprende con metros.",
+      "Sin <code>fit</code>, el escalador no tiene μ ni σ que aplicar.",
+      "El kNN es el último paso: estima, no transforma."],
+    explicacion: "Cada paso intermedio hace <code>fit_transform</code> y pasa su salida al siguiente; el último solo hace <code>fit</code>. Es la mitad izquierda de la Figure 6.1 de Raschka."
+  });
+  prop("prop2", {
+    pregunta: "¿Cuál de estos pasos puede ir <b>fuera</b> del pipeline sin fuga?",
+    opciones: [
+      "Pasar la distancia de metros a kilómetros.",
+      "Imputar los huecos con la mediana.",
+      "Elegir las 10 columnas más correlacionadas con <code>y</code>.",
+      "El one-hot de una columna de texto."],
+    correcta: 0,
+    pistas: [null,
+      "La mediana se calcula con los datos: si incluye el test, el test se cuela.",
+      "Mira la respuesta en todas las filas: es la fuga más grave.",
+      "Aprende qué categorías existen (paso 6): también es un <code>fit</code>."],
+    explicacion: "Dividir entre 1000 es la misma cuenta para cualquier fila, vista o no: no aprende nada de los datos. Todo lo que estima algo con los datos va dentro."
+  });
+  prop("prop3", {
+    pregunta: "¿Cómo se llama el parámetro <code>C</code> del paso <code>LogisticRegression</code> dentro de un <code>make_pipeline</code>?",
+    opciones: ["<code>logisticregression__C</code>", "<code>C</code>", "<code>LogisticRegression__C</code>", "<code>logisticregression_C</code>"],
+    correcta: 0,
+    pistas: [null,
+      "El pipeline no sabe de qué paso hablas.",
+      "<code>make_pipeline</code> usa el nombre de la clase en minúsculas.",
+      "Son dos guiones bajos."],
+    explicacion: "Nombre del paso en minúsculas, dos guiones bajos y el parámetro. Es el nombre que usa Raschka en la página 185 para la curva de validación."
+  });
+
+  /* ---------------- formula de memoria ---------------- */
+  B.ordenar($("formula"), {
+    pregunta: "Arma la línea que evalúa escalador y kNN con validación cruzada, sin fuga, en los pliegues de la página.",
+    piezas: [tt("cross_val_score("), tt("make_pipeline("), tt("StandardScaler(),"), tt("KNeighborsClassifier(n_neighbors=1)"), tt("),"), tt("X, y, cv=KFold(5))")],
+    distractores: [tt("StandardScaler().fit_transform(X),"), tt(".fit_transform(X_test)"), tt("n_neighbors__k=1")],
+    soluciones: [[0, 1, 2, 3, 4, 5]],
+    explicacion: "<code>cross_val_score(make_pipeline(StandardScaler(), KNeighborsClassifier(n_neighbors=1)), X, y, cv=KFold(5))</code> da <code>[1.  1.  0.5 1.  1. ]</code>. Escalar antes con <code>fit_transform(X)</code> sería la fuga; <code>fit_transform</code> sobre el test, la trampa del paso 5; y <code>n_neighbors__k</code> no existe.",
+    alResolver: function (ok) { C.reto("formula", ok); }
+  });
+
+  /* ---------------- vida real: el algoritmo en codigo ---------------- */
+  (function () {
+    var CODIGO = {
+      py: [
+        ["imp", "import numpy as np"],
+        ["imp", "from sklearn.pipeline import make_pipeline"],
+        ["imp", "from sklearn.preprocessing import StandardScaler"],
+        ["imp", "from sklearn.neighbors import KNeighborsClassifier"],
+        ["imp", "from sklearn.model_selection import KFold, cross_val_score"],
+        ["datos1", "horas = np.array([10, 7, 9, 1, 2, 3, 7, 5, 1, 1])"],
+        ["datos2", "dist = np.array([5500, 2500, 2000, 3000, 5500, 6000, 1000, 1500, 1500, 2000])  # metros"],
+        ["matriz", "X = np.column_stack([horas, dist]).astype(float)"],
+        ["etiq", "y = np.array([1, 1, 1, 0, 0, 0, 1, 1, 0, 0])       # inventado: 1 = aprobó"],
+        ["ac0", "aciertos = []"],
+        ["forf", "for f in range(5):"],
+        ["prueba", "    prueba = [2 * f, 2 * f + 1]"],
+        ["entreno", "    entreno = [i for i in range(10) if i not in prueba]"],
+        ["media", "    media = X[entreno].mean(axis=0)           # fit: solo con su train"],
+        ["desv", "    desv = X[entreno].std(axis=0)"],
+        ["ze", "    Ze = (X[entreno] - media) / desv          # transform del train"],
+        ["zp", "    Zp = (X[prueba] - media) / desv           # transform del test, con lo del train"],
+        ["bien0", "    bien = 0"],
+        ["fori", "    for i in range(2):"],
+        ["d2", "        d2 = ((Ze - Zp[i]) ** 2).sum(axis=1)"],
+        ["vecino", "        vecino = d2.argmin()"],
+        ["si", "        if y[entreno][vecino] == y[prueba][i]:"],
+        ["suma", "            bien = bien + 1"],
+        ["guarda", "    aciertos.append(bien / 2)"],
+        ["imp1", "print(aciertos)"],
+        ["imp2", "print(np.mean(aciertos))"],
+        ["pipe", "pipe = make_pipeline(StandardScaler(), KNeighborsClassifier(n_neighbors=1))"],
+        ["lib", "print(cross_val_score(pipe, X, y, cv=KFold(5)))"]
+      ],
+      r: [
+        ["datos1", "horas <- c(10, 7, 9, 1, 2, 3, 7, 5, 1, 1)"],
+        ["datos2", "dist <- c(5500, 2500, 2000, 3000, 5500, 6000, 1000, 1500, 1500, 2000)  # metros"],
+        ["matriz", "X <- cbind(horas, dist)"],
+        ["etiq", "y <- c(1, 1, 1, 0, 0, 0, 1, 1, 0, 0)       # inventado: 1 = aprobó"],
+        ["ac0", "aciertos <- c()"],
+        ["forf", "for (f in 1:5) {"],
+        ["prueba", "  prueba <- c(2 * f - 1, 2 * f)"],
+        ["entreno", "  entreno <- setdiff(1:10, prueba)"],
+        ["media", "  media <- colMeans(X[entreno, ])           # fit: solo con su train"],
+        ["desv", "  desv <- apply(X[entreno, ], 2, sd)"],
+        ["ze", "  Ze <- scale(X[entreno, ], media, desv)    # transform del train"],
+        ["zp", "  Zp <- scale(X[prueba, ], media, desv)     # transform del test, con lo del train"],
+        ["bien0", "  bien <- 0"],
+        ["fori", "  for (i in 1:2) {"],
+        ["d2", "    d2 <- colSums((t(Ze) - Zp[i, ])^2)"],
+        ["vecino", "    vecino <- which.min(d2)"],
+        ["si", "    if (y[entreno][vecino] == y[prueba][i]) {"],
+        ["suma", "      bien <- bien + 1"],
+        [null, "    }"],
+        [null, "  }"],
+        ["guarda", "  aciertos <- c(aciertos, bien / 2)"],
+        [null, "}"],
+        ["imp1", "print(aciertos)"],
+        ["imp2", "print(mean(aciertos))"],
+        ["pipe", "suppressMessages(library(caret))"],
+        ["pipe", "datos <- data.frame(horas, dist, aprobo = factor(y))"],
+        ["pipe", "folds <- lapply(1:5, function(f) setdiff(1:10, c(2 * f - 1, 2 * f)))"],
+        ["pipe", "ctrl <- trainControl(method = \"cv\", index = folds)"],
+        ["pipe", "modelo <- suppressWarnings(train(aprobo ~ ., data = datos, method = \"knn\","],
+        ["pipe", "                tuneGrid = data.frame(k = 1),"],
+        ["pipe", "                preProcess = c(\"center\", \"scale\"), trControl = ctrl))"],
+        ["lib", "print(modelo$resample$Accuracy)"]
+      ]
+    };
+    var SAL = {
+      py: ["[1.0, 1.0, 0.5, 1.0, 1.0]", "0.9", "[1.  1.  0.5 1.  1. ]"],
+      r: ["[1] 1.0 1.0 0.5 1.0 1.0", "[1] 0.9", "[1] 1.0 1.0 0.5 1.0 1.0"]
+    };
+
+    // una foto del estado por linea ejecutada
+    var EV = [];
+    (function () {
+      var base = { fase: 1, f: null, etapa: 0, i: null, bien: 0, aciertos: [], sal: 0, pipe: false, fin: false };
+      function foto(id, extra) { EV.push(Object.assign({ id: id }, base, extra || {})); }
+      foto("imp");
+      ["datos1", "datos2", "matriz", "etiq", "ac0"].forEach(function (id, k) { base.etapa = -(k + 1); foto(id); });
+      for (var f = 1; f <= 5; f++) {
+        var P = pliegue(f, "pipe");
+        base.fase = f + 1; base.f = f; base.i = null; base.bien = 0;
+        ["forf", "prueba", "entreno", "media", "desv", "ze", "zp", "bien0"].forEach(function (id, k) { base.etapa = k + 1; foto(id); });
+        for (var i = 0; i < 2; i++) {
+          base.i = i;
+          ["fori", "d2", "vecino", "si"].forEach(function (id, k) { base.etapa = 9 + k; foto(id); });
+          if (P.vecinos[i].ok) { base.bien++; base.etapa = 13; foto("suma"); }
+        }
+        base.aciertos = base.aciertos.concat([base.bien / 2]);
+        base.i = null; base.etapa = 14; foto("guarda");
+      }
+      base.fase = 7; base.f = null; base.etapa = 20;
+      base.sal = 1; foto("imp1");
+      base.sal = 2; foto("imp2");
+      base.pipe = true; foto("pipe");
+      base.sal = 3; foto("lib", { fin: true });
+    })();
+
+    function lista(a, ctx, py) { var b = a.map(function (x) { return ctx.ix(x); }); return py ? "[" + b.join(", ") + "]" : b.join(" "); }
+    function narrar(e, ctx) {
+      var py = ctx.lang() === "py", P = e.f ? pliegue(e.f, "pipe", null, py ? 0 : 1) : null, v = P && e.i != null ? P.vecinos[e.i] : null;
+      switch (e.id) {
+        case "imp": return py ? "Carga NumPy para el bucle y, de scikit-learn, lo que se usa al final para comparar: el pipeline, el escalador, el kNN y la validación cruzada." : "En R no hace falta importar nada para el bucle; caret se carga al final, para comparar.";
+        case "datos1": return "Las horas de estudio de los diez estudiantes, en el orden de la tabla.";
+        case "datos2": return "La distancia de cada uno a la universidad, en metros: de 1000 a 6000.";
+        case "matriz": return py ? "<code>X</code>: una matriz de 10 filas y 2 columnas, horas y distancia, en decimales." : "<code>X</code>: una matriz de 10 filas y 2 columnas con <code>cbind</code>. Sus columnas se llaman <code>horas</code> y <code>dist</code>.";
+        case "etiq": return "<code>y</code>: 1 si aprobó, 0 si no. Cinco y cinco.";
+        case "ac0": return "La lista donde se guarda la nota de cada pliegue. Empieza vacía.";
+        case "forf": return "Pliegue " + e.f + " de 5. <code>f</code> vale " + ctx.ix(e.f - 1) + (py ? ": Python cuenta desde 0." : ": R cuenta desde 1.") + (e.f === 1 ? " Todo lo que sigue, hasta guardar la nota, se repite en cada pliegue: también el fit." : "");
+        case "prueba": return "El examen de este pliegue: las filas " + lista(P.pr, ctx, py) + " (" + D[P.pr[0]] + " y " + D[P.pr[1]] + " m). Bloques seguidos, sin barajar.";
+        case "entreno": return "El entrenamiento: las otras 8 filas. " + (py ? "La lista por comprensión deja fuera a las del examen." : "<code>setdiff</code> quita las del examen de 1:10.");
+        case "media": return "<b>El fit, primera parte:</b> la media de cada columna, solo con las 8 filas de entrenamiento: (" + fx(P.e.mu[0], 3) + ", " + fx(P.e.mu[1]) + "). Mira la caja: entran 8 fichas, ninguna del examen.";
+        case "desv": return "<b>El fit, segunda parte:</b> la desviación de cada columna: (" + fx(P.e.sd[0]) + ", " + fx(P.e.sd[1]) + ")." + (e.f === 1 ? (py ? " <code>std</code> de NumPy divide entre n, como <code>StandardScaler</code>." : " <code>sd</code> de R divide entre n − 1. Python divide entre n; los vecinos no cambian porque las dos columnas se encogen en la misma proporción.") : "");
+        case "ze": return "<b>transform del entrenamiento:</b> cada fila menos la media, dividida entre la desviación. " + (py ? "" : "<code>scale</code> con centro y escala dados no recalcula nada: aplica los que le pasas. Sin esos argumentos haría su propio fit. ") + "Los 8 puntos azules aparecen en el plano.";
+        case "zp": return "<b>transform del examen, con lo del entrenamiento:</b> los dos puntos morados. La distancia de " + D[P.pr[1]] + " m queda en z = " + fx(P.Z[P.pr[1]][1]) + ".";
+        case "bien0": return "Contador de aciertos del pliegue, en 0.";
+        case "fori": return "Estudiante " + (e.i + 1) + " de 2 del examen: " + filaTxtL(v.i, ctx) + ", " + H[v.i] + " h y " + D[v.i] + " m. <code>i</code> = " + ctx.ix(e.i) + ".";
+        case "d2": return "La distancia al cuadrado, en z, a cada uno de los 8 de entrenamiento: " + v.d2.map(function (x) { return fx(x); }).join(", ") + ".";
+        case "vecino": return "La más pequeña está en la posición <b>" + ctx.ix(v.pos) + "</b> de <code>entreno</code>" + (py ? " (<code>argmin</code> cuenta desde 0)" : " (<code>which.min</code> cuenta desde 1)") + ": es " + filaTxtL(v.fila, ctx) + ", con " + H[v.fila] + " h y " + D[v.fila] + " m.";
+        case "si":
+          if (v.ok) return "Compara etiquetas: el vecino " + (Y[v.fila] ? "aprobó" : "no aprobó") + " y el estudiante también " + (Y[v.i] ? "aprobó" : "no aprobó") + ". <b>Acierto.</b>";
+          return "Compara etiquetas: el vecino aprobó y este estudiante no. <b>Falla.</b> Es el único fallo del programa: la desviación de la distancia se aprendió sin los dos que viven lejos (" + fx(P.e.sd[1], 0) + " m), así que la distancia pesa más y su vecino es el de 10 h y 5500 m. Con la escala de los diez habría acertado, pero solo porque esa escala ya conocía el examen.";
+        case "suma": return "Suma un acierto: <code>bien</code> = " + e.bien + ".";
+        case "guarda": return "Guarda la nota del pliegue: " + e.bien + " de 2 = <b>" + fx(e.bien / 2, 1) + "</b>. Al volver arriba, el siguiente pliegue hará su propio fit.";
+        case "imp1": return "Las cinco notas. Solo el pliegue 3 falla uno.";
+        case "imp2": return "La media: <b>0.9</b>. La línea de la media corrió 5 veces, una por pliegue.";
+        case "pipe": return py ? "Ahora la librería: el escalador y el kNN en un pipeline. Todavía no se ajusta nada." : "Ahora la librería: caret con <code>preProcess = c(\"center\", \"scale\")</code>, que centra y escala dentro de cada remuestreo. <code>index = folds</code> fija los mismos cinco pliegues del bucle (caret, por defecto, sortea los suyos). <code>suppressWarnings</code> tapa un aviso sobre el Kappa, que no se puede calcular en los pliegues cuyo examen tiene una sola clase.";
+        case "lib": return py ? "<code>cross_val_score</code> llama a <code>fit</code> del pipeline en cada pliegue: <b>los mismos cinco números</b> que el bucle." : "<code>modelo$resample$Accuracy</code>: <b>los mismos cinco números</b> que el bucle.";
+      }
+      return "";
+    }
+    function filaTxtL(i, ctx) { return "la fila " + ctx.ix(i); }
+    function visual(e, ant, ctx) {
+      var py = ctx.lang() === "py", ddof = py ? 0 : 1;
+      var etiq = function (i) { return ctx.ix(i); };
+      if (e && e.f && e.etapa >= 4) {
+        var P = pliegue(e.f, "pipe", null, ddof);
+        var memo = { e: P.e, fichas: P.en, etiq: etiq, on: e.etapa === 4 || e.etapa === 5 };
+        if (e.etapa === 4) memo.sinSd = true;
+        $("vrCaja").innerHTML = '<div class="cinta">' + cajaEsc(memo) + "</div>" + '<p class="esc-nota">' + (py ? "σ dividiendo entre n (como StandardScaler)." : "σ dividiendo entre n − 1 (como sd de R).") + " Fichas con el número de fila de " + (py ? "Python" : "R") + ".</p>";
+      } else if (e && e.f) $("vrCaja").innerHTML = '<div class="cinta">' + cajaEsc({ vacia: true }) + '</div><p class="esc-nota">Examen del pliegue ' + e.f + (e.etapa >= 2 ? ": filas " + pruebaDe(e.f).map(etiq).join(" y ") + "." : ".") + "</p>";
+      else if (e && e.pipe) $("vrCaja").innerHTML = '<div class="cinta">' + cajaEsc({ titulo: py ? "make_pipeline" : "caret::train", nombre: py ? "StandardScaler() → KNeighborsClassifier(n_neighbors=1)" : 'preProcess = c("center", "scale"), method = "knn"', vacia: true, on: true }) + '</div><p class="esc-nota">Un escalador nuevo en cada pliegue, dentro de la librería.</p>';
+      else $("vrCaja").innerHTML = '<div class="cinta">' + cajaEsc({ vacia: true }) + "</div>";
+
+      if (e && e.f && e.etapa >= 6) {
+        var Q = pliegue(e.f, "pipe", null, ddof);
+        var tope = e.i != null ? e.i : (e.etapa >= 14 ? 1 : -1);
+        var lin = e.i != null && e.etapa < 11 ? tope - 1 : tope;
+        var rs = e.i != null && e.etapa < 12 ? tope - 1 : tope;
+        $("vrPlano").innerHTML = planoPliegue(Q, { etiq: etiq, prueba: e.etapa >= 7, lineas: lin >= 0, lineasHasta: lin, res: rs >= 0, resHasta: rs });
+      } else $("vrPlano").innerHTML = '<p class="esc-nota">El plano aparece cuando se transforma el entrenamiento.</p>';
+
+      var ac = e ? e.aciertos : [];
+      var vals = [0, 1, 2, 3, 4].map(function (k) { return k < ac.length ? ac[k] : NaN; });
+      var h = '<div class="marc">';
+      vals.forEach(function (v, k) { h += '<span class="casilla' + (e && e.f === k + 1 ? " res" : "") + '"><small>pliegue ' + (k + 1) + "</small>" + (k < ac.length ? fx(v, 1) : "·") + "</span>"; });
+      h += '<span class="marc-m">media <b>' + (e && e.sal >= 2 ? "0.9" : "·") + "</b></span></div>";
+      if (e && e.sal >= 3) h += '<p class="esc-nota" style="color:var(--ok)">La librería dio los mismos cinco números.</p>';
+      $("vrMarc").innerHTML = h;
+      $("vrSal").textContent = e ? SAL[ctx.lang()].slice(0, e.sal).join("\n") : "";
+    }
+    B.vidaReal($("vidareal"), {
+      codigo: CODIGO,
+      eventos: EV,
+      narrar: narrar,
+      vars: function (e, ctx) {
+        var py = ctx.lang() === "py", v = [];
+        if (!e || !e.f) {
+          if (e && e.aciertos.length) v.push("<span>aciertos = <b>" + (py ? "[" + e.aciertos.map(function (x) { return fx(x, 1); }).join(", ") + "]" : e.aciertos.map(function (x) { return fx(x, 1); }).join(" ")) + "</b></span>");
+          return v;
+        }
+        var P = pliegue(e.f, "pipe", null, py ? 0 : 1);
+        v.push('<span class="vk">f = <b>' + ctx.ix(e.f - 1) + "</b></span>");
+        if (e.etapa >= 2) v.push("<span>prueba = <b>" + lista(P.pr, ctx, py) + "</b></span>");
+        if (e.etapa >= 3) v.push("<span>entreno = <b>" + lista(P.en, ctx, py) + "</b></span>");
+        if (e.etapa >= 4) v.push("<span>media = <b>(" + fx(P.e.mu[0], 3) + ", " + fx(P.e.mu[1]) + ")</b></span>");
+        if (e.etapa >= 5) v.push("<span>desv = <b>(" + fx(P.e.sd[0]) + ", " + fx(P.e.sd[1]) + ")</b></span>");
+        if (e.i != null) v.push('<span class="vk">i = <b>' + ctx.ix(e.i) + "</b></span>");
+        if (e.i != null && e.etapa >= 11) v.push("<span>vecino = <b>" + ctx.ix(P.vecinos[e.i].pos) + "</b></span>");
+        if (e.etapa >= 8) v.push("<span>bien = <b>" + e.bien + "</b></span>");
+        v.push("<span>aciertos = <b>" + (py ? "[" + e.aciertos.map(function (x) { return fx(x, 1); }).join(", ") + "]" : (e.aciertos.length ? e.aciertos.map(function (x) { return fx(x, 1); }).join(" ") : "NULL")) + "</b></span>");
+        return v;
+      },
+      visual: visual,
+      demora: function (e) { return !e ? 600 : e.id === "forf" || e.id === "si" ? 1100 : e.id === "media" || e.id === "desv" || e.id === "zp" ? 1300 : e.id === "pipe" || e.id === "lib" ? 1500 : 700; }
+    });
+
+    B.numerico(cuerpo("vrPred"), {
+      pregunta: "¿Cuántas veces se ejecuta la línea <code>media = X[entreno].mean(axis=0)</code> (en R, <code>media &lt;- colMeans(X[entreno, ])</code>)?",
+      respuesta: 5,
+      tolerancia: 0,
+      pistas: ["La línea está dentro del <code>for f</code>, fuera del <code>for i</code>."],
+      diagnostico: function (v) {
+        if (v === 1) return "Una sola vez es lo que pasa cuando se escala antes de partir: esa es la fuga. Aquí la línea está dentro del bucle de los pliegues.";
+        if (v === 10) return "10 son las veces que corre el bucle de los estudiantes del examen. La media está un nivel más afuera.";
+        if (v === 8) return "8 son las filas de entrenamiento de cada pliegue: la media las usa todas en una sola ejecución.";
+        return null;
+      },
+      explicacion: "<b>5 veces</b>, una por pliegue: el escalador se vuelve a ajustar cada vez, con su entrenamiento. Ahora dale a reproducir y mira cómo cambia la memoria de la caja de un pliegue a otro."
+    });
+
+    prop("codigo1", {
+      pregunta: "¿Por qué la segunda predicción dice que aprueba?",
+      opciones: [
+        "<code>fit_transform</code> vuelve a ajustar con una sola fila: su media es ella misma y su desviación 0, así que queda en (0, 0), el estudiante promedio, cuyo vecino aprobó.",
+        "kNN con un vecino es inestable.",
+        "El estudiante está fuera del rango de los datos.",
+        "Falta escalar <code>y</code>."],
+      correcta: 0,
+      pistas: [null,
+        "Con <code>transform</code>, el mismo kNN acierta: el problema no es el modelo.",
+        "6000 m es el máximo de la tabla, y <code>transform</code> lo maneja sin problema.",
+        "Las etiquetas no se escalan."],
+      explicacion: "Una fila sola queda siempre en (0, 0). Comprobado: <code>StandardScaler().fit_transform([[9.0, 1000.0]])</code> también da <code>[[0. 0.]]</code>. El vecino de (0, 0) en la escala de los diez es la fila 1 (7 h, 2500 m), que aprobó: <b>todo estudiante nuevo sale aprobado</b>. Con <code>pipe.predict</code> no pasa, porque nunca vuelve a ajustar."
+    });
+    prop("codigo2", {
+      pregunta: "Mismo pipeline, mismos datos. ¿Por qué cambia el resultado?",
+      opciones: [
+        "Con un clasificador, <code>cv=5</code> usa <code>StratifiedKFold(5)</code>, que arma otros pliegues; con 10 filas, cambiar los pliegues cambia el número.",
+        "<code>cv=5</code> baraja al azar.",
+        "Uno de los dos tiene fuga.",
+        "<code>KFold</code> usa 4 pliegues."],
+      correcta: 0,
+      pistas: [null,
+        "No baraja: es determinista. Corre el programa dos veces y da lo mismo.",
+        "Los dos usan el pipeline: el escalador se ajusta dentro de cada pliegue en los dos.",
+        "Son 5 en los dos casos."],
+      explicacion: "<code>StratifiedKFold</code> conserva la proporción de clases: cada examen tiene un 0 y un 1, con exámenes [0 3], [1 4], [2 5], [6 8] y [7 9]. Raschka lo explica en la página 178. Moraleja: con pocos datos, el número de la validación cruzada es ruidoso; compara versiones siempre con los mismos pliegues."
+    });
+    prop("codigo3", {
+      pregunta: "¿Qué pasó en el segundo pliegue?",
+      opciones: [
+        "El one-hot de ese pliegue no vio 'noche' en su entrenamiento y falló al transformar el examen; <code>cross_val_score</code> lo convirtió en <code>nan</code> y siguió.",
+        "El kNN no acepta texto.",
+        "'noche' está mal escrito.",
+        "La fuga lo arregló."],
+      correcta: 0,
+      pistas: [null,
+        "El texto ya llega convertido en 0 y 1 en los otros pliegues: el kNN nunca ve texto.",
+        "Está bien escrito: solo aparece una vez, en la fila 3.",
+        "Aquí no hay fuga: es justamente lo honesto. Con la segunda línea, <code>handle_unknown=\"ignore\"</code>, la noche queda en ceros y el pliegue 2 da 1."],
+      explicacion: "Es el <code>fit</code> del one-hot dentro del pliegue: solo conoce las categorías de su entrenamiento. En la vida real pasa con códigos postales, productos nuevos o países raros. <code>handle_unknown=\"ignore\"</code> en Python y <code>step_novel()</code> en R lo resuelven."
+    });
+  })();
+
+  /* ---------------- tarjetas ---------------- */
+  B.tarjetas($("tarjetas"), [
+    ["¿Qué aprende <code>StandardScaler</code> en <code>fit</code>?", "La media y la desviación de cada columna (<code>mean_</code>, <code>scale_</code>), con las filas que le pases."],
+    ["¿Qué es la fuga de datos?", "Que algo calculado con el test (una media, una selección de columnas) entre en el entrenamiento. La evaluación sale optimista."],
+    ["¿Por qué no escalar antes de la validación cruzada?", "Porque cada pliegue es un examen distinto y su escala tiene que salir solo de sus filas de entrenamiento."],
+    ["¿Qué hace <code>pipe.predict</code>?", "Pasa los datos por <code>transform</code> en cada paso y <code>predict</code> en el último. Nunca vuelve a ajustar."],
+    ["¿Qué pasa con <code>StandardScaler().fit_transform</code> de una sola fila nueva?", "Queda en ceros: la fila es su propia media y su desviación es 0. Usa <code>transform</code>."],
+    ["¿Para qué sirve <code>ColumnTransformer</code>?", "Para dar a cada grupo de columnas su preparación (escalar números, one-hot a textos) y juntarlas antes del modelo."],
+    ["¿Cómo se nombra un parámetro dentro del pipeline?", "<code>paso__parametro</code>, con doble guion bajo: <code>kneighborsclassifier__n_neighbors</code>."],
+    ["¿Cuál es el pipeline de R?", "La receta: <code>recipe</code> más <code>step_*</code>; <code>prep</code> es el <code>fit</code> y <code>bake</code> el <code>transform</code>. En un <code>workflow</code> o en <code>caret::train</code> se ajusta dentro de cada pliegue."]
+  ]);
+
+  /* ---------------- conexiones ---------------- */
+  B.conexiones("sklearn-pipeline");
+})();
+</script>
+</body>
+</html>

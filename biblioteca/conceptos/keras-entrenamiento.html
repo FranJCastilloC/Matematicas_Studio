@@ -1,0 +1,1629 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Entrenar con Keras: épocas, lotes y curvas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+/* ---------- escenario ---------- */
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.esc-head .hint { font-size: 12.5px; color: var(--ink-2); }
+.esc-ctrl { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin: 0 0 8px; }
+.esc-ctrl button { font-family: var(--f-mono); font-size: 12px; padding: 7px 10px; }
+.esc-ctrl button[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.esc-ctrl label { display: inline-flex; gap: 4px; align-items: center; font-family: var(--f-mono); font-size: 12px; color: var(--ink-2); }
+.esc-ctrl select { font-family: var(--f-mono); font-size: 12px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); }
+.esc-ctrl input[type="checkbox"] { accent-color: var(--accent); }
+.esc-nota { font-size: 12.5px; color: var(--ink-3); margin: 6px 0 0; }
+.esc-estado { font-family: var(--f-mono); font-size: 12px; color: var(--ink-2); margin: 6px 0 0; overflow-wrap: anywhere; }
+.esc-estado b { color: var(--ink); }
+.panel { border: 1px solid var(--line); border-radius: 10px; padding: 8px; margin: 0 0 10px; background: var(--surface); min-width: 0; }
+.panel.resalta { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.panel-t { font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 6px; }
+.fila-paneles { display: grid; grid-template-columns: minmax(0, 1fr) 150px; gap: 10px; }
+@media (max-width: 600px) { .fila-paneles { grid-template-columns: minmax(0, 1fr); } .fila-paneles .recta-p { order: -1; } }
+svg.graf { width: 100%; height: auto; display: block; }
+svg.graf text { font-family: var(--f-mono); font-size: 10px; fill: var(--ink-3); }
+svg.graf .eje { stroke: var(--line); stroke-width: 1; }
+svg.graf .rej { stroke: var(--line); stroke-width: .5; stroke-dasharray: 2 3; }
+
+/* mazo de tarjetas */
+.mazo { display: flex; flex-wrap: wrap; gap: 6px; align-items: stretch; }
+.lote { border: 2px solid var(--j); border-radius: 8px; padding: 3px 4px 4px; min-width: 0; }
+.lote.sinmarco { border-color: transparent; padding: 0; }
+.lote.inc { border-style: dashed; }
+.lote.on { border-color: var(--accent); background: var(--accent-soft); }
+.lote-t { display: block; font-family: var(--f-mono); font-size: 9.5px; color: var(--ink-3); margin: 0 0 3px; }
+.lote.on .lote-t { color: var(--accent); }
+.cartas { display: flex; flex-wrap: wrap; gap: 3px; }
+.carta { font-family: var(--f-mono); font-size: 11px; padding: 3px 5px; border-radius: 5px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); white-space: nowrap; }
+.mazo-val { margin-top: 8px; border: 2px solid var(--line); border-radius: 8px; padding: 3px 4px 4px; background: var(--surface-2); }
+.mazo-val .carta { color: var(--ink-3); background: var(--surface); }
+.contador { font-family: var(--f-mono); font-size: 12px; color: var(--ink); margin: 8px 0 0; }
+.tapado { display: inline-block; padding: 1px 8px; border: 1.5px dashed var(--accent); border-radius: 6px; color: var(--accent); background: var(--accent-soft); font-family: var(--f-mono); }
+
+/* huellas del paso 4 */
+.huellas { width: 100%; border-collapse: collapse; font-family: var(--f-mono); font-size: 12px; margin-top: 8px; }
+.huellas th, .huellas td { border-bottom: 1px solid var(--line); padding: 4px 6px; text-align: left; }
+.huellas th { color: var(--ink-3); font-weight: 500; font-size: 11px; }
+.huellas tr.on td { background: var(--accent-soft); }
+
+/* codigo del fit con argumentos tocables */
+.fitcod { font-family: var(--f-mono); font-size: 12px; line-height: 1.8; background: var(--surface-2); border-radius: 8px; padding: 8px 10px; overflow-wrap: anywhere; white-space: normal; color: var(--ink); }
+.fitcod button.arg { font-family: var(--f-mono); font-size: 12px; padding: 1px 5px; margin: 1px 0; border-radius: 5px; border: 1px solid var(--accent); background: var(--surface); color: var(--accent); max-width: 100%; white-space: normal; overflow-wrap: anywhere; text-align: left; }
+.fitcod button.arg[aria-pressed="true"] { background: var(--accent); color: var(--surface); }
+.no-corrio { font-size: 12px; color: var(--bad); margin: 6px 0 0; }
+
+/* chequeos con campos */
+.campos-fila { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-top: 6px; }
+.campo { display: inline-flex; align-items: center; gap: 4px; font-family: var(--f-mono); font-size: 13px; color: var(--ink-2); flex-wrap: wrap; }
+.campo input.num { width: 80px; }
+
+/* retos propios */
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.ojo-opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px; margin-top: 10px; }
+.ojo-opts .opt { text-align: left; }
+.objetivos { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.objetivos li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.objetivos .m { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.objetivos li.hecho { color: var(--ink); }
+.objetivos li.hecho .m { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 3px var(--surface); }
+.lista-val { font-family: var(--f-mono); font-size: 12.5px; background: var(--surface-2); border-radius: 8px; padding: 8px 10px; margin: 6px 0 10px; overflow-wrap: anywhere; }
+.lec { border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); overflow: hidden; margin: 6px 0 10px; }
+.lec-t { display: block; font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); padding: 5px 10px 0; }
+.lec pre { margin: 0; padding: 4px 10px 8px; font-family: var(--f-mono); font-size: 12px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink-2); }
+.lec pre .sal { color: var(--ink); font-weight: 500; }
+.lec pre .err { color: var(--bad); font-weight: 500; }
+.lec-par { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 520px) { .lec-par { grid-template-columns: minmax(0, 1fr); } }
+
+/* vida real */
+.vr-sal { margin: 4px 0 0; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); font-family: var(--f-mono); font-size: 12px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; min-height: 3em; color: var(--ink); }
+.vr-nota code { overflow-wrap: anywhere; }
+
+/* piezas largas de B.ordenar y de cazar el error */
+.chip { max-width: 100%; white-space: normal; text-align: left; }
+.chip .katex-html { white-space: normal; }
+.chip .mord.texttt { white-space: normal; overflow-wrap: anywhere; }
+.linea .katex-html { white-space: normal; }
+.linea .mord.texttt { white-space: normal; overflow-wrap: anywhere; }
+.linea { max-width: 100%; }
+a.enl { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ Entrenar con Keras: épocas, lotes y curvas</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Programación con datos · Keras · ISLR2 lab 10.9 y Raschka cap. 11 · Programación y entorno de trabajo (SM142002) UD3</p>
+    <h1>Entrenar con Keras: épocas, lotes y curvas</h1>
+    <p class="lede">
+      Cuando llamas a <code>fit</code>, Keras no mira todos los datos de una vez. Toma un <b>puñado</b> de filas (un lote), corrige los pesos un poco (un paso) y pasa al siguiente puñado.
+      Cuando ya vio todas las filas, terminó una <b>vuelta</b> (una época). Al final de cada vuelta mide dos números, la pérdida de entrenamiento y la de validación, y con ellos dibuja dos curvas.
+      Aquí vas a ver todo eso con un modelo de un solo peso: una <b>bola</b> que baja por una parábola mientras otra parábola, la de los datos nuevos, mira desde al lado.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> Entrenas una red y la pérdida de entrenamiento baja en cada época, sin falta. ¿Eso quiere decir que el modelo es cada vez mejor con datos que nunca vio? Si pudieras mirar solo un número durante el entrenamiento para decidir cuándo parar, ¿cuál mirarías y en qué momento pararías?</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: creo que..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>La bola, las tarjetas y las dos curvas</h2>
+      <p>Siete pasos. Cada uno termina con un chequeo: hasta que no lo resuelves, el siguiente queda cerrado. Los datos son inventados: diez estudiantes de un grupo de práctica, con sus horas de estudio y la nota de un mini examen. Ese grupo tuvo un corrector <b>generoso</b>. Otros cuatro estudiantes, de otro grupo y con un corrector normal, son la <b>validación</b>. El modelo es una recta por el origen, <code>nota = w · horas</code>, con un solo peso <code>w</code> que empieza en 0.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="Repasar por partes">
+          <span class="etapa">Paso 1</span>
+          <h3>Repasar los datos por partes</h3>
+          <p>En el escenario tienes diez tarjetas. Cada una es un estudiante: <code>1 h → 3</code> quiere decir que estudió una hora y sacó un 3. Al lado está la nube de puntos con la recta del modelo. Al principio la recta está plana: predice un 0 para todos.</p>
+          <p>Entrenar no es mirar las diez tarjetas una vez y listo. El modelo toma un <b>puñado</b> de tarjetas, mira cuánto se equivoca con ellas y gira la recta un poco hacia donde se equivoca menos. Después toma el siguiente puñado y vuelve a corregir. Cuando ya pasó por todas las tarjetas, terminó una <b>vuelta</b>.</p>
+          <p>Las cuatro tarjetas grises son de los otros estudiantes. Nunca entran a un puñado: solo sirven para ver si la recta funciona con gente que el modelo no usó para corregirse.</p>
+          <p>Raschka arma estos puñados a mano en su red de MNIST: baraja las filas y las corta en trozos de 100. Su generador <b>descarta</b> el último trozo si queda incompleto (con 55 000 filas no pierde nada, porque salen 550 justos). Keras no lo descarta: lo usa aunque sea más chico
+          <cite class="cita" data-fuente="raschka11" data-pag="18" data-pimp="352" data-seccion="Coding the neural network training loop" data-que="num_epochs = 50, minibatch_size = 100 y la función minibatch_generator, que baraja los índices y los corta en trozos de 100, descartando el último incompleto." data-cuando="Al terminar este paso"></cite>.</p>
+          <div class="check" id="chk1">
+            <p class="check-tit">Predice antes de tocar nada</p>
+            <div class="cuerpo"></div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Época, lote, paso">
+          <span class="etapa">Paso 2</span>
+          <h3>Época, lote y pasos por época</h3>
+          <p>Ahora los nombres. El <b>lote</b> (en Keras, <code>batch_size</code>; aquí $b$) es cuántas filas mira el modelo en cada corrección. Un <b>paso</b> es una actualización del peso. Una <b>época</b> (<code>epochs</code>) es una pasada completa por las $n$ filas de entrenamiento.</p>
+          <div class="fbloque"><div class="vivo">$\text{pasos por época} = \left\lceil \dfrac{n}{b} \right\rceil \qquad \text{actualizaciones} = \text{épocas} \times \left\lceil \dfrac{n}{b} \right\rceil$</div></div>
+          <p>Los corchetes $\lceil \ \rceil$ quieren decir <b>redondear hacia arriba</b>. Las filas que sobran forman un último lote más chico, de $n - b\,(\lceil n/b \rceil - 1)$ filas. Cambia el lote en el escenario y mira cómo se reagrupan las tarjetas.</p>
+          <p><b>Trampa.</b> ISLR2 entrena una red con los 176 jugadores de <code>Hitters</code> y lotes de 32, y escribe que una época son "176/32 = 5.5" pasos de SGD. Como cuenta de cuántos datos se procesan está bien, pero Keras no da medio paso: da <b>6</b>, cinco de 32 filas y uno de 16 ($176 - 5 \cdot 32 = 16$)
+          <cite class="cita" data-fuente="islr2" data-pag="456" data-pimp="445" data-seccion="10.9.1 A Single Layer Network on the Hitters Data" data-que="El fit con epochs = 1500, batch_size = 32 y validation_data, la cuenta 176/32 = 5.5 pasos por época y el aviso de que un segundo fit sigue desde donde quedó." data-cuando="Al terminar este paso"></cite>.
+          Lo mismo se ve en el cuaderno DL03 de la UD4 de SM142004: la barra de progreso de Keras dice <code>9/9</code> con 404 filas y lotes de 50 ($\lceil 8.08 \rceil = 9$, el último de 4 filas) y <code>8/8</code> con 398 filas ($\lceil 7.96 \rceil = 8$, el último de 48).</p>
+          <details class="profundizar">
+            <summary>¿Y si no pongo <code>batch_size</code>?</summary>
+            <div>
+              <p>Keras usa 32 por defecto. Con estas 10 filas, eso es un solo lote por época: el conjunto entero. Es el recorrido de lote 10 que vas a ver en el paso 4: la bola termina la época 1 en <code>w = 0.7</code>, frente a <code>w = 1.6562</code> con lotes de 4.</p>
+            </div>
+          </details>
+          <div class="check" id="chk2"><p class="check-tit">Calcula con el escenario</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Un paso = un lote">
+          <span class="etapa">Paso 3</span>
+          <h3>Un paso es un lote</h3>
+          <p>En cada paso, el modelo calcula la pendiente de la pérdida (el gradiente) <b>solo con las filas del lote</b> y mueve <code>w</code> en contra:</p>
+          <div class="fbloque"><div class="vivo">$w \leftarrow w - \text{tasa} \cdot \text{grad}, \qquad \text{grad} = \dfrac{1}{b} \sum_{i \in \text{lote}} 2\,x_i\,(w\,x_i - y_i)$</div></div>
+          <p>Ese <code>grad</code> es la derivada del error cuadrático medio del lote. Es el mismo descenso de gradiente estocástico de <a class="enl" data-tit="Descenso de gradiente estocástico">Descenso de gradiente estocástico</a>, ahora visto desde dentro de <code>fit</code>; por qué el ruido de los lotes ayuda está explicado ahí y aquí no se repite.</p>
+          <p>En el escenario, la parábola azul es la pérdida de entrenamiento según <code>w</code>. La bola marca el <code>w</code> actual. Cada paso la hace saltar. Con la casilla "parábola del lote" ves en gris la parábola de las filas de ese lote: es la que el paso intenta bajar.</p>
+          <p>Raschka repasa la idea: el SGD aproxima la pérdida con un ejemplo o un mini lote y por eso actualiza los pesos mucho más seguido
+          <cite class="cita" data-fuente="raschka11" data-pag="4" data-pimp="338" data-seccion="Single-layer neural network recap" data-que="El gradiente del MSE y el repaso del SGD: un ejemplo o un mini lote por actualización, más pasos y con ruido." data-cuando="Al leer este paso"></cite>,
+          y la regla $w_j := w_j - \eta\,\partial L/\partial w_j$ aparece en su bucle de 50 épocas
+          <cite class="cita" data-fuente="raschka11" data-pag="22" data-pimp="356" data-seccion="Coding the neural network training loop" data-que="La regla de actualización, la corrida de 50 épocas con tasa 0.1 y la comparación de entrenamiento y validación al final." data-cuando="Al terminar este paso"></cite>.
+          El material de la UD4 dice en prosa que "el gradiente de error se multiplica por el learning rate", pero no define mini lote ni época
+          <cite class="cita" data-fuente="dl4" data-pag="18" data-pimp="18" data-seccion="Hiperparámetros" data-que="El learning rate en prosa, AdaGrad y ADAM. No define mini lote ni época: por eso esta página los explica con Keras y con ISLR2." data-cuando="Cuando quieras ver cómo lo cuenta la unidad"></cite>.
+          La UD3 de SM142002, donde está TensorFlow, todavía no tiene material publicado en la carpeta de la materia.</p>
+          <div class="check" id="chk3"><p class="check-tit">Calcula antes de pulsar</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="El lote cambia el viaje">
+          <span class="etapa">Paso 4</span>
+          <h3>El tamaño del lote cambia el viaje</h3>
+          <p>Con la misma tasa, lotes chicos dan <b>muchos pasos</b> por época, cada uno con pocas filas y algo de ruido. Lotes grandes dan <b>pocos pasos</b>, cada uno más estable. Ninguno es "el correcto": el tamaño del lote es un hiperparámetro que se ajusta, como la tasa de aprendizaje. La UD4 lo pone en su lista de buenas prácticas
+          <cite class="cita" data-fuente="dl4" data-pag="43" data-pimp="43" data-seccion="Tema 12: limitaciones y buenas prácticas" data-que="Entre las buenas prácticas: ajustar el learning rate y el tamaño del lote, junto a normalizar los datos y usar dropout." data-cuando="Al terminar este paso"></cite>,
+          y las diapositivas de LSTM repiten la lista con "batch size"
+          <cite class="cita" data-fuente="lstm4" data-pag="51" data-pimp="51" data-seccion="Limitaciones y buenas prácticas" data-que="La misma lista de buenas prácticas en diapositivas, con batch size y tasa de aprendizaje." data-cuando="Si prefieres la versión corta"></cite>.</p>
+          <p>En el escenario, elige un lote y pulsa "una época desde w = 0". La huella de la bola queda dibujada para que compares lotes.</p>
+          <p><b>Trampa.</b> Más pasos no es siempre mejor. Con lote 1 y las tarjetas en orden fijo, <code>w</code> no se asienta en 2.5: cada tarjeta empuja hacia su propia razón nota/horas y la última del orden tira más fuerte. Con lote 4, en cambio, los tres lotes tienen su mínimo justo en 2.5 (verás sus parábolas grises en el paso 3), así que la bola llega a 2.5 sin ese sesgo.</p>
+          <details class="profundizar">
+            <summary>¿Para qué sirve <code>shuffle=True</code>?</summary>
+            <div>
+              <p>Keras baraja las filas de entrenamiento al empezar cada época; es su valor por defecto. Así ningún estudiante es siempre "el último" y el sesgo del orden fijo se promedia. Por eso dos entrenamientos dan resultados un poco distintos, algo que ISLR2 avisa en su laboratorio: los resultados varían un poco con cada ajuste por culpa del SGD.</p>
+              <p>La casilla "barajar cada época" del escenario lo muestra con una semilla fija, para que siempre salga el mismo barajado. El código de la vida real usa orden fijo, para que Python y R den exactamente los mismos números.</p>
+            </div>
+          </details>
+          <div class="check" id="chk4"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Dos curvas">
+          <span class="etapa">Paso 5</span>
+          <h3>Dos curvas: entrenamiento y validación</h3>
+          <p>Al final de cada época se mide la pérdida en dos conjuntos. El de <b>entrenamiento</b> es el que da los pasos. El de <b>validación</b> nunca mueve a <code>w</code>: solo se mide. En el escenario se enciende la parábola verde, la de validación, y abajo aparece el panel de curvas: un punto por época.</p>
+          <p>Mientras las dos curvas bajan, el modelo aprende algo que sirve. Cuando la de validación sube y la de entrenamiento sigue bajando, el modelo está aprendiendo rarezas del entrenamiento que no se repiten en datos nuevos: es <a class="enl" data-tit="Sobreajuste">sobreajuste</a>. Aquí la rareza es el corrector generoso: el mínimo de entrenamiento está en $w = 2.5$ y el de validación en $w = 2$.</p>
+          <div class="check" id="chk5"><p class="check-tit">Predice antes de destapar</p><div class="cuerpo"></div></div>
+          <div id="post5" hidden>
+            <p>Las dos parábolas explican la U de la curva verde: la bola pasa por el fondo de la parábola de validación, $w = 2$, y sigue hacia el 2.5 del corrector generoso. En una red grande no hay dos parábolas en una dimensión, pero las curvas se leen igual.</p>
+            <p>Raschka muestra la pérdida de entrenamiento por época, que baja fuerte en las primeras 10
+            <cite class="cita" data-fuente="raschka11" data-pag="23" data-pimp="357" data-seccion="Evaluating the neural network performance" data-que="Figure 11.7: el MSE de entrenamiento por época, que baja fuerte al principio y después se aplana." data-cuando="Después del chequeo"></cite>,
+            y la exactitud de entrenamiento y validación, que se separan desde la época 25: un sobreajuste leve
+            <cite class="cita" data-fuente="raschka11" data-pag="24" data-pimp="358" data-seccion="Evaluating the neural network performance" data-que="Figure 11.8: exactitud de entrenamiento y de validación por época; la brecha se abre desde la época 25." data-cuando="Después del chequeo"></cite>.
+            En el capítulo 6 tiene la lectura general de la brecha entre entrenamiento y validación
+            <cite class="cita" data-fuente="raschka6" data-pag="11" data-pimp="181" data-seccion="Diagnosing bias and variance problems with learning curves" data-que="Figure 6.4: cómo se lee una brecha grande entre entrenamiento y validación. Ojo: ahí el eje horizontal es el tamaño de la muestra, no la época." data-cuando="Al terminar este paso"></cite>;
+            ojo, ahí el eje horizontal es el tamaño de la muestra, no la época. Lo de sesgo y varianza está en <a class="enl" data-tit="Sesgo y varianza de un modelo">Sesgo y varianza de un modelo</a>.</p>
+            <p>En la UD5 de SM142004, el cuaderno CNN03 termina con exactitud 0.98 en entrenamiento y 0.518 en validación, y el propio cuaderno lo llama sobreajuste. Parte de esa brecha viene del desbalance de clases: 1000 gatos y 168 perros en entrenamiento.</p>
+          </div>
+
+          <div class="destacado" id="destacado">
+            <p class="dest-tit">Una confusión muy común</p>
+            <h4>¿Por qué en la época 1 la validación sale mucho más baja que el entrenamiento?</h4>
+            <p>Si entrenaras este modelo con Keras, en la época 1 la barra de progreso diría <code>loss: 11.6477 - val_loss: 0.7954</code>. Parece que el modelo va mejor con datos que nunca vio. (Esos números se calcularon con NumPy imitando la regla de Keras: Keras no está instalado en esta máquina.)</p>
+            <div class="check" id="chk5b"><p class="check-tit">Predice antes de seguir</p><div class="cuerpo"></div></div>
+            <div id="dest5" hidden>
+              <p>El <code>loss</code> que muestra Keras es el promedio de las pérdidas de cada lote, medidas <b>antes</b> de su paso y ponderadas por el tamaño del lote:</p>
+              <div class="fbloque"><div class="vivo">$\dfrac{15.75 \cdot 4 + 8.9141 \cdot 4 + 8.9102 \cdot 2}{10} = 11.6477$</div></div>
+              <p>15.75 se midió con <code>w = 0</code>, 8.9141 con <code>w = 0.625</code> y 8.9102 con <code>w = 1.0938</code>. La validación se mide una sola vez, al final, con <code>w = 1.6562</code>. Con ese mismo <code>w</code>, la pérdida de entrenamiento es 2.2934. Para comparar de igual a igual, las dos curvas tienen que medirse con el mismo <code>w</code>: el interruptor "como lo imprime Keras" del panel de curvas muestra la diferencia. En las primeras épocas, la curva de Keras va media época atrasada.</p>
+              <p>En redes con dropout hay una segunda razón: durante el entrenamiento Keras apaga neuronas al azar y la pérdida de entrenamiento sale peor; en la validación no apaga ninguna (ver <a class="enl" data-tit="Dropout y batch normalization">Dropout y batch normalization</a>). Las diapositivas de la UD5 ponen <code>Dropout(0.2)</code> entre capas y comentan que evita "memorizing or overfitting"
+              <cite class="cita" data-fuente="cnn5diapo" data-pag="38" data-pimp="38" data-seccion="Keras: perceptrón multicapa con dropout" data-que="Un perceptrón multicapa en Keras con Dropout(0.2) después de cada capa densa y el comentario de que evita memorizar o sobreajustar." data-cuando="Después del destacado"></cite>.</p>
+              <details class="profundizar">
+                <summary>¿Cómo sé qué número estoy mirando?</summary>
+                <div>
+                  <p><code>hist.history["loss"]</code> es el promedio durante la época, con pesos que cambiaban. <code>model.evaluate(x, y)</code> mide con los pesos finales. Si quieres la curva de entrenamiento "justa", llama a <code>evaluate</code> al final de cada época (o pasa también los datos de entrenamiento como validación), a costa de más tiempo.</p>
+                  <p>Raschka promedia pérdidas de lotes en su función <code>compute_mse_and_acc</code> y divide entre el índice del último lote (49) y no entre el número de lotes (50): por eso su texto da 0.27 donde la cuenta da 0.28. Es el mismo tema, cómo se promedian las pérdidas de los lotes.</p>
+                </div>
+              </details>
+            </div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Parar a tiempo">
+          <span class="etapa">Paso 6</span>
+          <h3>Parar a tiempo: la paciencia</h3>
+          <p>Si la validación deja de mejorar, seguir entrenando solo acerca el modelo a las rarezas del entrenamiento. La <b>parada temprana</b> hace tres cosas: guarda el mejor <code>w</code> visto en validación; cuenta cuántas épocas seguidas pasan sin mejorarlo; y si el contador llega a la <b>paciencia</b>, para y vuelve al mejor <code>w</code>. Mejorar quiere decir bajar estrictamente: un empate no cuenta. En Keras:</p>
+          <div class="fbloque"><div class="vivo" style="overflow-wrap:anywhere">keras.callbacks.EarlyStopping(monitor="val_loss", patience=2, restore_best_weights=True)</div></div>
+          <div class="cita" id="citaHipo" hidden></div>
+          <p>Raschka, al terminar sus 50 épocas, compara entrenamiento y validación y sugiere que se pudo parar antes. ISLR2 va más lejos en la sección 10.7.2: la pérdida de validación empieza a subir hacia la época 30 y por eso la parada temprana funciona también como una forma de regularización.</p>
+          <p><b>Trampa.</b> En Keras, <code>restore_best_weights</code> vale <code>False</code> por defecto. Con el <code>EarlyStopping</code> "de fábrica" y <code>patience=2</code>, el entrenamiento para en la época 4, pero el modelo se queda con el <code>w</code> de la época 4. Y <code>patience</code> vale 0 por defecto: para en la primera época que no mejora. En el escenario, apaga "restaurar los mejores pesos" y mira dónde queda la bola.</p>
+          <details class="profundizar">
+            <summary>¿Por qué parar temprano regulariza?</summary>
+            <div>
+              <p>La bola empieza en <code>w = 0</code>. Parar antes la deja más cerca del inicio, como si una penalización la empujara hacia 0: es la idea de ridge. Aquí, parar con el <code>w</code> de la época 2 deja <code>w = 2.2152</code>, entre 0 y 2.5. ISLR2 lo dice en la sección 10.7.2: el descenso por gradiente impone por sí mismo una regularización aproximadamente cuadrática.</p>
+            </div>
+          </details>
+          <div class="check" id="chk6"><p class="check-tit">Calcula con las curvas</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="El fit, argumento por argumento">
+          <span class="etapa">Paso 7</span>
+          <h3>El <code>fit</code> de Keras, argumento por argumento</h3>
+          <p>Todo lo anterior es una sola llamada. En el escenario, toca cada argumento y se ilumina la parte del escenario que controla:</p>
+          <ul>
+            <li><code>epochs</code>: vueltas máximas.</li>
+            <li><code>batch_size</code>: los marcos de las tarjetas; 32 si no lo pones.</li>
+            <li><code>shuffle</code>: barajar cada época; <code>True</code> por defecto.</li>
+            <li><code>validation_data</code>: el mazo gris. O bien <code>validation_split=0.2</code>, que aparta <b>las últimas</b> filas antes de barajar (lo ves en una trampa de la vida real).</li>
+            <li><code>callbacks</code>: la estrella y la paciencia.</li>
+          </ul>
+          <p><code>fit</code> devuelve un objeto <code>History</code>: <code>hist.history["loss"]</code> y <code>hist.history["val_loss"]</code> son las dos curvas. En R, con el paquete keras que usa ISLR2, es <code>history &lt;- modelo %&gt;% fit(x, y, epochs = 10, batch_size = 4, validation_data = list(xv, yv))</code> y <code>plot(history)</code>.</p>
+          <p class="no-corrio">Ni TensorFlow ni el paquete keras de R están instalados en esta máquina: el código de Keras de esta página no se corrió.</p>
+          <p>Las diapositivas de la UD5 compilan con <code>rmsprop</code> y entrenan con <code>batch_size=128</code> y <code>nb_epoch=4</code>
+          <cite class="cita" data-fuente="cnn5diapo" data-pag="39" data-pimp="39" data-seccion="Keras: compilar, entrenar, evaluar" data-que="compile con rmsprop y categorical_crossentropy, fit con batch_size=128 y nb_epoch=4, evaluate con batch_size=32." data-cuando="Al leer este paso"></cite>.
+          <code>nb_epoch</code> es el nombre de Keras 1: hoy es <code>epochs</code>, y con el nombre viejo Keras actual da error. La misma diapositiva usa comillas tipográficas (<code>'rmsprop’</code>), que dan error de sintaxis si copias el código.
+          ISLR2 entrena MNIST con <code>validation_split = 0.2</code>: de 60 000 imágenes quedan 48 000 para entrenar, con lotes de 128 son 375 pasos por época, y dibuja las curvas con <code>plot(history)</code>
+          <cite class="cita" data-fuente="islr2" data-pag="459" data-pimp="448" data-seccion="10.9.2 A Multilayer Network on the MNIST Digit Data" data-que="fit con validation_split = 0.2, lotes de 128 y 375 pasos por época sobre 48 000 imágenes, y plot(history) con las dos curvas." data-cuando="Al terminar la página"></cite>.</p>
+          <p>Un matiz de ISLR2: en el laboratorio de <code>Hitters</code> pasa <b>los datos de prueba</b> como <code>validation_data</code>, para ver el error de prueba a medida que avanzan las épocas. Para mirar está bien. Pero si con esa curva decidieras cuándo parar, la prueba dejaría de ser una prueba: ya la usaste para elegir. Lo correcto es separar validación y prueba, como hacen ellos en MNIST con <code>validation_split</code>.</p>
+          <div class="check" id="chk7"><p class="check-tit">Elige y explica</p><div class="cuerpo"></div></div>
+          <p>En el cuaderno DL03 de la UD4 de SM142004 pasa algo parecido: una celda "equivalente" se ejecutó además de la primera sobre el mismo <code>model</code>, y el modelo quedó con las capas duplicadas (ocho <code>Dense</code> en el <code>summary</code>). Los objetos de Keras recuerdan lo que ya les hiciste.</p>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+        </div>
+        <div id="escCuerpo"></div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>Esto es lo que <code>fit</code> hace por dentro con <code>EarlyStopping(patience=2, restore_best_weights=True)</code>, escrito con bucles: por época, por lote; al final de cada época, las dos pérdidas, la mejor validación y el contador de paciencia; al terminar, volver al mejor <code>w</code>. Mismos datos y mismos hiperparámetros del recorrido: tasa 0.05, lote 4, paciencia 2. Keras no está instalado en esta máquina, así que el código usa NumPy y R base; se corrió en los dos lenguajes y da los mismos números. Elige Python o R y dale a reproducir: conviene subir la velocidad o usar "Ir al final".</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir</p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="true">Python</button>
+            <button type="button" data-lang="r" aria-pressed="false">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">1 · datos</span><span data-f="2">2 · lotes y pasos</span><span data-f="3">3 · fin de época</span><span data-f="4">4 · restaurar</span>
+        </div>
+        <h3 class="mini-tit vr-tit">Las tarjetas y el lote en uso</h3>
+        <div id="vrMazo"></div>
+        <h3 class="mini-tit vr-tit">La bola en la parábola</h3>
+        <div id="vrParab"></div>
+        <h3 class="mini-tit vr-tit">Las curvas por época</h3>
+        <div id="vrCurvas"></div>
+        <h3 class="mini-tit vr-tit">Salida del programa</h3>
+        <pre class="vr-sal" id="vrSal"></pre>
+      </div>
+    </div>
+
+    <p class="vr-nota">Con Keras, todo el bucle cabe en dos líneas: <code>parada = keras.callbacks.EarlyStopping(monitor="val_loss", patience=2, restore_best_weights=True)</code> y <code>hist = modelo.fit(x, y, epochs=10, batch_size=4, shuffle=False, validation_data=(xv, yv), callbacks=[parada])</code>, con <code>modelo</code> una sola capa <code>Dense(1, use_bias=False, kernel_initializer="zeros")</code>, <code>SGD(learning_rate=0.05)</code> y <code>loss="mse"</code>. <b>No se pudo correr en esta máquina: TensorFlow no está instalado.</b> Según la regla de Keras, debería dar <code>val_loss</code> de 0.7954, 0.6158, 0.9078 y 1.0465, quedarse con <code>w</code> cerca de 2.2152 (en <code>float32</code> pueden cambiar los últimos decimales) y mostrar <code>loss</code> de 11.6477, 1.5926, 0.4472 y 0.3168, el promedio durante cada época. Es lo esperado, no algo comprobado. El código usa orden fijo (<code>shuffle=False</code>) para que Python y R coincidan; Keras baraja por defecto. R imprime con <code>cat</code>, que deja un espacio antes de cada salto de línea; aquí la salida se muestra sin él.</p>
+
+    <details class="profundizar">
+      <summary>La forma vectorizada</summary>
+      <div>
+        <p>El bucle de épocas no tiene una versión de una línea: cada paso depende del <code>w</code> que dejó el anterior. Lo que sí está vectorizado es el lote: <code>np.mean(2 * xb * (w * xb - yb))</code> calcula el gradiente de las 4 filas a la vez, sin un bucle por fila. Eso es lo que hace la GPU con lotes grandes, y por eso un lote grande es más rápido <b>por época</b> aunque dé menos pasos.</p>
+      </div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Paró, pero ¿con qué pesos?</h3><span class="estado" data-reto="codigo1"></span></div>
+        <div class="lec"><span class="lec-t">Keras (no se pudo correr aquí)</span><pre>parada = keras.callbacks.EarlyStopping(monitor="val_loss", patience=2)</pre></div>
+        <div class="lec"><span class="lec-t">Imitación en Python (sí se corrió)</span><pre>import numpy as np
+val = [0.7954, 0.6158, 0.9078, 1.0465]       # val_loss de cada época
+pesos = [1.6562, 2.2152, 2.4039, 2.4676]     # w al final de cada época
+mejor = int(np.argmin(val))
+print("época con menor val_loss:", mejor + 1)
+print("restore_best_weights=False:", pesos[-1])
+print("restore_best_weights=True: ", pesos[mejor])
+<span class="sal">época con menor val_loss: 2
+restore_best_weights=False: 2.4676
+restore_best_weights=True:  2.2152</span></pre></div>
+        <div id="codigo1"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>La validación que no se parece al resto</h3><span class="estado" data-reto="codigo2"></span></div>
+        <div class="lec"><span class="lec-t">Keras (no se pudo correr aquí)</span><pre>modelo.fit(x, y, epochs=10, validation_split=0.2)</pre></div>
+        <div class="lec-par">
+          <div class="lec"><span class="lec-t">Imitación en Python (sí se corrió)</span><pre>import numpy as np
+x = np.array([1, 1, 1, 1, 2, 2, 2, 2, 2, 2])   # filas ordenadas por horas
+corte = int(len(x) * (1 - 0.2))              # validation_split=0.2
+print(corte)
+print(x[:corte], x[corte:])
+<span class="sal">8
+[1 1 1 1 2 2 2 2] [2 2]</span></pre></div>
+          <div class="lec"><span class="lec-t">Imitación en R (sí se corrió)</span><pre>x &lt;- c(1, 1, 1, 1, 2, 2, 2, 2, 2, 2)   # filas ordenadas por horas
+corte &lt;- floor(length(x) * (1 - 0.2))  # validation_split = 0.2
+print(corte)
+print(x[(corte + 1):length(x)])
+<span class="sal">[1] 8
+[1] 2 2</span></pre></div>
+        </div>
+        <p class="desc">La regla "las últimas filas, antes de barajar" está en la documentación de <code>fit</code>; no se pudo comprobar con Keras aquí. Las imitaciones reproducen esa regla.</p>
+        <div id="codigo2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>El segundo <code>fit</code></h3><span class="estado" data-reto="codigo3"></span></div>
+        <div class="lec"><span class="lec-t">Imitación en R (sí se corrió)</span><pre>x &lt;- c(1, 2, 1, 2, 1, 2, 1, 2, 2, 2)
+y &lt;- c(3, 5, 2, 5, 2, 5, 3, 5, 4, 6)
+entrenar &lt;- function(w, epocas, tasa = 0.05, lote = 4) {
+  for (epoca in 1:epocas) {
+    for (ini in seq(1, length(x), by = lote)) {
+      fin &lt;- min(ini + lote - 1, length(x))
+      w &lt;- w - tasa * mean(2 * x[ini:fin] * (w * x[ini:fin] - y[ini:fin]))
+    }
+  }
+  w
+}
+w &lt;- entrenar(0, 2)
+print(round(w, 4))
+w &lt;- entrenar(w, 2)       # como llamar fit() otra vez
+print(round(w, 4))
+print(round(entrenar(0, 4), 4))
+<span class="sal">[1] 2.2152
+[1] 2.4676
+[1] 2.4676</span></pre></div>
+        <p class="desc">ISLR2 lo avisa en el laboratorio de <code>Hitters</code> (p. 445): si corres <code>fit()</code> otra vez, el ajuste sigue desde donde quedó.</p>
+        <div id="codigo3"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: la biblioteca te avisa en el índice cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>¿Qué le pasa a este entrenamiento?</h3><span class="estado" data-reto="ojo"></span></div>
+        <p class="desc">Ocho rondas al azar. Ves las dos curvas por época: entrenamiento en azul, validación en verde. Decide sin calcular. Apruebas con 7 de 8.</p>
+        <div id="ojo"></div>
+      </article>
+
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Construir</span><h3>Tres entrenamientos a pedido</h3><span class="estado" data-reto="construir"></span></div>
+        <p class="desc">Mueve los controles hasta cumplir los tres objetivos, en cualquier orden. Se marcan solos. Siempre hasta 10 épocas, con las tarjetas en orden fijo.</p>
+        <ul class="objetivos" id="objetivos"></ul>
+        <div id="construir" style="margin-top:10px"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>Contar pasos</h3><span class="estado" data-reto="mano"></span></div>
+        <p class="desc">Un conjunto nuevo al azar. Con papel: cuántos pasos por época, de qué tamaño es el último lote y cuántas actualizaciones en total.</p>
+        <div id="mano"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>¿Cuándo para?</h3><span class="estado" data-reto="paciencia"></span></div>
+        <p class="desc">Ocho pérdidas de validación, una por época, y una paciencia. Aplica la regla exacta: mejora solo si baja estrictamente; si no, el contador sube; para cuando el contador llega a la paciencia.</p>
+        <div id="paciencia"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Una línea mal</h3><span class="estado" data-reto="error"></span></div>
+        <p class="desc">Tres versiones del código de la vida real con una línea cambiada. Las salidas son reales. Toca la línea mala.</p>
+        <div id="error"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Qué es una época</h3><span class="estado" data-reto="prop1"></span></div>
+        <div id="prop1"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Un loss raro</h3><span class="estado" data-reto="prop2"></span></div>
+        <div id="prop2"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Paciencia 3</h3><span class="estado" data-reto="prop3"></span></div>
+        <div id="prop3"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Recordar a la fuerza es lo que fija. Arma la llamada de memoria y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Llamada de memoria</span><h3>El <code>fit</code> con parada temprana</h3><span class="estado" data-reto="formula"></span></div>
+        <p class="desc">Ya existe <code>parada = EarlyStopping(monitor="val_loss", patience=2, restore_best_weights=True)</code>. Hay piezas de más que no pertenecen. No mires arriba.</p>
+        <div id="formula"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el material</h2>
+      <p class="lecturas-intro">Ya construiste la idea con las manos. Ahora ve a los libros y al material del máster y comprueba que la reconoces. Cada entrada dice qué vas a encontrar y en qué momento conviene leerla. Si abres la biblioteca con doble clic, el enlace abre el archivo en esa página. La UD3 de SM142002, donde se enseña TensorFlow, no tiene material publicado en la carpeta de la materia; por eso las lecturas vienen de ISLR2, de Raschka y de las unidades 4 y 5 de SM142004. Fuera de esta lista quedan los cuadernos DL03 (UD4) y CNN03 (UD5), que se nombran en el recorrido.</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> Los catorce estudiantes, sus horas y sus notas son inventados, elegidos para que las dos parábolas den exactas: $L_{\text{entr}}(w) = 0.3 + 2.8\,(w - 2.5)^2$ y $L_{\text{val}}(w) = 0.5 + 2.5\,(w - 2)^2$. Los retos generan otros números al azar.
+    El código de la vida real y de las trampas se ejecutó en Python 3.13.5 con NumPy 2.1.3 y en R 4.6.1; los mensajes de error de R salen en inglés porque así los imprime R en esta máquina.
+    TensorFlow y el paquete keras de R no están instalados: todo número "de Keras" se calculó imitando su regla y se presenta como lo esperado, no como salida real.
+    El escenario recalcula el entrenamiento en el navegador con el mismo algoritmo y da los mismos números que el código. Tu progreso se guarda solo en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+(function () {
+  "use strict";
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var RETOS = ["ojo", "construir", "mano", "paciencia", "error", "prop1", "prop2", "prop3", "codigo1", "codigo2", "codigo3", "formula"];
+  var C = B.concepto({ id: "keras-entrenamiento", retos: RETOS, pasos: 7 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  /* ---------------- utilidades ---------------- */
+  function azar(n) { return Math.floor(Math.random() * n); }
+  function eleg(a) { return a[azar(a.length)]; }
+  function escH(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+  // redondeo a 4 decimales como round() de Python y R: los empates exactos van al par (1.65625 da 1.6562)
+  function r4(v) {
+    var x = v * 1e4, f = Math.floor(x), d = x - f;
+    var r = Math.abs(d - 0.5) < 1e-7 ? (f % 2 === 0 ? f : f + 1) : Math.round(x);
+    return r / 1e4;
+  }
+  function n4(v) { var s = String(r4(v)); return s.charAt(0) === "-" ? "−" + s.slice(1) : s; }
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+  function tt(s) {
+    var m = /^( *)(.*)$/.exec(s), sang = Math.round(m[1].length / 2);
+    var t = m[2].replace(/\\/g, "").replace(/([_#%&{}$])/g, "\\$1").replace(/\^/g, "\\textasciicircum{}").replace(/~/g, "\\textasciitilde{}");
+    return new Array(sang + 1).join("\\quad ") + "\\texttt{" + t + "}";
+  }
+
+  // enlaces por titulo a otros conceptos del catalogo
+  [].forEach.call(document.querySelectorAll("a.enl[data-tit]"), function (a) {
+    var c = B.buscarConcepto(a.getAttribute("data-tit"));
+    if (c && c.estado === "listo" && c.archivo) a.setAttribute("href", "../" + c.archivo);
+    else a.removeAttribute("href");
+  });
+
+  /* ---------------- los datos y el simulador ---------------- */
+  var X = [1, 2, 1, 2, 1, 2, 1, 2, 2, 2], Y = [3, 5, 2, 5, 2, 5, 3, 5, 4, 6];
+  var XV = [1, 2, 1, 2], YV = [3, 4, 1, 4];
+  var N = X.length, MAXEP = 10;
+  function mseIdx(w, xs, ys, idx) { var s = 0; idx.forEach(function (i) { var e = w * xs[i] - ys[i]; s += e * e; }); return s / idx.length; }
+  function todos(n) { var a = []; for (var i = 0; i < n; i++) a.push(i); return a; }
+  function Ltr(w) { return mseIdx(w, X, Y, todos(N)); }
+  function Lval(w) { return mseIdx(w, XV, YV, todos(4)); }
+  function Llote(w, idx) { return mseIdx(w, X, Y, idx); }
+  // barajado con semilla fija (mulberry32), distinto en cada epoca
+  function semilla(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; var t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  function permutar(n, s) { var r = semilla(s), a = todos(n); for (var i = n - 1; i > 0; i--) { var j = Math.floor(r() * (i + 1)), t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
+  // o: tasa, lote, pac (0 = sin parada temprana), rest, barajar, max
+  function entrenar(o) {
+    var w = 0, pasos = [], epocas = [], mejor = Infinity, mejorW = 0, mejorEp = 0, sin = 0, paro = null, max = o.max || MAXEP;
+    for (var ep = 1; ep <= max; ep++) {
+      var orden = o.barajar ? permutar(N, 7919 * ep + 13) : todos(N), acc = 0;
+      for (var ini = 0, k = 0; ini < N; ini += o.lote, k++) {
+        var fin = Math.min(ini + o.lote, N), idx = orden.slice(ini, fin), g = 0;
+        idx.forEach(function (i) { g += 2 * X[i] * (w * X[i] - Y[i]); });
+        g /= idx.length;
+        var pl = Llote(w, idx), wn = w - o.tasa * g;
+        acc += pl * idx.length;
+        pasos.push({ ep: ep, k: k, ini: ini, fin: fin, idx: idx, wA: w, pl: pl, g: g, wD: wn });
+        w = wn;
+      }
+      var tr = Ltr(w), va = Lval(w), mejora = va < mejor;
+      if (mejora) { mejor = va; mejorW = w; mejorEp = ep; sin = 0; } else sin++;
+      epocas.push({ ep: ep, w: w, tr: tr, val: va, keras: acc / N, mejora: mejora, sin: sin, mejorEp: mejorEp, mejorW: mejorW, nPasos: pasos.length });
+      if (o.pac && sin === o.pac) { paro = ep; break; }
+    }
+    var wFin = o.pac && o.rest ? mejorW : w;
+    return { pasos: pasos, epocas: epocas, paro: paro, mejorEp: mejorEp, mejorW: mejorW, wUlt: w, wFin: wFin, valFin: Lval(wFin), pasosEp: Math.ceil(N / o.lote) };
+  }
+
+  /* ---------------- dibujos ---------------- */
+  function colorVar(n) { return "var(--" + n + ")"; }
+  // parabola: o = {w, val, marcas, lote (idx), trazos [[wA, wD]], huellas [{ws, on, lab}], rest (w restaurado), zoom}
+  function parabSvg(o) {
+    var W = 360, H = 210, pl = 34, pr = 10, pt = 10, pb = 26;
+    var w0 = o.zoom ? 1.5 : 0, w1 = 3, Lm = o.zoom ? 2.5 : 18;
+    function sx(w) { return pl + (Math.max(w0, Math.min(w1, w)) - w0) / (w1 - w0) * (W - pl - pr); }
+    function sy(L) { return pt + (1 - Math.min(L, Lm) / Lm) * (H - pt - pb); }
+    function curva(f, cls) {
+      var d = "";
+      for (var i = 0; i <= 120; i++) { var w = w0 + (w1 - w0) * i / 120; d += (i ? "L" : "M") + sx(w).toFixed(1) + " " + sy(f(w)).toFixed(1); }
+      return '<path d="' + d + '" fill="none" ' + cls + "/>";
+    }
+    var s = '<svg class="graf" viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Pérdida según w">';
+    s += '<defs><marker id="flechaP" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--accent)"/></marker></defs>';
+    var tw = o.zoom ? [1.5, 2, 2.5, 3] : [0, 0.5, 1, 1.5, 2, 2.5, 3];
+    tw.forEach(function (w) { s += '<line class="rej" x1="' + sx(w) + '" y1="' + pt + '" x2="' + sx(w) + '" y2="' + (H - pb) + '"/><text x="' + sx(w) + '" y="' + (H - pb + 13) + '" text-anchor="middle">' + w + "</text>"; });
+    var tl = o.zoom ? [0, 0.5, 1, 1.5, 2, 2.5] : [0, 5, 10, 15];
+    tl.forEach(function (L) { s += '<text x="' + (pl - 4) + '" y="' + (sy(L) + 3) + '" text-anchor="end">' + L + "</text>"; });
+    s += '<line class="eje" x1="' + pl + '" y1="' + (H - pb) + '" x2="' + (W - pr) + '" y2="' + (H - pb) + '"/><line class="eje" x1="' + pl + '" y1="' + pt + '" x2="' + pl + '" y2="' + (H - pb) + '"/>';
+    s += '<text x="' + (W - pr) + '" y="' + (H - 2) + '" text-anchor="end">w</text>';
+    if (o.marcas) {
+      [[2, "mín. validación"], [2.5, "mín. entrenamiento"]].forEach(function (m, i) {
+        s += '<line x1="' + sx(m[0]) + '" y1="' + pt + '" x2="' + sx(m[0]) + '" y2="' + (H - pb) + '" stroke="' + (i ? "var(--j)" : "var(--k)") + '" stroke-width="1" stroke-dasharray="4 3"/>';
+        s += '<text x="' + (sx(m[0]) + (i ? 3 : -3)) + '" y="' + (pt + 10 + i * 12) + '" text-anchor="' + (i ? "start" : "end") + '" style="fill:' + (i ? "var(--j)" : "var(--k)") + '">' + m[1] + "</text>";
+      });
+    }
+    if (o.lote) s += curva(function (w) { return Llote(w, o.lote); }, 'stroke="var(--ink-3)" stroke-width="1.5" stroke-dasharray="5 3"');
+    if (o.val) s += curva(Lval, 'stroke="var(--k)" stroke-width="2.2"');
+    s += curva(Ltr, 'stroke="var(--j)" stroke-width="2.2"');
+    (o.huellas || []).forEach(function (h) {
+      var d = h.ws.map(function (w, i) { return (i ? "L" : "M") + sx(w).toFixed(1) + " " + sy(Ltr(w)).toFixed(1); }).join("");
+      s += '<path d="' + d + '" fill="none" stroke="' + (h.on ? "var(--accent)" : "var(--ink-3)") + '" stroke-width="' + (h.on ? 2 : 1.2) + '" stroke-dasharray="' + (h.on ? "none" : "3 2") + '"/>';
+      h.ws.forEach(function (w) { s += '<circle cx="' + sx(w) + '" cy="' + sy(Ltr(w)) + '" r="2.4" fill="' + (h.on ? "var(--accent)" : "var(--ink-3)") + '"/>'; });
+      var ult = h.ws[h.ws.length - 1];
+      s += '<text x="' + sx(ult) + '" y="' + (sy(Ltr(ult)) - 7) + '" text-anchor="middle" style="fill:' + (h.on ? "var(--accent)" : "var(--ink-3)") + '">' + h.lab + "</text>";
+    });
+    (o.trazos || []).forEach(function (t, i, arr) {
+      var on = i === arr.length - 1;
+      s += '<line x1="' + sx(t[0]) + '" y1="' + sy(Ltr(t[0])) + '" x2="' + sx(t[1]) + '" y2="' + sy(Ltr(t[1])) + '" stroke="var(--accent)" stroke-width="' + (on ? 2 : 1) + '" opacity="' + (on ? 1 : 0.45) + '" marker-end="url(#flechaP)"/>';
+    });
+    if (o.rest != null && Math.abs(o.rest - o.w) > 1e-9) {
+      s += '<path d="M' + sx(o.w) + " " + (sy(Ltr(o.w)) - 4) + " Q " + ((sx(o.w) + sx(o.rest)) / 2) + " " + (Math.min(sy(Ltr(o.w)), sy(Ltr(o.rest))) - 40) + " " + sx(o.rest) + " " + (sy(Ltr(o.rest)) - 6) + '" fill="none" stroke="var(--accent)" stroke-width="1.6" stroke-dasharray="4 3" marker-end="url(#flechaP)"/>';
+      s += '<text x="' + ((sx(o.w) + sx(o.rest)) / 2) + '" y="' + (Math.min(sy(Ltr(o.w)), sy(Ltr(o.rest))) - 26) + '" text-anchor="middle" style="fill:var(--accent)">restaurar</text>';
+      s += '<circle cx="' + sx(o.w) + '" cy="' + sy(Ltr(o.w)) + '" r="5" fill="none" stroke="var(--ink-3)" stroke-width="1.5"/>';
+      s += '<circle cx="' + sx(o.rest) + '" cy="' + sy(Ltr(o.rest)) + '" r="7" fill="var(--accent)" stroke="var(--surface)" stroke-width="2"/>';
+    } else if (o.w != null) {
+      s += '<circle cx="' + sx(o.w) + '" cy="' + sy(Ltr(o.w)) + '" r="7" fill="var(--accent)" stroke="var(--surface)" stroke-width="2"/>';
+    }
+    if (o.val && o.w != null) s += '<circle cx="' + sx(o.rest != null ? o.rest : o.w) + '" cy="' + sy(Lval(o.rest != null ? o.rest : o.w)) + '" r="4" fill="var(--surface)" stroke="var(--k)" stroke-width="2"/>';
+    return s + "</svg>";
+  }
+  function estrella(cx, cy, r) {
+    var p = [];
+    for (var i = 0; i < 10; i++) { var a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r * 0.45 : r; p.push((cx + rr * Math.cos(a)).toFixed(1) + "," + (cy + rr * Math.sin(a)).toFixed(1)); }
+    return '<polygon points="' + p.join(" ") + '" fill="var(--accent)" stroke="var(--surface)" stroke-width="1"/>';
+  }
+  // curvas por epoca: o = {tr: [], val: [] o null, tapada, mejor (epoca), paro (epoca), max}
+  function curvasSvg(o) {
+    var W = 360, H = 180, pl = 36, pr = 10, pt = 12, pb = 26, max = o.max || MAXEP;
+    var vals = (o.tr || []).concat(o.val && !o.tapada ? o.val : []);
+    var top = Math.max.apply(null, vals.concat([1]));
+    var paso = top > 8 ? 4 : top > 4 ? 2 : top > 2 ? 0.5 : top > 1 ? 0.25 : 0.2;
+    var ym = Math.ceil(top / paso) * paso;
+    function sx(e) { return pl + (e - 1) / (max - 1) * (W - pl - pr); }
+    function sy(L) { return pt + (1 - L / ym) * (H - pt - pb); }
+    var s = '<svg class="graf" viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Pérdida por época">';
+    for (var e = 1; e <= max; e++) s += '<text x="' + sx(e) + '" y="' + (H - pb + 13) + '" text-anchor="middle">' + e + "</text>";
+    for (var L = 0; L <= ym + 1e-9; L += paso) s += '<line class="rej" x1="' + pl + '" y1="' + sy(L) + '" x2="' + (W - pr) + '" y2="' + sy(L) + '"/><text x="' + (pl - 4) + '" y="' + (sy(L) + 3) + '" text-anchor="end">' + r4(L) + "</text>";
+    s += '<line class="eje" x1="' + pl + '" y1="' + (H - pb) + '" x2="' + (W - pr) + '" y2="' + (H - pb) + '"/><line class="eje" x1="' + pl + '" y1="' + pt + '" x2="' + pl + '" y2="' + (H - pb) + '"/>';
+    s += '<text x="' + (W - pr) + '" y="' + (H - 2) + '" text-anchor="end">época</text>';
+    if (o.paro) s += '<line x1="' + sx(o.paro) + '" y1="' + pt + '" x2="' + sx(o.paro) + '" y2="' + (H - pb) + '" stroke="var(--bad)" stroke-width="1.2" stroke-dasharray="4 3"/><text x="' + (sx(o.paro) - 3) + '" y="' + (pt + 9) + '" text-anchor="end" style="fill:var(--bad)">para</text>';
+    function serie(arr, color) {
+      if (!arr || !arr.length) return "";
+      var d = arr.map(function (v, i) { return (i ? "L" : "M") + sx(i + 1).toFixed(1) + " " + sy(v).toFixed(1); }).join("");
+      var h = '<path d="' + d + '" fill="none" stroke="' + color + '" stroke-width="2"/>';
+      arr.forEach(function (v, i) { h += '<circle cx="' + sx(i + 1) + '" cy="' + sy(v) + '" r="3" fill="' + color + '"/>'; });
+      return h;
+    }
+    s += serie(o.tr, "var(--j)");
+    if (o.val && !o.tapada) s += serie(o.val, "var(--k)");
+    if (o.mejor && o.val && !o.tapada) s += estrella(sx(o.mejor), sy(o.val[o.mejor - 1]) - 12, 7);
+    if (o.tapada && o.tr && o.tr.length) s += '<rect x="' + (pl + 4) + '" y="' + (pt + 2) + '" width="' + (W - pl - pr - 8) + '" height="22" rx="6" fill="var(--accent-soft)" stroke="var(--accent)" stroke-dasharray="4 3"/><text x="' + ((W + pl - pr) / 2) + '" y="' + (pt + 17) + '" text-anchor="middle" style="fill:var(--accent);font-size:11px">validación: tapada hasta el chequeo</text>';
+    s += '<text x="' + (pl + 6) + '" y="' + (H - pb - 6) + '" style="fill:var(--j)">entrenamiento</text>';
+    if (o.val && !o.tapada) s += '<text x="' + (pl + 96) + '" y="' + (H - pb - 6) + '" style="fill:var(--k)">validación</text>';
+    return s + "</svg>";
+  }
+  // recta en la nube de puntos
+  function rectaSvg(w) {
+    var W = 150, H = 130, pl = 20, pr = 6, pt = 6, pb = 20;
+    function sx(x) { return pl + x / 2.5 * (W - pl - pr); }
+    function sy(y) { return pt + (1 - y / 7) * (H - pt - pb); }
+    var s = '<svg class="graf" viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Recta nota = w por horas">';
+    s += '<defs><clipPath id="clipR"><rect x="' + pl + '" y="' + pt + '" width="' + (W - pl - pr) + '" height="' + (H - pt - pb) + '"/></clipPath></defs>';
+    [0, 1, 2].forEach(function (x) { s += '<text x="' + sx(x) + '" y="' + (H - pb + 12) + '" text-anchor="middle">' + x + "</text>"; });
+    [0, 3, 6].forEach(function (y) { s += '<text x="' + (pl - 3) + '" y="' + (sy(y) + 3) + '" text-anchor="end">' + y + "</text>"; });
+    s += '<line class="eje" x1="' + pl + '" y1="' + (H - pb) + '" x2="' + (W - pr) + '" y2="' + (H - pb) + '"/><line class="eje" x1="' + pl + '" y1="' + pt + '" x2="' + pl + '" y2="' + (H - pb) + '"/>';
+    var vistos = {};
+    X.forEach(function (x, i) { var k = x + "," + Y[i]; vistos[k] = (vistos[k] || 0) + 1; s += '<circle cx="' + (sx(x) - 4 + 3 * (vistos[k] - 1)) + '" cy="' + sy(Y[i]) + '" r="3" fill="var(--j)"/>'; });
+    XV.forEach(function (x, i) { s += '<circle cx="' + (sx(x) + 6) + '" cy="' + sy(YV[i]) + '" r="3.2" fill="var(--surface)" stroke="var(--k)" stroke-width="1.6"/>'; });
+    s += '<line clip-path="url(#clipR)" x1="' + sx(0) + '" y1="' + sy(0) + '" x2="' + sx(2.5) + '" y2="' + sy(2.5 * w) + '" stroke="var(--accent)" stroke-width="2.2"/>';
+    s += '<text x="' + (W - pr) + '" y="' + (pt + 9) + '" text-anchor="end" style="fill:var(--accent)">w = ' + n4(w) + "</text>";
+    return s + "</svg>";
+  }
+  function carta(i, val) { return '<span class="carta">' + (val ? XV[i] : X[i]) + " h → " + (val ? YV[i] : Y[i]) + "</span>"; }
+  // mazo: grupos = [{idx, on, inc, lab}] o null (sin marcos)
+  function mazoHtml(grupos, verVal, resaltaVal) {
+    var h = '<div class="mazo">';
+    if (!grupos) h += '<div class="lote sinmarco"><div class="cartas">' + todos(N).map(function (i) { return carta(i); }).join("") + "</div></div>";
+    else grupos.forEach(function (g) {
+      h += '<div class="lote' + (g.on ? " on" : "") + (g.inc ? " inc" : "") + '"><span class="lote-t">' + g.lab + '</span><div class="cartas">' + g.idx.map(function (i) { return carta(i); }).join("") + "</div></div>";
+    });
+    h += "</div>";
+    if (verVal) h += '<div class="mazo-val' + (resaltaVal ? " resalta" : "") + '"><span class="lote-t">validación · nunca entra a un lote</span><div class="cartas">' + [0, 1, 2, 3].map(function (i) { return carta(i, true); }).join("") + "</div></div>";
+    return h;
+  }
+  function gruposDe(b, orden, onK) {
+    var g = [], o = orden || todos(N);
+    for (var ini = 0, k = 0; ini < N; ini += b, k++) {
+      var fin = Math.min(ini + b, N);
+      g.push({ idx: o.slice(ini, fin), on: k === onK, inc: fin - ini < b, lab: "lote " + (k + 1) + (fin - ini < b ? " · incompleto" : "") });
+    }
+    return g;
+  }
+
+  /* ---------------- el escenario ---------------- */
+  var ES = { lote: 4, tasa: 0.05, pac: 0, rest: true, barajar: false, n: 0, zoom: false, keras: false, plote: false, huellas: {}, ultHuella: null, epocasF: 4, arg: null };
+  var RUN = null, modo = -1, pasos = null;
+  var est = { c1: false, c2: false, c3: false, c4: false, c5: false, c5b: false, c6: false, c7: false };
+  function rerun() {
+    RUN = entrenar({ tasa: ES.tasa, lote: ES.lote, pac: ES.pac, rest: ES.rest, barajar: ES.barajar, max: MAXEP });
+    if (ES.n > RUN.pasos.length) ES.n = RUN.pasos.length;
+  }
+  function wActual() { return ES.n ? RUN.pasos[ES.n - 1].wD : 0; }
+  function epocasHechas() { return RUN.epocas.filter(function (e) { return e.nPasos <= ES.n; }); }
+  function terminado() { return ES.n >= RUN.pasos.length; }
+  function pasosDeEpoca(ep) { return RUN.pasos.filter(function (p) { return p.ep === ep; }); }
+  function epocaActual() { return ES.n ? RUN.pasos[ES.n - 1].ep : 1; }
+  function defaults(m) {
+    ES.n = 0; ES.zoom = false; ES.keras = false; ES.plote = false; ES.arg = null; ES.barajar = false; ES.rest = true; ES.tasa = 0.05;
+    if (m === 0 || m === 2 || m === 3 || m === 4) { ES.lote = 4; ES.pac = 0; }
+    if (m === 1) { ES.pac = 0; }
+    if (m === 3) { ES.huellas = {}; ES.ultHuella = null; }
+    if (m === 5 || m === 6) { ES.lote = 4; ES.pac = 2; }
+    rerun();
+    if (m === 4) ES.n = 12;
+    if (m === 5 || m === 6) ES.n = RUN.pasos.length;
+  }
+  function opcionesSel(p, lista, actual) {
+    return '<select data-p="' + p + '">' + lista.map(function (v) { return '<option value="' + v[0] + '"' + (String(v[0]) === String(actual) ? " selected" : "") + ">" + v[1] + "</option>"; }).join("") + "</select>";
+  }
+  function selLote(dis) { return '<label>lote ' + opcionesSel("lote", [[1, 1], [2, 2], [4, 4], [5, 5], [10, 10]], ES.lote).replace("<select", dis ? "<select disabled" : "<select") + "</label>"; }
+  function selTasa(dis) { return '<label>tasa ' + opcionesSel("tasa", [[0.01, "0.01"], [0.025, "0.025"], [0.05, "0.05"], [0.1, "0.1"]], ES.tasa).replace("<select", dis ? "<select disabled" : "<select") + "</label>"; }
+  function selPac(dis) { return '<label>paciencia ' + opcionesSel("pac", [[0, "apagada"], [1, 1], [2, 2], [3, 3]], ES.pac).replace("<select", dis ? "<select disabled" : "<select") + "</label>"; }
+  function casilla(p, txt, dis) { return '<label><input type="checkbox" data-p="' + p + '"' + (ES[p] ? " checked" : "") + (dis ? " disabled" : "") + "> " + txt + "</label>"; }
+  function botones(lista) {
+    return '<div class="esc-ctrl">' + lista.map(function (b) { return '<button type="button" data-acc="' + b[0] + '"' + (b[2] ? " disabled" : "") + (b[3] ? ' class="ghost"' : "") + ">" + b[1] + "</button>"; }).join("") + "</div>";
+  }
+  function contador() {
+    var ep = ES.n ? RUN.pasos[ES.n - 1].ep : 1, k = ES.n ? RUN.pasos[ES.n - 1].k + 1 : 0;
+    return '<p class="contador">época ' + ep + " · paso " + k + " de " + RUN.pasosEp + " · actualizaciones: " + ES.n + "</p>";
+  }
+  function grupoActual() {
+    var ep = epocaActual(), ps = pasosDeEpoca(ep), onK = ES.n ? RUN.pasos[ES.n - 1].k : -1;
+    return ps.map(function (p) { return { idx: p.idx, on: p.k === onK, inc: p.fin - p.ini < ES.lote, lab: "lote " + (p.k + 1) + (p.fin - p.ini < ES.lote ? " · incompleto" : "") }; });
+  }
+  function trazosEpoca() {
+    if (!ES.n) return [];
+    var ep = epocaActual();
+    return RUN.pasos.slice(0, ES.n).filter(function (p) { return p.ep === ep; }).map(function (p) { return [p.wA, p.wD]; });
+  }
+  function texFormulaPaso(p) {
+    var terms = p.idx.map(function (i) { return "2\\cdot" + X[i] + "\\,(" + n4(p.wA * X[i]).replace("−", "-") + " - " + Y[i] + ")"; });
+    return B.texStr("\\text{grad} = \\frac{" + terms.join(" + ") + "}{" + p.idx.length + "} = " + n4(p.g).replace("−", "-"), false) +
+      "<br>" + B.texStr("w = " + n4(p.wA).replace("−", "-") + " - " + ES.tasa + "\\cdot(" + n4(p.g).replace("−", "-") + ") = " + n4(p.wD), false);
+  }
+  function estadoParada(hechas) {
+    if (!ES.pac) return '<p class="esc-estado">Parada temprana apagada: entrena las 10 épocas.</p>';
+    var u = hechas[hechas.length - 1];
+    var h = '<p class="esc-estado">';
+    if (!u) return h + "Sin épocas terminadas todavía.</p>";
+    h += "mejor época: <b>" + u.mejorEp + "</b> (validación " + n4(Lval(u.mejorW)) + ") · sin mejora: <b>" + u.sin + " de " + ES.pac + "</b>";
+    if (terminado() && RUN.paro) {
+      h += "<br>Se detuvo al final de la época <b>" + RUN.paro + "</b>. " + (ES.rest ? "Restaura el <code>w</code> de la época " + RUN.mejorEp + ": <b>w = " + n4(RUN.mejorW) + "</b> (validación " + n4(RUN.valFin) + ")." : "Sin restaurar: se queda con <b>w = " + n4(RUN.wUlt) + "</b> (validación " + n4(Lval(RUN.wUlt)) + "), no con el mejor, " + n4(RUN.mejorW) + ".");
+    } else if (terminado()) {
+      h += "<br>No se detuvo: entrenó las 10 épocas" + (ES.rest ? " y restaura el mejor, <b>w = " + n4(RUN.mejorW) + "</b>." : ".");
+    }
+    return h + "</p>";
+  }
+  function panel(id, titulo, cont, extra) { return '<div class="panel' + (ES.arg && ARGPANEL[ES.arg] && ARGPANEL[ES.arg].indexOf(id) >= 0 ? " resalta" : "") + '" data-panel="' + id + '"' + (extra || "") + '><p class="panel-t">' + titulo + "</p>" + cont + "</div>"; }
+  var ARGPANEL = { epochs: ["curvas"], batch_size: ["mazo"], shuffle: ["mazo"], validation_data: ["val"], callbacks: ["curvas", "parada"] };
+  function curvasActuales(ocultarVal, sinEstrella) {
+    var hechas = epocasHechas();
+    return curvasSvg({ tr: hechas.map(function (e) { return ES.keras ? e.keras : e.tr; }), val: hechas.map(function (e) { return e.val; }), tapada: ocultarVal, mejor: !sinEstrella && ES.pac && hechas.length ? hechas[hechas.length - 1].mejorEp : null, paro: !sinEstrella && terminado() ? RUN.paro : null });
+  }
+
+  function render() {
+    var h = "", m = modo, w = wActual(), hechas;
+    if (m === 0) {
+      var lim = Math.min(3, RUN.pasos.length);
+      h += botones([["paso", "Ver un puñado de 4", !est.c1 || ES.n >= lim], ["epoca1", "Dar la vuelta completa", !est.c1 || ES.n >= lim], ["reset", "Reiniciar", !est.c1 || !ES.n, true]]);
+      h += '<div class="fila-paneles">' + panel("mazo", "Las diez tarjetas" + (est.c1 ? ", de 4 en 4" : ""), mazoHtml(est.c1 ? grupoActual() : null, true)) +
+        '<div class="recta-p">' + panel("recta", "La recta", rectaSvg(w)) + "</div></div>";
+      h += est.c1 ? contador().replace("paso", "puñado") : '<p class="esc-nota">Los botones se abren al resolver el chequeo.</p>';
+      if (est.c1 && ES.n >= 3) h += '<p class="esc-nota">Tres correcciones: dos puñados de 4 y uno de 2. La recta terminó la vuelta en <code>w = 1.6562</code>.</p>';
+    } else if (m === 1) {
+      var b = ES.lote, K = Math.ceil(N / b), ult = N - b * (K - 1);
+      h += '<div class="esc-ctrl">' + selLote() + '<label>épocas ' + opcionesSel("epocasF", [[1, 1], [2, 2], [3, 3], [4, 4], [5, 5], [10, 10]], ES.epocasF) + "</label></div>";
+      h += panel("mazo", "Las tarjetas agrupadas en lotes de " + b, mazoHtml(gruposDe(b, null, -1), true));
+      h += '<div class="fbloque"><div class="vivo">' + B.texStr("\\left\\lceil \\frac{10}{" + b + "} \\right\\rceil = " + K + "\\ \\text{pasos por época},\\quad \\text{último lote: } 10 - " + b + "\\cdot" + (K - 1) + " = " + ult, false) +
+        "<br>" + (est.c2 ? B.texStr(ES.epocasF + "\\ \\text{épocas} \\times " + K + " = " + (ES.epocasF * K) + "\\ \\text{actualizaciones}", false) : 'actualizaciones en ' + ES.epocasF + ' épocas: <span class="tapado">se muestra al resolver</span>') + "</div></div>";
+      h += '<p class="esc-nota">Con lote 1: 10 pasos; con 2: 5; con 5: 2; con 10: 1. Fíjate en el marco punteado: es el lote incompleto.</p>';
+    } else if (m === 2) {
+      var dis = !est.c3;
+      h += botones([["paso", "Un paso (un lote)", dis || terminado()], ["epoca", "Una época", dis || terminado()], ["reset", "Reiniciar w = 0", dis || !ES.n, true]]);
+      h += '<div class="esc-ctrl">' + casilla("plote", "parábola del lote", dis) + casilla("zoom", "acercar al fondo", dis) + "</div>";
+      var prox = ES.n < RUN.pasos.length ? RUN.pasos[ES.n] : null, ultP = ES.n ? RUN.pasos[ES.n - 1] : null;
+      var loteVer = ES.plote ? (ultP || prox) : null;
+      h += panel("parab", "La pérdida de entrenamiento según w", parabSvg({ w: w, trazos: dis ? [] : trazosEpoca(), lote: loteVer ? loteVer.idx : null, zoom: ES.zoom, marcas: false }));
+      h += panel("mazo", "El lote de este paso", mazoHtml(grupoActual(), false));
+      h += contador();
+      if (dis) h += '<div class="fbloque"><div class="vivo">grad y nuevo w: <span class="tapado">se muestran al resolver</span></div></div>';
+      else if (ultP) h += '<div class="fbloque"><div class="vivo">' + texFormulaPaso(ultP) + "</div></div>" + (ES.plote ? '<p class="esc-nota">En gris, la parábola del lote ' + (ultP.k + 1) + ": su fondo está en 2.5, igual que las de los otros dos lotes. La del lote 3, con dos tarjetas de 2 horas, es más empinada.</p>" : "");
+      else h += '<p class="esc-nota">Pulsa "Un paso" para ver la cuenta con los números del lote.</p>';
+    } else if (m === 3) {
+      var dis3 = !est.c4;
+      h += botones([["huella", "Una época desde w = 0", dis3], ["borrarH", "Borrar huellas", dis3 || !Object.keys(ES.huellas).length, true]]);
+      h += '<div class="esc-ctrl">' + selLote(dis3) + casilla("barajar", "barajar cada época (semilla fija)", dis3) + casilla("zoom", "acercar al fondo", dis3) + "</div>";
+      var hs = Object.keys(ES.huellas).map(function (k) { return { ws: ES.huellas[k], on: String(k) === String(ES.ultHuella), lab: "lote " + k.split("|")[0] }; });
+      h += panel("parab", "Huellas de la bola en una época (tasa 0.05)", parabSvg({ w: hs.length ? null : 0, huellas: hs, zoom: ES.zoom }));
+      if (hs.length) {
+        h += '<table class="huellas"><tr><th>lote</th><th>pasos</th><th>w al final de la época 1</th></tr>' + Object.keys(ES.huellas).map(function (k) {
+          var ws = ES.huellas[k];
+          return '<tr class="' + (String(k) === String(ES.ultHuella) ? "on" : "") + '"><td>' + k.replace("|b", " (barajado)") + "</td><td>" + (ws.length - 1) + "</td><td>" + n4(ws[ws.length - 1]) + "</td></tr>";
+        }).join("") + "</table>";
+      } else h += '<p class="esc-nota">' + (dis3 ? "Los botones se abren al resolver el chequeo." : "Elige un lote y pulsa el botón.") + "</p>";
+    } else if (m === 4) {
+      var dis4 = !est.c5;
+      h += botones([["paso", "Un paso", dis4 || terminado()], ["epoca", "Una época", dis4 || terminado()], ["todo", "Entrenar hasta el final", dis4 || terminado()], ["reset", "Reiniciar w = 0", dis4 || !ES.n, true]]);
+      h += '<div class="esc-ctrl">' + selLote(dis4) + selTasa(dis4) + casilla("zoom", "acercar al fondo", dis4) + "</div>";
+      h += panel("parab", "Entrenamiento (azul) y validación (verde)", parabSvg({ w: w, val: !dis4, marcas: !dis4, zoom: ES.zoom }));
+      h += '<div class="esc-ctrl">' + (est.c5b ? '<button type="button" data-acc="keras" aria-pressed="' + ES.keras + '">entrenamiento como lo imprime Keras</button>' : "") + "</div>";
+      h += panel("curvas", ES.keras ? "Curvas por época (entrenamiento: promedio durante la época, como Keras)" : "Curvas por época (entrenamiento: con el w del final de la época)", curvasActuales(dis4, true));
+      hechas = epocasHechas();
+      h += '<p class="esc-estado">' + hechas.map(function (e) { return "época " + e.ep + ": entr. <b>" + n4(ES.keras ? e.keras : e.tr) + "</b>" + (dis4 ? "" : " · val. <b>" + n4(e.val) + "</b>"); }).join("<br>") + "</p>";
+    } else if (m === 5) {
+      var dis5 = !est.c6;
+      h += botones([["paso", "Un paso", dis5 || terminado()], ["epoca", "Una época", dis5 || terminado()], ["todo", "Entrenar hasta el final", dis5 || terminado()], ["reset", "Reiniciar w = 0", dis5 || !ES.n, true]]);
+      h += '<div class="esc-ctrl">' + selLote(dis5) + selTasa(dis5) + selPac(dis5) + casilla("rest", "restaurar los mejores pesos", dis5) + "</div>";
+      hechas = epocasHechas();
+      var rest5 = !dis5 && terminado() && ES.pac && ES.rest ? RUN.mejorW : null;
+      h += panel("parab", "La bola", parabSvg({ w: w, val: true, marcas: true, rest: rest5, zoom: ES.zoom }));
+      h += panel("curvas", "Curvas por época", curvasActuales(false, dis5));
+      h += dis5 ? '<p class="esc-estado">' + hechas.map(function (e) { return "época " + e.ep + ": val. <b>" + n4(e.val) + "</b> con w = " + n4(e.w); }).join("<br>") + '</p><p class="esc-nota">La estrella, el contador y la parada se muestran al resolver el chequeo.</p>' : estadoParada(hechas);
+    } else if (m === 6) {
+      h += fitHtml();
+      h += botones([["paso", "Un paso", terminado()], ["epoca", "Una época", terminado()], ["todo", "Entrenar hasta el final", terminado()], ["reset", "Reiniciar w = 0", !ES.n, true]]);
+      h += '<div class="esc-ctrl">' + selLote() + selTasa() + selPac() + casilla("rest", "restaurar los mejores pesos") + casilla("barajar", "barajar cada época") + "</div>";
+      hechas = epocasHechas();
+      h += panel("mazo", "batch_size: los lotes · validation_data: el mazo gris", mazoHtml(grupoActual(), true, ES.arg === "validation_data"));
+      h += panel("parab", "La bola", parabSvg({ w: w, val: true, marcas: true, rest: terminado() && ES.pac && ES.rest ? RUN.mejorW : null, zoom: ES.zoom }));
+      h += panel("curvas", "epochs: el eje · callbacks: la estrella y la parada", curvasActuales(false, false));
+      h += panel("parada", "callbacks=[parada]", estadoParada(hechas));
+    }
+    $("escCuerpo").innerHTML = h;
+    var mv = $("escCuerpo").querySelector(".mazo-val");
+    if (mv && ES.arg === "validation_data") mv.style.borderColor = "var(--accent)";
+  }
+  function fitHtml() {
+    function arg(k, txt) { return '<button type="button" class="arg" data-arg="' + k + '" aria-pressed="' + (ES.arg === k) + '">' + txt + "</button>"; }
+    return '<div class="fitcod">parada = keras.callbacks.EarlyStopping(monitor="val_loss", patience=' + ES.pac + ", restore_best_weights=" + (ES.rest ? "True" : "False") + ")<br>hist = modelo.fit(x, y, " +
+      arg("epochs", "epochs=10") + ", " + arg("batch_size", "batch_size=" + ES.lote) + ", " + arg("shuffle", "shuffle=" + (ES.barajar ? "True" : "False")) + ", " + arg("validation_data", "validation_data=(xv, yv)") + ", " + arg("callbacks", "callbacks=[parada]") + ")</div>" +
+      '<p class="no-corrio">Código de Keras: no se pudo correr en esta máquina. El escenario lo imita.</p>' +
+      (ES.arg ? '<p class="esc-nota">' + {
+        epochs: "<b>epochs</b>: el eje de las curvas. Son vueltas <b>máximas</b>: la parada temprana puede cortar antes.",
+        batch_size: "<b>batch_size</b>: los marcos de las tarjetas. Si no lo pones, Keras usa 32 (aquí sería un solo lote de 10).",
+        shuffle: "<b>shuffle</b>: si las tarjetas se barajan al empezar cada época. En Keras vale True por defecto; aquí False para que coincida con el código.",
+        validation_data: "<b>validation_data</b>: el mazo gris. Nunca entra a un lote; se mide al final de cada época.",
+        callbacks: "<b>callbacks</b>: la estrella (mejor época), el contador de paciencia y la línea roja donde para."
+      }[ES.arg] + "</p>" : '<p class="esc-nota">Toca un argumento para iluminar su parte del escenario.</p>');
+  }
+
+  $("escCuerpo").addEventListener("click", function (e) {
+    var b = e.target.closest("button");
+    if (!b || b.disabled) return;
+    var a = b.getAttribute("data-acc"), g = b.getAttribute("data-arg");
+    if (g) { ES.arg = ES.arg === g ? null : g; render(); return; }
+    if (!a) return;
+    if (a === "paso") { if (ES.n < RUN.pasos.length) ES.n++; }
+    else if (a === "epoca" || a === "epoca1") {
+      if (ES.n < RUN.pasos.length) { var ep = RUN.pasos[ES.n].ep; while (ES.n < RUN.pasos.length && RUN.pasos[ES.n].ep === ep) ES.n++; }
+    } else if (a === "todo") ES.n = RUN.pasos.length;
+    else if (a === "reset") ES.n = 0;
+    else if (a === "keras") ES.keras = !ES.keras;
+    else if (a === "huella") {
+      var r = entrenar({ tasa: 0.05, lote: ES.lote, pac: 0, rest: false, barajar: ES.barajar, max: 1 });
+      var clave = ES.lote + (ES.barajar ? "|b" : "");
+      ES.huellas[clave] = [0].concat(r.pasos.map(function (p) { return p.wD; }));
+      ES.ultHuella = clave;
+    } else if (a === "borrarH") { ES.huellas = {}; ES.ultHuella = null; }
+    render();
+  });
+  $("escCuerpo").addEventListener("change", function (e) {
+    var t = e.target, p = t.getAttribute("data-p");
+    if (!p) return;
+    if (t.type === "checkbox") ES[p] = t.checked;
+    else ES[p] = +t.value;
+    if (p === "lote" || p === "tasa" || p === "pac" || p === "barajar") {
+      var full = modo >= 4 && ES.n === RUN.pasos.length;
+      ES.n = 0;
+      rerun();
+      if (modo >= 5 && full) ES.n = RUN.pasos.length;
+      if (modo === 4 && full) ES.n = RUN.pasos.length;
+    } else if (p === "rest") rerun();
+    render();
+  });
+
+  function entrar(i) {
+    if (i !== modo) { modo = i; defaults(i); }
+    var hints = [
+      est.c1 ? "Mira la recta girar de puñado en puñado" : "Predice antes de tocar",
+      "Cambia el lote y mira los marcos",
+      est.c3 ? "Da pasos y mira la cuenta" : "Calcula antes de pulsar",
+      est.c4 ? "Compara las huellas de varios lotes" : "Predice antes de tocar",
+      est.c5 ? "Juega con el lote y la tasa" : "La validación está tapada",
+      est.c6 ? "Cambia la paciencia y apaga restaurar" : "Calcula con las curvas",
+      "Toca los argumentos del fit"
+    ];
+    $("escHint").textContent = hints[i];
+    render();
+  }
+
+  /* ---------------- chequeos de cada paso ---------------- */
+  B.opcionMultiple(cuerpo("chk1"), {
+    pregunta: "Tienes 10 tarjetas y el modelo las mira de 4 en 4, en orden. ¿Cuántas veces corrige la recta en una vuelta completa por las 10 tarjetas?",
+    opciones: ["3", "2", "2.5", "10"],
+    correcta: 0,
+    pistas: [null,
+      "Las 2 tarjetas que sobran no se pierden: forman un puñado más pequeño. (El generador de Raschka sí las descarta; Keras no.)",
+      "No existe media corrección: el puñado de 2 tarjetas es una corrección completa.",
+      "Eso sería mirar las tarjetas de 1 en 1."],
+    explicacion: "<b>3</b>: dos puñados de 4 y uno de 2. El último es más chico, pero cuenta igual. <b>Ahora prueba</b> los botones del escenario: la recta gira tres veces y termina la vuelta en <code>w = 1.6562</code>.",
+    alResolver: function () { est.c1 = true; if (pasos.actual() === 0) entrar(0); pasos.completar(0); }
+  });
+
+  B.numerico(cuerpo("chk2"), {
+    pregunta: "Con el tamaño de lote que tienes elegido en el escenario, ¿cuántas actualizaciones de <code>w</code> hace el entrenamiento en 4 épocas?",
+    respuesta: function () { return 4 * Math.ceil(N / ES.lote); },
+    tolerancia: 0,
+    pistas: [function () { return "Primero los pasos por época: $\\lceil 10/" + ES.lote + " \\rceil$. Redondea hacia arriba."; }, "Después multiplica por las 4 épocas."],
+    diagnostico: function (v, r) {
+      var b = ES.lote;
+      if (v === 4 * Math.floor(N / b) && v !== r) return "Redondeaste hacia abajo: el último lote, aunque sea incompleto, también da un paso.";
+      if (Math.abs(v - 4 * N / b) < 1e-9 && v !== r) return "Eso es " + r4(N / b) + " × 4, sin redondear. Keras no da fracciones de paso.";
+      if (v === 40 && r !== 40) return "Eso serían 4 épocas con lote 1, o 10 épocas de 4 pasos.";
+      if (v === Math.ceil(N / b)) return "Esos son los pasos de <b>una</b> época. Son 4 épocas.";
+      return null;
+    },
+    explicacion: function () { var K = Math.ceil(N / ES.lote); return "$4 \\times \\lceil 10/" + ES.lote + " \\rceil = 4 \\times " + K + " = " + 4 * K + "$. Con lote 4 serían 12: dos lotes de 4 y uno de 2 por época. <b>Mira el escenario:</b> la cuenta de actualizaciones ya se muestra."; },
+    alResolver: function () { est.c2 = true; if (pasos.actual() === 1) entrar(1); pasos.completar(1); }
+  });
+
+  B.numerico(cuerpo("chk3"), {
+    pregunta: "La bola está en <code>w = 0</code> y el primer lote es (1, 3), (2, 5), (1, 2), (2, 5). Con tasa 0.05, ¿dónde queda <code>w</code> después de este paso?",
+    respuesta: 0.625,
+    tolerancia: 0.001,
+    pistas: ["Con $w = 0$, cada término es $2x(0 - y) = -2xy$: $-6$, $-20$, $-4$ y $-20$.", "La media de los cuatro es $-50/4 = -12.5$. Ahora $w - 0.05 \\cdot \\text{grad}$."],
+    diagnostico: function (v) {
+      if (Math.abs(v + 0.625) < 1e-6) return "El paso va <b>en contra</b> del gradiente: $0 - 0.05 \\cdot (-12.5)$, menos por menos.";
+      if (Math.abs(v - 12.5) < 1e-6 || Math.abs(v + 12.5) < 1e-6) return "Ese es el gradiente. Falta multiplicarlo por la tasa.";
+      if (Math.abs(v - 0.3125) < 1e-6) return "Dividiste entre 8. La media es entre las 4 filas del lote.";
+      return null;
+    },
+    explicacion: "$\\text{grad} = \\frac{-6 - 20 - 4 - 20}{4} = -12.5$ y $w = 0 - 0.05 \\cdot (-12.5) = 0.625$. <b>Ahora pulsa Un paso</b> en el escenario. Los dos pasos siguientes dan $-9.375 \\to 1.09375$ y $-11.25 \\to 1.65625$: el lote de 2 filas también da un paso completo.",
+    alResolver: function () { est.c3 = true; if (pasos.actual() === 2) entrar(2); pasos.completar(2); }
+  });
+
+  B.opcionMultiple(cuerpo("chk4"), {
+    pregunta: "Misma tasa, una sola época desde <code>w = 0</code>. ¿Con qué tamaño de lote llega <code>w</code> más lejos?",
+    opciones: ["Lote 1", "Lote 10", "Da igual: todos ven los mismos datos", "Lote 4"],
+    correcta: 0,
+    pistas: [null,
+      "Usa todos los datos, pero da un solo paso en la época: termina en 0.7.",
+      "Ven lo mismo, pero se mueven un número distinto de veces.",
+      "Es el del recorrido: llega a 1.6562, menos que con lotes más chicos."],
+    explicacion: "Con lote 1 hay 10 pasos en la época y la bola llega a <b>2.507</b>, ya pasado el mínimo de entrenamiento. Lote 2: 2.027; lote 4: 1.6562; lote 5: 1.2164; lote 10: 0.7. <b>Ahora compruébalo</b> en el escenario, lote por lote.",
+    alResolver: function () { est.c4 = true; if (pasos.actual() === 3) entrar(3); pasos.completar(3); }
+  });
+
+  B.opcionMultiple(cuerpo("chk5"), {
+    pregunta: "La pérdida de entrenamiento baja en las 4 épocas: 2.2934, 0.5271, 0.3259 y 0.3029. ¿Qué hace la de validación?",
+    opciones: ["Baja y después sube", "Baja siempre, igual que la de entrenamiento", "Sube siempre", "Se queda igual, porque la validación no entrena"],
+    correcta: 0,
+    pistas: [null,
+      "Las dos parábolas no tienen el mínimo en el mismo lugar: 2.5 la de entrenamiento y 2 la de validación.",
+      "En la época 2 todavía mejora.",
+      "La validación no entrena, pero sí cambia: se mide con el <code>w</code> nuevo de cada época."],
+    explicacion: "0.7954, <b>0.6158</b>, 0.9078, 1.0465: baja hasta la época 2 y después sube. La bola cruzó $w = 2$, el fondo de la parábola de validación, persiguiendo el 2.5 del corrector generoso. <b>Mira el escenario:</b> ya se ven la parábola verde y la curva de validación.",
+    alResolver: function () { est.c5 = true; $("post5").hidden = false; if (pasos.actual() === 4) entrar(4); cerrar5(); }
+  });
+  B.opcionMultiple(cuerpo("chk5b"), {
+    pregunta: "¿Por qué el <code>loss</code> de entrenamiento de la época 1 sale tan alto?",
+    opciones: ["Porque Keras promedia las pérdidas de los lotes mientras <code>w</code> todavía se movía", "Porque la validación es más fácil", "Porque el modelo sobreajusta desde la época 1", "Es un error de Keras"],
+    correcta: 0,
+    pistas: [null,
+      "Con el mismo <code>w</code> del final de la época 1, la de entrenamiento es 2.2934: no hay nada más fácil.",
+      "El sobreajuste es al revés: validación peor que entrenamiento, y creciendo.",
+      "No es un error: es cómo Keras resume la época."],
+    explicacion: "El primer lote se midió con <code>w = 0</code> y pesa mucho en el promedio. Abajo está la cuenta.",
+    alResolver: function () { est.c5b = true; $("dest5").hidden = false; if (pasos.actual() === 4) entrar(4); cerrar5(); }
+  });
+  function cerrar5() { if (est.c5 && est.c5b) pasos.completar(4); }
+
+  B.opcionMultiple(cuerpo("chk6"), {
+    pregunta: "Con paciencia 2 y las curvas del paso 5, ¿al final de qué época se detiene el entrenamiento y con qué <code>w</code> se queda (restaurando los mejores pesos)?",
+    opciones: ["Se detiene al final de la época 4 y se queda con <code>w = 2.2152</code>", "Época 2, <code>w = 2.2152</code>", "Época 4, <code>w = 2.4676</code>", "Época 3, <code>w = 2.2152</code>", "Época 10, <code>w = 2.5</code>"],
+    correcta: 0,
+    mezclar: true,
+    pistas: [null,
+      "En la época 2 todavía no sabe que es la mejor: necesita ver 2 épocas sin mejora.",
+      "Eso es lo que pasa sin restaurar los mejores pesos.",
+      "Con paciencia 2 hacen falta dos épocas sin mejora: la 3 y la 4.",
+      "Eso es sin parada temprana."],
+    explicacion: "La mejor validación es la de la época 2 (0.6158). La 3 no mejora (contador 1), la 4 tampoco (contador 2 = paciencia): para al final de la época 4 y vuelve al <code>w</code> de la época 2, <b>2.2152</b>. <b>Mira el escenario:</b> la bola vuelve a la estrella. Ahora apaga \"restaurar los mejores pesos\" o cambia la paciencia.",
+    alResolver: function () { est.c6 = true; if (pasos.actual() === 5) entrar(5); pasos.completar(5); }
+  });
+
+  B.opcionMultiple(cuerpo("chk7"), {
+    pregunta: "Corres <code>modelo.fit(x, y, epochs=2, ...)</code> y después, en la misma sesión, otra vez <code>modelo.fit(x, y, epochs=2, ...)</code>. ¿Desde dónde empieza la segunda llamada?",
+    opciones: ["Desde los pesos que dejó la primera: es como entrenar 4 épocas", "Desde cero: <code>fit</code> reinicia los pesos", "Da error porque el modelo ya está entrenado", "Hace 2 épocas más, pero desde <code>w = 0</code>"],
+    correcta: 0,
+    mezclar: true,
+    pistas: [null,
+      "No. Para empezar de cero hay que volver a crear el modelo, o recargar los pesos iniciales.",
+      "Keras no se queja: entrena de nuevo, sin avisar.",
+      "Es el mismo error que pensar que reinicia: los pesos se guardan en el modelo."],
+    explicacion: "El modelo guarda sus pesos. Tras la primera llamada, <code>w = 2.2152</code>; tras la segunda, <code>w = 2.4676</code>, lo mismo que 4 épocas seguidas. Lo verificas en el reto <code>codigo3</code> de la vida real.",
+    alResolver: function () { est.c7 = true; pasos.completar(6); }
+  });
+
+  pasos = B.pasos($("recorrido"), {
+    concepto: C,
+    alEntrar: entrar,
+    alTerminar: function () { location.hash = "retos"; }
+  });
+  est.c1 = pasos.hecho(0);
+  est.c2 = pasos.hecho(1);
+  est.c3 = pasos.hecho(2);
+  est.c4 = pasos.hecho(3);
+  est.c5 = est.c5b = pasos.hecho(4);
+  est.c6 = pasos.hecho(5);
+  est.c7 = pasos.hecho(6);
+  if (est.c5) { $("post5").hidden = false; $("dest5").hidden = false; }
+  modo = -1;
+  entrar(pasos.actual());
+
+  /* ---------------- hipotesis inicial ---------------- */
+  (function () {
+    var ta = $("hipotesis"), t = null;
+    ta.value = B.nota("keras-entrenamiento", "hipotesis");
+    function cita() {
+      var v = ta.value.trim(), e = $("citaHipo");
+      e.hidden = !v;
+      if (v) { e.textContent = ""; e.appendChild(document.createTextNode("Al principio escribiste: «" + v + "». La respuesta de esta página: la pérdida de entrenamiento puede bajar siempre mientras el modelo empeora con datos nuevos. El número que hay que mirar es la pérdida de validación, y se para cuando lleva varias épocas sin mejorar.")); }
+    }
+    cita();
+    ta.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { B.nota("keras-entrenamiento", "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; cita(); }, 500);
+    });
+  })();
+
+  /* ---------------- marcadores de estado de retos ---------------- */
+  function pintarEstados() {
+    [].forEach.call(document.querySelectorAll("[data-reto]"), function (e) {
+      var ok = C.retoOk(e.getAttribute("data-reto"));
+      e.textContent = ok ? "resuelto" : "pendiente";
+      e.classList.toggle("ok", ok);
+    });
+  }
+  C.alCambiar(pintarEstados);
+
+  /* ---------------- reto: ojo clinico ---------------- */
+  (function () {
+    var OPC = [
+      ["sigue", "Sigue aprendiendo: entrena más"],
+      ["sobre", "Sobreajuste: para antes"],
+      ["alta", "Tasa demasiado alta"],
+      ["nada", "No aprende: modelo muy simple o tasa muy baja"]
+    ];
+    var EXPLICA = {
+      sigue: "Las dos curvas bajan hasta la última época y la de validación no se separa: todavía hay algo que aprender.",
+      sobre: "La de entrenamiento baja, pero la de validación toca fondo y sube: la brecha entre las dos crece. Lo que importa es la de validación: conviene parar en su mínimo.",
+      alta: "Las dos saltan o suben desde el principio: los pasos son tan grandes que la bola rebota de un lado a otro de la parábola.",
+      nada: "Las dos quedan casi planas, altas y juntas: el modelo no logra bajar la pérdida, ni siquiera en entrenamiento."
+    };
+    function ruido(a) { return (Math.random() - 0.5) * 2 * a; }
+    function rr(a, b) { return a + Math.random() * (b - a); }
+    function gen() {
+      var u = Math.random(), tr = [], val = [], t, tipo;
+      if (u < 0.1) {
+        var R = entrenar({ tasa: 0.05, lote: 4, pac: 0, max: 10 });
+        return { tipo: "sobre", tr: R.epocas.map(function (e) { return e.tr; }), val: R.epocas.map(function (e) { return e.val; }), real: "Son las curvas de esta página con lote 4: la mejor época es la 2." };
+      }
+      if (u < 0.2) {
+        var R2 = entrenar({ tasa: 0.05, lote: 10, pac: 0, max: 5 });
+        return { tipo: "sigue", tr: R2.epocas.map(function (e) { return e.tr; }), val: R2.epocas.map(function (e) { return e.val; }), real: "Son las curvas de esta página con lote 10, hasta la época 5." };
+      }
+      tipo = eleg(["sigue", "sobre", "alta", "nada"]);
+      var a = rr(1.5, 3), tau = rr(3, 5), c = rr(0.2, 0.5);
+      for (t = 0; t < 10; t++) {
+        if (tipo === "sigue") { tr.push(c + a * Math.exp(-t / tau) + ruido(0.01)); }
+        else if (tipo === "sobre") { tr.push(c + a * Math.exp(-t / 2.5) + ruido(0.01)); }
+        else if (tipo === "alta") { tr.push(rr(1, 1.4) + 0.12 * t + rr(0.4, 0.9) * Math.abs(Math.sin(t * 1.7 + 0.5)) ); }
+        else tr.push(2.4 - 0.015 * t + ruido(0.03));
+      }
+      if (tipo === "sigue") { var f = rr(1.1, 1.25), d = rr(0.08, 0.2); val = tr.map(function (v) { return v * f + d + ruido(0.01); }); }
+      else if (tipo === "sobre") { var m = 2 + azar(5), q = rr(0.05, 0.1), vmin = tr[m] + rr(0.15, 0.3); val = tr.map(function (v, i) { return vmin + q * (i - m) * (i - m) + ruido(0.01); }); }
+      else if (tipo === "alta") { val = tr.map(function (v) { return v + rr(0.1, 0.35); }); }
+      else { var dd = rr(0.05, 0.15); val = tr.map(function (v) { return v + dd + ruido(0.03); }); }
+      return { tipo: tipo, tr: tr, val: val };
+    }
+    var cont = $("ojo");
+    cont.innerHTML = '<div class="ronda"></div><div id="ojoGraf"></div><div class="ojo-opts">' + OPC.map(function (o) { return '<button type="button" class="opt" data-a="' + o[0] + '">' + o[1] + "</button>"; }).join("") +
+      '</div><div class="fb" aria-live="polite"></div><div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    var ronda, aciertos, respondida, actual;
+    function nueva() { ronda = 0; aciertos = 0; mostrar(); }
+    function mostrar() {
+      respondida = false;
+      actual = gen();
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 8 · aciertos " + aciertos;
+      $("ojoGraf").innerHTML = curvasSvg({ tr: actual.tr, val: actual.val, max: actual.tr.length });
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (b) { b.disabled = false; b.className = "opt"; });
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+    }
+    cont.querySelector(".ojo-opts").addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || respondida) return;
+      respondida = true;
+      var ok = b.getAttribute("data-a") === actual.tipo;
+      if (ok) aciertos++;
+      b.classList.add(ok ? "ok" : "mal");
+      if (!ok) cont.querySelector('.ojo-opts [data-a="' + actual.tipo + '"]').classList.add("ok");
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (x) { x.disabled = true; });
+      cont.querySelector(".fb").innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No.</span> ') + EXPLICA[actual.tipo] + (actual.real ? " " + actual.real : "");
+      var sig = cont.querySelector(".sig");
+      sig.hidden = false;
+      if (ronda === 7) {
+        var aprobo = aciertos >= 7;
+        C.reto("ojo", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertos + " de 8" + (aprobo ? ". Aprobado." : ". Necesitas 7 para aprobar.");
+        sig.textContent = "Otra tanda";
+      } else sig.textContent = "Siguiente ronda";
+    });
+    cont.querySelector(".sig").addEventListener("click", function () { if (ronda === 7) nueva(); else { ronda++; mostrar(); } });
+    nueva();
+  })();
+
+  /* ---------------- reto: construir ---------------- */
+  (function () {
+    var st = { lote: 4, tasa: 0.05, pac: 2, rest: true };
+    var OBJ = [
+      { t: "Exactamente 5 pasos por época.", ok: function (R) { return R.pasosEp === 5; } },
+      { t: "Que la parada temprana detenga el entrenamiento antes de la época 10 y restaure una validación menor que 0.51.", ok: function (R) { return st.pac > 0 && st.rest && R.paro !== null && R.paro < 10 && R.valFin < 0.51; } },
+      { t: "Un entrenamiento cuya mejor época sea la 1 y que aun así se detenga.", ok: function (R) { return st.pac > 0 && R.mejorEp === 1 && R.paro !== null; } }
+    ];
+    var hechos = [false, false, false], ul = $("objetivos");
+    OBJ.forEach(function (o) { var li = document.createElement("li"); li.innerHTML = '<span class="m"></span><span>' + o.t + "</span>"; ul.appendChild(li); });
+    function sel(p, lista) { return '<label>' + p.replace("pac", "paciencia") + ' <select data-c="' + p + '">' + lista.map(function (v) { return '<option value="' + v[0] + '"' + (String(v[0]) === String(st[p]) ? " selected" : "") + ">" + v[1] + "</option>"; }).join("") + "</select></label>"; }
+    function pintar() {
+      var R = entrenar({ tasa: st.tasa, lote: st.lote, pac: st.pac, rest: st.rest, max: MAXEP });
+      var h = '<div class="esc-ctrl">' + sel("lote", [[1, 1], [2, 2], [4, 4], [5, 5], [10, 10]]) + sel("tasa", [[0.01, "0.01"], [0.025, "0.025"], [0.05, "0.05"], [0.1, "0.1"]]) + sel("pac", [[0, "apagada"], [1, 1], [2, 2], [3, 3]]) +
+        '<label><input type="checkbox" data-c="rest"' + (st.rest ? " checked" : "") + "> restaurar los mejores pesos</label></div>";
+      h += curvasSvg({ tr: R.epocas.map(function (e) { return e.tr; }), val: R.epocas.map(function (e) { return e.val; }), mejor: R.mejorEp, paro: R.paro });
+      h += '<p class="esc-estado">pasos por época: <b>' + R.pasosEp + "</b> · " + (R.paro ? "se detiene al final de la época <b>" + R.paro + "</b>" : "no se detiene (10 épocas)") + " · mejor época: <b>" + R.mejorEp + "</b><br>" +
+        (st.pac && st.rest ? "w restaurado: <b>" + n4(R.wFin) + "</b> · validación: <b>" + n4(R.valFin) + "</b>" : "w final: <b>" + n4(R.wFin) + "</b> · validación: <b>" + n4(R.valFin) + "</b>") + "</p>";
+      if (st.pac && !st.rest && R.paro && R.paro < 10) h += '<p class="esc-nota">Paró a tiempo, pero sin restaurar se queda con el <code>w</code> de la época ' + R.paro + ", no con el de la mejor: el objetivo 2 pide restaurar.</p>";
+      $("construir").innerHTML = h;
+      OBJ.forEach(function (o, i) { if (o.ok(R)) hechos[i] = true; });
+      [].forEach.call(ul.children, function (li, i) { li.classList.toggle("hecho", hechos[i]); });
+      if (hechos.every(Boolean) && !pintar.listo) { pintar.listo = true; C.reto("construir", true); }
+    }
+    $("construir").addEventListener("change", function (e) {
+      var t = e.target, p = t.getAttribute("data-c");
+      if (!p) return;
+      st[p] = t.type === "checkbox" ? t.checked : +t.value;
+      pintar();
+    });
+    pintar();
+  })();
+
+  /* ---------------- campos: varias respuestas numericas a la vez ---------------- */
+  function campos(el, cfg) {
+    var hecho = false, nP = 0;
+    function v(x) { return typeof x === "function" ? x() : x; }
+    el.innerHTML = '<div class="q-extra">' + B.conTex(v(cfg.pregunta)) + '</div><div class="campos-fila">' +
+      cfg.campos.map(function (c, i) {
+        return '<label class="campo"><span>' + (c.pre || "") + '</span><input class="num" data-k="' + i + '" inputmode="decimal" autocomplete="off" aria-label="' + escH(c.aria) + '"></label>';
+      }).join("") + '</div><div class="num-row" style="margin-top:8px"><button type="button" class="primary comprobar">Comprobar</button>' +
+      '<button type="button" class="pedir">Pista</button><button type="button" class="ver ghost" hidden>Ver solución</button></div>' +
+      '<div class="pistas"></div><div class="fb" aria-live="polite"></div>';
+    var ins = [].slice.call(el.querySelectorAll("input")), fb = el.querySelector(".fb"), ver = el.querySelector(".ver"), pedir = el.querySelector(".pedir");
+    function cerrar(ok) {
+      hecho = true;
+      ins.forEach(function (i) { i.disabled = true; });
+      el.querySelector(".comprobar").disabled = true;
+      pedir.disabled = true;
+      ver.hidden = true;
+      var r = document.createElement("button");
+      r.type = "button";
+      r.className = "reintentar ghost";
+      r.textContent = "Otro ejercicio";
+      r.addEventListener("click", function () { if (cfg.antesDeReintentar) cfg.antesDeReintentar(); campos(el, cfg); });
+      el.appendChild(r);
+      if (cfg.alResolver) cfg.alResolver(ok);
+    }
+    el.querySelector(".comprobar").addEventListener("click", function () {
+      if (hecho) return;
+      var vals = ins.map(function (i) { return i.value.trim(); });
+      if (vals.some(function (x) { return x === ""; })) { fb.innerHTML = "Completa todos los espacios antes de comprobar."; return; }
+      var r = cfg.revisar(vals);
+      if (r.ok) {
+        fb.innerHTML = '<span class="si">Correcto.</span> ' + B.conTex(v(cfg.solucion));
+        cerrar(nP === 0);
+      } else fb.innerHTML = '<span class="no">Todavía no.</span> ' + B.conTex(r.msg || "");
+    });
+    pedir.addEventListener("click", function () {
+      if (nP >= cfg.pistas.length) return;
+      var d = document.createElement("div");
+      d.className = "pista";
+      d.innerHTML = "<b>Pista " + (nP + 1) + ".</b> " + B.conTex(v(cfg.pistas[nP]));
+      el.querySelector(".pistas").appendChild(d);
+      nP++;
+      if (nP >= cfg.pistas.length) { pedir.disabled = true; ver.hidden = false; }
+    });
+    ver.addEventListener("click", function () {
+      if (hecho) return;
+      fb.innerHTML = '<span class="no">Solución.</span> ' + B.conTex(v(cfg.solucion));
+      cerrar(false);
+    });
+  }
+
+  /* ---------------- reto: a mano (pasos por epoca) ---------------- */
+  (function () {
+    var T;
+    function gen(primera) {
+      if (primera) return { n: 176, b: 32, E: 10 };
+      var b = eleg([16, 32, 64, 128]), n;
+      do { n = 50 + azar(951); } while (n % b === 0 || n < b);
+      return { n: n, b: b, E: eleg([5, 10, 20]) };
+    }
+    function calc() { var K = Math.ceil(T.n / T.b); return { K: K, ult: T.n - T.b * (K - 1), tot: K * T.E }; }
+    T = gen(true);
+    campos($("mano"), {
+      pregunta: function () { return '<p class="q">Tienes <b>' + T.n + "</b> filas de entrenamiento, <code>batch_size=" + T.b + "</code> y <code>epochs=" + T.E + "</code>.</p>"; },
+      campos: [{ pre: "pasos por época:", aria: "Pasos por época" }, { pre: "tamaño del último lote:", aria: "Tamaño del último lote" }, { pre: "actualizaciones en total:", aria: "Actualizaciones totales" }],
+      revisar: function (v) {
+        var r = calc(), a = B.aNumero(v[0]), b = B.aNumero(v[1]), c = B.aNumero(v[2]);
+        if (a === r.K && b === r.ult && c === r.tot) return { ok: true };
+        if (a === Math.floor(T.n / T.b)) return { msg: "Los pasos por época se redondean hacia arriba: las " + (T.n % T.b) + " filas que sobran forman un lote más." };
+        if (a !== r.K) return { msg: "Revisa los pasos por época: divide y redondea hacia arriba." };
+        if (b === T.b) return { msg: "Si todos los lotes fueran de " + T.b + ", " + T.n + " sería múltiplo de " + T.b + ". El último es lo que sobra." };
+        if (b !== r.ult) return { msg: "El último lote es lo que sobra después de los lotes llenos." };
+        if (c === Math.round(T.n / T.b * T.E * 100) / 100) return { msg: "Multiplicaste sin redondear. Cada época tiene " + r.K + " pasos enteros." };
+        return { msg: "Las dos primeras están bien. Las actualizaciones son pasos por época por épocas." };
+      },
+      pistas: ["Pasos por época: divide $n$ entre el lote y redondea hacia arriba.", "El último lote: lo que sobra después de los lotes llenos, $n - b\\,(\\lceil n/b \\rceil - 1)$.",
+        function () { var r = calc(); return "$\\lceil " + T.n + "/" + T.b + " \\rceil = " + r.K + "$ pasos por época. Ahora el último lote y multiplica por " + T.E + "."; }],
+      solucion: function () { var r = calc(); return "$\\lceil " + T.n + "/" + T.b + " \\rceil = " + r.K + "$ pasos por época; el último lote tiene $" + T.n + " - " + T.b + " \\cdot " + (r.K - 1) + " = " + r.ult + "$ filas; en total $" + r.K + " \\times " + T.E + " = " + r.tot + "$ actualizaciones." + (T.n === 176 ? " Es el caso de <code>Hitters</code>: ISLR2 escribe 5.5 pasos, Keras da 6." : ""); },
+      antesDeReintentar: function () { T = gen(false); },
+      alResolver: function (ok) { C.reto("mano", ok); }
+    });
+  })();
+
+  /* ---------------- reto: paciencia ---------------- */
+  (function () {
+    var T;
+    function aplicar(vals, pac) {
+      var mejor = Infinity, me = 0, sin = 0;
+      for (var i = 0; i < vals.length; i++) {
+        if (vals[i] < mejor) { mejor = vals[i]; me = i + 1; sin = 0; } else sin++;
+        if (sin === pac) return { paro: i + 1, rest: me };
+      }
+      return { paro: null, rest: me };
+    }
+    function gen(primera) {
+      if (primera) return { vals: [0.90, 0.71, 0.64, 0.66, 0.62, 0.65, 0.69, 0.70], pac: 2 };
+      for (var intento = 0; intento < 500; intento++) {
+        var pac = 1 + azar(3), v = [], x = 0.8 + Math.random() * 0.3, usados = {};
+        for (var i = 0; i < 8; i++) {
+          x = x + (i < 3 ? -0.08 : 0) + (Math.random() - 0.45) * 0.12;
+          var r = Math.round(Math.max(0.3, x) * 100) / 100;
+          if (usados[r]) { r = r + 0.01; r = Math.round(r * 100) / 100; }
+          usados[r] = true;
+          v.push(r);
+        }
+        var res = aplicar(v, pac);
+        if (res.paro && res.rest >= 2 && res.paro <= 8) return { vals: v, pac: pac };
+      }
+      return { vals: [0.90, 0.71, 0.64, 0.66, 0.62, 0.65, 0.69, 0.70], pac: 1 };
+    }
+    T = gen(true);
+    function fmt2(x) { return x.toFixed(2); }
+    campos($("paciencia"), {
+      pregunta: function () { return '<p class="q">Paciencia <b>' + T.pac + "</b>. Pérdida de validación por época:</p><div class=\"lista-val\">" + T.vals.map(function (x, i) { return "época " + (i + 1) + ": " + fmt2(x); }).join(" · ") + "</div>"; },
+      campos: [{ pre: "para al final de la época", aria: "Época en que se detiene" }, { pre: "restaura los pesos de la época", aria: "Época restaurada" }],
+      revisar: function (v) {
+        var r = aplicar(T.vals, T.pac), a = B.aNumero(v[0]), b = B.aNumero(v[1]);
+        if (a === r.paro && b === r.rest) return { ok: true };
+        if (a === r.rest && b === r.rest) return { msg: "La época " + r.rest + " es la mejor, pero eso solo se sabe después de ver " + T.pac + " época" + (T.pac > 1 ? "s" : "") + " peor" + (T.pac > 1 ? "es" : "") + " seguidas." };
+        if (a === r.paro) return { msg: "La parada está bien. Restaura la época con la menor validación vista hasta ahí." };
+        if (b === r.rest) return { msg: "La época restaurada está bien. Cuenta de nuevo: cada mejora reinicia el contador a 0." };
+        return { msg: "Recorre la lista época por época: anota la mejor hasta el momento y el contador sin mejora." };
+      },
+      pistas: ["Recorre la lista de izquierda a derecha y anota la mejor validación vista hasta ese momento.", "Cada vez que una época mejora, el contador vuelve a 0. Cada vez que no, sube 1.",
+        function () { var r = aplicar(T.vals, T.pac); return "La mejor validación antes de parar está en la época " + r.rest + ". ¿Cuándo se acumulan " + T.pac + " épocas sin mejorarla?"; }],
+      solucion: function () {
+        var r = aplicar(T.vals, T.pac), mejor = Infinity, sin = 0, pasosT = [];
+        for (var i = 0; i < r.paro; i++) {
+          if (T.vals[i] < mejor) { mejor = T.vals[i]; sin = 0; pasosT.push((i + 1) + " mejora"); } else { sin++; pasosT.push((i + 1) + " sin mejora (" + sin + ")"); }
+        }
+        return "Época " + pasosT.join(", ") + ". Para al final de la <b>" + r.paro + "</b> y restaura la <b>" + r.rest + "</b>.";
+      },
+      antesDeReintentar: function () { T = gen(false); },
+      alResolver: function (ok) { C.reto("paciencia", ok); }
+    });
+  })();
+
+  /* ---------------- reto: cazar el error ---------------- */
+  B.cazarError($("error"), {
+    variantes: [
+      {
+        intro: "En Python. La salida real es <code>1 1.0938 5.8371 2.5532</code>, <code>2 1.709 2.052 0.7117</code>, ... hasta la época 5, y termina con <code>pasos por época: 3 w final: 2.0551</code>. Con 10 filas y lotes de 4, algo no cuadra desde la época 1.",
+        lineas: [tt("for epoca in range(1, 11):"), tt("    for ini in range(0, len(x) - lote, lote):"), tt("        fin = min(ini + lote, len(x))"), tt("        xb = x[ini:fin]"), tt("        yb = y[ini:fin]"), tt("        grad = np.mean(2 * xb * (w * xb - yb))"), tt("        w = w - tasa * grad")],
+        erronea: 1,
+        explicacion: "<code>range(0, 6, 4)</code> da solo 0 y 4: el último lote, filas 9 y 10, <b>nunca se usa</b>. Por eso la época 1 termina en 1.0938 y no en 1.6562. Y la última línea sigue diciendo \"3 pasos\" aunque se dieron 2: esa cuenta no mira el bucle. Lo correcto es <code>range(0, len(x), lote)</code>."
+      },
+      {
+        intro: "En R. La salida real es <code>1 NA NA NA</code> y después <code>Error in if (perd_val &lt; mejor) { : missing value where TRUE/FALSE needed</code>.",
+        lineas: [tt("  for (ini in seq(1, length(x), by = lote)) {"), tt("    fin <- ini + lote - 1"), tt("    xb <- x[ini:fin]"), tt("    yb <- y[ini:fin]"), tt("    grad <- mean(2 * xb * (w * xb - yb))"), tt("    w <- w - tasa * grad")],
+        erronea: 1,
+        explicacion: "Sin el <code>min</code>, en el tercer lote <code>ini:fin</code> es <code>9:12</code>, y <code>x[11]</code> y <code>x[12]</code> no existen: dan <code>NA</code>. El <code>NA</code> contagia el gradiente, el <code>w</code> y las pérdidas, y el <code>if</code> no sabe qué hacer con él (ver <a class=\"enl\" href=\"na-nan.html\">NA y NaN</a>). Lo correcto es <code>fin &lt;- min(ini + lote - 1, length(x))</code>."
+      },
+      {
+        intro: "En Python. La salida real tiene diez líneas, de <code>1 1.6562 2.2934 0.7954</code> a <code>10 2.5 0.3 1.1249</code>, y termina con <code>pasos por época: 3 w final: 2.5</code>. La parada temprana nunca actúa.",
+        lineas: [tt("    perd = np.mean((w * x - y) ** 2)"), tt("    perd_val = np.mean((w * xv - yv) ** 2)"), tt("    print(epoca, round(w, 4), round(perd, 4), round(perd_val, 4))"), tt("    if perd < mejor:"), tt("        mejor, mejor_w, sin_mejora = perd_val, w, 0"), tt("    else:"), tt("        sin_mejora = sin_mejora + 1")],
+        erronea: 3,
+        explicacion: "El <code>if</code> compara la pérdida de <b>entrenamiento</b>, que baja siempre: cada época parece una mejora, el contador nunca sube y no para. La parada temprana tiene que mirar la validación, <code>if perd_val &lt; mejor:</code>; en Keras, <code>monitor=\"val_loss\"</code>."
+      }
+    ],
+    alResolver: function (ok) { C.reto("error", ok); }
+  });
+
+  /* ---------------- retos: propiedades ---------------- */
+  function prop(id, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple($(id), cfg);
+  }
+  prop("prop1", {
+    pregunta: "¿Qué es una época?",
+    opciones: ["Una pasada completa por todas las filas de entrenamiento, en $\\lceil n/b \\rceil$ pasos", "Un paso de gradiente", "Un lote", "Una pasada por entrenamiento y validación", "Lo que tarda la pérdida en bajar a la mitad"],
+    correcta: 0,
+    pistas: [null, "Eso es un paso; una época tiene varios.", "El lote es el puñado de filas de cada paso.", "La validación no se recorre para aprender: solo se mide.", "Es una unidad de conteo, no de calidad."],
+    explicacion: "Una época es una vuelta por las $n$ filas de entrenamiento. Con lotes de $b$, son $\\lceil n/b \\rceil$ pasos. Al final de cada una, Keras mide la validación."
+  });
+  prop("prop2", {
+    pregunta: "En la época 1 Keras imprime <code>loss: 11.65 - val_loss: 0.80</code>. ¿Qué concluyes?",
+    opciones: ["Nada raro: el <code>loss</code> es el promedio durante la época, con pesos que todavía cambiaban; la validación se mide al final", "El modelo generaliza mejor de lo que aprende", "Hay fuga de datos", "Sobreajuste"],
+    correcta: 0,
+    pistas: [null, "Con el mismo <code>w</code> final, la de entrenamiento es 2.29.", "La validación nunca entró a un lote.", "El sobreajuste es al revés: validación peor que entrenamiento, y creciendo."],
+    explicacion: "El primer lote se mide con <code>w = 0</code> (15.75) y arrastra el promedio. Medidas con el mismo <code>w</code>, entrenamiento 2.2934 y validación 0.7954."
+  });
+  prop("prop3", {
+    pregunta: "¿Qué hace <code>EarlyStopping(monitor=\"val_loss\", patience=3)</code> si la mejor <code>val_loss</code> fue en la época 6?",
+    opciones: ["Entrena las épocas 7, 8 y 9; si ninguna mejora, para al final de la 9", "Para en la 6", "Para en la 9 y deja los pesos de la 6", "Para cuando la pérdida de entrenamiento sube"],
+    correcta: 0,
+    pistas: [null, "En la 6 todavía no sabe que es la mejor.", "Eso pasa solo con <code>restore_best_weights=True</code>; por defecto deja los de la 9.", "Mira la que le dices en <code>monitor</code>."],
+    explicacion: "Necesita ver 3 épocas seguidas sin mejora: la 7, la 8 y la 9. Para al final de la 9 y, sin <code>restore_best_weights=True</code>, se queda con los pesos de la 9."
+  });
+
+  /* ---------------- formula de memoria ---------------- */
+  B.ordenar($("formula"), {
+    pregunta: "Arma la llamada que entrena 10 épocas como máximo, con lotes de 4, validación aparte y la parada temprana.",
+    piezas: [tt("modelo.fit("), tt("x, y,"), tt("epochs=10,"), tt("batch_size=4,"), tt("validation_data=(xv, yv),"), tt("callbacks=[parada]"), tt(")")],
+    distractores: [tt("nb_epoch=10,"), tt("steps=3,"), tt("validation_data=(x, y),"), tt("batch=4,")],
+    soluciones: [[0, 1, 2, 3, 4, 5, 6], [0, 1, 3, 2, 4, 5, 6]],
+    explicacion: "<code>modelo.fit(x, y, epochs=10, batch_size=4, validation_data=(xv, yv), callbacks=[parada])</code>. Los distractores: <code>nb_epoch</code> es el nombre de Keras 1 (la diapositiva de la UD5); los pasos los calcula Keras; validar con los mismos datos de entrenamiento no detecta nada; y el argumento se llama <code>batch_size</code>.",
+    alResolver: function (ok) { C.reto("formula", ok); }
+  });
+
+  /* ---------------- vida real: el algoritmo en codigo ---------------- */
+  (function () {
+    /*CODIGO*/
+    var CODIGO = {
+      py: [
+        ["import", "import numpy as np"],
+        ["datx", "x = np.array([1, 2, 1, 2, 1, 2, 1, 2, 2, 2])    # horas (inventado)"],
+        ["daty", "y = np.array([3, 5, 2, 5, 2, 5, 3, 5, 4, 6])    # nota (inventado)"],
+        ["valx", "xv = np.array([1, 2, 1, 2])                     # validación"],
+        ["valy", "yv = np.array([3, 4, 1, 4])"],
+        ["hiper", "w, tasa, lote, paciencia = 0.0, 0.05, 4, 2"],
+        ["estado", "mejor, mejor_w, sin_mejora = np.inf, w, 0"],
+        ["fore", "for epoca in range(1, 11):"],
+        ["forl", "    for ini in range(0, len(x), lote):"],
+        ["fin", "        fin = min(ini + lote, len(x))"],
+        ["xb", "        xb = x[ini:fin]"],
+        ["yb", "        yb = y[ini:fin]"],
+        ["grad", "        grad = np.mean(2 * xb * (w * xb - yb))"],
+        ["paso", "        w = w - tasa * grad"],
+        ["perd", "    perd = np.mean((w * x - y) ** 2)"],
+        ["perdv", "    perd_val = np.mean((w * xv - yv) ** 2)"],
+        ["imp", "    print(epoca, round(w, 4), round(perd, 4), round(perd_val, 4))"],
+        ["si", "    if perd_val < mejor:"],
+        ["mejora", "        mejor, mejor_w, sin_mejora = perd_val, w, 0"],
+        [null, "    else:"],
+        ["cuenta", "        sin_mejora = sin_mejora + 1"],
+        ["para", "    if sin_mejora == paciencia:"],
+        [null, "        break"],
+        ["restaura", "w = mejor_w"],
+        ["final", "print(\"pasos por época:\", int(np.ceil(len(x) / lote)), \"w final:\", round(w, 4))"]
+      ],
+      r: [
+        ["datx", "x <- c(1, 2, 1, 2, 1, 2, 1, 2, 2, 2)    # horas (inventado)"],
+        ["daty", "y <- c(3, 5, 2, 5, 2, 5, 3, 5, 4, 6)    # nota (inventado)"],
+        ["valx", "xv <- c(1, 2, 1, 2)                     # validación"],
+        ["valy", "yv <- c(3, 4, 1, 4)"],
+        ["hiper", "w <- 0; tasa <- 0.05; lote <- 4; paciencia <- 2"],
+        ["estado", "mejor <- Inf; mejor_w <- w; sin_mejora <- 0"],
+        ["fore", "for (epoca in 1:10) {"],
+        ["forl", "  for (ini in seq(1, length(x), by = lote)) {"],
+        ["fin", "    fin <- min(ini + lote - 1, length(x))"],
+        ["xb", "    xb <- x[ini:fin]"],
+        ["yb", "    yb <- y[ini:fin]"],
+        ["grad", "    grad <- mean(2 * xb * (w * xb - yb))"],
+        ["paso", "    w <- w - tasa * grad"],
+        [null, "  }"],
+        ["perd", "  perd <- mean((w * x - y)^2)"],
+        ["perdv", "  perd_val <- mean((w * xv - yv)^2)"],
+        ["imp", "  cat(epoca, round(w, 4), round(perd, 4), round(perd_val, 4), \"\\n\")"],
+        ["si", "  if (perd_val < mejor) {"],
+        ["mejora", "    mejor <- perd_val; mejor_w <- w; sin_mejora <- 0"],
+        [null, "  } else {"],
+        ["cuenta", "    sin_mejora <- sin_mejora + 1"],
+        [null, "  }"],
+        ["para", "  if (sin_mejora == paciencia) break"],
+        [null, "}"],
+        ["restaura", "w <- mejor_w"],
+        ["final", "cat(\"pasos por época:\", ceiling(length(x) / lote), \"w final:\", round(w, 4), \"\\n\")"]
+      ]
+    };
+    /*FIN CODIGO*/
+
+    // la foto del estado por linea ejecutada: el mismo algoritmo del codigo
+    var EV = [], SAL = [];
+    (function () {
+      var st = { fase: 1, datos: 0, w: null, ep: 0, k: -1, ini: null, fin: null, grad: null, perd: null, pv: null, mejor: null, mejorEp: 0, sin: null, sal: 0, puntos: [], lote: false, fin2: false };
+      function foto(id, extra) { var e = {}; for (var c in st) e[c] = st[c]; e.puntos = st.puntos.slice(); if (extra) for (var d in extra) e[d] = extra[d]; e.id = id; EV.push(e); }
+      foto("import");
+      st.datos = 1; foto("datx");
+      st.datos = 2; foto("daty");
+      st.datos = 3; foto("valx");
+      st.datos = 4; foto("valy");
+      st.w = 0; foto("hiper");
+      st.mejor = Infinity; st.sin = 0; foto("estado");
+      var w = 0, mejor = Infinity, mejorW = 0, sin = 0;
+      for (var ep = 1; ep <= 10; ep++) {
+        st.fase = 2; st.ep = ep; st.k = -1; st.ini = null; st.fin = null; st.grad = null; st.lote = false; foto("fore");
+        for (var ini = 0, k = 0; ini < N; ini += 4, k++) {
+          var fin = Math.min(ini + 4, N), g = 0;
+          st.k = k; st.ini = ini; st.fin = null; st.grad = null; st.lote = false; foto("forl");
+          st.fin = fin; foto("fin");
+          st.lote = true; foto("xb");
+          foto("yb");
+          for (var i = ini; i < fin; i++) g += 2 * X[i] * (w * X[i] - Y[i]);
+          g /= fin - ini;
+          st.grad = g; foto("grad");
+          w = w - 0.05 * g; st.w = w; foto("paso");
+        }
+        st.fase = 3; st.k = -1; st.lote = false;
+        var tr = Ltr(w), va = Lval(w);
+        st.perd = tr; foto("perd");
+        st.pv = va; foto("perdv");
+        SAL.push(ep + " " + r4(w) + " " + r4(tr) + " " + r4(va));
+        st.sal = SAL.length; st.puntos.push([tr, va]); foto("imp");
+        foto("si", { mejora: va < mejor });
+        if (va < mejor) { mejor = va; mejorW = w; sin = 0; st.mejor = va; st.mejorEp = ep; st.sin = 0; foto("mejora"); }
+        else { sin++; st.sin = sin; foto("cuenta"); }
+        foto("para", { corta: sin === 2 });
+        if (sin === 2) break;
+      }
+      st.fase = 4; st.w = mejorW; st.restaurado = true; foto("restaura");
+      SAL.push("pasos por época: 3 w final: " + r4(mejorW));
+      st.sal = SAL.length; foto("final", { fin: true });
+    })();
+
+    function narrar(e, ctx) {
+      var py = ctx.lang() === "py", ix = ctx.ix;
+      switch (e.id) {
+        case "import": return py ? "Carga NumPy, para los vectores y la media." : "Esta línea solo existe en Python: R trae los vectores y <code>mean</code> sin cargar nada.";
+        case "datx": return "Las horas de los diez estudiantes de entrenamiento, en este orden. El orden importa: los lotes se cortan así.";
+        case "daty": return "Sus notas, con el corrector generoso.";
+        case "valx": return "Las horas de los cuatro estudiantes de validación. Nunca van a entrar a un lote.";
+        case "valy": return "Sus notas, con un corrector normal.";
+        case "hiper": return "El peso empieza en 0, la tasa es 0.05, el lote 4 y la paciencia 2. Son los <code>kernel_initializer</code>, <code>learning_rate</code>, <code>batch_size</code> y <code>patience</code> de Keras.";
+        case "estado": return "La memoria de la parada temprana: la mejor validación vista (" + (py ? "infinito, <code>np.inf</code>" : "infinito, <code>Inf</code>") + ", para que la primera época siempre mejore), su <code>w</code> y el contador de épocas sin mejora.";
+        case "fore": return "Empieza la época <b>" + e.ep + "</b> de 10 como máximo. El <code>break</code> puede cortar antes.";
+        case "forl": return "Lote " + (e.k + 1) + " de 3: <code>ini</code> vale <b>" + ix(e.ini) + "</b>" + (py ? " (Python cuenta desde 0)." : " (R cuenta desde 1).");
+        case "fin": return "<code>fin</code> vale <b>" + e.fin + "</b>. " + (e.k === 2 ? "El último lote se corta en la fila 10: por eso tiene 2 filas y no 4." : py ? "El corte <code>x[ini:fin]</code> no incluye la posición <code>fin</code>." : "El rango <code>ini:fin</code> sí incluye <code>fin</code>.");
+        case "xb": return "Las horas del lote: <b>" + X.slice(e.ini, e.fin).join(", ") + "</b>.";
+        case "yb": return "Las notas del lote: <b>" + Y.slice(e.ini, e.fin).join(", ") + "</b>.";
+        case "grad": return "El gradiente del lote, la media de $2x(wx - y)$ en sus filas: <b>" + n4(e.grad) + "</b>. Solo usa estas " + (e.fin - e.ini) + " filas.";
+        case "paso": return "Un paso: <code>w</code> se mueve en contra del gradiente y queda en <b>" + n4(e.w) + "</b>.";
+        case "perd": return "Fin de la época " + e.ep + ". La pérdida de entrenamiento con el <code>w</code> del final: <b>" + n4(e.perd) + "</b>. Keras imprimiría otra, el promedio de los lotes durante la época (ver el destacado del paso 5).";
+        case "perdv": return "La pérdida de validación con el mismo <code>w</code>: <b>" + n4(e.pv) + "</b>.";
+        case "imp": return "Imprime la época, <code>w</code> y las dos pérdidas" + (py ? "." : ". <code>cat</code> deja un espacio antes del salto de línea.");
+        case "si": return "¿La validación bajó estrictamente respecto de la mejor (" + (e.mejor === Infinity ? "infinito" : n4(e.mejor)) + ")? " + (e.mejora ? "<b>Sí</b>." : "<b>No</b>.");
+        case "mejora": return "Nueva mejor época: la <b>" + e.ep + "</b>. Guarda su <code>w</code> y el contador vuelve a 0.";
+        case "cuenta": return "Sin mejora: el contador sube a <b>" + e.sin + "</b>.";
+        case "para": return e.corta ? "El contador llegó a la paciencia: con paciencia 2, dos épocas seguidas sin mejorar bastan para parar. <code>break</code>." : "El contador vale " + e.sin + ", menos que la paciencia: sigue.";
+        case "restaura": return "Vuelve al mejor <code>w</code>, el de la época " + e.mejorEp + ": <b>" + n4(e.w) + "</b>. Es <code>restore_best_weights=True</code>.";
+        case "final": return "Pasos por época: $\\lceil 10/4 \\rceil = 3$, el número que Keras pone en su barra de progreso (<code>3/3</code>). Python y R imprimen lo mismo.";
+      }
+      return "";
+    }
+    function visual(e, anterior, ctx) {
+      var grupos = gruposDe(4, null, e && e.lote ? e.k : -1);
+      $("vrMazo").innerHTML = e && e.datos >= 2 ? mazoHtml(grupos, e.datos >= 4) : '<p class="esc-nota">Todavía no hay datos.</p>';
+      var w = e && e.w != null ? e.w : null;
+      $("vrParab").innerHTML = w == null ? '<p class="esc-nota">Todavía no hay <code>w</code>.</p>' : parabSvg({ w: w, val: !!(e.puntos && e.puntos.length), marcas: e.fase >= 3 || e.puntos.length > 0 });
+      var pts = e ? e.puntos : [];
+      $("vrCurvas").innerHTML = curvasSvg({ tr: pts.map(function (p) { return p[0]; }), val: pts.map(function (p) { return p[1]; }), mejor: e && e.mejorEp ? e.mejorEp : null, paro: e && e.restaurado ? 4 : null });
+      $("vrSal").textContent = SAL.slice(0, e ? e.sal : 0).join("\n");
+    }
+    B.vidaReal($("vidareal"), {
+      codigo: CODIGO,
+      eventos: EV,
+      narrar: narrar,
+      vars: function (e, ctx) {
+        var v = [], py = ctx.lang() === "py";
+        if (!e) return v;
+        if (e.w != null) v.push('<span class="vk">w = <b>' + n4(e.w) + "</b></span>");
+        if (e.ep) v.push("<span>epoca = <b>" + e.ep + "</b></span>");
+        if (e.ini != null && e.fase === 2) v.push("<span>ini = <b>" + ctx.ix(e.ini) + "</b></span>");
+        if (e.fin != null && e.fase === 2) v.push("<span>fin = <b>" + e.fin + "</b></span>");
+        if (e.grad != null && e.fase === 2) v.push("<span>grad = <b>" + n4(e.grad) + "</b></span>");
+        if (e.perd != null) v.push("<span>perd = <b>" + n4(e.perd) + "</b></span>");
+        if (e.pv != null) v.push("<span>perd_val = <b>" + n4(e.pv) + "</b></span>");
+        if (e.mejor != null) v.push("<span>mejor = <b>" + (e.mejor === Infinity ? (py ? "inf" : "Inf") : n4(e.mejor)) + "</b></span>");
+        if (e.sin != null) v.push("<span>sin_mejora = <b>" + e.sin + "</b></span>");
+        return v;
+      },
+      visual: visual,
+      demora: function (e) { return !e ? 600 : e.id === "imp" || e.id === "para" || e.id === "restaura" ? 1200 : e.id === "paso" ? 700 : 350; }
+    });
+
+    B.numerico(cuerpo("vrPred"), {
+      pregunta: "¿Cuántas veces se ejecuta la línea <code>w = w - tasa * grad</code> (en R, <code>w &lt;- w - tasa * grad</code>)?",
+      respuesta: 12,
+      tolerancia: 0,
+      pistas: ["Cuenta en qué época se detiene el entrenamiento y cuántos lotes hay por época."],
+      diagnostico: function (v) {
+        if (v === 10) return "Esas son las épocas máximas del <code>for</code>. La línea está dentro del bucle de lotes, y el entrenamiento para antes.";
+        if (v === 8) return "4 épocas por 2 lotes: olvidaste el lote incompleto de 2 filas, que también da un paso.";
+        if (v === 40) return "Eso serían 10 épocas de 4 pasos. Son 3 lotes por época, y la parada corta antes.";
+        if (v === 30) return "10 épocas de 3 pasos, sin la parada temprana. Con paciencia 2, ¿en qué época para?";
+        return null;
+      },
+      explicacion: "<b>12 veces</b>: 3 lotes por época durante 4 épocas, porque el entrenamiento para al final de la época 4. Ahora dale a reproducir (o a Ir al final) y cuéntalo."
+    });
+
+    prop("codigo1", {
+      pregunta: "Usaste <code>EarlyStopping(patience=2)</code>, sin más argumentos, y el entrenamiento paró en la época 4. ¿Con qué <code>w</code> quedó el modelo?",
+      opciones: ["2.4676, el de la última época", "2.2152, el de la mejor época", "2.5, el mínimo de entrenamiento", "0, porque parar reinicia el modelo"],
+      correcta: 0,
+      pistas: [null, "Eso pasa solo si lo pides con <code>restore_best_weights=True</code>.", "Eso es sin parar: la bola llega a 2.5 en la época 10.", "Parar no borra nada."],
+      explicacion: "Sin <code>restore_best_weights=True</code>, Keras para pero no vuelve atrás: el modelo queda con el <code>w</code> de la época 4, 2.4676, con validación 1.0465 en vez de 0.6158. La imitación lo muestra con <code>pesos[-1]</code> frente a <code>pesos[mejor]</code>."
+    });
+    prop("codigo2", {
+      pregunta: "Con las filas ordenadas por horas y <code>validation_split=0.2</code>, ¿qué estudiantes quedan en la validación?",
+      opciones: ["Los dos últimos, ambos de 2 horas: ningún estudiante de 1 hora valida", "Dos al azar", "Los dos primeros", "El 20 % de cada grupo de horas"],
+      correcta: 0,
+      pistas: [null, "El barajado llega después del corte.", "Es el final, no el principio.", "<code>validation_split</code> no estratifica."],
+      explicacion: "Keras toma la validación del final de los datos tal como los pasas, y recién después baraja lo que queda. Si los datos vienen ordenados (por fecha, por clase, por horas), la validación no se parece al resto. Arreglo: barajar antes de <code>fit</code> o pasar <code>validation_data</code> explícito."
+    });
+    prop("codigo3", {
+      pregunta: "¿Por qué la segunda llamada da lo mismo que entrenar 4 épocas seguidas?",
+      opciones: ["Porque el modelo guarda sus pesos: la segunda llamada empieza en 2.2152, no en 0", "Por casualidad", "Porque <code>fit</code> duplica las épocas", "Porque R guarda el historial"],
+      correcta: 0,
+      pistas: [null, "Da exactamente 2.4676 las dos veces: no es casualidad.", "Cada llamada hace las épocas que le pides, ni una más.", "La función <code>entrenar</code> no guarda nada: recibe <code>w</code> y lo devuelve. Lo que continúa es el <code>w</code> que le pasas."],
+      explicacion: "En la imitación, el <code>w</code> que devuelve la primera llamada entra a la segunda. En Keras pasa lo mismo, porque los pesos viven dentro del modelo: para empezar de cero hay que crear el modelo otra vez."
+    });
+  })();
+
+  /* ---------------- tarjetas ---------------- */
+  B.tarjetas($("tarjetas"), [
+    ["¿Qué es un lote?", "El puñado de filas con el que se calcula <b>un</b> paso de gradiente (<code>batch_size</code>; 32 si no lo pones)."],
+    ["¿Qué es una época?", "Una pasada completa por las $n$ filas de entrenamiento: $\\lceil n/b \\rceil$ pasos."],
+    ["176 filas, lotes de 32: ¿cuántos pasos por época?", "6: cinco de 32 y uno de 16. ISLR2 escribe 5.5 porque cuenta equivalentes de datos."],
+    ["¿Por qué el <code>loss</code> de la época 1 sale mayor que el <code>val_loss</code>?", "Keras promedia los lotes mientras los pesos cambian; la validación se mide al final. Con dropout, además, el entrenamiento se mide con neuronas apagadas."],
+    ["Entrenamiento baja y validación sube: ¿qué pasa?", "Sobreajuste: el modelo aprende rarezas del entrenamiento. Conviene quedarse con la mejor época de validación."],
+    ["¿Qué hace la paciencia?", "Cuántas épocas seguidas sin mejorar la validación se toleran antes de parar."],
+    ["<code>EarlyStopping(patience=2)</code> paró: ¿con qué pesos quedó?", "Con los de la última época, salvo que pongas <code>restore_best_weights=True</code>."],
+    ["Llamo a <code>fit</code> dos veces: ¿empieza de cero?", "No: continúa desde los pesos que dejó la primera. Para empezar de cero, crea el modelo otra vez."]
+  ]);
+
+  /* ---------------- conexiones ---------------- */
+  B.conexiones("keras-entrenamiento");
+})();
+</script>
+</body>
+</html>

@@ -46,6 +46,13 @@ window.FUENTES = {
     tipo: "diapositivas",
     nota: "Las diapositivas de clase (64), con casos en R y caret. Ojo: usa C con dos sentidos opuestos (presupuesto y costo)."
   },
+  raschka4: {
+    corto: "Raschka cap. 4",
+    titulo: "Machine Learning with PyTorch and Scikit-Learn, cap. 4: Building Good Training Datasets – Data Preprocessing",
+    autor: "Raschka, Liu y Mirjalili",
+    archivo: "/Users/franciscocastillo/brain/02-Biblioteca/Machine-Learning/PyTorch-Scikit-Learn/Cap04 - Building Good Training Datasets – Data Preprocessing.pdf",
+    nota: "Faltantes, la interfaz fit/transform de scikit-learn, categóricas, escalado y selección de variables. Página PDF = impresa − 104."
+  },
   raschka6: {
     corto: "Raschka cap. 6",
     titulo: "Machine Learning with PyTorch and Scikit-Learn, cap. 6: Learning Best Practices for Model Evaluation and Hyperparameter Tuning",
@@ -1645,5 +1652,26 @@ window.FUENTES = {
     autor: "James, Witten, Hastie y Tibshirani",
     archivo: "/Users/franciscocastillo/Downloads/ISLRv2_corrected_June_2023.pdf",
     nota: "Teoría y laboratorios en R de regresión, remuestreo, regularización, árboles, SVM, PCA y agrupamiento. Usa R base y paquetes por tema, sin tidyverse. Página PDF = impresa + 11. Mapa: brain/fuentes/islr2-r.md."
+  },
+  hojanumpy: {
+    corto: "Hoja NumPy",
+    titulo: "NumPy Python Cheat Sheet (hoja de referencia de la materia)",
+    autor: "DataCamp. Material de SM142002, UD1",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142002 - Programacion y entorno de trabajo para la IA/UD1. Python, IDEs y SQL/Notebooks y otros recursos/Numpy_Python_Cheat_Sheet.pdf",
+    nota: "Una página: crear arrays, forma, aritmética (incluye a - b entre formas distintas sin nombrar el broadcasting), agregados, copias y vistas, indexación. Página PDF = impresa."
+  },
+  hojapandas: {
+    corto: "Hoja Pandas",
+    titulo: "Pandas Cheat Sheet (hoja de referencia de la materia)",
+    autor: "Material de SM142002, UD1",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142002 - Programacion y entorno de trabajo para la IA/UD1. Python, IDEs y SQL/Notebooks y otros recursos/Pandas_Cheat_Sheet.pdf",
+    nota: "Tres páginas: crear DataFrames, melt y pivot, loc e iloc, merge, groupby, valores que faltan y fechas. Página PDF = impresa."
+  },
+  hojamatplotlib: {
+    corto: "Hoja Matplotlib",
+    titulo: "Matplotlib cheat sheets (versión 3.9.4, hoja de referencia de la materia)",
+    autor: "Matplotlib. Material de SM142002, UD1",
+    archivo: "/Users/franciscocastillo/brain/01-Academico/Master-IA-UAX/SEMESTRE 1 /SM142002 - Programacion y entorno de trabajo para la IA/UD1. Python, IDEs y SQL/Notebooks y otros recursos/matplotlib_cheatsheets.pdf",
+    nota: "Dos páginas: inicio rápido con fig, ax = plt.subplots(), anatomía de una figura, gráficos básicos, escalas, colores y leyendas. Página PDF = impresa."
   }
 };

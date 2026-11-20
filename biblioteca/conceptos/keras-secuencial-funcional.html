@@ -1,0 +1,1710 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Una red con Keras: modelo secuencial y funcional</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+/* ---------- escenario ---------- */
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.esc-head .hint { font-size: 12.5px; color: var(--ink-2); }
+.esc-ctrl { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin: 0 0 10px; }
+.esc-ctrl button { font-family: var(--f-mono); font-size: 12px; padding: 6px 9px; }
+.esc-ctrl button[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.esc-ctrl .lab { font-family: var(--f-mono); font-size: 12px; color: var(--ink-2); }
+.esc-ctrl select { font-family: var(--f-mono); font-size: 12px; padding: 5px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); max-width: 100%; }
+.esc-nota { font-size: 12.5px; color: var(--ink-3); margin: 8px 0 0; }
+.esc-frase { font-size: 13.5px; color: var(--ink); margin: 10px 0 0; padding: 8px 10px; border-left: 3px solid var(--ok); background: var(--ok-soft); border-radius: 0 6px 6px 0; }
+.esc-alerta { font-size: 13.5px; color: var(--ink); margin: 10px 0 0; padding: 8px 10px; border-left: 3px solid var(--bad); background: var(--bad-soft); border-radius: 0 6px 6px 0; }
+.esc-ambar { font-size: 13.5px; color: var(--ink); margin: 10px 0 0; padding: 8px 10px; border-left: 3px solid var(--accent); background: var(--accent-soft); border-radius: 0 6px 6px 0; }
+
+/* la pila de capas (svg) */
+svg.pila, svg.caja, svg.grafo { width: 100%; height: auto; display: block; max-width: 460px; margin: 0 auto; }
+.pila .cable, .caja .cable, .grafo .cable { stroke: var(--j); stroke-width: .8; opacity: .4; }
+.pila .pasa, .grafo .pasa { stroke: var(--ink-3); stroke-width: 1; stroke-dasharray: 3 3; }
+.pila .comprimida, .grafo .comprimida { fill: var(--j-soft); stroke: var(--j); stroke-width: 1; }
+.comp-t { font-family: var(--f-mono); font-size: 11px; fill: var(--j); }
+.nodo-in { fill: var(--j); }
+.nodo { fill: var(--surface); stroke: var(--ink-2); stroke-width: 1.4; }
+.nodo-k { fill: var(--k); }
+.sesgo { fill: var(--k); }
+.lab-capa { font-family: var(--f-mono); font-size: 11px; fill: var(--ink); }
+.lab-sub { font-family: var(--f-mono); font-size: 10px; fill: var(--ink-3); }
+.forma-t { font-family: var(--f-mono); font-size: 10.5px; fill: var(--accent); }
+.franja.hl .cable { opacity: .95; stroke-width: 1.3; }
+.franja.hl .lab-capa { fill: var(--accent); font-weight: 600; }
+.franja.on .cable { stroke: var(--accent); opacity: .8; }
+.caja .marco { fill: none; stroke: var(--ink-3); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.caja .txt { font-family: var(--f-body); font-size: 11px; fill: var(--ink-2); }
+.caja .cable.anim { stroke-dasharray: 200; stroke-dashoffset: 200; animation: dibujar .6s ease-out forwards; }
+.caja .sesgo.anim { opacity: 0; animation: aparecer .4s ease-out forwards; }
+.grafo .tapa-r { fill: var(--accent-soft); stroke: var(--accent); stroke-dasharray: 4 3; }
+.grafo .tapa-t { font-family: var(--f-mono); font-size: 16px; fill: var(--accent); }
+@keyframes dibujar { to { stroke-dashoffset: 0; } }
+@keyframes aparecer { to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .caja .cable.anim { animation: none; stroke-dashoffset: 0; } .caja .sesgo.anim { animation: none; opacity: 1; } }
+
+/* la tabla summary */
+.sumt-wrap { margin-top: 10px; max-width: 100%; overflow-x: auto; }
+.sumt { width: 100%; border-collapse: collapse; font-family: var(--f-mono); font-size: 11.5px; }
+.sumt th, .sumt td { border-bottom: 1px solid var(--line); padding: 4px 6px; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+.sumt th { color: var(--ink-3); font-weight: 500; font-size: 10.5px; }
+.sumt td.nm { text-align: right; white-space: nowrap; }
+.sumt .tipo { color: var(--ink-3); }
+.sumt .fo { color: var(--ink-3); }
+.sumt tr.hl td { background: var(--accent-soft); }
+.sumt tr.on td { background: var(--accent-soft); }
+.sumt-tot { font-family: var(--f-mono); font-size: 12px; margin: 6px 0 0; color: var(--ink-2); }
+.sumt-tot b { color: var(--ink); }
+.sumt-tot b.pulso { animation: pulso 1.2s ease-out 1; border-radius: 4px; }
+@keyframes pulso { 0% { box-shadow: 0 0 0 3px var(--ok); } 100% { box-shadow: 0 0 0 0 var(--ok); } }
+@media (prefers-reduced-motion: reduce) { .sumt-tot b.pulso { animation: none; } }
+.tapa { display: inline-block; min-width: 1.8em; text-align: center; color: var(--accent); font-weight: 600; background: var(--accent-soft); border-radius: 4px; }
+
+/* codigo del escenario */
+pre.cod { margin: 8px 0 0; padding: 8px 10px; background: var(--surface-2); border-radius: 8px; font-family: var(--f-mono); font-size: 11.5px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); }
+pre.cod .cl { display: block; border-left: 3px solid transparent; padding-left: 4px; cursor: default; }
+pre.cod .cl.hl { border-left-color: var(--accent); background: var(--accent-soft); }
+.cod-t { font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); margin: 10px 0 0; }
+
+/* tensores */
+.tensores { display: flex; flex-wrap: wrap; gap: 10px 8px; align-items: center; margin-top: 10px; }
+.tens { display: inline-flex; flex-direction: column; gap: 3px; align-items: flex-start; }
+.tens-g { display: grid; gap: 1px; }
+.tens-g span { width: 7px; height: 7px; background: var(--j); opacity: .75; border-radius: 1px; }
+.tens.none .tens-g span { opacity: .22; }
+.tens-t { font-family: var(--f-mono); font-size: 11px; color: var(--accent); }
+.tens-fl { font-family: var(--f-mono); color: var(--ink-3); font-size: 13px; }
+
+/* editor de pila */
+.editor { display: grid; gap: 4px; margin: 0 0 10px; }
+.ed-fila { display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; font-family: var(--f-mono); font-size: 12px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); }
+.ed-fila .nom { min-width: 7.5em; color: var(--ink); }
+.ed-fila button { font-size: 11.5px; padding: 3px 8px; }
+.ed-fila select { font-family: var(--f-mono); font-size: 11.5px; padding: 2px 4px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface); color: var(--ink); }
+.ed-fila.entrada { background: var(--j-soft); }
+
+/* compile */
+.compile { border: 1px dashed var(--line); border-radius: 10px; padding: 8px 10px; margin-top: 10px; }
+.compile label { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; font-family: var(--f-mono); font-size: 12px; color: var(--ink-2); margin: 4px 0; }
+
+/* matriz de pesos */
+.matriz { display: inline-grid; gap: 2px; margin: 6px 0 0; }
+.matriz span { width: 14px; height: 14px; border-radius: 2px; background: var(--j-soft); border: 1px solid var(--j); }
+.matriz span.n1 { background: var(--accent); border-color: var(--accent); }
+.mat-t { font-family: var(--f-mono); font-size: 12px; color: var(--ink); margin: 8px 0 0; }
+
+/* chequeos con campos */
+.campos-fila { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-top: 6px; }
+.campo { display: inline-flex; align-items: center; gap: 4px; font-family: var(--f-mono); font-size: 14px; color: var(--ink-2); }
+.campo input.num { width: 72px; }
+
+/* retos propios */
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.codigo-linea { font-family: var(--f-mono); font-size: 13px; padding: 8px 10px; background: var(--surface-2); border-radius: 8px; margin: 6px 0 10px; overflow-wrap: anywhere; white-space: pre-wrap; }
+.ojo-par { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 8px 0; }
+.ojo-caja { border: 1px solid var(--line); border-radius: 10px; padding: 10px; text-align: center; font-family: var(--f-mono); }
+.ojo-caja .gr { font-size: 20px; color: var(--ink); }
+.ojo-caja .pq { font-size: 11px; color: var(--ink-3); }
+.ojo-t { font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 4px; }
+.ojo-opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 6px; margin-top: 10px; }
+.ojo-opts .opt { text-align: center; font-family: var(--f-mono); }
+.objetivos { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.objetivos li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.objetivos .m { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.objetivos li.hecho { color: var(--ink); }
+.objetivos li.hecho .m { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 3px var(--surface); }
+.lec { border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); overflow: hidden; margin: 6px 0 10px; }
+.lec-t { display: block; font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); padding: 5px 10px 0; }
+.lec pre { margin: 0; padding: 4px 10px 8px; font-family: var(--f-mono); font-size: 12px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink-2); }
+.lec pre .sal { color: var(--ink); font-weight: 500; }
+.lec pre .err { color: var(--bad); font-weight: 500; }
+.lec-par { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 520px) { .lec-par { grid-template-columns: minmax(0, 1fr); } }
+.etiqueta-no { display: inline-block; font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .04em; color: var(--bad); border: 1px solid var(--bad); border-radius: 999px; padding: 1px 8px; margin: 0 0 6px; }
+
+/* vida real */
+.vr-sal { margin: 4px 0 0; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); font-family: var(--f-mono); font-size: 12px; line-height: 1.55; white-space: pre; overflow-x: auto; min-height: 3em; color: var(--ink); }
+.vr-A { display: inline-grid; gap: 1px; font-family: var(--f-mono); font-size: 10.5px; margin-top: 4px; max-width: 100%; overflow-x: auto; }
+.vr-A span { padding: 2px 3px; background: var(--j-soft); color: var(--ink); text-align: center; border-radius: 2px; min-width: 2.2em; }
+.vr-A span.nuevo { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.vr-info { font-family: var(--f-mono); font-size: 12px; color: var(--ink-2); margin: 6px 0 0; }
+
+/* piezas largas de B.ordenar: que se partan a 375 px */
+.chip { max-width: 100%; white-space: normal; text-align: left; }
+.chip .katex-html { white-space: normal; }
+.chip .mord.texttt { white-space: normal; overflow-wrap: anywhere; }
+.linea .katex-html { white-space: normal; }
+.linea .mord.texttt { white-space: normal; overflow-wrap: anywhere; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ Una red con Keras</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Programación con datos · Programación y entorno de trabajo (SM142002) · UD3 · ISLR2, laboratorio 10.9</p>
+    <h1>Una red con Keras: modelo secuencial y funcional</h1>
+    <p class="lede">
+      Declarar una red en Keras es apilar <b>cajas</b>. Cada capa densa recibe una fila de números y entrega otra, y los <b>cables</b> que la cruzan son sus pesos.
+      Aquí vas a ver cuántos cables tiene cada caja, qué forma tiene la tabla que viaja entre una y otra, qué hace <code>compile</code> y cuándo una fila de cajas
+      ya no alcanza y hace falta un grafo.
+    </p>
+    <p class="lede" style="font-size:15px">
+      La unidad de la materia donde esto se enseña (SM142002, UD3: scikit-learn, TensorFlow y Git) todavía no tiene material publicado. Por eso esta página usa
+      el de la UD4 y la UD5 de SM142004, donde ya usaste Keras, y el laboratorio 10.9 de ISLR2, que lo hace desde R. Keras no está instalado en esta máquina:
+      el código de Keras que ves aquí no se ejecutó, y cada vez que aparece lo dice.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> Vas a armar una red que recibe las 4 medidas de una flor y elige entre 3 especies, con una capa de 10 neuronas en medio. ¿Cuántos números tiene que aprender esa red? Y si en vez de 150 flores tuvieras 15 000, ¿ese número cambia? Escribe tu idea.</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: creo que..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>Cajas, cables y la tabla que viaja</h2>
+      <p>Siete pasos. Cada uno termina con un chequeo: hasta que no lo resuelves, el siguiente queda cerrado. Equivocarte aquí no resta nada, es parte del método. Las flores son las de la página anterior de la ruta: 4 medidas, 3 especies. Los datos y los tamaños son inventados.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="Una caja con cables">
+          <span class="etapa">Paso 1</span>
+          <h3>Una capa es una caja con cables</h3>
+          <p>En el escenario hay una caja. Arriba entran las 4 medidas de una flor: largo y ancho del sépalo, largo y ancho del pétalo. Abajo salen 3 puntajes, uno por especie. El puntaje más alto es la especie que la red elige.</p>
+          <p>Cada puntaje mira las <b>cuatro</b> medidas. Para eso tiene un cable propio con cada una, y cada cable tiene un ajuste: cuánto pesa esa medida en ese puntaje. Además, cada puntaje tiene una perilla propia que lo sube o lo baja. Lo que la red aprende son esos ajustes.</p>
+          <p>Lo que pasa <b>dentro</b> de la caja, las cuentas neurona por neurona, lo viste en <a href="red-multicapa.html">Red multicapa y propagación hacia adelante</a>. Aquí solo la vas a declarar y contar.</p>
+          <div class="check" id="chk1">
+            <p class="check-tit">Predice antes de ver nada</p>
+            <div class="cuerpo"></div>
+          </div>
+          <div id="post1" hidden>
+            <p>A los cables se les llama <b>pesos</b> y a las perillas, <b>sesgos</b>. El material de la UD4 escribe la neurona como <span data-tex="a_i = g(w_i x_i + b_i)"></span>
+            <cite class="cita" data-fuente="dl4" data-pag="13" data-pimp="13" data-seccion="Multilayer feed-forward" data-que="La neurona con su peso, su sesgo y su activación, la palabra forward propagation y la red 3-4-4-2." data-cuando="Al terminar este paso"></cite>.
+            Léela con cuidado: a esa fórmula le falta el sumatorio. Una neurona suma <b>todas</b> sus entradas pesadas, <span data-tex="\sum_j w_{ij}\,x_j + b_i"></span>, que es justo lo que ves en la caja: cada salida recibe 4 cables. Y el texto dice que el sesgo garantiza que al menos un nodo por capa esté activo; no es así. El sesgo desplaza el umbral: mueve el punto donde la neurona empieza a responder.</p>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Apilar cajas">
+          <span class="etapa">Paso 2</span>
+          <h3>Apilar cajas: <code>Sequential</code></h3>
+          <p>Una red tiene varias cajas, una debajo de otra. La salida de una es la entrada de la siguiente. En Keras, un modelo <b>secuencial</b> es exactamente eso: una lista de capas en orden.</p>
+          <p>Aquí entra la notación, como código. A la derecha está la red 4-10-3 y el código que la declara. Pasa el cursor (o toca) una línea del código y se ilumina su caja; y al revés. Fíjate en algo: en cada capa solo dices <b>cuántas neuronas</b> tiene. Cuántas entradas recibe lo hereda de la capa de arriba.</p>
+          <p>ISLR2 arma su primera red así, desde R: <code>keras_model_sequential()</code> y después capas unidas con el pipe <code>%&gt;%</code>, que pasa lo de la izquierda como primer argumento de lo de la derecha
+          <cite class="cita" data-fuente="islr2" data-pag="455" data-pimp="444" data-seccion="10.9.1 A Single Layer Network on the Hitters Data" data-que="keras_model_sequential() con layer_dense(units = 50, activation = relu, input_shape = ncol(x)), layer_dropout y layer_dense(units = 1), y la explicación del pipe." data-cuando="Al leer este paso"></cite>.
+          Las diapositivas de la UD4 dibujan una red de 3 entradas, dos capas ocultas de 4 y 2 salidas
+          <cite class="cita" data-fuente="dl4diapo" data-pag="22" data-pimp="22" data-seccion="Multilayer feed-forward" data-que="La red 3-4-4-2 dibujada con Input, Hidden 1, Hidden 2 y Output. Cuenta sus parámetros: deberían darte 46." data-cuando="Después del chequeo, como ejercicio"></cite>:
+          cuando termines este paso, cuéntale los parámetros; deberían darte 46.</p>
+          <details class="profundizar">
+            <summary>¿Por qué <code>keras.Input</code> y no <code>input_shape</code>?</summary>
+            <div>
+              <p>El material (UD5 e ISLR2) pone <code>input_shape=</code> dentro de la primera capa. Es la forma de Keras 2. Keras 3 recomienda empezar con <code>keras.Input(shape=(4,))</code>, y en R el paquete <code>keras3</code> la escribe <code>keras_model_sequential(input_shape = 4)</code>. Las dos dicen lo mismo: el tamaño de <b>una</b> muestra. ISLR2 (2023) usa el paquete <code>keras</code> de R, que hoy se llama <code>keras3</code>, y el propio libro avisa que en su sitio web hay una versión del laboratorio con <code>torch</code>. Nada de este recuadro se ejecutó aquí.</p>
+            </div>
+          </details>
+          <div class="check" id="chk2"><p class="check-tit">Calcula con los datos en vivo</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="La forma y el None">
+          <span class="etapa">Paso 3</span>
+          <h3>La forma de cada tensor y el <code>None</code></h3>
+          <p>Entre caja y caja viaja una <b>tabla</b>: una fila por flor y una columna por número. A esa tabla Keras la llama <b>tensor</b>, y su forma es (lote, n): cuántas flores pasan juntas y cuántos números tiene cada una. El material de la UD4 lo dice así para TensorFlow: los bordes del grafo son tensores, arrays de varias dimensiones
+          <cite class="cita" data-fuente="dl4" data-pag="22" data-pimp="22" data-seccion="Tema 6: TensorFlow" data-que="TensorFlow como grafo de flujo de datos, donde los nodos son operaciones y los bordes son tensores." data-cuando="Al leer este paso"></cite>.</p>
+          <p>Cuando declaras la red, Keras no sabe cuántas flores le vas a pasar. Por eso escribe <code>None</code> en el lugar del lote: <code>(None, 10)</code> quiere decir "cualquier número de flores, 10 números cada una". El lote se decide cuando llegan los datos.</p>
+          <p>Una muestra no tiene que ser una fila. En la UD5 cada muestra es una imagen de 32 × 32 × 3, y una capa <code>Flatten(input_shape=(32, 32, 3))</code> la vuelve una fila de 3072 números, sin parámetros
+          <cite class="cita" data-fuente="cnn5diapo" data-pag="33" data-pimp="33" data-seccion="Keras: red densa sobre 32×32×3" data-que="Un Sequential con Flatten(input_shape=(32, 32, 3)), Dense(100), Activation(relu) y Dense(60). La forma de una muestra es una imagen." data-cuando="Después del chequeo"></cite>.
+          Y en la UD4 hay dos <code>summary</code> de una GAN con las formas <code>(32, 128)</code> en vez de <code>(None, 128)</code>: ahí la entrada se declaró con el lote fijo en 32, y el <code>None</code> se volvió un número
+          <cite class="cita" data-fuente="dl4diapo" data-pag="47" data-pimp="47" data-seccion="GAN" data-que="Dos model.summary() donde la forma sale con el lote fijo, (32, 128), y los parámetros por capa: 4224, 33024, 131584 y 5643." data-cuando="Después del chequeo"></cite>.
+          No es un error, pero choca con todos los demás <code>summary</code> que vas a ver.</p>
+          <p><b>Trampa.</b> <code>input_shape</code> es la forma de <b>una</b> muestra, sin el lote. Si tus datos son una tabla de 150 × 4 y escribes <code>input_shape=(150, 4)</code>, Keras entiende que cada muestra es una tabla entera de 150 × 4. La salida de <code>Dense(10)</code> queda <code>(None, 150, 10)</code>, porque la capa se aplica fila por fila sobre el último eje, y los parámetros siguen siendo 50. El <code>summary</code> no te avisa. Lo ves con números reales en la trampa <b>codigo1</b> de la vida real.</p>
+          <div class="check" id="chk3"><p class="check-tit">Predice antes de mover el lote</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Pesos más sesgos">
+          <span class="etapa">Paso 4</span>
+          <h3>Parámetros = pesos + sesgos</h3>
+          <p>Una <code>Dense</code> con <span data-tex="n"></span> entradas y <span data-tex="m"></span> neuronas tiene un cable por cada pareja entrada-neurona y una perilla por neurona:</p>
+          <div class="fbloque"><div data-tex="\text{params} = \underbrace{n\,m}_{\text{pesos}} + \underbrace{m}_{\text{sesgos}} = (n+1)\,m" data-display></div><div class="vivo" id="vivo4"></div></div>
+          <p>El total de la red es la suma por capa. Las capas que no tienen cables, como <code>Dropout</code>, <code>Flatten</code>, <code>Activation</code> o <code>Concatenate</code>, tienen 0: mueven o apagan números, pero no aprenden nada.</p>
+          <p>ISLR2 lo dice con su red de MNIST: la primera capa tiene (784 + 1) × 256 = 200 960 parámetros, porque cada capa incluye un sesgo, y las capas de dropout tienen 0
+          <cite class="cita" data-fuente="islr2" data-pag="458" data-pimp="447" data-seccion="10.9.2 A Multilayer Network on the MNIST Digit Data" data-que="summary(modelnn): 200 960, 0, 32 896, 0 y 1 290, total 235 146, con la cuenta (784 + 1) × 256." data-cuando="Después del chequeo"></cite>.
+          La UD5 arma un perceptrón con <code>Dense(512, input_shape=(784,))</code>, <code>Activation</code> y <code>Dropout(0.2)</code> y no da el total
+          <cite class="cita" data-fuente="cnn5diapo" data-pag="38" data-pimp="38" data-seccion="Keras: perceptrón multicapa con dropout y softmax" data-que="Dense(512, input_shape=(784,)), Activation(relu), Dropout(0.2), otra Dense(512) y la salida Dense(10) con softmax. No trae el total." data-cuando="Después del destacado"></cite>:
+          con la fórmula sale 401 920 + 262 656 + 5 130 = 669 706.</p>
+          <p>En el escenario puedes agregar y quitar capas, cambiar neuronas y agregar un <code>Dropout</code> o una <code>Activation</code> aparte.</p>
+          <div class="check" id="chk4"><p class="check-tit">Calcula con los datos en vivo</p><div class="cuerpo"></div></div>
+
+          <div class="destacado" id="destacado">
+            <p class="dest-tit">Una confusión muy común</p>
+            <h4>¿Los parámetros crecen con los datos?</h4>
+            <p>Entrenas la red 4-10-3 primero con 150 flores y después con 15 000.</p>
+            <div class="check" id="chk4b"><p class="check-tit">Predice antes de seguir</p><div class="cuerpo"></div></div>
+            <div id="post4b" hidden>
+              <div class="cita" id="citaHipo" hidden></div>
+              <p>Los parámetros son los cables, y los cables dependen solo de <b>cuántas columnas entran</b> y <b>cuántas neuronas hay</b>. Las filas, las flores, pasan por los mismos cables una tras otra. Por eso el lote es <code>None</code>: a la red le da igual cuántas lleguen.</p>
+              <p>Lo que sí cambia los parámetros es el <b>ancho</b> de la entrada. Si en vez de 4 medidas entran 784 píxeles, la misma capa de 10 neuronas pasa de 50 a (784 + 1) × 10 = 7 850. Es la regresión logística de MNIST en ISLR2 (p. 448): una sola capa densa de 10 salidas con softmax.</p>
+              <details class="profundizar">
+                <summary>¿Dónde está casi todo el peso de una red?</summary>
+                <div>
+                  <p>En la capa densa que recibe la entrada más ancha. En la red de MNIST de ISLR2, 200 960 de 235 146 parámetros (85 %) están en la primera capa. En el cuaderno CNN03 de la UD5 es más extremo: 9 470 464 de 9 494 561 parámetros viven en una sola <code>Dense(512)</code>, la que recibe la imagen aplanada. Por eso las redes convolucionales aplanan lo más tarde posible.</p>
+                </div>
+              </details>
+            </div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="compile">
+          <span class="etapa">Paso 5</span>
+          <h3><code>compile</code>: elegir cómo se va a aprender</h3>
+          <p>Declarar la red no la entrena. <code>compile</code> le dice a Keras tres cosas:</p>
+          <ul>
+            <li>la <b>pérdida</b>: qué error medir;</li>
+            <li>el <b>optimizador</b>: cómo mover los pesos para bajar ese error;</li>
+            <li>las <b>métricas</b>: qué reportar mientras entrena.</li>
+          </ul>
+          <p>No toca los pesos ni cambia cuántos hay. En el escenario, compila y mira el contador: sigue igual. El entrenamiento empieza con <code>fit</code>, que es la página siguiente de la ruta, "Entrenar con Keras: épocas, lotes y curvas".</p>
+          <p>ISLR2 compila su red de regresión con <code>loss = "mse"</code> y <code>optimizer_rmsprop()</code>, y explica un detalle: <code>compile</code> no cambia el objeto de R, solo le comunica la especificación a la instancia de Python que corre por debajo
+          <cite class="cita" data-fuente="islr2" data-pag="456" data-pimp="445" data-seccion="10.9.1 A Single Layer Network on the Hitters Data" data-que="compile(loss = mse, optimizer = optimizer_rmsprop(), metrics = mean_absolute_error), la frase de que compile no cambia el objeto de R, y después fit con épocas y lotes de 32." data-cuando="Al leer este paso"></cite>.
+          La UD5 compila con <code>optimizer='rmsprop'</code> y <code>loss='categorical_crossentropy'</code>
+          <cite class="cita" data-fuente="cnn5diapo" data-pag="39" data-pimp="39" data-seccion="Keras: compilar, entrenar, evaluar" data-que="compile con rmsprop y categorical_crossentropy, y fit con batch_size=128 y nb_epoch=4, el nombre de Keras 1." data-cuando="Al terminar este paso"></cite>.
+          Si copias esas diapositivas (38 y 39) vas a tropezar: falta importar <code>Dropout</code>, <code>nb_epoch</code> es el nombre de Keras 1 (hoy es <code>epochs</code>), <code>keras.utils.np_utils</code> ya no existe y las comillas tipográficas, como <code>'rmsprop’</code>, dan error de sintaxis.</p>
+          <p><b>Trampa.</b> La pérdida tiene que encajar con las etiquetas. Si tus especies vienen como enteros 0, 1, 2 y eliges <code>categorical_crossentropy</code>, no encaja: esa pérdida espera filas one-hot de 3 columnas, como <code>[0, 1, 0]</code>. O conviertes con <code>to_categorical</code> (lo hacen ISLR2 y la UD5) o usas <code>sparse_categorical_crossentropy</code>, que acepta los enteros. Keras se queja con un error de formas. La versión <code>sparse_</code> no aparece en el material; pruébala en el escenario.</p>
+          <div class="check" id="chk5"><p class="check-tit">Elige y explica</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="La API funcional">
+          <span class="etapa">Paso 6</span>
+          <h3>La API funcional: capas como funciones</h3>
+          <p>En la API funcional cada capa se <b>llama</b> sobre un tensor y devuelve otro: <code>x = layers.Dense(10)(entrada)</code>. Primero creas la capa, después la aplicas. Al final le dices a Keras dónde empieza y dónde termina: <code>keras.Model(inputs=..., outputs=...)</code>.</p>
+          <p>Para una pila simple las dos formas dan el mismo modelo: cambia el interruptor del escenario y mira que la red 4-10-3 sigue teniendo 83 parámetros. La diferencia aparece cuando la red <b>no</b> es una fila. Agrega una segunda entrada inventada, 2 datos de color de la flor (tono y brillo), y el dibujo se abre en un grafo: cada entrada tiene su rama, y <code>Concatenate</code> pega las dos tablas de lado.</p>
+          <p>En R, con <code>keras3</code> (no ejecutado): <code>entrada &lt;- keras_input(shape = 4)</code>, <code>salida &lt;- entrada |&gt; layer_dense(10, activation = "relu") |&gt; layer_dense(3, activation = "softmax")</code> y <code>modelo &lt;- keras_model(entrada, salida)</code>.</p>
+          <p>El material no trae ningún modelo funcional: la UD4, la UD5 e ISLR2 usan solo modelos secuenciales. El cuaderno DL02 de la UD4 escribe la red como una clase propia que hereda de <code>tf.keras.Model</code>; esa es la tercera forma, por subclases. Las formas y los 91 parámetros del grafo se comprobaron con NumPy: (5, 8), (5, 4), (5, 12) y (5, 3) para un lote de 5.</p>
+          <details class="profundizar">
+            <summary>¿Cuándo no alcanza <code>Sequential</code>?</summary>
+            <div>
+              <p>Cuando hay varias entradas o varias salidas, ramas que se juntan (como aquí), conexiones que saltan capas (las residuales) o una capa que se usa dos veces. Regla práctica: dibuja tu red. Si hay un punto con dos flechas entrando o dos saliendo, es funcional.</p>
+            </div>
+          </details>
+          <div class="check" id="chk6"><p class="check-tit">Calcula con los datos en vivo</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="kernel y weight">
+          <span class="etapa">Paso 7</span>
+          <h3>Lo que Keras guarda: <code>kernel</code> (n, m), y cómo lo escribe PyTorch</h3>
+          <p>Una <code>Dense</code> guarda su matriz de pesos como <code>kernel</code>, de forma (entradas, salidas): (4, 10) en la primera capa. El sesgo es un vector de 10. Lo que calcula es</p>
+          <div class="fbloque"><div data-tex="Z = \operatorname{activación}(A\,W + b), \qquad A_{(\text{lote},\,4)}\;W_{(4,\,10)}" data-display></div></div>
+          <p>PyTorch guarda la misma capa al revés: <code>nn.Linear(4, 10).weight</code> tiene forma (10, 4) y calcula <code>A @ W.T + b</code>. Son los mismos 50 números con otra orientación. En el escenario, cambia entre Keras y PyTorch: los 4 pesos de la primera neurona son una <b>columna</b> en Keras y una <b>fila</b> en PyTorch. En R, <code>keras3</code> usa la misma capa de Python por debajo: R solo la llama.</p>
+          <p>Raschka arma en PyTorch el mismo apilado con <code>nn.Sequential(nn.Linear(4, 16), nn.ReLU(), ...)</code>
+          <cite class="cita" data-fuente="raschka13" data-pag="9" data-pimp="417" data-seccion="Implementing models based on nn.Sequential" data-que="nn.Sequential(nn.Linear(4, 16), nn.ReLU(), nn.Linear(16, 32), nn.ReLU()): la misma idea de apilar capas, en PyTorch." data-cuando="Al terminar este paso"></cite>
+          y una red para Iris con 4 medidas y 3 especies, como la de aquí
+          <cite class="cita" data-fuente="raschka12" data-pag="28" data-pimp="396" data-seccion="Building a multilayer perceptron for classifying flowers in the Iris dataset" data-que="nn.Linear(4, 16), sigmoide y nn.Linear(16, 3): 4 medidas de entrada y 3 especies de salida." data-cuando="Al terminar este paso"></cite>.
+          Dos cosas para leerla bien: el texto dice que ese modelo tiene dos capas ocultas, y tiene una oculta y la de salida. Y dice que la última capa usa softmax, pero el <code>forward</code> no la tiene. Está bien así, porque <code>nn.CrossEntropyLoss</code> la aplica por dentro.</p>
+          <p><b>Trampa (R).</b> En R, los modelos de Keras se modifican en el lugar. ISLR2 escribe <code>modelnn &lt;- keras_model_sequential()</code> y luego <code>modelnn %&gt;% layer_dense(...)</code> sin volver a asignar
+          <cite class="cita" data-fuente="islr2" data-pag="457" data-pimp="446" data-seccion="10.9.2 A Multilayer Network on the MNIST Digit Data" data-que="modelnn se crea con keras_model_sequential() y las capas se agregan con %>% sin reasignar: el objeto apunta a un modelo de Python que cambia en el lugar." data-cuando="Al leer esta trampa"></cite>.
+          Funciona porque el objeto apunta a un modelo de Python. Pero si corres dos veces esa línea, la red queda con las capas repetidas. Es el mismo fallo del cuaderno DL03 de la UD4 en Python (lo ves en la trampa <b>codigo2</b>). Regla: construye el modelo en una sola celda, desde cero.</p>
+          <p>En la materia, la UD1 solo nombra TensorFlow y PyTorch en la lista de herramientas de Python
+          <cite class="cita" data-fuente="prog1" data-pag="11" data-pimp="11" data-seccion="Python en la ciencia de datos" data-que="TensorFlow y PyTorch aparecen solo nombrados en una lista de librerías. La UD3, donde se enseñan, no está publicada." data-cuando="Cuando quieras ubicar el tema en la materia"></cite>;
+          la UD3, donde se enseñan, no está publicada.</p>
+          <div class="check" id="chk7"><p class="check-tit">Elige y explica</p><div class="cuerpo"></div></div>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+        </div>
+        <div id="escCuerpo"></div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>Keras no está instalado en esta máquina, así que este programa <b>no llama a Keras</b>. Hace a mano lo que hace <code>model.summary()</code>: recorre las capas y cuenta pesos y sesgos. Después pasa un lote de 5 flores por matrices reales, como hace cada <code>Dense</code>, y cierra comparando la fórmula con el tamaño de las matrices construidas, que es lo que hace <code>count_params()</code>. Es la misma red 4-10-3 del recorrido, con pesos de 0.1 para que las cuentas den limpias. Elige Python o R y dale a reproducir.</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir</p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="true">Python</button>
+            <button type="button" data-lang="r" aria-pressed="false">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">1 · contar como summary</span><span data-f="2">2 · pasar un lote</span>
+        </div>
+        <h3 class="mini-tit vr-tit">La pila</h3>
+        <div id="vrPila"></div>
+        <h3 class="mini-tit vr-tit">Lo que imprimiría summary</h3>
+        <div id="vrSum"></div>
+        <h3 class="mini-tit vr-tit">A: el lote que viaja</h3>
+        <div id="vrTens"></div>
+        <h3 class="mini-tit vr-tit">Salida del programa</h3>
+        <pre class="vr-sal" id="vrSal"></pre>
+      </div>
+    </div>
+
+    <p class="vr-nota"><span class="etiqueta-no">no ejecutado: Keras no está instalado en esta máquina</span><br>
+    En Keras, todo lo anterior es una línea: <code>modelo.summary()</code> y <code>modelo.count_params()</code> en Python, o <code>summary(modelo)</code> y <code>count_params(modelo)</code> en R con <code>keras3</code>. Con la red 4-10-3 deberían dar 50, 33 y 83: lo dice la fórmula, comprobada arriba con NumPy y con R, y el <code>summary</code> de ISLR2 (p. 447) sigue la misma regla.</p>
+
+    <details class="profundizar">
+      <summary>La misma red en Keras, en los dos lenguajes</summary>
+      <div>
+        <p><span class="etiqueta-no">no se pudo ejecutar en esta máquina: Keras no está instalado</span></p>
+        <div class="lec-par">
+          <div class="lec"><span class="lec-t">Python, keras 3</span><pre>import keras
+from keras import layers
+modelo = keras.Sequential([
+    keras.Input(shape=(4,)),
+    layers.Dense(10, activation="relu"),
+    layers.Dense(3, activation="softmax"),
+])
+modelo.compile(optimizer="adam", loss="categorical_crossentropy", metrics=["accuracy"])
+modelo.summary()</pre></div>
+          <div class="lec"><span class="lec-t">R, keras3</span><pre>library(keras3)
+modelo &lt;- keras_model_sequential(input_shape = 4) |&gt;
+  layer_dense(units = 10, activation = "relu") |&gt;
+  layer_dense(units = 3, activation = "softmax")
+modelo |&gt; compile(optimizer = "adam", loss = "categorical_crossentropy", metrics = "accuracy")
+summary(modelo)</pre></div>
+        </div>
+        <p>ISLR2 (2023) usa el paquete <code>keras</code> y el pipe <code>%&gt;%</code>. Hoy el paquete de R es <code>keras3</code>, y el pipe nativo <code>|&gt;</code> funciona igual.</p>
+      </div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>El lote dentro de input_shape</h3><span class="estado" data-reto="codigo1"></span></div>
+        <p class="desc">Keras no se pudo correr. La <code>Dense</code> de Keras multiplica por su <code>kernel</code> sobre el último eje, igual que <code>@</code>, así que la forma se reproduce con NumPy.</p>
+        <div class="lec"><span class="lec-t">Python con NumPy (salida real)</span><pre>import numpy as np
+X = np.ones((1, 150, 4))              # input_shape=(150, 4): 150 flores como UNA muestra
+W = np.full((4, 10), 0.1)
+b = np.zeros(10)
+print((X @ W + b).shape)
+print(W.size + b.size)
+<span class="sal">(1, 150, 10)
+50</span></pre></div>
+        <div id="codigo1"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>La celda corrida dos veces</h3><span class="estado" data-reto="codigo2"></span></div>
+        <p class="desc">El cuaderno <code>DL03 - multilayer perceptron - Keras.ipynb</code> de la UD4 agrega <code>Dense(10)</code>, <code>Dense(10)</code>, <code>Dense(10)</code> y <code>Dense(1)</code> sobre las 13 variables de Boston Housing, y después corre la celda "equivalente" sobre el <b>mismo</b> modelo. Su <code>summary</code> guardado tiene ocho <code>Dense</code> y 622 parámetros. Este programa reproduce la cuenta. El cuaderno además dice "32 neuronas" con <code>Dense(10)</code> y "two hidden layer" con tres.</p>
+        <div class="lec"><span class="lec-t">Python (salida real)</span><pre>tamanos = [13, 10, 10, 10, 1, 10, 10, 10, 1]   # la celda se corrió dos veces
+total = 0
+for k in range(1, len(tamanos)):
+    p = tamanos[k - 1] * tamanos[k] + tamanos[k]
+    total = total + p
+    print(p, end=" ")
+print()
+print(total)
+<span class="sal">140 110 110 11 20 110 110 11
+622</span></pre></div>
+        <div id="codigo2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>La matriz al revés</h3><span class="estado" data-reto="codigo3"></span></div>
+        <div class="lec-par">
+          <div class="lec"><span class="lec-t">Python con NumPy (salida real)</span><pre>import numpy as np
+X = np.ones((5, 4))
+W = np.full((10, 4), 0.1)             # orientación de PyTorch: (salidas, entradas)
+print((X @ W.T).shape)
+print((X @ W).shape)
+<span class="sal">(5, 10)</span>
+<span class="err">Traceback (most recent call last):
+  ...
+ValueError: matmul: Input operand 1 has a mismatch in its core dimension 0, with gufunc signature (n?,k),(k,m?)-&gt;(n?,m?) (size 10 is different from 4)</span></pre></div>
+          <div class="lec"><span class="lec-t">R (salida real)</span><pre>X &lt;- matrix(1, nrow = 5, ncol = 4)
+W &lt;- matrix(0.1, nrow = 10, ncol = 4)
+print(dim(X %*% t(W)))
+print(dim(X %*% W))
+<span class="sal">[1]  5 10</span>
+<span class="err">Error in X %*% W : non-conformable arguments
+Calls: print
+Execution halted</span></pre></div>
+        </div>
+        <div id="codigo3"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: la biblioteca te avisa en el índice cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>¿Cuál tiene más parámetros?</h3><span class="estado" data-reto="ojo"></span></div>
+        <p class="desc">Cinco rondas al azar. Dos capas densas, cada una con sus entradas y sus neuronas. Decide sin calcular cuál tiene más parámetros. Apruebas con 4 de 5.</p>
+        <div id="ojo"></div>
+      </article>
+
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Construir</span><h3>Arma tres redes</h3><span class="estado" data-reto="construir"></span></div>
+        <p class="desc">La entrada son siempre las 4 medidas. Con los botones, consigue las tres redes, en cualquier orden. Se marcan solas.</p>
+        <ul class="objetivos" id="objetivos"></ul>
+        <div id="construir" style="margin-top:12px"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>Cuenta los parámetros</h3><span class="estado" data-reto="mano"></span></div>
+        <p class="desc">Una red nueva al azar. Con papel, cuenta los parámetros de cada capa y el total.</p>
+        <div id="mano"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>La forma con el lote</h3><span class="estado" data-reto="formas"></span></div>
+        <p class="desc">Un lote y una red al azar. Escribe la forma concreta que sale de la capa oculta, y cómo escribe el <code>summary</code> la forma de la salida.</p>
+        <div id="formas"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Un summary con una fila mal</h3><span class="estado" data-reto="error"></span></div>
+        <p class="desc">Tres tablas escritas a mano. En cada una, una fila está mal. Tócala.</p>
+        <div id="error"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>El None</h3><span class="estado" data-reto="prop1"></span></div>
+        <div id="prop1"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Lo que hace compile</h3><span class="estado" data-reto="prop2"></span></div>
+        <div id="prop2"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Secuencial o funcional</h3><span class="estado" data-reto="prop3"></span></div>
+        <div id="prop3"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Recordar a la fuerza es lo que fija. Arma la red de memoria y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Código de memoria</span><h3>La red 4-10-3 en Keras</h3><span class="estado" data-reto="formula"></span></div>
+        <p class="desc">Hay piezas de más que no pertenecen. No mires arriba.</p>
+        <div id="formula"></div>
+        <div id="formulaTabla"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el material</h2>
+      <p class="lecturas-intro">Ya construiste la idea con las manos. Ahora ve al material del máster y a los libros y comprueba que la reconoces. Cada entrada dice qué vas a encontrar y en qué momento conviene leerla. Si abres la biblioteca con doble clic, el enlace abre el archivo en esa página. Fuera de esta lista quedan los cuadernos de la UD4 y la UD5 que se nombran en la página: <code>DL02</code> y <code>DL03</code> (UD4), y <code>CNN01</code> y <code>CNN03</code> (UD5).</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> Las flores, sus 4 medidas, los 2 datos de color y los pesos de 0.1 son inventados; los tamaños de las redes se eligieron para que las cuentas den limpias. Los retos generan otras redes al azar.
+    Las salidas de código marcadas como reales se obtuvieron ejecutando el código en Python 3.13 con NumPy 2.1.3 y en R 4.6.1 base; los mensajes de error de R salen en inglés porque así los imprime R en esta máquina.
+    Keras, TensorFlow y PyTorch no están instalados aquí: el código que los usa no se ejecutó, y las cifras que se le atribuyen salen de la fórmula y de los <code>summary</code> impresos en ISLR2 y en la UD4. El escenario no ejecuta Keras: calcula formas y parámetros en el navegador con las mismas reglas. Tu progreso se guarda solo en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+(function () {
+  "use strict";
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+  var ID = "keras-secuencial-funcional";
+
+  var RETOS = ["ojo", "construir", "mano", "formas", "error", "prop1", "prop2", "prop3", "codigo1", "codigo2", "codigo3", "formula"];
+  var C = B.concepto({ id: "keras-secuencial-funcional", retos: RETOS, pasos: 7 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  /* ---------------- utilidades ---------------- */
+  function azar(n) { return Math.floor(Math.random() * n); }
+  function entre(a, b) { return a + azar(b - a + 1); }
+  function escH(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+  function miles(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, " "); }
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+  // codigo dentro de KaTeX: \texttt, con espacios largos como \quad para que la pieza pueda partirse
+  function tt(s) {
+    var m = /^( *)(.*)$/.exec(s), sang = Math.round(m[1].length / 2);
+    var partes = m[2].split(/ {2,}/).map(function (p) { return "\\texttt{" + p.replace(/\\/g, "").replace(/([_#%&{}$])/g, "\\$1") + "}"; });
+    return new Array(sang + 1).join("\\quad ") + partes.join("\\quad ");
+  }
+
+  /* ---------------- el modelo de una red ----------------
+     red: {nIn, capas: [{t: "dense" | "dropout" | "act", m, act}]} */
+  var MAXN = 16;
+  function anchos(red) {
+    var w = [red.nIn];
+    red.capas.forEach(function (c) { w.push(c.t === "dense" ? c.m : w[w.length - 1]); });
+    return w;
+  }
+  function resumen(red) {
+    var w = anchos(red), cnt = { dense: 0, dropout: 0, act: 0 }, filas = [], total = 0;
+    red.capas.forEach(function (c, i) {
+      cnt[c.t]++;
+      var n = w[i], m = w[i + 1], p = c.t === "dense" ? n * m + m : 0;
+      filas.push({
+        capa: i, n: n, m: m, p: p,
+        nombre: c.t === "dense" ? "dense_" + cnt.dense : c.t === "dropout" ? "dropout_" + cnt.dropout : "activation_" + cnt.act,
+        tipo: c.t === "dense" ? "Dense" : c.t === "dropout" ? "Dropout" : "Activation",
+        formula: c.t === "dense" ? n + "·" + m + " + " + m : ""
+      });
+      total += p;
+    });
+    return { filas: filas, total: total, w: w };
+  }
+  function densas(red) { return red.capas.filter(function (c) { return c.t === "dense"; }); }
+  function arquitectura(red) { return [red.nIn].concat(densas(red).map(function (c) { return c.m; })).join("-"); }
+  function red(tams, acts) {
+    return { nIn: tams[0], capas: tams.slice(1).map(function (m, i) { return { t: "dense", m: m, act: acts ? acts[i] : (i === tams.length - 2 ? "softmax" : "relu") }; }) };
+  }
+  function copiaRed(r) { return { nIn: r.nIn, capas: r.capas.map(function (c) { return { t: c.t, m: c.m, act: c.act }; }) }; }
+  function etqCapa(c) {
+    if (c.t === "dense") return "Dense(" + c.m + ")" + (c.act && c.act !== "ninguna" ? " " + c.act : "");
+    if (c.t === "dropout") return "Dropout(0.2)";
+    return "Activation(" + (c.act || "relu") + ")";
+  }
+
+  /* ---------------- dibujo: la tabla summary ---------------- */
+  // o: lote (null = None), ocultar(f) -> bool, ocultarTotal, formula, conectado, totalId, pulso
+  function tablaHtml(filas, total, o) {
+    o = o || {};
+    var h = '<div class="sumt-wrap"><table class="sumt"><thead><tr><th>Layer (type)</th><th>Output Shape</th><th>Param #</th>' + (o.conectado ? "<th>Connected to</th>" : "") + "</tr></thead><tbody>";
+    filas.forEach(function (f) {
+      var oc = o.ocultar && o.ocultar(f), ocF = o.ocultarForma && o.ocultarForma(f);
+      var forma = ocF ? '<span class="tapa">?</span>' : "(" + (o.lote != null ? o.lote : "None") + ", " + f.m + ")";
+      var par = oc ? '<span class="tapa">?</span>' : (o.formula && f.formula ? '<span class="fo">' + f.formula + " = </span>" : "") + miles(f.p);
+      h += '<tr' + (f.capa != null ? ' data-capa="' + f.capa + '"' : "") + (f.on ? ' class="on"' : "") + "><td>" + escH(f.nombre) + ' <span class="tipo">(' + f.tipo + ")</span></td><td>" + forma + '</td><td class="nm">' + par + "</td>" +
+        (o.conectado ? "<td>" + escH(f.con || "-") + "</td>" : "") + "</tr>";
+    });
+    h += '</tbody></table><p class="sumt-tot">Total params: <b' + (o.pulso ? ' class="pulso"' : "") + ">" + (o.ocultarTotal ? '<span class="tapa">?</span>' : miles(total)) + "</b></p></div>";
+    return h;
+  }
+
+  /* ---------------- dibujo: la pila de capas (svg) ---------------- */
+  function xsFila(n, a, b) {
+    a = a == null ? 18 : a; b = b == null ? 224 : b;
+    if (n === 1) return [(a + b) / 2];
+    var paso = Math.min(22, (b - a) / (n - 1)), x0 = (a + b) / 2 - paso * (n - 1) / 2, r = [];
+    for (var i = 0; i < n; i++) r.push(x0 + i * paso);
+    return r;
+  }
+  function f1(x) { return Math.round(x * 10) / 10; }
+  function cablesSvg(n, m, xa, xb, y0, y1, ocultos) {
+    if (ocultos) return "";
+    if (n * m > 120) {
+      var a = Math.min(xa[0], xb[0]) - 6, b = Math.max(xa[xa.length - 1], xb[xb.length - 1]) + 6;
+      return '<rect class="comprimida" x="' + f1(a) + '" y="' + f1(y0 + 7) + '" width="' + f1(b - a) + '" height="' + f1(y1 - y0 - 14) + '" rx="6"></rect>' +
+        '<text class="comp-t" x="' + f1((a + b) / 2) + '" y="' + f1((y0 + y1) / 2 + 4) + '" text-anchor="middle">' + n + " × " + m + " cables</text>";
+    }
+    var s = "";
+    xa.forEach(function (x0) { xb.forEach(function (x1) { s += '<line class="cable" x1="' + f1(x0) + '" y1="' + f1(y0 + 5) + '" x2="' + f1(x1) + '" y2="' + f1(y1 - 5) + '"></line>'; }); });
+    return s;
+  }
+  // o: formas (lote o null), on (capa resaltada), etiquetaEntrada
+  function pilaSvg(rd, o) {
+    o = o || {};
+    var w = anchos(rd), dy = 62, top = 18, H = top + (w.length - 1) * dy + 22, s = "";
+    var aria = "Pila de capas: entrada de " + rd.nIn + rd.capas.map(function (c) { return ", " + etqCapa(c); }).join("");
+    s += '<svg class="pila" viewBox="0 0 360 ' + H + '" role="img" aria-label="' + escH(aria) + '">';
+    // una fila de mas de 24 neuronas se dibuja como una barra
+    function xsVis(n) { return xsFila(Math.min(n, 24)); }
+    rd.capas.forEach(function (c, i) {
+      var y0 = top + i * dy, y1 = y0 + dy, n = w[i], m = w[i + 1];
+      s += '<g class="franja' + (o.on === i ? " on" : "") + '" data-capa="' + i + '">';
+      if (c.t === "dense") s += cablesSvg(n, m, xsVis(n), xsVis(m), y0, y1, false);
+      else xsVis(n).forEach(function (x) { s += '<line class="pasa" x1="' + f1(x) + '" y1="' + (y0 + 5) + '" x2="' + f1(x) + '" y2="' + (y1 - 5) + '"></line>'; });
+      s += '<text class="lab-capa" x="236" y="' + (y0 + dy / 2 + 2) + '">' + escH(etqCapa(c)) + "</text>";
+      if (c.t !== "dense") s += '<text class="lab-sub" x="236" y="' + (y0 + dy / 2 + 15) + '">sin cables</text>';
+      s += "</g>";
+    });
+    w.forEach(function (n, r) {
+      var y = top + r * dy, dense = r > 0 && rd.capas[r - 1].t === "dense";
+      if (n > 24) {
+        s += '<rect class="' + (r === 0 ? "nodo-in" : "nodo") + '" x="14" y="' + (y - 5) + '" width="214" height="10" rx="5"></rect>' +
+          '<text class="lab-sub" x="121" y="' + (y - 8) + '" text-anchor="middle">' + n + " números</text>";
+      } else xsFila(n).forEach(function (x) {
+        s += '<circle class="' + (r === 0 ? "nodo-in" : "nodo") + '" cx="' + f1(x) + '" cy="' + y + '" r="4.5"></circle>';
+        if (dense) s += '<circle class="sesgo" cx="' + f1(x + 5) + '" cy="' + (y + 6) + '" r="2"></circle>';
+      });
+      if (o.formas !== undefined) s += '<text class="forma-t" x="236" y="' + (y + 4) + '">(' + (o.formas == null ? "None" : o.formas) + ", " + n + ")</text>";
+      else if (r === 0) s += '<text class="lab-sub" x="236" y="' + (y + 4) + '">entrada: ' + n + "</text>";
+    });
+    return s + "</svg>";
+  }
+
+  // paso 1: una sola caja 4 -> 3, sin simbolos
+  var MEDIDAS = ["largo sépalo", "ancho sépalo", "largo pétalo", "ancho pétalo"];
+  var ESPECIES = ["setosa", "versicolor", "virginica"];
+  function cajaSvg(mostrar, animar) {
+    var xa = [55, 135, 215, 295], xb = [95, 175, 255];
+    var s = '<svg class="caja" viewBox="0 0 360 230" role="img" aria-label="Una caja que recibe 4 medidas y entrega 3 puntajes">';
+    s += '<rect class="marco" x="20" y="44" width="320" height="134" rx="12"></rect>';
+    xa.forEach(function (x, i) { s += '<text class="txt" x="' + x + '" y="20" text-anchor="middle">' + MEDIDAS[i] + "</text>"; });
+    xb.forEach(function (x, i) { s += '<text class="txt" x="' + x + '" y="222" text-anchor="middle">' + ESPECIES[i] + "</text>"; });
+    if (mostrar) {
+      var k = 0;
+      xa.forEach(function (x0) {
+        xb.forEach(function (x1) {
+          s += '<line class="cable' + (animar ? " anim" : "") + '"' + (animar ? ' style="animation-delay:' + (k * 0.12).toFixed(2) + 's"' : "") + ' x1="' + x0 + '" y1="40" x2="' + x1 + '" y2="190"></line>';
+          k++;
+        });
+      });
+    }
+    xa.forEach(function (x) { s += '<circle class="nodo-in" cx="' + x + '" cy="34" r="7"></circle>'; });
+    xb.forEach(function (x, i) {
+      s += '<circle class="nodo" cx="' + x + '" cy="196" r="8"></circle>';
+      if (mostrar) s += '<circle class="sesgo' + (animar ? " anim" : "") + '"' + (animar ? ' style="animation-delay:' + (1.5 + i * 0.25).toFixed(2) + 's"' : "") + ' cx="' + (x + 12) + '" cy="184" r="4"></circle>';
+    });
+    if (!mostrar) s += '<text class="txt" x="180" y="116" text-anchor="middle">¿Cuántos ajustes hay aquí dentro?</text>';
+    return s + "</svg>";
+  }
+
+  // paso 6: el grafo de dos entradas
+  function grafoSvg(a, c, revelar) {
+    var s = '<svg class="grafo" viewBox="0 0 360 262" role="img" aria-label="Grafo: medidas a Dense(' + a + '), color a Dense(' + c + '), Concatenate y Dense(3)">';
+    var xm = xsFila(4, 16, 140), xc = xsFila(2, 178, 234), xA = xsFila(a, 16, 150), xC = xsFila(c, 172, 240);
+    var yI = 18, yD = 82, yJ = 156, yO = 236;
+    s += cablesSvg(4, a, xm, xA, yI, yD, false) + cablesSvg(2, c, xc, xC, yI, yD, false);
+    var xJ = xsFila(a + c, 16, 240);
+    if (revelar) {
+      xA.forEach(function (x, i) { s += '<line class="pasa" x1="' + f1(x) + '" y1="' + (yD + 5) + '" x2="' + f1(xJ[i]) + '" y2="' + (yJ - 5) + '"></line>'; });
+      xC.forEach(function (x, i) { s += '<line class="pasa" x1="' + f1(x) + '" y1="' + (yD + 5) + '" x2="' + f1(xJ[a + i]) + '" y2="' + (yJ - 5) + '"></line>'; });
+      s += cablesSvg(a + c, 3, xJ, xsFila(3, 60, 200), yJ, yO, false);
+    } else {
+      s += '<rect class="tapa-r" x="16" y="' + (yJ - 14) + '" width="224" height="28" rx="6"></rect><text class="tapa-t" x="128" y="' + (yJ + 6) + '" text-anchor="middle">?</text>';
+    }
+    xm.forEach(function (x) { s += '<circle class="nodo-in" cx="' + f1(x) + '" cy="' + yI + '" r="4.5"></circle>'; });
+    xc.forEach(function (x) { s += '<circle class="nodo-k" cx="' + f1(x) + '" cy="' + yI + '" r="4.5"></circle>'; });
+    xA.forEach(function (x) { s += '<circle class="nodo" cx="' + f1(x) + '" cy="' + yD + '" r="4.5"></circle><circle class="sesgo" cx="' + f1(x + 5) + '" cy="' + (yD + 6) + '" r="2"></circle>'; });
+    xC.forEach(function (x) { s += '<circle class="nodo" cx="' + f1(x) + '" cy="' + yD + '" r="4.5"></circle><circle class="sesgo" cx="' + f1(x + 5) + '" cy="' + (yD + 6) + '" r="2"></circle>'; });
+    if (revelar) xJ.forEach(function (x, i) { s += '<circle class="' + (i < a ? "nodo-in" : "nodo-k") + '" cx="' + f1(x) + '" cy="' + yJ + '" r="4"></circle>'; });
+    xsFila(3, 60, 200).forEach(function (x) { s += '<circle class="nodo" cx="' + f1(x) + '" cy="' + yO + '" r="4.5"></circle><circle class="sesgo" cx="' + f1(x + 5) + '" cy="' + (yO + 6) + '" r="2"></circle>'; });
+    s += '<text class="lab-capa" x="252" y="' + (yI + 4) + '">medidas · color</text>';
+    s += '<text class="lab-capa" x="252" y="' + (yD + 4) + '">Dense(' + a + ") · Dense(" + c + ")</text>";
+    s += '<text class="lab-capa" x="252" y="' + (yJ + 4) + '">Concatenate</text>';
+    s += '<text class="lab-sub" x="252" y="' + (yJ + 18) + '">' + (revelar ? "(None, " + (a + c) + ")" : "(None, ?)") + "</text>";
+    s += '<text class="lab-capa" x="252" y="' + (yO + 4) + '">Dense(3) softmax</text>';
+    return s + "</svg>";
+  }
+
+  // tensores del paso 3
+  function tensorHtml(filas, cols, none) {
+    var nf = none ? 3 : filas, h = '<div class="tens' + (none ? " none" : "") + '"><div class="tens-g" style="grid-template-columns:repeat(' + cols + ', 7px)">';
+    for (var i = 0; i < nf * cols; i++) h += "<span></span>";
+    return h + '</div><span class="tens-t">(' + (none ? "None" : filas) + ", " + cols + ")</span></div>";
+  }
+
+  // codigo del escenario: lineas [capa, texto]
+  function codHtml(titulo, lineas) {
+    return '<p class="cod-t">' + titulo + '</p><pre class="cod">' + lineas.map(function (l) {
+      return '<span class="cl"' + (l[0] != null ? ' data-capa="' + l[0] + '"' : "") + ">" + escH(l[1]) + "</span>";
+    }).join("") + "</pre>";
+  }
+
+  /* ---------------- editor de pila (paso 4 y reto construir) ---------------- */
+  var ACTS = ["relu", "softmax", "sigmoid", "ninguna"];
+  function editorHtml(rd, rid) {
+    var nD = densas(rd).length, ultima = -1;
+    rd.capas.forEach(function (c, i) { if (c.t === "dense") ultima = i; });
+    var h = '<div class="editor"><div class="ed-fila entrada"><span class="nom">Input (' + rd.nIn + ")</span><span>" + (rd.nIn === 4 ? "4 medidas, fija" : rd.nIn + " píxeles, fija") + "</span></div>";
+    rd.capas.forEach(function (c, i) {
+      h += '<div class="ed-fila"><span class="nom">' + escH(etqCapa(c)) + "</span>";
+      if (c.t === "dense") {
+        h += '<button type="button" data-red="' + rid + '" data-acc="menos" data-i="' + i + '"' + (c.m <= 1 ? " disabled" : "") + ' aria-label="Una neurona menos">−</button>' +
+          '<button type="button" data-red="' + rid + '" data-acc="mas" data-i="' + i + '"' + (c.m >= MAXN ? " disabled" : "") + ' aria-label="Una neurona más">+</button>' +
+          '<select data-red="' + rid + '" data-acc="act" data-i="' + i + '" aria-label="Activación">' + ACTS.map(function (a) { return "<option" + (a === c.act ? " selected" : "") + ">" + a + "</option>"; }).join("") + "</select>";
+      }
+      if (i !== ultima && (c.t !== "dense" || nD > 1)) h += '<button type="button" class="ghost" data-red="' + rid + '" data-acc="quitar" data-i="' + i + '">quitar</button>';
+      h += "</div>";
+    });
+    var lleno = rd.capas.length >= 7;
+    h += '</div><div class="esc-ctrl"><button type="button" data-red="' + rid + '" data-acc="addDense"' + (lleno ? " disabled" : "") + ">+ capa Dense</button>" +
+      '<button type="button" data-red="' + rid + '" data-acc="addDrop"' + (lleno ? " disabled" : "") + ">+ Dropout</button>" +
+      '<button type="button" data-red="' + rid + '" data-acc="addAct"' + (lleno ? " disabled" : "") + ">+ Activation aparte</button></div>";
+    return h;
+  }
+  function editorAccion(rd, acc, i, valor) {
+    var ultima = -1;
+    rd.capas.forEach(function (c, k) { if (c.t === "dense") ultima = k; });
+    if (acc === "mas" && rd.capas[i].m < MAXN) rd.capas[i].m++;
+    else if (acc === "menos" && rd.capas[i].m > 1) rd.capas[i].m--;
+    else if (acc === "act") rd.capas[i].act = valor;
+    else if (acc === "quitar") rd.capas.splice(i, 1);
+    else if (rd.capas.length < 7) {
+      if (acc === "addDense") rd.capas.splice(ultima, 0, { t: "dense", m: 8, act: "relu" });
+      else if (acc === "addDrop") rd.capas.splice(ultima, 0, { t: "dropout" });
+      else if (acc === "addAct") rd.capas.splice(ultima, 0, { t: "act", act: "relu" });
+    }
+  }
+
+  /* ---------------- campos de texto con pistas ---------------- */
+  // cfg: pregunta (texto o funcion), campos [{pre, post, aria}], revisar(vals) -> {ok} | {msg}, pistas[], solucion, reintentable, antesDeReintentar, alResolver
+  function campos(el, cfg) {
+    var fallos = 0, nP = 0, hecho = false;
+    function v(x) { return typeof x === "function" ? x() : x; }
+    var hayP = cfg.pistas && cfg.pistas.length;
+    el.innerHTML = '<p class="q"></p><div class="campos-fila">' +
+      cfg.campos.map(function (c, i) {
+        return '<label class="campo"><span>' + (c.pre || "") + '</span><input class="num" data-k="' + i + '" inputmode="decimal" autocomplete="off" aria-label="' + escH(c.aria) + '"><span>' + (c.post || "") + "</span></label>";
+      }).join("") + '</div><div class="num-row" style="margin-top:8px"><button type="button" class="primary comprobar">Comprobar</button>' +
+      (hayP ? '<button type="button" class="pedir">Pista</button>' : "") + '<button type="button" class="ver ghost" hidden>Ver solución</button></div>' +
+      '<div class="pistas"></div><div class="fb" aria-live="polite"></div>';
+    var q = el.querySelector(".q"), ins = [].slice.call(el.querySelectorAll("input")), fb = el.querySelector(".fb"), ver = el.querySelector(".ver"), pedir = el.querySelector(".pedir");
+    function refrescar() { if (!hecho) q.innerHTML = B.conTex(v(cfg.pregunta)); }
+    refrescar();
+    function cerrar(ok) {
+      hecho = true;
+      ins.forEach(function (i) { i.disabled = true; });
+      el.querySelector(".comprobar").disabled = true;
+      if (pedir) pedir.disabled = true;
+      ver.hidden = true;
+      if (cfg.reintentable) {
+        var r = document.createElement("button");
+        r.type = "button";
+        r.className = "reintentar ghost";
+        r.textContent = "Otro ejercicio";
+        r.addEventListener("click", function () { if (cfg.antesDeReintentar) cfg.antesDeReintentar(); campos(el, cfg); });
+        el.appendChild(r);
+      }
+      if (cfg.alResolver) cfg.alResolver(ok);
+    }
+    function comprobar() {
+      if (hecho) return;
+      var vals = ins.map(function (i) { return i.value.trim(); });
+      if (vals.some(function (x) { return x === ""; })) { fb.innerHTML = "Completa todos los espacios antes de comprobar."; return; }
+      var r = cfg.revisar(vals.map(function (x) { return B.aNumero(x); }));
+      if (r.ok) {
+        ins.forEach(function (i) { i.classList.remove("mal"); i.classList.add("ok"); });
+        fb.innerHTML = '<span class="si">Correcto.</span> ' + B.conTex(v(cfg.solucion));
+        cerrar(true);
+        return;
+      }
+      fallos++;
+      ins.forEach(function (i) { i.classList.add("mal"); });
+      fb.innerHTML = '<span class="no">Todavía no.</span> ' + B.conTex(r.msg);
+      if (fallos >= 3) ver.hidden = false;
+    }
+    el.querySelector(".comprobar").addEventListener("click", comprobar);
+    ins.forEach(function (i) {
+      i.addEventListener("keydown", function (e) { if (e.key === "Enter") comprobar(); });
+      i.addEventListener("input", function () { ins.forEach(function (x) { x.classList.remove("mal"); }); });
+    });
+    if (pedir) pedir.addEventListener("click", function () {
+      if (nP >= cfg.pistas.length) return;
+      var d = document.createElement("div");
+      d.className = "pista";
+      d.innerHTML = "<b>Pista " + (nP + 1) + ".</b> " + B.conTex(v(cfg.pistas[nP]));
+      el.querySelector(".pistas").appendChild(d);
+      nP++;
+      if (nP >= cfg.pistas.length) { pedir.disabled = true; ver.hidden = false; }
+    });
+    ver.addEventListener("click", function () { fb.innerHTML = '<span class="no">Solución.</span> ' + B.conTex(v(cfg.solucion)); cerrar(false); });
+    return { refrescar: refrescar };
+  }
+
+  /* ---------------- estado del escenario ---------------- */
+  var est = { c1: false, c2: false, c3: false, c4: false, c4b: false, c5: false, c6: false, c7: false, anim1: false };
+  var ESC = {
+    h2: 10,                                  // capa oculta de los pasos 2 y 3
+    lote: 5, none: false,                    // paso 3
+    r4: red([4, 8, 8, 3]),                   // paso 4
+    salida: "s3", etiq: "onehot", perd: "categorical_crossentropy", opt: "adam", met: "accuracy", compilado: false, // paso 5
+    api: "seq", dos: false, ra: 8, rc: 4,    // paso 6
+    torch: false                             // paso 7
+  };
+  var modo = 0, pasos, chk2h, chk4h, chk6h;
+  function red2() { return red([4, ESC.h2, 3]); }
+
+  /* ---------------- paso 5: pérdida frente a la última capa ---------------- */
+  var SALIDAS = { s3: "Dense(3) softmax", l1: "Dense(1) sin activación", g1: "Dense(1) sigmoid" };
+  function red5() { return ESC.salida === "s3" ? red([4, 10, 3]) : red([4, 10, 1], ["relu", ESC.salida === "g1" ? "sigmoid" : "ninguna"]); }
+  function semaforo() {
+    var s = ESC.salida, p = ESC.perd, e = ESC.etiq, res;
+    if (s === "s3") {
+      if (e === "onehot") res = p === "categorical_crossentropy" ? ["ok", "Encaja: 3 neuronas softmax y etiquetas one-hot de 3 columnas."] :
+        p === "sparse_categorical_crossentropy" ? ["mal", "No encaja: <code>sparse_</code> espera un entero por flor (0, 1 o 2), y tus etiquetas son filas de 3 columnas. Error de formas."] :
+        p === "mse" ? ["ambar", "Corre, pero mide distancias entre probabilidades: no es la pérdida de clasificación."] :
+        ["ambar", "Corre, pero trata cada columna como un sí o no aparte, como si una flor pudiera ser de dos especies."];
+      else res = p === "sparse_categorical_crossentropy" ? ["ok", "Encaja: 3 neuronas softmax y un entero por flor. Es la versión que acepta 0, 1, 2 sin convertir."] :
+        p === "categorical_crossentropy" ? ["mal", "La trampa: <code>categorical_crossentropy</code> espera filas one-hot de 3 columnas y le das un entero por flor. Error de formas. Convierte con <code>to_categorical</code> o usa <code>sparse_</code>."] :
+        ["mal", "No encaja: con etiquetas enteras y 3 salidas softmax, la pareja natural es <code>sparse_categorical_crossentropy</code>."];
+    } else if (s === "l1") {
+      res = p === "mse" ? ["ok", "Encaja: una neurona sin activación predice un número, y <code>mse</code> mide el error al cuadrado. Así lo hace ISLR2 con los salarios."] :
+        p === "binary_crossentropy" ? ["mal", "No encaja: espera una probabilidad entre 0 y 1, y la neurona sin activación puede dar cualquier número."] :
+        ["mal", "No encaja: es una pérdida para elegir entre varias clases, y aquí hay un solo número."];
+    } else {
+      res = p === "binary_crossentropy" ? ["ok", "Encaja: una neurona sigmoide da una probabilidad, y la pérdida mide qué tan bien acierta un sí o no."] :
+        p === "mse" ? ["ambar", "Corre, pero para una probabilidad la pareja natural es <code>binary_crossentropy</code>."] :
+        ["mal", "No encaja: con una sola neurona no hay varias clases que repartir."];
+    }
+    if (s === "l1" && ESC.met === "accuracy") res[1] += " Y ojo con la métrica: <code>accuracy</code> no tiene sentido en regresión; usa <code>mae</code>.";
+    if (s !== "l1" && ESC.met === "mae") res[1] += " La métrica <code>mae</code> es de regresión; para clasificar se reporta <code>accuracy</code>.";
+    return res;
+  }
+
+  /* ---------------- render del escenario por paso ---------------- */
+  function codigoSeq(h) {
+    return {
+      py: [[null, "modelo = keras.Sequential(["], ["in", "    keras.Input(shape=(4,)),"], [0, '    layers.Dense(' + h + ', activation="relu"),'], [1, '    layers.Dense(3, activation="softmax"),'], [null, "])"]],
+      r: [[null, "modelo <- keras_model_sequential() %>%"], [0, '  layer_dense(units = ' + h + ', activation = "relu", input_shape = 4) %>%'], [1, '  layer_dense(units = 3, activation = "softmax")']]
+    };
+  }
+  function render1() {
+    var animar = est.c1 && !est.anim1;
+    if (animar) est.anim1 = true;
+    return cajaSvg(est.c1, animar) + '<p class="esc-nota">' + (est.c1 ? "12 cables (cada medida con cada especie) y 3 perillas verdes, una por especie: 15 números ajustables." : "Los cables están ocultos. Responde la predicción para verlos.") + "</p>";
+  }
+  function render2() {
+    var rd = red2(), R = resumen(rd), cs = codigoSeq(ESC.h2);
+    return '<div class="esc-ctrl"><span class="lab">Capa oculta: Dense(' + ESC.h2 + ")</span>" +
+      '<button type="button" data-acc="h2-"' + (ESC.h2 <= 1 ? " disabled" : "") + ' aria-label="Una neurona menos en la capa oculta">−</button>' +
+      '<button type="button" data-acc="h2+"' + (ESC.h2 >= MAXN ? " disabled" : "") + ' aria-label="Una neurona más en la capa oculta">+</button></div>' +
+      pilaSvg(rd) + tablaHtml(R.filas, R.total, { ocultar: function () { return !est.c2; }, ocultarTotal: !est.c2 }) +
+      codHtml("Python, keras 3 (no ejecutado)", cs.py) + codHtml("R, paquete keras de ISLR2 (no ejecutado)", cs.r) +
+      '<p class="esc-nota">Pasa el cursor o toca una línea del código, una caja o una fila de la tabla.</p>';
+  }
+  function render3() {
+    var rd = red2(), R = resumen(rd), w = R.w, L = ESC.none ? null : ESC.lote;
+    var h = '<div class="esc-ctrl"><span class="lab">Lote</span>' +
+      '<button type="button" data-acc="none" aria-pressed="' + (ESC.none ? "true" : "false") + '"' + (est.c3 ? "" : " disabled") + ">None</button>" +
+      '<button type="button" data-acc="lote-"' + (est.c3 && !ESC.none && ESC.lote > 1 ? "" : " disabled") + ' aria-label="Una flor menos">−</button>' +
+      '<span class="lab">' + (ESC.none ? "None" : ESC.lote + (ESC.lote === 1 ? " flor" : " flores")) + "</span>" +
+      '<button type="button" data-acc="lote+"' + (est.c3 && !ESC.none && ESC.lote < 8 ? "" : " disabled") + ' aria-label="Una flor más">+</button>' +
+      '<span class="lab">oculta: ' + ESC.h2 + "</span></div>";
+    if (!est.c3) return h + pilaSvg(rd) + '<p class="esc-nota">Responde el chequeo y se encienden los tensores que viajan entre las cajas, con su forma.</p>';
+    h += pilaSvg(rd, { formas: L });
+    h += '<div class="tensores">' + w.map(function (n, i) { return (i ? '<span class="tens-fl">→</span>' : "") + tensorHtml(ESC.lote, n, ESC.none); }).join("") + "</div>";
+    var l = ESC.none ? "\\text{None}" : ESC.lote;
+    h += '<div class="fbloque"><div data-tex="\\underbrace{A}_{(' + l + ",\\,4)}\\;\\underbrace{W}_{(4,\\," + ESC.h2 + ")} + \\underbrace{b}_{(" + ESC.h2 + ")} = \\underbrace{Z}_{(" + l + ",\\," + ESC.h2 + ')}" data-display></div></div>';
+    h += '<p class="esc-nota">Mueve el lote: cambia el número de filas de cada tensor, pero no la matriz <code>W</code>. ' + (ESC.none ? "Con None, las filas se dibujan difuminadas: cualquier número sirve." : "") + "</p>";
+    return h;
+  }
+  function render4() {
+    var R = resumen(ESC.r4);
+    return editorHtml(ESC.r4, "r4") + '<div class="esc-ctrl"><span class="lab">Atajos</span><button type="button" data-acc="pre" data-v="4-8-8-3">4-8-8-3</button><button type="button" data-acc="pre" data-v="4-10-3">4-10-3</button><button type="button" data-acc="pre" data-v="mnist">MNIST de ISLR2</button></div>' +
+      pilaSvg(ESC.r4) + tablaHtml(R.filas, R.total, { formula: est.c4, ocultar: function (f) { return !est.c4 && f.p > 0; }, ocultarTotal: !est.c4 }) +
+      (est.c4 ? "" : '<p class="esc-nota">La columna <code>Param #</code> se destapa al resolver el chequeo.</p>');
+  }
+  function render5() {
+    var rd = red5(), R = resumen(rd), sem = semaforo();
+    function sel(id, opciones, actual, bloqueo) {
+      return '<select id="' + id + '" data-acc="sel">' + opciones.map(function (o) {
+        return '<option value="' + o[0] + '"' + (o[0] === actual ? " selected" : "") + (bloqueo && bloqueo(o[0]) ? " disabled" : "") + ">" + o[1] + "</option>";
+      }).join("") + "</select>";
+    }
+    var h = pilaSvg(rd) + '<div class="compile"><label>última capa ' + sel("selSalida", [["s3", SALIDAS.s3], ["l1", SALIDAS.l1], ["g1", SALIDAS.g1]], ESC.salida, function (v) { return !est.c5 && v !== "s3"; }) + "</label>" +
+      (ESC.salida === "s3" ? "<label>etiquetas " + sel("selEtiq", [["onehot", "one-hot: [0, 1, 0]"], ["enteras", "enteras: 0, 1, 2"]], ESC.etiq) + "</label>" : "") +
+      "<label>loss " + sel("selPerd", [["mse", "mse"], ["categorical_crossentropy", "categorical_crossentropy"], ["sparse_categorical_crossentropy", "sparse_categorical_crossentropy"], ["binary_crossentropy", "binary_crossentropy"]], ESC.perd) + "</label>" +
+      "<label>optimizer " + sel("selOpt", [["sgd", "sgd"], ["rmsprop", "rmsprop"], ["adam", "adam"]], ESC.opt) + "</label>" +
+      "<label>metrics " + sel("selMet", [["accuracy", "accuracy"], ["mae", "mae"]], ESC.met) + "</label>" +
+      '<div class="esc-ctrl" style="margin-top:6px"><button type="button" class="primary" data-acc="compilar">modelo.compile(...)</button></div></div>';
+    h += '<p class="' + (sem[0] === "ok" ? "esc-frase" : sem[0] === "mal" ? "esc-alerta" : "esc-ambar") + '">' + sem[1] + "</p>";
+    h += tablaHtml(R.filas, R.total, { pulso: ESC.compilado });
+    h += '<p class="esc-nota">' + (ESC.compilado ? "Compilado. El total de parámetros no cambió: <code>compile</code> no toca los pesos." : "Elige pérdida, optimizador y métrica, y compila. Mira el total antes y después.") +
+      (est.c5 ? "" : " Las otras últimas capas se abren al resolver el chequeo.") + "</p>";
+    ESC.compilado = false;
+    return h;
+  }
+  function filas6() {
+    if (!ESC.dos) {
+      var R = resumen(red([4, 10, 3])), f = [{ nombre: "input_1", tipo: "InputLayer", m: 4, p: 0, con: "-" }];
+      R.filas.forEach(function (x, i) { x.con = i ? R.filas[i - 1].nombre : "input_1"; f.push(x); });
+      return { filas: f, total: R.total };
+    }
+    var a = ESC.ra, c = ESC.rc;
+    return {
+      filas: [
+        { nombre: "medidas", tipo: "InputLayer", m: 4, p: 0, con: "-" },
+        { nombre: "color", tipo: "InputLayer", m: 2, p: 0, con: "-" },
+        { nombre: "dense_1", tipo: "Dense", m: a, p: 4 * a + a, con: "medidas" },
+        { nombre: "dense_2", tipo: "Dense", m: c, p: 2 * c + c, con: "color" },
+        { nombre: "concatenate", tipo: "Concatenate", m: a + c, p: 0, con: "dense_1, dense_2", junta: true },
+        { nombre: "dense_3", tipo: "Dense", m: 3, p: (a + c) * 3 + 3, con: "concatenate", sal: true }
+      ],
+      total: 5 * a + 3 * c + (a + c) * 3 + 3
+    };
+  }
+  function codigoFunc() {
+    if (!ESC.dos) return [[null, 'entrada = keras.Input(shape=(4,))'], [0, 'x = layers.Dense(10, activation="relu")(entrada)'], [1, 'salida = layers.Dense(3, activation="softmax")(x)'], [null, "modelo = keras.Model(inputs=entrada, outputs=salida)"]];
+    return [[null, 'medidas = keras.Input(shape=(4,), name="medidas")'], [null, 'color = keras.Input(shape=(2,), name="color")'],
+      [null, "a = layers.Dense(" + ESC.ra + ', activation="relu")(medidas)'], [null, "c = layers.Dense(" + ESC.rc + ', activation="relu")(color)'],
+      [null, "juntas = layers.Concatenate()([a, c])"], [null, 'salida = layers.Dense(3, activation="softmax")(juntas)'], [null, "modelo = keras.Model(inputs=[medidas, color], outputs=salida)"]];
+  }
+  function render6() {
+    var h = '<div class="esc-ctrl"><div class="seg" role="group" aria-label="API"><button type="button" data-acc="api" data-v="seq" aria-pressed="' + (ESC.api === "seq") + '">Secuencial</button><button type="button" data-acc="api" data-v="func" aria-pressed="' + (ESC.api === "func") + '">Funcional</button></div>';
+    if (ESC.api === "func") h += '<button type="button" data-acc="dos" aria-pressed="' + ESC.dos + '">' + (ESC.dos ? "quitar la segunda entrada" : "agregar una segunda entrada") + "</button>";
+    h += "</div>";
+    if (ESC.api === "seq" || !ESC.dos) {
+      var rd = red([4, 10, 3]);
+      h += pilaSvg(rd);
+      if (ESC.api === "seq") { var R = resumen(rd); h += tablaHtml(R.filas, R.total) + codHtml("Python, keras 3 (no ejecutado)", codigoSeq(10).py); }
+      else { var F = filas6(); h += tablaHtml(F.filas, F.total, { conectado: true }) + codHtml("Python, API funcional (no ejecutado)", codigoFunc()); }
+      h += '<p class="esc-nota">' + (ESC.api === "seq" ? "Cambia a Funcional: mismo dibujo, mismo total." : "El mismo modelo de 83 parámetros, escrito como funciones llamadas sobre tensores. La tabla agrega la columna <code>Connected to</code>.") + "</p>";
+      return h;
+    }
+    h += '<div class="esc-ctrl"><span class="lab">rama medidas: Dense(' + ESC.ra + ")</span>" +
+      '<button type="button" data-acc="ra-"' + (ESC.ra <= 1 ? " disabled" : "") + ' aria-label="Una neurona menos en la rama de medidas">−</button><button type="button" data-acc="ra+"' + (ESC.ra >= 12 ? " disabled" : "") + ' aria-label="Una neurona más en la rama de medidas">+</button>' +
+      '<span class="lab">rama color: Dense(' + ESC.rc + ")</span>" +
+      '<button type="button" data-acc="rc-"' + (ESC.rc <= 1 ? " disabled" : "") + ' aria-label="Una neurona menos en la rama de color">−</button><button type="button" data-acc="rc+"' + (ESC.rc >= 12 ? " disabled" : "") + ' aria-label="Una neurona más en la rama de color">+</button></div>';
+    var G = filas6();
+    h += grafoSvg(ESC.ra, ESC.rc, est.c6);
+    h += tablaHtml(G.filas, G.total, { conectado: true, ocultarForma: function (f) { return !est.c6 && f.junta; }, ocultar: function (f) { return !est.c6 && f.sal; }, ocultarTotal: !est.c6 });
+    h += codHtml("Python, API funcional (no ejecutado)", codigoFunc());
+    return h;
+  }
+  function render7() {
+    var t = ESC.torch, filas = t ? 10 : 4, cols = t ? 4 : 10, g = "";
+    for (var i = 0; i < filas; i++) for (var j = 0; j < cols; j++) g += '<span class="' + ((t ? i : j) === 0 ? "n1" : "") + '"></span>';
+    var h = '<div class="esc-ctrl"><div class="seg" role="group" aria-label="Librería"><button type="button" data-acc="torch" data-v="0" aria-pressed="' + !t + '">Keras</button><button type="button" data-acc="torch" data-v="1" aria-pressed="' + t + '">PyTorch</button></div></div>';
+    h += '<p class="mat-t">' + (t ? "nn.Linear(4, 10).weight: forma (10, 4)" : "Dense(10).kernel: forma (4, 10)") + "</p>";
+    h += '<div class="matriz" style="grid-template-columns:repeat(' + cols + ', 14px)" role="img" aria-label="Matriz de ' + filas + " por " + cols + '">' + g + "</div>";
+    h += '<p class="esc-nota">En morado, los 4 pesos de la primera neurona: una ' + (t ? "<b>fila</b>" : "<b>columna</b>") + ". " + (t ? "PyTorch calcula <code>A @ W.T + b</code>." : "Keras calcula <code>A @ W + b</code>.") + " Más el sesgo de 10: 50 números en los dos.</p>";
+    h += codHtml("Python, keras 3 (no ejecutado)", [[null, "modelo = keras.Sequential(["], [null, "    keras.Input(shape=(4,)),"], [null, '    layers.Dense(10, activation="relu"),'], [null, '    layers.Dense(3, activation="softmax"),'], [null, "])"]]);
+    h += codHtml("R, keras3 (no ejecutado)", [[null, "modelo <- keras_model_sequential(input_shape = 4) |>"], [null, '  layer_dense(units = 10, activation = "relu") |>'], [null, '  layer_dense(units = 3, activation = "softmax")']]);
+    h += codHtml("PyTorch (no ejecutado)", [[null, "modelo = nn.Sequential("], [null, "    nn.Linear(4, 10), nn.ReLU(),"], [null, "    nn.Linear(10, 3))"]]);
+    return h;
+  }
+  var HINTS = [
+    function () { return est.c1 ? "Así son los cables de la caja" : "Predice antes de ver los cables"; },
+    function () { return "Cambia las neuronas de la capa oculta"; },
+    function () { return est.c3 ? "Mueve el lote" : "Responde para ver los tensores"; },
+    function () { return "Agrega, quita y cambia capas"; },
+    function () { return "Elige la pérdida y compila"; },
+    function () { return ESC.api === "seq" ? "Cambia a Funcional" : ESC.dos ? "Cambia el tamaño de las ramas" : "Agrega una segunda entrada"; },
+    function () { return "Cambia entre Keras y PyTorch"; }
+  ];
+  function render() {
+    var f = [render1, render2, render3, render4, render5, render6, render7][modo];
+    $("escCuerpo").innerHTML = f();
+    $("escHint").textContent = HINTS[modo]();
+    B.tex($("escCuerpo"));
+    vivo4();
+  }
+  function vivo4() {
+    var R = resumen(ESC.r4);
+    $("vivo4").textContent = est.c4 ? "La red del escenario: " + R.filas.filter(function (f) { return f.p; }).map(function (f) { return "(" + f.n + " + 1)·" + f.m + " = " + f.p; }).join("   ") + "   total " + R.total : "La red del escenario: " + arquitectura(ESC.r4) + ". Las cuentas aparecen al resolver el chequeo.";
+  }
+  function entrar(i) { modo = i; render(); }
+
+  function refrescarChequeos() {
+    if (chk2h) chk2h.refrescar();
+    if (chk4h) chk4h.refrescar();
+    if (chk6h) chk6h.refrescar();
+  }
+  var PRE = { "4-8-8-3": [4, 8, 8, 3], "4-10-3": [4, 10, 3] };
+  $("escCuerpo").addEventListener("click", function (e) {
+    var b = e.target.closest("button[data-acc]");
+    if (!b || b.disabled) return;
+    var acc = b.getAttribute("data-acc");
+    if (b.hasAttribute("data-red")) editorAccion(ESC.r4, acc, +b.getAttribute("data-i"));
+    else if (acc === "h2-") ESC.h2 = Math.max(1, ESC.h2 - 1);
+    else if (acc === "h2+") ESC.h2 = Math.min(MAXN, ESC.h2 + 1);
+    else if (acc === "none") ESC.none = !ESC.none;
+    else if (acc === "lote-") ESC.lote = Math.max(1, ESC.lote - 1);
+    else if (acc === "lote+") ESC.lote = Math.min(8, ESC.lote + 1);
+    else if (acc === "pre") {
+      var v = b.getAttribute("data-v");
+      if (v === "mnist") { ESC.r4 = red([784, 256, 128, 10]); ESC.r4.capas.splice(1, 0, { t: "dropout" }); ESC.r4.capas.splice(3, 0, { t: "dropout" }); }
+      else ESC.r4 = red(PRE[v]);
+    }
+    else if (acc === "compilar") ESC.compilado = true;
+    else if (acc === "api") ESC.api = b.getAttribute("data-v");
+    else if (acc === "dos") ESC.dos = !ESC.dos;
+    else if (acc === "ra-") ESC.ra = Math.max(1, ESC.ra - 1);
+    else if (acc === "ra+") ESC.ra = Math.min(12, ESC.ra + 1);
+    else if (acc === "rc-") ESC.rc = Math.max(1, ESC.rc - 1);
+    else if (acc === "rc+") ESC.rc = Math.min(12, ESC.rc + 1);
+    else if (acc === "torch") ESC.torch = b.getAttribute("data-v") === "1";
+    render();
+    refrescarChequeos();
+  });
+  $("escCuerpo").addEventListener("change", function (e) {
+    var t = e.target;
+    if (t.getAttribute("data-acc") === "act" && t.hasAttribute("data-red")) editorAccion(ESC.r4, "act", +t.getAttribute("data-i"), t.value);
+    else if (t.id === "selSalida") ESC.salida = t.value;
+    else if (t.id === "selEtiq") ESC.etiq = t.value;
+    else if (t.id === "selPerd") ESC.perd = t.value;
+    else if (t.id === "selOpt") ESC.opt = t.value;
+    else if (t.id === "selMet") ESC.met = t.value;
+    else return;
+    render();
+    refrescarChequeos();
+  });
+  // resaltar una capa: codigo, caja y fila de la tabla a la vez
+  function resaltar(raiz, capa) {
+    [].forEach.call(raiz.querySelectorAll("[data-capa]"), function (x) { x.classList.toggle("hl", capa != null && x.getAttribute("data-capa") === capa); });
+  }
+  $("escCuerpo").addEventListener("mouseover", function (e) {
+    var x = e.target.closest("[data-capa]");
+    resaltar($("escCuerpo"), x ? x.getAttribute("data-capa") : null);
+  });
+  $("escCuerpo").addEventListener("mouseleave", function () { resaltar($("escCuerpo"), null); });
+
+  /* ---------------- chequeos del recorrido ---------------- */
+  B.opcionMultiple(cuerpo("chk1"), {
+    pregunta: "La caja convierte 4 medidas en 3 puntajes. Cada puntaje usa las 4 medidas con un ajuste propio para cada una, más un ajuste propio suyo. ¿Cuántos números ajustables tiene la caja?",
+    opciones: ["15", "12", "7", "4"],
+    correcta: 0,
+    mezclar: true,
+    pistas: [null,
+      "Contaste los cables, pero cada puntaje tiene además su ajuste propio, que no depende de ninguna medida.",
+      "Sumaste entradas y salidas (4 + 3). Cada puntaje tiene un cable con CADA una de las 4 medidas.",
+      "Los ajustes no son de las medidas: son de los cables, y cada medida tiene 3 cables, uno por puntaje."],
+    explicacion: "4 × 3 = 12 cables, uno por cada pareja medida-puntaje, más 3 perillas, una por puntaje: <b>15</b>. <b>Mira el escenario:</b> los cables se encienden de a uno y después las 3 perillas.",
+    alResolver: function () { est.c1 = true; $("post1").hidden = false; if (pasos.actual() === 0) entrar(0); pasos.completar(0); }
+  });
+
+  chk2h = B.numerico(cuerpo("chk2"), {
+    pregunta: function () { return "La capa oculta tiene ahora <b>" + ESC.h2 + "</b> neuronas. ¿Cuántos parámetros tiene la segunda capa <code>Dense</code>, la de salida, con sus 3 especies?"; },
+    respuesta: function () { return ESC.h2 * 3 + 3; },
+    tolerancia: 0,
+    pistas: ["¿Cuántos números le llegan a cada especie? No son las 4 medidas: son las salidas de la capa de arriba.", function () { return "Cables: " + ESC.h2 + " × 3. Y falta algo más por cada especie."; }],
+    diagnostico: function (v) {
+      var h = ESC.h2;
+      if (v === h * 3) return "Te faltan los sesgos: ¿y la perilla propia de cada especie?";
+      if (v === 15 || v === (4 + h) * 3 + 3) return "Esta capa no ve las 4 medidas: ve las " + h + " salidas de la capa de arriba.";
+      if (v === 5 * h + 3 * h + 3 || v === 4 * h + h) return "Esa no es la capa de salida. Cuenta solo los cables que llegan a las 3 especies.";
+      return null;
+    },
+    explicacion: function () { return "La capa de salida recibe las " + ESC.h2 + " salidas de la oculta: " + ESC.h2 + " × 3 = " + (ESC.h2 * 3) + " pesos, más 3 sesgos: <b>" + (ESC.h2 * 3 + 3) + "</b>. <b>Mira la tabla:</b> ya se destapó <code>Param #</code>."; },
+    alResolver: function () { est.c2 = true; if (pasos.actual() === 1) entrar(1); pasos.completar(1); }
+  });
+
+  B.opcionMultiple(cuerpo("chk3"), {
+    pregunta: "Pasas un lote de 32 flores por la red 4-10-3. ¿Qué forma tiene la salida de la capa oculta?",
+    opciones: ["(32, 10)", "(10, 32)", "(32, 4)", "(None, 10)"],
+    correcta: 0,
+    mezclar: true,
+    pistas: [null,
+      "Cada fila es una flor y cada columna una neurona. El lote va primero.",
+      "Esa es la entrada. La capa oculta entrega 10 números por flor.",
+      "Eso es lo que escribe el <code>summary</code> antes de saber el lote. Con 32 flores reales, el None vale 32."],
+    explicacion: "32 filas, una por flor, y 10 columnas, una por neurona: <b>(32, 10)</b>. El <code>summary</code> lo escribe <code>(None, 10)</code> porque al declarar la red todavía no sabe cuántas flores vienen. <b>Ahora mueve el lote</b> en el escenario.",
+    alResolver: function () { est.c3 = true; if (pasos.actual() === 2) entrar(2); pasos.completar(2); }
+  });
+
+  chk4h = B.numerico(cuerpo("chk4"), {
+    pregunta: function () { return "La red del escenario es <b>" + arquitectura(ESC.r4) + "</b>" + (ESC.r4.capas.some(function (c) { return c.t !== "dense"; }) ? ", con capas sin cables" : "") + ". ¿Cuántos parámetros tiene en total?"; },
+    respuesta: function () { return resumen(ESC.r4).total; },
+    tolerancia: 0,
+    pistas: ["Capa por capa: entradas × neuronas + neuronas. Después suma.", function () { var f = resumen(ESC.r4).filas.filter(function (x) { return x.p; })[0]; return "La primera capa: " + f.n + " × " + f.m + " + " + f.m + " = " + f.p + "."; }],
+    diagnostico: function (v) {
+      var R = resumen(ESC.r4), soloPesos = R.filas.reduce(function (s, f) { return s + f.n * (f.p ? f.m : 0); }, 0), ult = R.filas.filter(function (f) { return f.p; }).pop();
+      if (v === soloPesos || v === R.total - ult.m) return "Cada neurona trae su sesgo, también las de salida.";
+      return null;
+    },
+    explicacion: function () { var R = resumen(ESC.r4); return R.filas.filter(function (f) { return f.p; }).map(function (f) { return f.n + "·" + f.m + " + " + f.m + " = " + f.p; }).join("; ") + ". Total: <b>" + R.total + "</b>. Las capas sin cables suman 0. <b>Mira la tabla:</b> ya muestra la cuenta de cada fila."; },
+    alResolver: function () { est.c4 = true; if (pasos.actual() === 3) entrar(3); vivo4(); cerrar4(); }
+  });
+  B.opcionMultiple(cuerpo("chk4b"), {
+    pregunta: "¿Cuántos parámetros tiene la red 4-10-3 con 150 flores, y cuántos con 15 000?",
+    opciones: ["83 y 83", "83 y 8 300", "450 y 45 000", "Depende del tamaño del lote"],
+    correcta: 0,
+    mezclar: true,
+    pistas: [null,
+      "Multiplicaste por 100 porque hay 100 veces más flores. Pero las flores no tienen cables propios: pasan todas por los mismos.",
+      "Contaste un número por medida de cada flor. Esos son los datos, no lo que la red aprende.",
+      "El lote es cuántas flores pasan juntas. Por eso es None en el <code>summary</code>: los cables no dependen de él."],
+    explicacion: "<b>83 en los dos casos.</b> Los cables dependen de las columnas y de las neuronas, no de las filas.",
+    alResolver: function () { est.c4b = true; $("post4b").hidden = false; citarHipo(); cerrar4(); }
+  });
+  function cerrar4() { if (est.c4 && est.c4b) pasos.completar(3); }
+
+  B.opcionMultiple(cuerpo("chk5"), {
+    pregunta: "Tu red termina en <code>Dense(1)</code> sin activación y predice un precio. ¿Qué pérdida eliges en <code>compile</code>?",
+    opciones: ["<code>mse</code>: es regresión", "<code>categorical_crossentropy</code>", "<code>binary_crossentropy</code>", "<code>accuracy</code>"],
+    correcta: 0,
+    mezclar: true,
+    pistas: [null,
+      "Esa es para elegir entre varias clases con softmax. Aquí hay un solo número.",
+      "Esa es para una neurona sigmoide que da una probabilidad entre 0 y 1. Un precio no es una probabilidad.",
+      "<code>accuracy</code> es una métrica, no una pérdida: solo cuenta aciertos y no tiene una derivada útil para mover los pesos."],
+    explicacion: "Una neurona sin activación predice un número cualquiera: es <b>regresión</b>, y la pérdida es <code>mse</code> (o <code>mae</code>). Así lo hace ISLR2 con los salarios de Hitters. <b>Ahora prueba</b> las otras últimas capas en el escenario.",
+    alResolver: function () { est.c5 = true; if (pasos.actual() === 4) entrar(4); pasos.completar(4); }
+  });
+
+  chk6h = campos(cuerpo("chk6"), {
+    pregunta: function () { return "Cambia a <b>Funcional</b> y agrega la segunda entrada. Con las ramas <code>Dense(" + ESC.ra + ")</code> y <code>Dense(" + ESC.rc + ")</code>, ¿qué forma sale de <code>Concatenate</code> y cuántos parámetros tiene la capa de salida <code>Dense(3)</code>?"; },
+    campos: [{ pre: "Concatenate: (None,", post: ")", aria: "Columnas que salen de Concatenate" }, { pre: "salida:", post: "parámetros", aria: "Parámetros de la capa de salida" }],
+    revisar: function (v) {
+      var a = ESC.ra, c = ESC.rc, okF = v[0] === a + c, okP = v[1] === (a + c) * 3 + 3;
+      if (okF && okP) return { ok: true };
+      if (v[0] === a || v[0] === c) return { msg: "<code>Concatenate</code> pega las dos tablas de lado: sus columnas se suman, " + a + " + " + c + "." };
+      if (okF && (v[1] === a * 3 + 3 || v[1] === c * 3 + 3)) return { msg: "La salida ve todas las columnas que pegó <code>Concatenate</code>, no solo las de una rama." };
+      if (okF && v[1] === (a + c) * 3) return { msg: "La forma está bien. ¿Y los sesgos de las 3 especies?" };
+      if (okF) return { msg: "La forma está bien. La salida es una <code>Dense(3)</code> que recibe " + (a + c) + " números." };
+      return { msg: "Pegar de lado suma columnas. Y <code>Concatenate</code> no tiene cables." };
+    },
+    pistas: ["Concatenate no mezcla nada: pone la tabla de una rama al lado de la otra."],
+    solucion: function () { var a = ESC.ra, c = ESC.rc; return "<code>Concatenate</code> pega " + a + " + " + c + " columnas: <b>(None, " + (a + c) + ")</b>, y no tiene parámetros. La salida recibe esas " + (a + c) + ": " + (a + c) + " × 3 + 3 = <b>" + ((a + c) * 3 + 3) + "</b>. <b>Mira el grafo:</b> los dos colores quedan uno al lado del otro."; },
+    alResolver: function () { est.c6 = true; ESC.api = "func"; ESC.dos = true; if (pasos.actual() === 5) entrar(5); pasos.completar(5); }
+  });
+
+  B.opcionMultiple(cuerpo("chk7"), {
+    pregunta: "Copias los pesos de una <code>nn.Linear(4, 10)</code> de PyTorch a una <code>Dense(10)</code> de Keras con entrada 4. ¿Qué haces con la matriz?",
+    opciones: ["Trasponerla: PyTorch guarda (10, 4) y Keras espera (4, 10).", "Nada: son 40 pesos en los dos.", "Agregarle los 10 sesgos como una columna más.", "Cambiar la entrada de Keras a 10."],
+    correcta: 0,
+    mezclar: true,
+    pistas: [null,
+      "El número coincide, la orientación no. Sin trasponer, <code>A @ W</code> falla: lo ves en la trampa codigo3.",
+      "Los sesgos van aparte en las dos librerías: un vector de 10.",
+      "Así cambiarías la red, no copiarías sus pesos."],
+    explicacion: "Los mismos 40 pesos, en otra orientación: <b>se trasponen</b>. El sesgo de 10 se copia tal cual. <b>Gira la matriz</b> en el escenario.",
+    alResolver: function () { est.c7 = true; if (pasos.actual() === 6) entrar(6); pasos.completar(6); }
+  });
+
+  pasos = B.pasos($("recorrido"), {
+    concepto: C,
+    alEntrar: entrar,
+    alTerminar: function () { location.hash = "retos"; }
+  });
+  est.c1 = est.anim1 = pasos.hecho(0);
+  est.c2 = pasos.hecho(1);
+  est.c3 = pasos.hecho(2);
+  est.c4 = est.c4b = pasos.hecho(3);
+  est.c5 = pasos.hecho(4);
+  est.c6 = pasos.hecho(5);
+  est.c7 = pasos.hecho(6);
+  if (est.c1) { $("post1").hidden = false; }
+  if (est.c4b) $("post4b").hidden = false;
+  if (est.c6) { ESC.api = "func"; ESC.dos = true; }
+  entrar(pasos.actual());
+
+  /* ---------------- hipotesis inicial ---------------- */
+  function citarHipo() {
+    var v = $("hipotesis").value.trim(), e = $("citaHipo");
+    e.hidden = !v;
+    if (v) { e.textContent = ""; e.appendChild(document.createTextNode("Al principio escribiste: «" + v + "». Compáralo: la red 4-10-3 tiene 83 parámetros, y siguen siendo 83 con 150 flores o con 15 000.")); }
+  }
+  (function () {
+    var ta = $("hipotesis"), t = null;
+    ta.value = B.nota(ID, "hipotesis");
+    citarHipo();
+    ta.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { B.nota(ID, "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; citarHipo(); }, 500);
+    });
+  })();
+
+  /* ---------------- marcadores de estado de retos ---------------- */
+  function pintarEstados() {
+    [].forEach.call(document.querySelectorAll("[data-reto]"), function (e) {
+      var ok = C.retoOk(e.getAttribute("data-reto"));
+      e.textContent = ok ? "resuelto" : "pendiente";
+      e.classList.toggle("ok", ok);
+    });
+  }
+  C.alCambiar(pintarEstados);
+
+  /* ---------------- reto: ojo clinico ---------------- */
+  var PARES = [[[784, 10], [50, 100]], [[10, 50], [50, 10]], [[4, 10], [9, 5]], [[100, 1], [10, 10]], [[3, 20], [20, 3]], [[2, 512], [512, 2]], [[9, 10], [19, 5]], [[24, 4], [4, 20]], [[255, 2], [3, 128]], [[300, 3], [30, 30]]];
+  function params(c) { return (c[0] + 1) * c[1]; }
+  function genOjo() {
+    var par;
+    if (azar(10) < 6) par = PARES[azar(PARES.length)].slice();
+    else {
+      var lg = function (a, b) { return Math.round(Math.exp(Math.log(a) + Math.random() * (Math.log(b) - Math.log(a)))); };
+      par = [[lg(2, 800), lg(1, 512)], [lg(2, 800), lg(1, 512)]];
+    }
+    if (azar(2)) par.reverse();
+    var a = params(par[0]), b = params(par[1]);
+    return { par: par, pa: a, pb: b, resp: a > b ? "izq" : a < b ? "der" : "igual" };
+  }
+  (function () {
+    var cont = $("ojo");
+    cont.innerHTML = '<div class="ronda"></div><div id="ojoPar"></div><div class="ojo-opts"><button type="button" class="opt" data-a="izq">la de la izquierda</button><button type="button" class="opt" data-a="igual">iguales</button><button type="button" class="opt" data-a="der">la de la derecha</button></div>' +
+      '<div class="fb" aria-live="polite"></div><div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    var ronda, aciertos, respondida, actual;
+    function caja(c) { return '<div class="ojo-caja"><div class="gr">' + c[0] + " → " + c[1] + '</div><div class="pq">' + c[0] + " entradas, " + c[1] + (c[1] === 1 ? " neurona" : " neuronas") + "</div></div>"; }
+    function nueva() { ronda = 0; aciertos = 0; mostrar(); }
+    function mostrar() {
+      respondida = false;
+      actual = genOjo();
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 5 · aciertos " + aciertos;
+      $("ojoPar").innerHTML = '<div class="ojo-par">' + caja(actual.par[0]) + caja(actual.par[1]) + "</div>";
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (b) { b.disabled = false; b.className = "opt"; });
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+    }
+    cont.querySelector(".ojo-opts").addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || respondida) return;
+      respondida = true;
+      var ok = b.getAttribute("data-a") === actual.resp;
+      if (ok) aciertos++;
+      b.classList.add(ok ? "ok" : "mal");
+      if (!ok) cont.querySelector('.ojo-opts [data-a="' + actual.resp + '"]').classList.add("ok");
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (x) { x.disabled = true; });
+      var p = actual.par;
+      cont.querySelector(".fb").innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No.</span> ') +
+        B.conTex("$(" + p[0][0] + " + 1)\\cdot " + p[0][1] + " = " + actual.pa + "$ frente a $(" + p[1][0] + " + 1)\\cdot " + p[1][1] + " = " + actual.pb + "$. " +
+        (actual.resp === "igual" ? "Iguales: el producto $(n+1)\\,m$ puede coincidir con tamaños muy distintos." : "Manda el producto $(n+1)\\,m$: una entrada ancha pesa tanto como muchas neuronas."));
+      var sig = cont.querySelector(".sig");
+      sig.hidden = false;
+      if (ronda === 4) {
+        var aprobo = aciertos >= 4;
+        C.reto("ojo", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertos + " de 5" + (aprobo ? ". Aprobado." : ". Necesitas 4 para aprobar.");
+        sig.textContent = "Otra tanda";
+      } else sig.textContent = "Siguiente ronda";
+    });
+    cont.querySelector(".sig").addEventListener("click", function () { if (ronda === 4) nueva(); else { ronda++; mostrar(); } });
+    nueva();
+  })();
+
+  /* ---------------- reto: construir ---------------- */
+  (function () {
+    var rc = red([4, 6, 2]);
+    function ultimaM(rd) { var d = densas(rd); return d[d.length - 1].m; }
+    var OBJ = [
+      { t: "Salida (None, 3) y exactamente 83 parámetros.", ok: function (rd) { return ultimaM(rd) === 3 && resumen(rd).total === 83; } },
+      { t: "Salida (None, 1) y exactamente 61 parámetros.", ok: function (rd) { return ultimaM(rd) === 1 && resumen(rd).total === 61; } },
+      { t: "Dos capas ocultas, salida (None, 3) y un total entre 100 y 150.", ok: function (rd) { var t = resumen(rd).total; return densas(rd).length === 3 && ultimaM(rd) === 3 && t >= 100 && t <= 150; } }
+    ];
+    var hechos = [false, false, false], ul = $("objetivos"), listo = false;
+    OBJ.forEach(function (o) { var li = document.createElement("li"); li.innerHTML = '<span class="m"></span><span>' + o.t + "</span>"; ul.appendChild(li); });
+    function pintar() {
+      var R = resumen(rc);
+      $("construir").innerHTML = editorHtml(rc, "rc") + tablaHtml(R.filas, R.total);
+      OBJ.forEach(function (o, i) { if (o.ok(rc)) hechos[i] = true; });
+      [].forEach.call(ul.children, function (li, i) { li.classList.toggle("hecho", hechos[i]); });
+      if (hechos.every(Boolean) && !listo) { listo = true; C.reto("construir", true); }
+    }
+    $("construir").addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-acc]");
+      if (!b || b.disabled) return;
+      editorAccion(rc, b.getAttribute("data-acc"), +b.getAttribute("data-i"));
+      pintar();
+    });
+    $("construir").addEventListener("change", function (e) {
+      var t = e.target;
+      if (t.getAttribute("data-acc") !== "act") return;
+      editorAccion(rc, "act", +t.getAttribute("data-i"), t.value);
+      pintar();
+    });
+    pintar();
+  })();
+
+  /* ---------------- reto: a mano ---------------- */
+  (function () {
+    var T;
+    function gen() { T = { n: entre(2, 20), a: entre(2, 16), b: entre(2, 16), o: entre(1, 5) }; T.p1 = (T.n + 1) * T.a; T.p2 = (T.a + 1) * T.b; T.p3 = (T.b + 1) * T.o; T.tot = T.p1 + T.p2 + T.p3; }
+    gen();
+    campos($("mano"), {
+      pregunta: function () { return "Red " + T.n + "-" + T.a + "-" + T.b + "-" + T.o + ": entrada de " + T.n + ", <code>Dense(" + T.a + ")</code>, <code>Dense(" + T.b + ")</code> y salida <code>Dense(" + T.o + ")</code>. ¿Cuántos parámetros tiene cada capa, y el total?"; },
+      campos: [{ pre: "capa 1:", aria: "Parámetros de la capa 1" }, { pre: "capa 2:", aria: "Parámetros de la capa 2" }, { pre: "salida:", aria: "Parámetros de la capa de salida" }, { pre: "total:", aria: "Total de parámetros" }],
+      revisar: function (v) {
+        if (v[0] === T.p1 && v[1] === T.p2 && v[2] === T.p3 && v[3] === T.tot) return { ok: true };
+        if (v[0] === T.n * T.a) return { msg: "En la capa 1 faltan los sesgos: uno por neurona." };
+        if (v[1] === T.n * T.b + T.b || v[1] === (T.n + 1) * T.b) return { msg: "La capa 2 no ve las " + T.n + " entradas: ve las " + T.a + " salidas de la capa 1." };
+        if (v[0] === T.p1 && v[1] === T.p2 && v[2] === T.p3) return { msg: "Las tres capas están bien. Revisa la suma." };
+        return { msg: "Revisa capa por capa: entradas de esa capa × neuronas + neuronas." };
+      },
+      pistas: ["Cables = entradas × neuronas. Las entradas de una capa son las neuronas de la capa de arriba.", "Más un sesgo por neurona.", function () { return "La capa 1: " + T.n + " × " + T.a + " + " + T.a + " = " + T.p1 + "."; }],
+      solucion: function () { return "Capa 1: (" + T.n + " + 1)·" + T.a + " = " + T.p1 + ". Capa 2: (" + T.a + " + 1)·" + T.b + " = " + T.p2 + ". Salida: (" + T.b + " + 1)·" + T.o + " = " + T.p3 + ". Total: <b>" + T.tot + "</b>."; },
+      reintentable: true,
+      antesDeReintentar: gen,
+      alResolver: function (ok) { C.reto("mano", ok); }
+    });
+  })();
+
+  /* ---------------- reto: formas ---------------- */
+  (function () {
+    var T;
+    function gen() { T = { B: entre(8, 128), n: entre(2, 20), h: entre(2, 16), o: entre(1, 5) }; }
+    gen();
+    campos($("formas"), {
+      pregunta: function () { return "Pasas un lote de <b>" + T.B + "</b> muestras por la red " + T.n + "-" + T.h + "-" + T.o + ". ¿Qué forma sale de la capa oculta con ese lote? ¿Y cómo escribe el <code>summary</code> la forma de la salida?"; },
+      campos: [{ pre: "oculta: (", aria: "Filas de la salida de la capa oculta" }, { pre: ",", post: ")", aria: "Columnas de la salida de la capa oculta" }, { pre: "summary de la salida: (None,", post: ")", aria: "Columnas de la salida en el summary" }],
+      revisar: function (v) {
+        if (v[0] === T.B && v[1] === T.h && v[2] === T.o) return { ok: true };
+        if (v[0] === T.h && v[1] === T.B) return { msg: "Las filas son muestras y las columnas, neuronas." };
+        if (v[1] === T.n) return { msg: "Esa es la entrada. La capa oculta entrega " + "tantos números como neuronas tiene." };
+        if (v[0] === T.B && v[1] === T.h) return { msg: "La oculta está bien. La salida tiene una columna por neurona de salida." };
+        return { msg: "La forma es (muestras, números por muestra)." };
+      },
+      pistas: ["Las filas son las muestras del lote.", "Las columnas son las neuronas de esa capa.", "El summary pone None en lugar del lote."],
+      solucion: function () { return "La oculta entrega <b>(" + T.B + ", " + T.h + ")</b>: " + T.B + " muestras, " + T.h + " números cada una. El <code>summary</code> escribe la salida como <b>(None, " + T.o + ")</b>."; },
+      reintentable: true,
+      antesDeReintentar: gen,
+      alResolver: function (ok) { C.reto("formas", ok); }
+    });
+  })();
+
+  /* ---------------- reto: cazar el error ---------------- */
+  B.cazarError($("error"), {
+    variantes: [
+      {
+        intro: "Una red 784-256-128-10 con dropout, como la de MNIST en ISLR2. Una fila tiene la cuenta mal.",
+        lineas: [tt("Layer (type)  Output Shape  Param #"), tt("dense_1 (Dense)  (None, 256)  200704"), tt("dropout_1 (Dropout)  (None, 256)  0"), tt("dense_2 (Dense)  (None, 128)  32896"), tt("dropout_2 (Dropout)  (None, 128)  0"), tt("dense_3 (Dense)  (None, 10)  1290")],
+        erronea: 1,
+        explicacion: "784 × 256 = 200 704 son solo los pesos: faltan los 256 sesgos. Lo correcto es (784 + 1) × 256 = <b>200 960</b>, como en ISLR2. Las demás filas están bien: (256 + 1)·128 = 32 896 y (128 + 1)·10 = 1 290."
+      },
+      {
+        intro: "La red 4-10-3 con un Dropout en medio. Una fila está mal.",
+        lineas: [tt("Layer (type)  Output Shape  Param #"), tt("dense_1 (Dense)  (None, 10)  50"), tt("dropout_1 (Dropout)  (None, 10)  10"), tt("dense_2 (Dense)  (None, 3)  33"), tt("Total params: 93")],
+        erronea: 2,
+        explicacion: "Dropout no tiene cables: apaga neuronas al azar durante el entrenamiento, pero no aprende nada. Tiene <b>0</b>. Por eso el total también está mal: es 83, no 93."
+      },
+      {
+        intro: "El grafo de dos entradas con ramas Dense(8) y Dense(4). Una fila está mal.",
+        lineas: [tt("medidas (InputLayer)  (None, 4)  0"), tt("color (InputLayer)  (None, 2)  0"), tt("dense_1 (Dense)  (None, 8)  40"), tt("dense_2 (Dense)  (None, 4)  12"), tt("concatenate (Concatenate)  (None, 8)  0"), tt("dense_3 (Dense)  (None, 3)  39")],
+        erronea: 4,
+        explicacion: "<code>Concatenate</code> pega las columnas de las dos ramas: 8 + 4 = <b>(None, 12)</b>. Con (None, 8), la salida tendría 8·3 + 3 = 27; el 39 de la última fila delata que ve 12."
+      }
+    ],
+    alResolver: function (ok) { C.reto("error", ok); }
+  });
+
+  /* ---------------- retos: propiedades ---------------- */
+  function prop(id, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple($(id), cfg);
+  }
+  prop("prop1", {
+    pregunta: "¿Qué significa <code>None</code> en <code>(None, 10)</code>?",
+    opciones: ["El número de muestras del lote, que Keras todavía no conoce.", "Que la capa no tiene sesgos.", "Que la capa no tiene activación.", "Un error en la red."],
+    correcta: 0,
+    pistas: [null, "El sesgo está en <code>Param #</code>, no en la forma.", "La activación no aparece en la forma.", "Es lo normal: cualquier lote sirve."],
+    explicacion: "Es el lote. Al declarar la red, Keras no sabe cuántas muestras le vas a pasar; cada una sale con 10 números."
+  });
+  prop("prop2", {
+    pregunta: "¿Qué cambia <code>compile</code>?",
+    opciones: ["Elige la pérdida, el optimizador y las métricas; los pesos y su número no cambian.", "Inicializa los pesos al azar.", "Entrena una época.", "Agrega la capa de salida."],
+    correcta: 0,
+    pistas: [null, "Los pesos ya existen cuando la capa conoce su entrada.", "Eso es <code>fit</code>, la página siguiente.", "Las capas se declaran antes de compilar."],
+    explicacion: "<code>compile</code> configura cómo se va a aprender. No toca los pesos: el total de parámetros es el mismo antes y después."
+  });
+  prop("prop3", {
+    pregunta: "¿Cuándo necesitas la API funcional en vez de <code>Sequential</code>?",
+    opciones: ["Cuando el modelo tiene más de una entrada o salida, o ramas que se juntan.", "Cuando tiene más de 3 capas.", "Cuando usas softmax.", "Cuando la red es muy grande."],
+    correcta: 0,
+    pistas: [null, "<code>Sequential</code> apila las capas que quieras.", "La activación no depende de la API.", "El tamaño no importa; importa la forma del grafo."],
+    explicacion: "Si el dibujo de la red es una fila, <code>Sequential</code> alcanza. Si hay un punto con dos flechas entrando o saliendo, hace falta la API funcional."
+  });
+
+  /* ---------------- memoria ---------------- */
+  B.ordenar($("formula"), {
+    pregunta: "Arma la red 4-10-3 en Keras 3, en Python: 4 medidas, una oculta de 10 con relu y 3 especies con softmax.",
+    piezas: [tt("modelo = keras.Sequential(["), tt("keras.Input(shape=(4,)),"), tt('layers.Dense(10, activation="relu"),'), tt('layers.Dense(3, activation="softmax"),'), tt("])")],
+    distractores: [tt("keras.Input(shape=(150, 4)),"), tt('layers.Dense(4, activation="relu"),'), tt("layers.Dropout(10),")],
+    soluciones: [[0, 1, 2, 3, 4]],
+    explicacion: "La forma de la entrada es la de <b>una</b> flor, sin el lote; la entrada no se declara como <code>Dense</code>; y <code>Dropout</code> recibe una proporción, no neuronas. Abajo, la tabla que daría <code>summary</code>.",
+    alResolver: function (ok) {
+      C.reto("formula", ok);
+      if (ok) { var R = resumen(red([4, 10, 3])); $("formulaTabla").innerHTML = tablaHtml(R.filas, R.total); }
+    }
+  });
+  B.tarjetas($("tarjetas"), [
+    ["¿Cuántos parámetros tiene <code>Dense(m)</code> con $n$ entradas?", "$n\\,m + m = (n + 1)\\,m$: un peso por cable y un sesgo por neurona."],
+    ["¿Qué es <code>None</code> en <code>(None, 10)</code>?", "El lote: cualquier número de muestras. Cada una sale con 10 números."],
+    ["¿Qué va en <code>input_shape</code> o <code>keras.Input(shape=...)</code>?", "La forma de UNA muestra, sin el lote: <code>(4,)</code> para 4 medidas, <code>(28, 28)</code> para una imagen."],
+    ["¿Cuántos parámetros tienen Dropout, Flatten, Activation y Concatenate?", "0: no tienen cables."],
+    ["¿Los parámetros crecen con el número de datos?", "No: dependen del ancho de la entrada y de las neuronas, no de las filas."],
+    ["¿Qué hace <code>compile</code>?", "Elige pérdida, optimizador y métricas. No entrena (eso es <code>fit</code>) ni cambia los pesos."],
+    ["<code>Sequential</code> frente a funcional", "Sequential: una fila de capas. Funcional: capas llamadas sobre tensores y <code>keras.Model(inputs, outputs)</code>; permite ramas y varias entradas."],
+    ["Pesos de Keras frente a PyTorch", "Keras: <code>kernel</code> (entradas, salidas) y <code>A @ W + b</code>. PyTorch: <code>weight</code> (salidas, entradas) y <code>A @ W.T + b</code>."]
+  ]);
+
+  /* ---------------- vida real ---------------- */
+  (function () {
+    var CODIGO = {
+      py: [
+        ["import", "import numpy as np"],
+        ["datos", "tamanos = [4, 10, 3]                  # entrada, oculta, salida (inventado)"],
+        ["total0", "total = 0"],
+        ["fork", "for k in range(1, len(tamanos)):"],
+        ["nin", "    n_in = tamanos[k - 1]"],
+        ["nout", "    n_out = tamanos[k]"],
+        ["param", "    p = n_in * n_out + n_out          # pesos + sesgos"],
+        ["suma", "    total = total + p"],
+        ["fila", "    print(f\"dense_{k}  (None, {n_out})  {p}\")"],
+        ["imptot", "print(\"Total params:\", total)"],
+        ["lote", "X = np.ones((5, 4))                   # un lote de 5 flores"],
+        ["a0", "A = X"],
+        ["np0", "n_param = 0"],
+        ["fork2", "for k in range(1, len(tamanos)):"],
+        ["W", "    W = np.full((tamanos[k - 1], tamanos[k]), 0.1)"],
+        ["b", "    b = np.zeros(tamanos[k])"],
+        ["dense", "    A = A @ W + b                     # lo que hace Dense (sin activación)"],
+        ["cuenta", "    n_param = n_param + W.size + b.size"],
+        ["forma", "    print(A.shape)"],
+        ["compara", "print(n_param == total)"]
+      ],
+      r: [
+        ["datos", "tamanos <- c(4, 10, 3)                # entrada, oculta, salida (inventado)"],
+        ["total0", "total <- 0"],
+        ["fork", "for (k in 2:length(tamanos)) {"],
+        ["nin", "  n_in <- tamanos[k - 1]"],
+        ["nout", "  n_out <- tamanos[k]"],
+        ["param", "  p <- n_in * n_out + n_out           # pesos + sesgos"],
+        ["suma", "  total <- total + p"],
+        ["fila", "  cat(sprintf(\"dense_%d  (None, %d)  %d\\n\", k - 1, n_out, p))"],
+        [null, "}"],
+        ["imptot", "cat(sprintf(\"Total params: %d\\n\", total))"],
+        ["lote", "X <- matrix(1, nrow = 5, ncol = 4)    # un lote de 5 flores"],
+        ["a0", "A <- X"],
+        ["np0", "n_param <- 0"],
+        ["fork2", "for (k in 2:length(tamanos)) {"],
+        ["W", "  W <- matrix(0.1, nrow = tamanos[k - 1], ncol = tamanos[k])"],
+        ["b", "  b <- rep(0, tamanos[k])"],
+        ["dense", "  A <- sweep(A %*% W, 2, b, \"+\")      # lo que hace Dense (sin activación)"],
+        ["cuenta", "  n_param <- n_param + length(W) + length(b)"],
+        ["forma", "  print(dim(A))"],
+        [null, "}"],
+        ["compara", "print(n_param == total)"]
+      ]
+    };
+    // salidas reales, linea por linea
+    var SAL = {
+      py: ["dense_1  (None, 10)  50", "dense_2  (None, 3)  33", "Total params: 83", "(5, 10)", "(5, 3)", "True"],
+      r: ["dense_1  (None, 10)  50", "dense_2  (None, 3)  33", "Total params: 83", "[1]  5 10", "[1] 5 3", "[1] TRUE"]
+    };
+    var TAM = [4, 10, 3];
+    function simular(lang) {
+      var EV = [], st = { fase: 1, k: null, nin: null, nout: null, p: null, total: null, filas: 0, X: false, A: null, val: null, W: null, b: null, np: null, sal: 0, tam: false, fin: false, nuevo: false };
+      function f(id) { var o = { id: id }; for (var c in st) o[c] = st[c]; EV.push(o); st.nuevo = false; }
+      if (lang === "py") f("import");
+      st.tam = true; f("datos");
+      st.total = 0; f("total0");
+      for (var k = 1; k < 3; k++) {
+        st.k = k; st.nin = null; st.nout = null; st.p = null; f("fork");
+        st.nin = TAM[k - 1]; f("nin");
+        st.nout = TAM[k]; f("nout");
+        st.p = st.nin * st.nout + st.nout; f("param");
+        st.total += st.p; f("suma");
+        st.filas = k; st.sal++; f("fila");
+      }
+      st.k = null; st.nin = st.nout = st.p = null; st.sal++; f("imptot");
+      st.fase = 2; st.X = true; f("lote");
+      st.A = [5, 4]; st.val = 1; f("a0");
+      st.np = 0; f("np0");
+      for (k = 1; k < 3; k++) {
+        st.k = k; st.W = null; st.b = null; f("fork2");
+        st.W = [TAM[k - 1], TAM[k]]; f("W");
+        st.b = TAM[k]; f("b");
+        st.A = [5, TAM[k]]; st.val = 0.4; st.nuevo = true; f("dense");
+        st.np += TAM[k - 1] * TAM[k] + TAM[k]; f("cuenta");
+        st.sal++; f("forma");
+      }
+      st.k = null; st.sal++; st.fin = true; f("compara");
+      return EV;
+    }
+    var EVS = { py: simular("py"), r: simular("r") };
+    var EV = EVS.py.slice();
+
+    function narrar(e, ctx) {
+      var py = ctx.lang() === "py", k = e.k;
+      var kk = k == null ? "" : ctx.ix(k);
+      switch (e.id) {
+        case "import": return "Carga NumPy. Esta línea solo existe en Python: R hace matrices sin cargar nada.";
+        case "datos": return "La red como una lista de tamaños: 4 medidas de entrada, una oculta de 10 y 3 especies. No hay capas todavía: solo números.";
+        case "total0": return "El contador de parámetros empieza en 0.";
+        case "fork": return "Vuelta con <code>k = " + kk + "</code>. " + (py ? "En Python, la vuelta " + k + " lee <code>tamanos[" + (k - 1) + "]</code> y <code>tamanos[" + k + "]</code>." : "En R, la vuelta <code>k = " + kk + "</code> lee <code>tamanos[" + (kk - 1) + "]</code> y <code>tamanos[" + kk + "]</code>.") + " El bucle " + (py ? "empieza en 1" : "empieza en 2") + ": la entrada no es una capa con pesos.";
+        case "nin": return "<code>n_in = " + e.nin + "</code>: lo que entra a esta capa es lo que sale de la de arriba.";
+        case "nout": return "<code>n_out = " + e.nout + "</code>: las neuronas de esta capa.";
+        case "param": return "Pesos (<code>n_in * n_out</code> = " + (e.nin * e.nout) + " cables) más sesgos (uno por neurona, " + e.nout + "): <b>" + e.p + "</b>.";
+        case "suma": return "El total acumula: <b>" + e.total + "</b>.";
+        case "fila": return "Imprime la fila del summary: <code>dense_" + k + "  (None, " + e.nout + ")  " + e.p + "</code>." + (py ? "" : " En R el rótulo es <code>k - 1</code>, porque k va de 2 a 3.") + " El nombre <code>dense_1</code> lo pone Keras; no es el índice del lenguaje.";
+        case "imptot": return "<b>Total params: 83</b>. Hasta aquí, solo cuentas: ninguna matriz existe todavía.";
+        case "lote": return "Ahora las matrices de verdad. Un lote de 5 flores con sus 4 medidas, todas en 1 (inventadas): una tabla de 5 × 4.";
+        case "a0": return "<code>A</code> es la tabla que va a viajar por las capas.";
+        case "np0": return "Un segundo contador, que esta vez mide el tamaño real de las matrices.";
+        case "fork2": return "Vuelta con <code>k = " + kk + "</code>: la capa " + k + ".";
+        case "W": return "La matriz de pesos de " + e.W[0] + " × " + e.W[1] + ", toda en 0.1: es el <code>kernel</code> de Keras, (entradas, salidas).";
+        case "b": return "El sesgo: " + e.b + " ceros, uno por neurona.";
+        case "dense": return "Lo que hace <code>Dense</code> (sin activación): cada flor, cada fila, pasa por la <b>misma</b> matriz. El lote no cambia <code>W</code>. " + (k === 1 ? "Cada casilla vale 4 × 1 × 0.1 = 0.4." : "Cada casilla vale 10 × 0.4 × 0.1 = 0.4" + (py ? " (NumPy guarda 0.39999999999999997 por el redondeo binario)." : ".")) + (py ? " NumPy suma <code>b</code> a cada fila sin decirlo (difusión)." : " En R, <code>sweep(..., 2, b, \"+\")</code> suma el sesgo a cada columna: <code>A %*% W + b</code> lo reciclaría mal.");
+        case "cuenta": return "Suma el tamaño real de <code>W</code> y <code>b</code>: " + (e.W[0] * e.W[1]) + " + " + e.b + ". Van <b>" + e.np + "</b>. Esto es lo que hace <code>count_params()</code>.";
+        case "forma": return "Imprime la forma: <b>" + (py ? "(5, " + e.A[1] + ")" : "5 " + e.A[1]) + "</b>. Las filas siguen siendo las 5 flores.";
+        case "compara": return "<code>n_param == total</code>: " + (py ? "<b>True</b>" : "<b>TRUE</b>") + ". La fórmula y las matrices reales dan lo mismo, 83.";
+      }
+      return "";
+    }
+    function visual(e, anterior, ctx) {
+      var py = ctx.lang() === "py";
+      var rd = red([4, 10, 3]);
+      $("vrPila").innerHTML = e && e.tam ? pilaSvg(rd, { on: e.k != null ? e.k - 1 : null }) : '<p class="esc-nota">La red todavía no existe.</p>';
+      if (!e || e.total == null) $("vrSum").innerHTML = '<p class="esc-nota">Todavía no hay contador.</p>';
+      else {
+        var R = resumen(rd), filas = R.filas.slice(0, e.filas).map(function (f) { var g = {}; for (var c in f) g[c] = f[c]; g.on = e.fase === 1 && e.k === f.capa + 1; return g; });
+        $("vrSum").innerHTML = tablaHtml(filas, e.total, {});
+      }
+      if (!e || !e.A) $("vrTens").innerHTML = '<p class="esc-nota">' + (e && e.X ? "X existe: 5 × 4, todo en 1." : "Todavía no hay lote.") + "</p>";
+      else {
+        var g = '<div class="vr-A" style="grid-template-columns:repeat(' + e.A[1] + ', auto)">';
+        for (var i = 0; i < e.A[0] * e.A[1]; i++) g += '<span class="' + (e.nuevo ? "nuevo" : "") + '">' + (e.val === 1 ? "1" : "0.4") + "</span>";
+        g += "</div>";
+        $("vrTens").innerHTML = g + '<p class="vr-info">' + (py ? "A.shape = (" + e.A[0] + ", " + e.A[1] + ")" : "dim(A) = " + e.A[0] + " " + e.A[1]) +
+          (e.W ? " · W: " + e.W[0] + " × " + e.W[1] + " de 0.1" : "") + (e.b ? " · b: " + e.b + " ceros" : "") + "</p>";
+      }
+      $("vrSal").textContent = SAL[ctx.lang()].slice(0, e ? e.sal : 0).join("\n");
+    }
+    // al cambiar de lenguaje, los eventos cambian: este oyente corre antes que el del motor
+    $("vrLang").addEventListener("click", function (ev) {
+      var b = ev.target.closest("button[data-lang]");
+      if (!b) return;
+      var nuevos = EVS[b.getAttribute("data-lang")];
+      EV.length = 0;
+      nuevos.forEach(function (x) { EV.push(x); });
+    });
+    var motor = B.vidaReal($("vidareal"), {
+      codigo: CODIGO,
+      eventos: EV,
+      narrar: narrar,
+      vars: function (e, ctx) {
+        var py = ctx.lang() === "py", v = [];
+        if (!e) return v;
+        if (e.k != null) v.push('<span class="vk">k = <b>' + ctx.ix(e.k) + "</b></span>");
+        if (e.nin != null) v.push("<span>n_in = <b>" + e.nin + "</b></span>");
+        if (e.nout != null) v.push("<span>n_out = <b>" + e.nout + "</b></span>");
+        if (e.p != null) v.push("<span>p = <b>" + e.p + "</b></span>");
+        if (e.total != null) v.push("<span>total = <b>" + e.total + "</b></span>");
+        if (e.A) v.push("<span>" + (py ? "A.shape" : "dim(A)") + " = <b>" + (py ? "(" + e.A[0] + ", " + e.A[1] + ")" : e.A[0] + " " + e.A[1]) + "</b></span>");
+        if (e.np != null) v.push("<span>n_param = <b>" + e.np + "</b></span>");
+        return v;
+      },
+      visual: visual,
+      demora: function (e) { return !e ? 600 : e.id === "datos" || e.id === "dense" || e.id === "param" ? 1400 : e.id === "fila" || e.id === "imptot" || e.id === "compara" ? 1100 : 650; }
+    });
+    $("vrLang").addEventListener("click", function (ev) {
+      if (!ev.target.closest("button[data-lang]")) return;
+      motor.parar();
+      motor.ir(-1);
+    });
+
+    B.numerico(cuerpo("vrPred"), {
+      pregunta: "¿Cuántas veces se ejecuta la línea <code>p = n_in * n_out + n_out</code> (en R, <code>p &lt;- n_in * n_out + n_out</code>)?",
+      respuesta: 2,
+      tolerancia: 0,
+      pistas: ["El <code>for</code> empieza en la segunda posición de <code>tamanos</code>."],
+      diagnostico: function (v) {
+        if (v === 3) return "Son 3 tamaños, pero la entrada no es una capa con pesos: el bucle empieza en el segundo.";
+        if (v === 13) return "Contaste neuronas. La línea calcula una capa entera de una vez.";
+        if (v === 5) return "Esas son las flores del lote, y esta parte del programa todavía no usa datos.";
+        return null;
+      },
+      explicacion: "<b>2 veces</b>, una por capa <code>Dense</code>: ni por neurona ni por flor. Ahora dale a reproducir."
+    });
+
+    prop("codigo1", {
+      pregunta: "Escribiste <code>Dense(10, input_shape=(150, 4))</code> porque tu tabla tiene 150 filas. ¿Qué pasó?",
+      opciones: ["Keras cree que cada muestra es una tabla de 150 × 4: la salida es (None, 150, 10) y el summary sigue diciendo 50 parámetros, así que no avisa.", "Da error porque 150 no es 4.", "La capa tiene 150 veces más parámetros.", "El lote pasa a ser 150."],
+      correcta: 0,
+      pistas: [null, "No da error: hay un eje de más y la capa lo recorre fila por fila.", "Los pesos se comparten entre las 150 filas: siguen siendo 4 × 10 + 10.", "El lote sigue siendo None, por delante: la salida real de NumPy es (1, 150, 10)."],
+      explicacion: "La forma real con NumPy es <code>(1, 150, 10)</code> y los parámetros, <code>50</code>. Nada se queja, y el modelo trata tu tabla entera como una sola muestra. Lo correcto: <code>input_shape=(4,)</code>, o <code>keras.Input(shape=(4,))</code>."
+    });
+    prop("codigo2", {
+      pregunta: "¿Por qué la quinta capa del summary tiene 20 parámetros?",
+      opciones: ["Recibe la salida de 1 neurona, la Dense(1) de la primera pasada: 1 × 10 + 10.", "Es un error de imprenta del cuaderno.", "Porque la entrada vuelve a tener 13 variables.", "Porque un Dropout suma parámetros."],
+      correcta: 0,
+      pistas: [null, "Es real: sale del summary guardado en el cuaderno, y el programa lo reproduce.", "Con 13 entradas serían 13 × 10 + 10 = 140.", "No hay Dropout, y tendría 0."],
+      explicacion: "La segunda pasada se apiló <b>debajo</b> de la primera: la nueva <code>Dense(10)</code> recibe lo que sale de la <code>Dense(1)</code>. En Python y en R el modelo se modifica en el lugar; constrúyelo en una sola celda, desde cero."
+    });
+    prop("codigo3", {
+      pregunta: "¿Por qué la segunda multiplicación falla si <code>W</code> tiene los 40 pesos correctos?",
+      opciones: ["Para multiplicar, las columnas de X (4) tienen que coincidir con las filas de W: PyTorch guarda (10, 4) y Keras (4, 10); hay que trasponer.", "Faltan los sesgos.", "El lote de 5 es demasiado chico.", "W debería ser (5, 10)."],
+      correcta: 0,
+      pistas: [null, "Los sesgos no intervienen en la forma de la multiplicación.", "El lote no toca W: con 500 flores falla igual.", "W no depende del lote: sus formas posibles son (4, 10) o (10, 4)."],
+      explicacion: "<code>X @ W.T</code> (en R, <code>X %*% t(W)</code>) da (5, 10). Sin trasponer, NumPy dice <code>size 10 is different from 4</code> y R, <code>non-conformable arguments</code>."
+    });
+  })();
+
+  /* ---------------- conexiones ---------------- */
+  B.conexiones(ID);
+})();
+</script>
+</body>
+</html>

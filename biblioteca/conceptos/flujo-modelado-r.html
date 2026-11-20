@@ -1,0 +1,1597 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Un flujo de modelado reproducible en R</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+/* ---------- escenario ---------- */
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.esc-head .hint { font-size: 12.5px; color: var(--ink-2); }
+.esc-ctrl { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin: 0 0 10px; }
+.esc-ctrl button, .esc-ctrl select { font-family: var(--f-mono); font-size: 12px; padding: 6px 9px; }
+.esc-ctrl select { border: 1px solid var(--line); border-radius: 7px; background: var(--surface); color: var(--ink); }
+.esc-ctrl button[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.esc-ctrl label { display: inline-flex; gap: 5px; align-items: center; font-size: 12.5px; color: var(--ink-2); }
+.esc-ctrl input { accent-color: var(--accent); }
+.esc-nota { font-size: 12.5px; color: var(--ink-3); margin: 8px 0 0; }
+.esc-sub { font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-3); margin: 12px 0 5px; }
+.rotulo-sem { font-family: var(--f-mono); font-size: 13px; font-weight: 600; color: var(--accent); padding: 4px 8px; border: 1.5px solid var(--accent); border-radius: 7px; background: var(--accent-soft); }
+
+/* fichas y baraja */
+.fichas { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 4px; }
+@media (max-width: 520px) { .fichas { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+.ficha { border: 1.5px solid var(--line); border-radius: 7px; padding: 4px 2px; text-align: center; font-family: var(--f-mono); background: var(--surface); min-width: 0; }
+.ficha b { display: block; font-size: 15px; color: var(--ink); }
+.ficha small { display: block; font-size: 9.5px; color: var(--ink-3); }
+.ficha.ent { border-color: var(--j); background: var(--j-soft); }
+.ficha.pru { border-color: var(--k); background: var(--k-soft); border-style: dashed; }
+.ficha.pru b { color: var(--k); }
+.ficha.ent b { color: var(--j); }
+.ficha.tapa b { color: var(--accent); }
+.consola { margin: 8px 0 0; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); font-family: var(--f-mono); font-size: 12px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink-2); min-height: 2.2em; }
+.consola .sal { color: var(--ink); font-weight: 500; }
+.consola .nuevo { color: var(--accent); font-weight: 600; }
+
+/* mesas */
+.mesas { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 10px; margin-top: 10px; }
+@media (max-width: 520px) { .mesas { grid-template-columns: minmax(0, 1fr); } }
+.mesa { border: 1.5px solid var(--line); border-radius: 9px; padding: 6px 8px 8px; min-width: 0; }
+.mesa.ent { border-color: var(--j); }
+.mesa.pru { border-color: var(--k); border-style: dashed; }
+.mesa-t { font-family: var(--f-mono); font-size: 11px; color: var(--ink-2); margin-bottom: 4px; overflow-wrap: anywhere; }
+.tapada { display: grid; place-items: center; min-height: 80px; border: 2px dashed var(--accent); border-radius: 8px; font-family: var(--f-mono); font-size: 26px; color: var(--accent); background: var(--accent-soft); }
+
+/* tabla viva */
+.tv { width: 100%; border-collapse: collapse; font-family: var(--f-mono); font-size: 12px; font-variant-numeric: tabular-nums; }
+.tv th, .tv td { border-bottom: 1px solid var(--line); padding: 3px 5px; text-align: right; }
+.tv th { color: var(--ink-3); font-weight: 500; font-size: 11px; }
+.tv td:first-child, .tv th:first-child { text-align: left; }
+.tv .oc { color: var(--accent); font-weight: 600; }
+.tv .okc { color: var(--ok); font-weight: 600; }
+.tv .badc { color: var(--bad); font-weight: 600; }
+.tv tr.on td { background: var(--accent-soft); }
+
+/* plano */
+.plano { width: 100%; height: auto; display: block; }
+.plano text { font-family: var(--f-mono); font-size: 10px; fill: var(--ink-3); }
+.plano .eti { font-size: 10.5px; font-weight: 600; }
+.formula-viva { font-size: 14px; margin: 8px 0 0; overflow-x: auto; overflow-y: hidden; }
+
+/* medidor de RMSE */
+.medidor-rmse { margin-top: 10px; }
+.mr-fila { display: grid; grid-template-columns: 7.5em minmax(0, 1fr) 4.5em; gap: 8px; align-items: center; font-family: var(--f-mono); font-size: 11.5px; color: var(--ink-2); }
+.mr-pista { position: relative; height: 14px; background: var(--surface-2); border-radius: 7px; overflow: hidden; }
+.mr-barra { position: absolute; left: 0; top: 0; bottom: 0; background: var(--k); border-radius: 7px; }
+.mr-barra.fuga { background: var(--bad); }
+.mr-marca { position: absolute; top: -2px; bottom: -2px; width: 3px; background: var(--j); }
+.mr-num { text-align: right; color: var(--ink); font-weight: 600; }
+
+/* estaciones */
+.linea-est { display: flex; gap: 4px; align-items: stretch; flex-wrap: wrap; margin-top: 12px; }
+.estacion { flex: 1 1 0; min-width: 0; border: 1.5px solid var(--line); border-radius: 9px; padding: 5px 6px; opacity: .45; background: var(--surface); }
+.estacion.on { opacity: 1; border-color: var(--accent); }
+.estacion.vivo { box-shadow: 0 0 0 3px var(--accent-soft); }
+.est-nom { font-size: 11.5px; font-weight: 600; color: var(--ink); }
+.est-cod { font-family: var(--f-mono); font-size: 10px; color: var(--ink-2); overflow-wrap: anywhere; margin-top: 3px; }
+.est-fl { align-self: center; color: var(--accent); font-family: var(--f-mono); font-size: 12px; }
+@media (max-width: 600px) {
+  .linea-est { flex-direction: column; }
+  .est-fl { align-self: flex-start; padding-left: 12px; }
+}
+@media (prefers-reduced-motion: reduce) { .estacion { transition: none; } }
+
+/* pizarra de corridas */
+.pizarra { width: 100%; border-collapse: collapse; font-family: var(--f-mono); font-size: 12px; margin-top: 6px; }
+.pizarra th, .pizarra td { border-bottom: 1px solid var(--line); padding: 3px 6px; text-align: left; }
+.pizarra th { color: var(--ink-3); font-weight: 500; font-size: 11px; }
+.pizarra tr.nueva td { background: var(--accent-soft); }
+
+/* histograma de 120 particiones */
+.hist { width: 100%; height: auto; display: block; margin-top: 8px; }
+.hist text { font-family: var(--f-mono); font-size: 10px; fill: var(--ink-3); }
+
+/* chequeos y retos */
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.codigo-linea { font-family: var(--f-mono); font-size: 13px; padding: 8px 10px; background: var(--surface-2); border-radius: 8px; margin: 6px 0 10px; overflow-wrap: anywhere; white-space: pre-wrap; }
+.ojo-opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 6px; margin-top: 10px; }
+.ojo-opts .opt { text-align: center; }
+.objetivos { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.objetivos li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.objetivos .m { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.objetivos li.hecho { color: var(--ink); }
+.objetivos li.hecho .m { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 3px var(--surface); }
+.semillas { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0; }
+.semillas button { font-family: var(--f-mono); font-size: 12px; padding: 5px 8px; }
+.semillas button[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.cons-msg { font-size: 13px; color: var(--ink-2); margin: 6px 0 0; }
+.cons-msg.alerta { color: var(--bad); }
+.lec { border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); overflow: hidden; margin: 6px 0 10px; }
+.lec-t { display: block; font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); padding: 5px 10px 0; }
+.lec pre { margin: 0; padding: 4px 10px 8px; font-family: var(--f-mono); font-size: 12px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink-2); }
+.lec pre .sal { color: var(--ink); font-weight: 500; }
+.mano-tabla { margin: 8px 0; }
+.mano-parte { margin-top: 14px; padding-top: 10px; border-top: 1px dashed var(--line); }
+
+/* vida real */
+.vr-sal { margin: 4px 0 0; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); font-family: var(--f-mono); font-size: 12px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; min-height: 3em; color: var(--ink); }
+.vr-info { font-family: var(--f-mono); font-size: 12px; color: var(--ink-2); margin: 6px 0 0; overflow-wrap: anywhere; }
+.acum { display: inline-block; margin-top: 6px; padding: 6px 10px; border: 1.5px solid var(--accent); border-radius: 8px; font-family: var(--f-mono); font-size: 12.5px; color: var(--ink); background: var(--accent-soft); overflow-wrap: anywhere; max-width: 100%; }
+
+/* piezas largas: que se puedan partir a 375 px */
+.chip { max-width: 100%; white-space: normal; text-align: left; }
+.chip .katex-html { white-space: normal; }
+.chip .mord.texttt { white-space: normal; overflow-wrap: anywhere; }
+.linea .katex-html { white-space: normal; }
+.linea .mord.texttt { white-space: normal; overflow-wrap: anywhere; }
+.linea { max-width: 100%; }
+pre.bloque-cod { margin: 8px 0; padding: 8px 10px; background: var(--surface-2); border-radius: 8px; font-family: var(--f-mono); font-size: 12px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); }
+pre.bloque-cod .sal { color: var(--ink-3); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ Un flujo de modelado reproducible en R</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Programación con datos · Clasificaciones y agrupaciones (SM142003) UD0 · ISLR2, labs 4.7, 5.3 y 6.5</p>
+    <h1>Un flujo de modelado reproducible en R</h1>
+    <p class="lede">
+      Entrenar un modelo y medirlo son cinco estaciones en fila: <b>semilla</b>, <b>partir</b>, <b>ajustar</b>, <b>predecir</b> y <b>medir</b>.
+      Aquí las ves como una <b>baraja</b> que reparte a diez compañeros en dos mesas, una de entrenamiento y otra de prueba, y una línea de estaciones que no se puede desordenar.
+      Al final entiendes por qué tu número y el de tu compañero salen iguales, o por qué no, y qué significa que no salgan iguales.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> Tu compañero y tú corren el mismo programa con los mismos datos: separa a tres estudiantes para examinar al modelo y entrena con el resto. Él obtiene un error de 1.21 y tú de 1.51. ¿Alguno se equivocó? ¿Qué tendrían que hacer para obtener lo mismo? ¿Y cuál de los dos números es el "verdadero"? Escribe tu idea.</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: creo que..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>La baraja y las cinco estaciones</h2>
+      <p>Siete pasos. Cada uno termina con un chequeo: hasta que no lo resuelves, el siguiente queda cerrado. Equivocarte aquí no resta nada. Los datos son inventados: diez compañeros, las horas que estudiaron (1 a 10) y la nota del examen (0 a 10). El número de fila coincide con las horas: la fila 3 es quien estudió 3 horas. Lo que sigue une piezas que el material da por separado: la UD0 describe el flujo en palabras, ISLR2 lo programa con R base y las métricas están en SM142004.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="Misma receta, dos resultados">
+          <span class="etapa">Paso 1</span>
+          <h3>La misma receta, dos resultados</h3>
+          <p>Para saber si un modelo sirve, no basta con ver cómo le va con los datos que ya conoce. Hay que examinarlo con datos que no vio. Por eso, antes de entrenar, se aparta a algunos compañeros: el modelo aprende con los otros y después se le pregunta por los apartados.</p>
+          <p>La UD0 lo dice así: lo que importa es la generalización, cómo le va al modelo con datos nuevos
+          <cite class="cita" data-fuente="intro3" data-pag="18" data-ancla="data-splitting" data-seccion="4.3 Data splitting" data-que="El objetivo de partir los datos es la generalización: medir al modelo con datos que no vio al entrenarse." data-cuando="Al terminar este paso"></cite>.</p>
+          <p>En el escenario están los diez compañeros. El programa elige al azar a tres para el examen, entrena con los otros siete y anota cuánto se equivoca con los tres examinados.</p>
+          <div class="check" id="chk1">
+            <p class="check-tit">Predice antes de tocar nada</p>
+            <div class="cuerpo"></div>
+          </div>
+          <p id="cierre1" hidden>Ahora toca <b>Repartir al azar</b> tres o cuatro veces y mira la pizarra. Cambian los examinados, cambia la recta y cambia el error. Para que tu compañero obtenga tu número, el sorteo tiene que ser <b>repetible</b>.</p>
+        </section>
+
+        <section class="paso card" data-titulo="La semilla">
+          <span class="etapa">Paso 2</span>
+          <h3>La semilla: un sorteo que se puede repetir</h3>
+          <p>La computadora no tira dados. Calcula una sucesión de números que parecen al azar a partir de un número inicial, la <b>semilla</b>. <code>set.seed(123)</code> pone la sucesión en su punto de partida, y desde ahí cada llamada que usa azar consume números.</p>
+          <p>La regla: misma semilla, mismas llamadas, en el mismo orden, dan el mismo resultado. En el escenario, la baraja muestra el orden en que <code>sample(10)</code> reparte las diez fichas con cada semilla; <code>sample(10, 3)</code> se queda con las tres primeras.</p>
+          <p>El documento de clase de la UD4 pone <code>set.seed(42)</code> antes de <code>runif</code> para que veas los mismos números que el texto
+          <cite class="cita" data-fuente="prog4html" data-ancla="pedirle-ayuda-a-r" data-seccion="Pedirle ayuda a R" data-que="set.seed(42) antes de runif. Con una sola semilla antes de tres llamadas, solo el primer vector se repite: la misma trampa de este paso." data-cuando="Después de resolver el chequeo"></cite>,
+          y el PDF de la UD4 hace lo mismo con <code>set.seed(123)</code> y <code>runif(20, 10, 50)</code> para que sus matrices salgan idénticas a las tuyas
+          <cite class="cita" data-fuente="prog4" data-pag="11" data-pimp="11" data-seccion="Matrices" data-que="set.seed(123) y runif(20, 10, 50): las matrices del texto se reproducen idénticas. En la página 8, rnorm(10) y runif(10) van sin semilla." data-cuando="Al terminar este paso"></cite>.
+          Un detalle al leerlo: en la página 8 ese mismo PDF imprime <code>rnorm(10)</code> y <code>runif(10)</code> sin semilla, así que tus números no van a coincidir con los del texto. ISLR2 también lo avisa desde el primer lab: usa <code>set.seed(1303)</code> para que puedas repetir sus resultados, y lo hace en todos los labs (página 45 del libro).</p>
+          <div class="check" id="chk2">
+            <p class="check-tit">Predice antes de tocar</p>
+            <div class="cuerpo"></div>
+          </div>
+          <div id="trampa2" hidden>
+            <p><b>La trampa.</b> Con <code>set.seed(123)</code> una sola vez, la primera <code>sample(10, 3)</code> da <code>3 10 2</code> y la segunda da <code>2 6 3</code>. La segunda llamada sigue consumiendo la sucesión. Ojo: <code>2 6 3</code> no son las fichas 4 a 6 de la baraja (8, 6, 9): <code>sample</code> sin reemplazo consume la sucesión de otra forma. Es un resultado nuevo.</p>
+            <p>Lo que sí se repite es el script entero: si lo corres de arriba abajo, la primera llamada da <code>3 10 2</code> y la segunda <code>2 6 3</code>, todas las veces.</p>
+          </div>
+          <details class="profundizar">
+            <summary>¿La semilla es la misma en todas las versiones de R?</summary>
+            <div>
+              <p>No siempre. Desde R 3.6.0, <code>sample</code> usa otro método. Con el antiguo, <code>set.seed(123, sample.kind = "Rounding"); sample(10, 3)</code> da <code>3 8 4</code>, y R avisa <code>non-uniform 'Rounding' sampler used</code> (es un muestreo sesgado). Por eso ISLR2 advierte al principio del libro (página 13) que con versiones nuevas de R los resultados de los labs pueden no coincidir. Reproducible significa: misma semilla, mismas llamadas, misma versión.</p>
+            </div>
+          </details>
+        </section>
+
+        <section class="paso card" data-titulo="Partir: dos mesas">
+          <span class="etapa">Paso 3</span>
+          <h3>Partir: dos mesas</h3>
+          <p>Con los índices sorteados se arman dos tablas:</p>
+          <ul>
+            <li><code>datos[prueba, ]</code>: las 3 filas de prueba.</li>
+            <li><code>datos[-prueba, ]</code>: las 7 restantes, el entrenamiento. En R, el signo menos en un índice significa "todas menos estas".</li>
+          </ul>
+          <p>Siete y tres es el 70/30 que propone la UD0. La regla de oro: el entrenamiento se usa para todo el desarrollo; la prueba, una sola vez, al final
+          <cite class="cita" data-fuente="intro3" data-pag="19" data-ancla="5/4" data-seccion="Train vs test" data-que="Entrenamiento para todo el desarrollo, prueba una sola vez al final: la regla de oro." data-cuando="Al leer este paso"></cite>.
+          La diapositiva siguiente (20) da las proporciones habituales, 70/30 u 80/20, y agrega que poner más del 80 % en entrenamiento arriesga sobreajuste. Eso no es exacto: la proporción no sobreajusta; con una prueba muy chica lo que pierdes es precisión al medir.</p>
+          <p>ISLR2 hace lo mismo en su lab de validación: <code>set.seed(1)</code>, <code>train &lt;- sample(392, 196)</code> y <code>lm(..., subset = train)</code>, con la mitad para cada lado
+          <cite class="cita" data-fuente="islr2" data-pag="224" data-pimp="213" data-seccion="5.3.1 The Validation Set Approach" data-que="set.seed(1), train &lt;- sample(392, 196), lm(mpg ~ horsepower, subset = train) y el error con mean((mpg - predict(...))[-train]^2)." data-cuando="Al terminar este paso"></cite>.
+          El libro guarda los índices de <b>entrenamiento</b> (<code>train</code>) y esta página guarda los de <b>prueba</b> (<code>prueba</code>). Las dos formas valen; lo importante es que el otro conjunto salga con el signo menos (<code>-train</code> en el libro).</p>
+          <div class="check" id="chk3">
+            <p class="check-tit">Elige con los datos en vivo</p>
+            <div class="cuerpo"></div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Ajustar solo con entrenamiento">
+          <span class="etapa">Paso 4</span>
+          <h3>Ajustar solo con entrenamiento</h3>
+          <p>El modelo aprende únicamente de la mesa de entrenamiento: <code>lm(nota ~ horas, data = datos[-prueba, ])</code>. Los tres de prueba no existen para él. En el plano, la recta sale de los 7 puntos llenos; los 3 huecos no la tocan.</p>
+          <div class="fbloque"><div class="vivo" id="vivo4"></div></div>
+          <p>La UD0 lo llama "gastar" bien los datos: cada dato que el modelo ve al ajustarse ya no sirve para examinarlo
+          <cite class="cita" data-fuente="intro3" data-pag="17" data-ancla="a-strategic-approach" data-seccion="4.2 A strategic approach" data-que="Cómo gastar los datos: separar antes de ajustar y evitar la fuga de información de la prueba." data-cuando="Al leer este paso"></cite>.
+          Qué hace <code>lm</code> con la fórmula <code>nota ~ horas</code> lo ves en «Fórmulas y modelos en R: lm, glm y predict», y la teoría de la partición en «Partición de datos: train, test y fuga de datos».</p>
+          <div class="check" id="chk4">
+            <p class="check-tit">Calcula con los datos en vivo</p>
+            <div class="cuerpo"></div>
+          </div>
+          <div id="trampa4" hidden>
+            <p><b>La trampa: ajustar con todos.</b> Activa <b>ajustar con todos</b> en el escenario. Con la semilla 123, la recta pasa a <span data-tex="b_0 = 1.8667"></span> y <span data-tex="b_1 = 0.6606"></span>, y el error con los tres de prueba baja de 1.3617 a 0.8686. Parece mejor, pero el modelo ya había visto esas notas: el examen tenía las respuestas. Eso es <b>fuga de datos</b>, y el número que da es optimista.</p>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Predecir y medir">
+          <span class="etapa">Paso 5</span>
+          <h3>Predecir y medir</h3>
+          <p><code>predict(ajuste, datos[prueba, ])</code> da la nota que el modelo predice para cada uno de los tres de prueba. Cada error es real menos predicha, <span data-tex="y_i - \hat y_i"></span>. El <b>RMSE</b> los resume en un número, en las mismas unidades que la nota:</p>
+          <div class="fbloque"><span data-tex="\text{RMSE} = \sqrt{\tfrac{1}{n}\sum_{i=1}^{n} (y_i - \hat y_i)^2}" data-display></span><div class="vivo" id="vivo5"></div></div>
+          <p>La UD1 de SM142004 trae las fórmulas de MAE, MSE y RMSE con <span data-tex="\epsilon_i = Y_i - \hat Y_i"></span>
+          <cite class="cita" data-fuente="rl1" data-pag="22" data-pimp="22" data-seccion="Métricas" data-que="Las fórmulas de MAE, MSE y RMSE con el error definido como real menos predicho." data-cuando="Al leer este paso"></cite>.
+          En la página 13 de esa misma unidad el error se define al revés, predicción menos real. Para el RMSE da igual, porque se eleva al cuadrado; esta página usa real menos predicha, como la página 22. La UD0 agrega que el RMSE queda en las unidades de <span data-tex="y"></span>
+          <cite class="cita" data-fuente="intro3" data-pag="42" data-ancla="regression-models" data-seccion="6.1 Regression models" data-que="MSE, RMSE (en las mismas unidades que y), MAE y R2 como métricas de regresión." data-cuando="Después de resolver el chequeo"></cite>,
+          e ISLR2 calcula el error de validación en una sola línea, sin la raíz: <code>mean((mpg - predict(lm.fit, Auto))[-train]^2)</code> (página 213, la misma del paso 3). Las fórmulas en detalle están en <a href="metricas-regresion.html">Métricas de error: MAE, MSE, RMSE y R2</a>.</p>
+          <div class="check" id="chk5">
+            <p class="check-tit">Calcula con los datos en vivo</p>
+            <div class="cuerpo"></div>
+          </div>
+
+          <div class="destacado" id="destacado">
+            <p class="dest-tit">Una confusión muy común</p>
+            <h4>Si cambio la semilla, ¿cuál RMSE es el verdadero?</h4>
+            <div class="cita" id="citaHipo" hidden></div>
+            <div class="check" id="chk5b"><p class="check-tit">Predice antes de seguir</p><div class="cuerpo"></div></div>
+            <div id="destExtra" hidden>
+              <p>Un RMSE de una sola partición depende de quién cayó en prueba. La semilla no lo hace más verdadero: lo hace <b>repetible</b>, para que tú y tu compañero discutan el mismo número. Abajo están las doce semillas del selector, y el botón muestra las 120 formas posibles de elegir 3 de 10.</p>
+              <div id="destTabla"></div>
+              <p class="dest-fila" style="margin-top:12px">ISLR2 lo muestra igual: repite su lab con <code>set.seed(2)</code> y los errores cambian
+              <cite class="cita" data-fuente="islr2" data-pag="225" data-pimp="214" data-seccion="5.3.1 The Validation Set Approach" data-que="Con set.seed(2) el mismo lab elige otra partición y los errores de validación cambian." data-cuando="Después de ver las 120 particiones"></cite>,
+              y en la teoría dibuja diez particiones distintas con diez curvas de error distintas (Figura 5.2)
+              <cite class="cita" data-fuente="islr2" data-pag="211" data-pimp="200" data-seccion="5.1.1 The Validation Set Approach" data-que="La Figura 5.2: diez particiones al azar dan diez curvas de error distintas. La sección empieza en la página 198." data-cuando="Al terminar el destacado"></cite>.
+              Para estimar el error sin depender de un solo sorteo se promedia sobre varias particiones: eso es <a href="validacion-cruzada.html">Validación cruzada</a>.</p>
+              <p><b>Moraleja:</b> fija la semilla para poder repetir; cambia de partición, o usa validación cruzada, para saber cuánto confiar.</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Clasificar y contar aciertos">
+          <span class="etapa">Paso 6</span>
+          <h3>Clasificar y contar aciertos</h3>
+          <p>El mismo flujo sirve cuando lo que se predice es una clase. Nueva columna: aprueba si la nota es 5 o más. Se ajusta una regresión logística solo con entrenamiento, <code>predict(..., type = "response")</code> da probabilidades, con umbral 0.5 se vuelven clases, y la <b>accuracy</b> es la proporción de aciertos. La semilla queda fija en 123.</p>
+          <pre class="bloque-cod">datos$aprueba &lt;- as.integer(datos$nota &gt;= 5)
+modelo &lt;- glm(aprueba ~ horas, family = binomial, data = datos[-prueba, ])
+prob &lt;- predict(modelo, newdata = datos[prueba, ], type = "response")
+clase &lt;- ifelse(prob &gt; 0.5, 1, 0)
+mean(clase == datos$aprueba[prueba])</pre>
+          <p>Salidas reales: <code>prob</code> da <code>0.0552483 0.9952030 0.0178664</code> (con los nombres 3, 10 y 2), <code>clase</code> da <code>0 1 0</code>. El modelo es <span data-tex="b_0 = -6.342247"></span> y <span data-tex="b_1 = 1.167721"></span>.</p>
+          <p>ISLR2 hace exactamente este flujo con datos reales: entrena con los años anteriores a 2005, predice 2005 y cuenta aciertos con <code>table(glm.pred, Direction.2005)</code> y <code>mean(glm.pred == Direction.2005)</code>
+          <cite class="cita" data-fuente="islr2" data-pag="186" data-pimp="175" data-seccion="4.7.2 Logistic Regression" data-que="Entrenar con Year &lt; 2005, predecir 2005, la tabla de confusión y mean(glm.pred == Direction.2005). Sigue en la página 176." data-cuando="Al terminar este paso"></cite>.
+          La accuracy y sus parientes están en la UD2 de SM142004
+          <cite class="cita" data-fuente="rl2" data-pag="14" data-pimp="14" data-seccion="Métricas" data-que="Accuracy = (TP + TN) / Total, junto a precisión, recall, especificidad y F1." data-cuando="Después de resolver el chequeo"></cite>,
+          y en detalle en <a href="matriz-confusion.html">Matriz de confusión, precisión, recall y F1</a>. Lo que hace <code>glm</code> por dentro está en <a href="regresion-logistica.html">Regresión logística</a>.</p>
+          <div class="check" id="chk6">
+            <p class="check-tit">Calcula con los datos en vivo</p>
+            <div class="cuerpo"></div>
+          </div>
+          <p id="trampa6" hidden><b>Mira al de 3 horas:</b> aprobó con un 5 justo, y el modelo le da 0.055. Con 7 datos, una nota en el borde se equivoca. Y la accuracy de prueba (0.67) queda por debajo de la de entrenamiento (5 de 7, 0.71), como pasó con el RMSE.</p>
+          <details class="profundizar">
+            <summary>¿Y si olvido <code>type = "response"</code>?</summary>
+            <div>
+              <p>Entonces <code>predict</code> devuelve log-odds, no probabilidades: <code>-2.839085 5.334961 -4.006805</code>. Aquí el umbral 0.5 sobre log-odds da las mismas clases por casualidad, pero equivale a un umbral de probabilidad de 0.62. Con otros datos, la respuesta cambia sin ningún aviso.</p>
+            </div>
+          </details>
+        </section>
+
+        <section class="paso card" data-titulo="El flujo con tidymodels">
+          <span class="etapa">Paso 7</span>
+          <h3>El mismo flujo con tidymodels, y por qué la misma semilla reparte distinto</h3>
+          <p>tidymodels le pone nombre a cada estación: <code>initial_split</code> parte, <code>training()</code> y <code>testing()</code> son las mesas, <code>linear_reg() |&gt; fit()</code> ajusta, <code>predict()</code> predice y <code>rmse()</code> mide. Es la versión moderna que nombra la UD0, que presenta caret como el estándar clásico y tidymodels como su sucesor
+          <cite class="cita" data-fuente="intro3" data-pag="48" data-ancla="8" data-seccion="7 Putting it all together in R" data-que="caret como estándar clásico del modelado en R y tidymodels como su sucesor." data-cuando="Al leer este paso"></cite>,
+          con sus paquetes uno por uno
+          <cite class="cita" data-fuente="intro3" data-pag="50" data-ancla="8/2" data-seccion="Paquetes de tidymodels" data-que="rsample, parsnip, recipes, workflows, tune, yardstick, broom y dials: qué hace cada uno." data-cuando="Al terminar este paso"></cite>.
+          La UD0 no trae código: el bloque de abajo es la traducción, corrida en R 4.6.1.</p>
+          <pre class="bloque-cod">library(tidymodels)
+set.seed(123)
+particion &lt;- initial_split(datos, prop = 0.7)
+ajuste_tm &lt;- linear_reg() |&gt; fit(nota ~ horas, data = training(particion))
+res &lt;- testing(particion) |&gt; bind_cols(predict(ajuste_tm, testing(particion)))
+rmse(res, truth = nota, estimate = .pred)</pre>
+          <p>ISLR2 no usa tidymodels ni caret: todo el libro es R base. La guía de SM142002 promete tidymodels en la UD5, pero el PDF y el HTML de esa unidad no lo mencionan. Así que esta es la única versión con código que vas a ver.</p>
+          <div class="check" id="chk7">
+            <p class="check-tit">Predice antes de tocar el interruptor</p>
+            <div class="cuerpo"></div>
+          </div>
+          <div id="cierre7" hidden>
+            <p>Salidas reales: <code>res</code> tiene las horas 4, 5 y 7, con notas 3, 6 y 7 y <code>.pred</code> 4.586397, 5.213235 y 6.466912; <code>rmse</code> da <code>standard 1.07</code>; <code>tidy(ajuste_tm)</code> da intercepto 2.08 y pendiente 0.627. Es el mismo trío que <code>sample</code> elige con la semilla 3.</p>
+            <p>Lo que se repite es el flujo con su semilla y su función, no "la semilla 123" en abstracto. Si cambias <code>sample</code> por <code>initial_split</code>, o R por Python, cambia el reparto aunque el número sea el mismo. La UD0 usa justo <code>set.seed(123)</code> en su ejemplo de muestreo aleatorio simple (diapositiva 22).</p>
+          </div>
+          <details class="profundizar">
+            <summary>¿Y <code>workflow()</code>?</summary>
+            <div>
+              <p>En tidymodels se puede envolver el modelo y el preprocesado en un <code>workflow()</code>, para que los dos viajen juntos y el preprocesado aprenda solo del entrenamiento. Aquí no hay preprocesado, así que <code>fit</code> directo basta. La idea completa está en «Pipeline: el preprocesado dentro del modelo».</p>
+            </div>
+          </details>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+        </div>
+        <div id="escCuerpo"></div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>El flujo entero en un programa: datos, semilla, partición, ajuste, y la predicción y el RMSE escritos a mano en un bucle sobre la prueba. Al final se compara con la función de la librería y se comprueba que la partición se repite. Los mismos diez compañeros del recorrido. Ojo: con la misma semilla 123, Python y R no eligen a los mismos tres. Elige un lenguaje y dale a reproducir.</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir</p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="false">Python</button>
+            <button type="button" data-lang="r" aria-pressed="true">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">1 · datos y partición</span><span data-f="2">2 · ajuste</span><span data-f="3">3 · el bucle mide</span><span data-f="4">4 · comparar y repetir</span>
+        </div>
+        <h3 class="mini-tit vr-tit">El plano</h3>
+        <div id="vrPlano"></div>
+        <p class="vr-info" id="vrInfo"></p>
+        <div id="vrAcum"></div>
+        <h3 class="mini-tit vr-tit">Salida del programa</h3>
+        <pre class="vr-sal" id="vrSal"></pre>
+      </div>
+    </div>
+
+    <p class="vr-nota">En la práctica nadie escribe el bucle. En R, <code>yardstick::rmse_vec(real, predicho)</code>; en Python, <code>root_mean_squared_error(y_pru, ajuste.predict(X_pru))</code>, que existe desde scikit-learn 1.4 (antes era <code>mean_squared_error(..., squared=False)</code>). Las salidas que ves arriba son las reales: R 4.6.1 con yardstick 1.4.0, Python 3.13 con scikit-learn 1.6.1.</p>
+
+    <details class="profundizar">
+      <summary>La forma vectorizada</summary>
+      <div>
+        <p>El bucle entero cabe en una línea. En R, <code>sqrt(mean((datos$nota[prueba] - predict(ajuste, datos[prueba, ]))^2))</code> da <code>1.361678</code>. En Python, <code>np.sqrt(np.mean((y_pru - ajuste.predict(X_pru)) ** 2))</code>. La resta, el cuadrado y el promedio actúan sobre los tres de prueba a la vez.</p>
+        <p>En el bucle de R, <code>pred</code> se calcula con los coeficientes, <code>sum(coef(ajuste) * c(1, x))</code>, y no con <code>predict</code>, a propósito: <code>predict</code> devuelve un vector con el nombre de la fila, y <code>print(rmse)</code> saldría con un <code>3</code> encima del número.</p>
+      </div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Misma semilla, otra función</h3><span class="estado" data-reto="codigo1"></span></div>
+        <div class="lec"><span class="lec-t">R 4.6.1, rsample 1.3.2</span><pre>datos &lt;- data.frame(horas = 1:10, nota = c(2, 4, 5, 3, 6, 4, 7, 8, 7, 9))
+set.seed(123)
+print(sample(10, 3))
+set.seed(123)
+print(rsample::testing(rsample::initial_split(datos, prop = 0.7))$horas)
+<span class="sal">[1]  3 10  2
+[1] 4 5 7</span></pre></div>
+        <div id="codigo1"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Ajustar con todos y medir en la prueba</h3><span class="estado" data-reto="codigo2"></span></div>
+        <div class="lec"><span class="lec-t">R 4.6.1</span><pre>datos &lt;- data.frame(horas = 1:10, nota = c(2, 4, 5, 3, 6, 4, 7, 8, 7, 9))
+set.seed(123)
+prueba &lt;- sample(10, 3)
+bien &lt;- lm(nota ~ horas, data = datos[-prueba, ])
+mal &lt;- lm(nota ~ horas, data = datos)          # vio la prueba al ajustar
+rmse &lt;- function(m) sqrt(mean((datos$nota[prueba] - predict(m, datos[prueba, ]))^2))
+print(c(bien = rmse(bien), mal = rmse(mal)))
+<span class="sal">     bien       mal
+1.3616779 0.8686281 </span></pre></div>
+        <div id="codigo2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>La logística de scikit-learn no es glm</h3><span class="estado" data-reto="codigo3"></span></div>
+        <div class="lec"><span class="lec-t">Python 3.13, scikit-learn 1.6.1</span><pre>import numpy as np
+from sklearn.linear_model import LogisticRegression
+horas = np.array([1, 4, 5, 6, 7, 8, 9]).reshape(-1, 1)   # entrenamiento de R
+aprueba = np.array([0, 0, 1, 0, 1, 1, 1])
+por_defecto = LogisticRegression().fit(horas, aprueba)
+sin_penalizar = LogisticRegression(penalty=None).fit(horas, aprueba)
+print(por_defecto.intercept_, por_defecto.coef_)
+print(sin_penalizar.intercept_, sin_penalizar.coef_)
+<span class="sal">[-4.0600727] [[0.76640724]]
+[-6.34212812] [[1.16769997]]</span></pre></div>
+        <p class="desc">En R, <code>glm(aprueba ~ horas, family = binomial, data = datos[-prueba, ])</code> con el mismo entrenamiento da −6.342247 y 1.167721.</p>
+        <div id="codigo3"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: la biblioteca te avisa en el índice cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>¿Imprime lo mismo?</h3><span class="estado" data-reto="ojo"></span></div>
+        <p class="desc">Ocho rondas al azar. Ves un fragmento de código y corres el script completo dos veces. Decide sin ejecutar nada. Apruebas con 6 de 8. La regla: ¿hay azar? ¿la semilla va antes? ¿el generador la lee?</p>
+        <div id="ojo"></div>
+      </article>
+
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Construir</span><h3>Elige la semilla</h3><span class="estado" data-reto="construir"></span></div>
+        <p class="desc">Todo con <code>prueba &lt;- sample(10, 3)</code>. Cambia la semilla y la casilla de fuga hasta cumplir los tres objetivos, en cualquier orden. Se marcan solos.</p>
+        <ul class="objetivos" id="objetivos"></ul>
+        <div id="construir"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>Mide tú al modelo</h3><span class="estado" data-reto="mano"></span></div>
+        <p class="desc">Una recta y tres compañeros de prueba al azar. Con papel: predice, eleva los errores al cuadrado, promedia y saca la raíz. Después, una accuracy.</p>
+        <div id="mano"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Una línea mal</h3><span class="estado" data-reto="error"></span></div>
+        <p class="desc">Tres versiones del programa de R de la vida real, con <code>datos</code> ya creado. En cada una, una línea está mal. Tócala.</p>
+        <div id="error"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Qué fija la semilla</h3><span class="estado" data-reto="prop1"></span></div>
+        <div id="prop1"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Entrenamiento frente a prueba</h3><span class="estado" data-reto="prop2"></span></div>
+        <div id="prop2"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Bajó el error</h3><span class="estado" data-reto="prop3"></span></div>
+        <div id="prop3"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Recordar a la fuerza es lo que fija. Arma el flujo y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Flujo de memoria</span><h3>Las cinco estaciones en R</h3><span class="estado" data-reto="formula"></span></div>
+        <p class="desc">Una pieza por línea, en orden. Hay piezas de más que no pertenecen. No mires arriba.</p>
+        <div id="formula"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el material</h2>
+      <p class="lecturas-intro">Ya armaste el flujo con las manos. Ahora ve al material del máster y a ISLR2 y comprueba que lo reconoces. Cada entrada dice qué vas a encontrar y en qué momento conviene leerla. Si abres la biblioteca con doble clic, el enlace abre el archivo en esa página. Fuera de la lista quedan dos menciones de ISLR2 que vale la pena hojear: la página 45 (<code>set.seed(1303)</code> en el primer lab) y la página 272 (6.5.1, validación con <code>sample(c(TRUE, FALSE), ...)</code> y la predicción escrita a mano).</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> Los diez compañeros, sus horas de estudio y sus notas son inventados, elegidos para que con la semilla 123 la recta dé <span data-tex="b_0 = 1"></span> y <span data-tex="b_1 = 0.75"></span> exactos. Los retos generan otros datos al azar.
+    Todas las salidas de código se obtuvieron ejecutando el código en R 4.6.1 (rsample 1.3.2, yardstick 1.4.0, parsnip 1.6.1) y en Python 3.13 (NumPy 2.1.3, scikit-learn 1.6.1). El escenario no ejecuta R: la baraja de cada semilla es la que dio <code>sample(10)</code> en R y está guardada tal cual; las rectas y los errores se calculan en el navegador con mínimos cuadrados y coinciden con <code>lm</code>. Tu progreso se guarda solo en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+(function () {
+  "use strict";
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var RETOS = ["ojo", "construir", "mano", "error", "prop1", "prop2", "prop3", "codigo1", "codigo2", "codigo3", "formula"];
+  var C = B.concepto({ id: "flujo-modelado-r", retos: RETOS, pasos: 7 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  var D = "&#36;"; // signo de pesos dentro de textos que pasan por B.conTex
+
+  /* ---------------- utilidades ---------------- */
+  function azar(n) { return Math.floor(Math.random() * n); }
+  function eleg(a) { return a[azar(a.length)]; }
+  function mezcla(a) { a = a.slice(); for (var i = a.length - 1; i > 0; i--) { var j = azar(i + 1), t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
+  function escH(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+  function f4(x) { return String(+x.toFixed(4)); }
+  function f2(x) { return String(+x.toFixed(2)); }
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+  // vector impreso como en R: [1]  3 10  2
+  function rvec(a) {
+    var w = Math.max.apply(null, a.map(function (x) { return String(x).length; }));
+    return "[1] " + a.map(function (x) { var s = String(x); while (s.length < w) s = " " + s; return s; }).join(" ");
+  }
+  // codigo dentro de KaTeX (B.ordenar y B.cazarError dibujan con texStr)
+  function tt(s) {
+    var m = /^( *)(.*)$/.exec(s), sang = Math.round(m[1].length / 2);
+    var t = m[2].replace(/\\/g, "").replace(/([_#%&{}$])/g, "\\$1").replace(/\^/g, "\\textasciicircum{}").replace(/~/g, "\\textasciitilde{}");
+    return new Array(sang + 1).join("\\quad ") + "\\texttt{" + t + "}";
+  }
+
+  /* ---------------- los datos ---------------- */
+  var HORAS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+  var NOTA = [2, 4, 5, 3, 6, 4, 7, 8, 7, 9];
+  function nota(h) { return NOTA[h - 1]; }
+  function aprueba(h) { return nota(h) >= 5 ? 1 : 0; }
+  // sample(10) en R 4.6.1 para cada semilla: sus tres primeros son sample(10, 3)
+  var BARAJA = {
+    1: [9, 4, 7, 1, 2, 5, 3, 10, 6, 8], 2: [5, 6, 9, 1, 10, 7, 4, 8, 3, 2], 3: [5, 7, 4, 2, 3, 8, 9, 6, 10, 1],
+    4: [8, 3, 9, 7, 4, 10, 2, 1, 6, 5], 5: [2, 9, 7, 3, 1, 6, 5, 10, 4, 8], 6: [5, 8, 4, 9, 3, 1, 2, 7, 6, 10],
+    7: [10, 3, 7, 4, 2, 6, 5, 9, 8, 1], 8: [4, 7, 2, 9, 10, 8, 3, 5, 1, 6], 9: [5, 6, 3, 8, 7, 4, 10, 9, 2, 1],
+    10: [9, 7, 8, 6, 3, 2, 10, 5, 4, 1], 42: [1, 5, 10, 8, 2, 4, 6, 9, 7, 3], 123: [3, 10, 2, 8, 6, 9, 1, 7, 5, 4]
+  };
+  var SEMS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 42, 123];
+  var PY_PRUEBA = [5, 1, 8];
+  var LOG = { b0: -6.342247, b1: 1.167721 };
+  function sigm(h) { return 1 / (1 + Math.exp(-(LOG.b0 + LOG.b1 * h))); }
+
+  function ajustar(hs) {
+    var n = hs.length, mx = 0, my = 0, sxy = 0, sxx = 0;
+    hs.forEach(function (h) { mx += h; my += nota(h); });
+    mx /= n; my /= n;
+    hs.forEach(function (h) { sxy += (h - mx) * (nota(h) - my); sxx += (h - mx) * (h - mx); });
+    var b1 = sxy / sxx;
+    return { b0: my - b1 * mx, b1: b1 };
+  }
+  function predecir(f, h) { return f.b0 + f.b1 * h; }
+  function rmseDe(f, hs) {
+    var s = 0;
+    hs.forEach(function (h) { var e = nota(h) - predecir(f, h); s += e * e; });
+    return Math.sqrt(s / hs.length);
+  }
+  function resto(test) { return HORAS.filter(function (h) { return test.indexOf(h) < 0; }); }
+  // particion: func "sample" (3 primeras a prueba), "split" (7 primeras a entrenamiento), "py" (train_test_split)
+  function particion(sem, func) {
+    var test;
+    if (func === "py") test = PY_PRUEBA.slice();
+    else if (func === "split") test = BARAJA[sem].slice(7);
+    else test = BARAJA[sem].slice(0, 3);
+    var train = resto(test), fit = ajustar(train), todos = ajustar(HORAS);
+    return { sem: sem, func: func, test: test, train: train, fit: fit, todos: todos,
+      rmse: rmseDe(fit, test), rmseEnt: rmseDe(fit, train), rmseFuga: rmseDe(todos, test) };
+  }
+  // las 120 particiones posibles
+  var TODAS = [];
+  (function () {
+    for (var a = 1; a <= 8; a++) for (var b = a + 1; b <= 9; b++) for (var c = b + 1; c <= 10; c++) {
+      var t = [a, b, c], f = ajustar(resto(t));
+      TODAS.push({ test: t, rmse: rmseDe(f, t) });
+    }
+  })();
+
+  /* ---------------- dibujo: el plano ---------------- */
+  var nPlano = 0;
+  // o: test[], fit, fitTodos, fuga, errores, clase, cur (horas), etiquetas {h: [texto, color]}, sinPartir, atenuarTest
+  function planoSvg(o) {
+    o = o || {};
+    var id = "clp" + (++nPlano);
+    var W = 420, H = o.alto || 250, ml = 30, mr = 10, mt = 12, mb = 28;
+    var clase = !!o.clase;
+    function X(h) { return ml + h / 11 * (W - ml - mr); }
+    function Y(v) { return clase ? mt + (1 - (v + 0.15) / 1.3) * (H - mt - mb) : mt + (1 - v / 10) * (H - mt - mb); }
+    var s = '<svg class="plano" viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Plano horas y ' + (clase ? "aprueba" : "nota") + '">';
+    s += '<defs><clipPath id="' + id + '"><rect x="' + ml + '" y="' + mt + '" width="' + (W - ml - mr) + '" height="' + (H - mt - mb) + '"/></clipPath></defs>';
+    var ys = clase ? [0, 0.5, 1] : [0, 2, 4, 6, 8, 10];
+    ys.forEach(function (v) {
+      s += '<line x1="' + ml + '" x2="' + (W - mr) + '" y1="' + Y(v) + '" y2="' + Y(v) + '" stroke="var(--line)" stroke-width="1"' + (clase && v === 0.5 ? ' stroke-dasharray="5 4" stroke="var(--ink-3)"' : "") + "/>";
+      s += '<text x="' + (ml - 5) + '" y="' + (Y(v) + 3) + '" text-anchor="end">' + v + "</text>";
+    });
+    for (var h = 0; h <= 10; h += 2) s += '<text x="' + X(h) + '" y="' + (H - mb + 13) + '" text-anchor="middle">' + h + "</text>";
+    s += '<text x="' + (W - mr) + '" y="' + (H - 3) + '" text-anchor="end">horas</text>';
+    s += '<text x="' + (ml + 2) + '" y="' + (mt - 2) + '">' + (clase ? "aprueba (1) o no (0)" : "nota") + "</text>";
+    var test = o.test || [];
+    s += '<g clip-path="url(#' + id + ')">';
+    if (clase) {
+      var d = "";
+      for (var x = 0; x <= 11.001; x += 0.1) d += (d ? " L" : "M") + X(x).toFixed(1) + " " + Y(sigm(x)).toFixed(1);
+      s += '<path d="' + d + '" fill="none" stroke="var(--accent)" stroke-width="2.2"/>';
+    } else {
+      if (o.fit && o.fuga && o.fitTodos) {
+        s += '<line x1="' + X(0) + '" y1="' + Y(predecir(o.fit, 0)) + '" x2="' + X(11) + '" y2="' + Y(predecir(o.fit, 11)) + '" stroke="var(--ink-3)" stroke-width="1.4" stroke-dasharray="4 4"/>';
+        s += '<line x1="' + X(0) + '" y1="' + Y(predecir(o.fitTodos, 0)) + '" x2="' + X(11) + '" y2="' + Y(predecir(o.fitTodos, 11)) + '" stroke="var(--bad)" stroke-width="2.2"/>';
+      } else if (o.fit) {
+        s += '<line x1="' + X(0) + '" y1="' + Y(predecir(o.fit, 0)) + '" x2="' + X(11) + '" y2="' + Y(predecir(o.fit, 11)) + '" stroke="var(--accent)" stroke-width="2.2"/>';
+      }
+      var fe = o.fuga && o.fitTodos ? o.fitTodos : o.fit;
+      if (fe && o.errores) {
+        (o.erroresDe || test).forEach(function (h) {
+          s += '<line x1="' + X(h) + '" x2="' + X(h) + '" y1="' + Y(nota(h)) + '" y2="' + Y(predecir(fe, h)) + '" stroke="var(--neg)" stroke-width="2" stroke-dasharray="3 3"/>';
+        });
+      }
+    }
+    s += "</g>";
+    HORAS.forEach(function (h) {
+      var esT = test.indexOf(h) >= 0, v = clase ? aprueba(h) : nota(h);
+      var col = clase ? (aprueba(h) ? "var(--pos)" : "var(--neg)") : (o.sinPartir ? "var(--ink-3)" : esT ? "var(--k)" : "var(--j)");
+      if (o.cur === h) s += '<circle cx="' + X(h) + '" cy="' + Y(v) + '" r="11" fill="none" stroke="var(--accent)" stroke-width="2"/>';
+      if (esT && o.fuga) s += '<circle cx="' + X(h) + '" cy="' + Y(v) + '" r="9" fill="none" stroke="var(--bad)" stroke-width="2.5" opacity=".75"/>';
+      if (esT && !o.sinPartir) s += '<circle cx="' + X(h) + '" cy="' + Y(v) + '" r="5.5" fill="var(--surface)" stroke="' + col + '" stroke-width="2.4"' + (o.atenuarTest ? ' opacity=".55"' : "") + "/>";
+      else s += '<circle cx="' + X(h) + '" cy="' + Y(v) + '" r="5.5" fill="' + col + '"/>';
+      if (o.etiquetas && o.etiquetas[h]) {
+        var et = o.etiquetas[h], yy = Y(v) + (clase ? (v ? 18 : -10) : -10);
+        s += '<text class="eti" x="' + X(h) + '" y="' + yy + '" text-anchor="middle" style="fill:' + et[1] + '">' + escH(et[0]) + "</text>";
+      }
+    });
+    return s + "</svg>";
+  }
+  function medidorHtml(p, fuga) {
+    var esc0 = 2.5;
+    function pc(v) { return Math.min(100, v / esc0 * 100).toFixed(1); }
+    var vt = fuga ? p.rmseFuga : p.rmse;
+    return '<div class="medidor-rmse">' +
+      '<div class="mr-fila"><span>RMSE prueba</span><span class="mr-pista"><span class="mr-barra' + (fuga ? " fuga" : "") + '" style="width:' + pc(vt) + '%"></span><span class="mr-marca" style="left:' + pc(p.rmseEnt) + '%"></span></span><span class="mr-num">' + f4(vt) + "</span></div>" +
+      '<p class="esc-nota">La barra es el RMSE con los tres de prueba' + (fuga ? ", con la recta que ya los vio (fuga)" : "") + '. La marca fina azul es el RMSE de entrenamiento: <b>' + f4(p.rmseEnt) + "</b>.</p></div>";
+  }
+  function fichasHtml(orden, cls, tapar) {
+    return '<div class="fichas">' + orden.map(function (h, k) {
+      var c = cls ? cls(h, k) : "";
+      return '<div class="ficha ' + c + '"><b>' + (tapar && tapar(h, k) ? "?" : h) + "</b><small>" + (tapar && tapar(h, k) ? "&nbsp;" : "nota " + nota(h)) + "</small></div>";
+    }).join("") + "</div>";
+  }
+  function tablaFilas(hs, cols) {
+    var h = '<table class="tv"><thead><tr>' + cols.map(function (c) { return "<th>" + c[0] + "</th>"; }).join("") + "</tr></thead><tbody>";
+    hs.forEach(function (x) { h += "<tr>" + cols.map(function (c) { return "<td>" + c[1](x) + "</td>"; }).join("") + "</tr>"; });
+    return h + "</tbody></table>";
+  }
+
+  /* ---------------- estado del escenario ---------------- */
+  var S = { sem: 123, oculta: 123, fuga: false, func: "sample", corr1: [], reparto: null, corridas: [], lanzado: false, segunda: false, vivo: -1, hist: false };
+  var est = {};
+  var modo = 0, pasos = null;
+  var MODOS = ["corridas", "baraja", "mesas", "ajuste", "medir", "clasificar", "tres"];
+  function semEfectiva() { return S.sem != null ? S.sem : S.oculta; }
+  function partActual() { return particion(semEfectiva(), "sample"); }
+  function semTxt() { return S.sem != null ? String(S.sem) : "?"; }
+  function anotarCorrida(lista, p) {
+    lista.unshift({ sem: S.sem != null ? String(S.sem) : "?", test: p.test, rmse: p.rmse, fuga: S.fuga && modo >= 3 && modo <= 4, rmseF: p.rmseFuga });
+    if (lista.length > 5) lista.length = 5;
+  }
+
+  var EST_LIN = {
+    lm: function () { return [["Semilla", S.sem != null ? "set.seed(" + S.sem + ")" : "# sin set.seed"], ["Partir", "prueba <- sample(10, 3)"], ["Ajustar", S.fuga && (modo === 3 || modo === 4) ? "ajuste <- lm(nota ~ horas, data = datos)" : "ajuste <- lm(nota ~ horas, data = datos[-prueba, ])"], ["Predecir", "pred <- predict(ajuste, datos[prueba, ])"], ["Medir", "sqrt(mean((datos$nota[prueba] - pred)^2))"]]; },
+    glm: function () { return [["Semilla", "set.seed(123)"], ["Partir", "prueba <- sample(10, 3)"], ["Ajustar", "modelo <- glm(aprueba ~ horas, family = binomial, data = datos[-prueba, ])"], ["Predecir", 'prob <- predict(modelo, newdata = datos[prueba, ], type = "response")'], ["Medir", "mean(ifelse(prob > 0.5, 1, 0) == datos$aprueba[prueba])"]]; },
+    split: function () { return [["Semilla", "set.seed(123)"], ["Partir", "particion <- initial_split(datos, prop = 0.7)"], ["Ajustar", "ajuste_tm <- linear_reg() |> fit(nota ~ horas, data = training(particion))"], ["Predecir", "predict(ajuste_tm, testing(particion))"], ["Medir", "rmse(res, truth = nota, estimate = .pred)"]]; },
+    py: function () { return [["Semilla", "random_state=123 (dentro de la partición)"], ["Partir", "train_test_split(horas, nota, test_size=3, random_state=123)"], ["Ajustar", "ajuste = LinearRegression().fit(X_ent, y_ent)"], ["Predecir", "ajuste.predict(X_pru)"], ["Medir", "root_mean_squared_error(y_pru, ajuste.predict(X_pru))"]]; }
+  };
+  function estacionesHtml(lineas, encendidas) {
+    var h = '<div class="linea-est" id="lineaEst">';
+    lineas.forEach(function (l, k) {
+      if (k) h += '<span class="est-fl" aria-hidden="true">&rarr;</span>';
+      h += '<div class="estacion' + (k < encendidas ? " on" : "") + (S.vivo === k ? " vivo" : "") + '"><div class="est-nom">' + (k + 1) + ". " + l[0] + '</div><div class="est-cod">' + escH(l[1]) + "</div></div>";
+    });
+    return h + "</div>";
+  }
+  function pizarraHtml(lista, titulo) {
+    if (!lista.length) return '<p class="esc-sub">' + titulo + '</p><p class="esc-nota">Todavía no hay corridas.</p>';
+    var h = '<p class="esc-sub">' + titulo + '</p><table class="pizarra"><thead><tr><th>semilla</th><th>prueba</th><th>RMSE prueba</th></tr></thead><tbody>';
+    lista.forEach(function (c, k) {
+      h += '<tr' + (k === 0 ? ' class="nueva"' : "") + "><td>" + c.sem + "</td><td>" + c.test.join(" ") + "</td><td>" + (c.fuga ? f4(c.rmseF) + " (fuga)" : f4(c.rmse)) + "</td></tr>";
+    });
+    return h + "</tbody></table>";
+  }
+  function selectorSem(deshabilitado) {
+    var h = '<label>semilla <select data-acc="sem"' + (deshabilitado ? " disabled" : "") + ">";
+    SEMS.forEach(function (s) { h += '<option value="' + s + '"' + (S.sem === s ? " selected" : "") + ">" + s + "</option>"; });
+    h += '<option value="no"' + (S.sem == null ? " selected" : "") + ">sin semilla</option></select></label>";
+    return h + '<span class="rotulo-sem">semilla: ' + (deshabilitado ? "123" : semTxt()) + "</span>";
+  }
+
+  function render() {
+    var m = MODOS[modo], h = "", p = partActual();
+    if (m === "corridas") {
+      var r = S.reparto != null ? particion(S.reparto, "sample") : null;
+      h += '<div class="esc-ctrl">' + (est.c1 ? '<button type="button" class="primary" data-acc="repartir">Repartir al azar</button>' : '<span class="esc-nota">El botón para repartir aparece cuando respondas el chequeo.</span>') + "</div>";
+      h += fichasHtml(HORAS, function (x) { return r ? (r.test.indexOf(x) >= 0 ? "pru" : "ent") : ""; });
+      h += '<p class="esc-nota">Cada ficha: horas de estudio arriba, nota abajo.' + (r ? " En línea punteada, los tres examinados." : "") + "</p>";
+      h += planoSvg({ test: r ? r.test : [], fit: r ? r.fit : null, errores: !!r, sinPartir: !r });
+      h += '<p class="esc-sub">Pizarra de corridas</p>';
+      if (!S.corr1.length) h += '<p class="esc-nota">Todavía no hay corridas.</p>';
+      else {
+        h += '<table class="pizarra"><thead><tr><th>corrida</th><th>examinados</th><th>error</th></tr></thead><tbody>';
+        S.corr1.forEach(function (c, k) { h += "<tr" + (k === 0 ? ' class="nueva"' : "") + "><td>" + c.n + "</td><td>" + c.test.join(", ") + "</td><td>" + f2(c.rmse) + "</td></tr>"; });
+        h += "</tbody></table>";
+      }
+    } else if (m === "baraja") {
+      h += '<div class="esc-ctrl">' + selectorSem(false) + "</div>";
+      h += '<div class="esc-ctrl"><button type="button" class="primary" data-acc="lanzar">set.seed + sample(10, 3)</button>' +
+        (est.c2 ? '<button type="button" data-acc="segunda"' + (S.sem === 123 && S.lanzado ? "" : " disabled") + ">sample(10, 3) otra vez</button>" : "") + "</div>";
+      h += '<p class="esc-sub">La baraja: sample(10) con la semilla ' + semTxt() + "</p>";
+      h += fichasHtml(BARAJA[semEfectiva()], function (x, k) { return S.lanzado && k < 3 ? "pru" : ""; });
+      var cons = "";
+      if (S.lanzado) {
+        cons += (S.sem != null ? "&gt; set.seed(" + S.sem + ")\n" : "") + "&gt; sample(10, 3)\n<span class=\"sal\">" + rvec(p.test) + "</span>";
+        if (S.segunda) cons += "\n&gt; sample(10, 3)\n<span class=\"nuevo\">" + rvec([2, 6, 3]) + "</span>";
+      } else cons = "Toca el botón para sortear.";
+      h += '<div class="consola">' + cons + "</div>";
+      if (est.c2 && S.sem !== 123) h += '<p class="esc-nota">La segunda llamada está verificada en R con la semilla 123: elige 123 para verla.</p>';
+      if (S.sem == null) h += '<p class="esc-nota">Sin semilla, cada sorteo arranca la sucesión en un punto distinto: la baraja cambia cada vez.</p>';
+      h += estacionesHtml(EST_LIN.lm(), 1) + '<div class="esc-ctrl" style="margin-top:8px"><button type="button" data-acc="correr">Correr todo otra vez</button></div>';
+      h += pizarraHtml(S.corridas, "Pizarra de corridas");
+    } else if (m === "mesas") {
+      h += '<div class="esc-ctrl">' + selectorSem(false) + "</div>";
+      h += fichasHtml(BARAJA[semEfectiva()], function (x, k) { return k < 3 ? "pru" : (est.c3 ? "ent" : "tapa"); }, function (x, k) { return k >= 3 && !est.c3; });
+      h += '<div class="consola">&gt; prueba &lt;- sample(10, 3)\n&gt; prueba\n<span class="sal">' + rvec(p.test) + "</span></div>";
+      h += '<div class="mesas"><div class="mesa ent"><div class="mesa-t">datos[-prueba, ] (entrenamiento)</div>' +
+        (est.c3 ? tablaFilas(p.train, [["fila", function (x) { return x; }], ["horas", function (x) { return x; }], ["nota", nota]]) : '<div class="tapada">?</div>') +
+        '</div><div class="mesa pru"><div class="mesa-t">datos[prueba, ] (prueba)</div>' +
+        tablaFilas(p.test, [["fila", function (x) { return x; }], ["horas", function (x) { return x; }], ["nota", nota]]) + "</div></div>";
+      h += estacionesHtml(EST_LIN.lm(), 2) + '<div class="esc-ctrl" style="margin-top:8px"><button type="button" data-acc="correr">Correr todo otra vez</button></div>';
+      h += pizarraHtml(S.corridas, "Pizarra de corridas");
+    } else if (m === "ajuste" || m === "medir") {
+      var medir = m === "medir";
+      h += '<div class="esc-ctrl">' + selectorSem(false) + '<label><input type="checkbox" data-acc="fuga"' + (S.fuga ? " checked" : "") + "> ajustar con todos</label></div>";
+      var et = {};
+      if ((!medir && est.c4) || medir) p.test.forEach(function (x) { et[x] = ["pred " + f2(predecir(S.fuga ? p.todos : p.fit, x)), "var(--k)"]; });
+      h += planoSvg({ test: p.test, fit: p.fit, fitTodos: p.todos, fuga: S.fuga, errores: medir, atenuarTest: !medir, etiquetas: et });
+      h += '<p class="esc-nota">Puntos llenos: entrenamiento. Huecos: prueba (' + p.test.join(", ") + ")." + (S.fuga ? " En rojo, la recta ajustada con los diez: ya vio a los de prueba. La punteada gris es la honesta." : "") + "</p>";
+      if (medir) {
+        var fe = S.fuga ? p.todos : p.fit;
+        h += tablaFilas(p.test, [["horas", function (x) { return x; }], ["real", nota], ["predicha", function (x) { return f4(predecir(fe, x)); }],
+          ["error", function (x) { return f4(nota(x) - predecir(fe, x)); }],
+          ["error²", function (x) { return est.c5 ? f4(Math.pow(nota(x) - predecir(fe, x), 2)) : '<span class="oc">?</span>'; }]]);
+        if (est.c5) h += medidorHtml(p, S.fuga);
+      } else if (est.c4) h += medidorHtml(p, S.fuga);
+      h += estacionesHtml(EST_LIN.lm(), medir ? 5 : 3) + '<div class="esc-ctrl" style="margin-top:8px"><button type="button" data-acc="correr">Correr todo otra vez</button></div>';
+      h += pizarraHtml(S.corridas, "Pizarra de corridas");
+    } else if (m === "clasificar") {
+      var pc = particion(123, "sample"), etc = {};
+      if (est.c6) pc.test.forEach(function (x) { var cl = sigm(x) > 0.5 ? 1 : 0; etc[x] = cl === aprueba(x) ? ["acierta", "var(--ok)"] : ["falla", "var(--bad)"]; });
+      h += '<div class="esc-ctrl">' + selectorSem(true) + '<span class="esc-nota">En este paso la semilla queda fija: la curva está calculada con ella.</span></div>';
+      h += planoSvg({ clase: true, test: pc.test, etiquetas: etc });
+      h += '<p class="esc-nota">Arriba los que aprueban (verde), abajo los que no (rojo). Llenos: entrenamiento; huecos: prueba (3, 10, 2). La curva es la probabilidad de aprobar que da <code>glm</code>; la línea punteada, el umbral 0.5.</p>';
+      h += tablaFilas(pc.test, [["horas", function (x) { return x; }], ["probabilidad", function (x) { return sigm(x).toFixed(4); }], ["clase predicha", function (x) { return sigm(x) > 0.5 ? 1 : 0; }], ["real", aprueba],
+        ["", function (x) { if (!est.c6) return '<span class="oc">?</span>'; var ok = (sigm(x) > 0.5 ? 1 : 0) === aprueba(x); return '<span class="' + (ok ? "okc" : "badc") + '">' + (ok ? "acierta" : "falla") + "</span>"; }]]);
+      h += estacionesHtml(EST_LIN.glm(), 5);
+    } else if (m === "tres") {
+      var fn = est.c7 ? S.func : "sample";
+      h += '<div class="esc-ctrl"><span class="rotulo-sem">semilla: 123</span>' + ["sample", "split", "py"].map(function (f) {
+        var nom = { sample: "sample (R)", split: "initial_split (R)", py: "train_test_split (Python)" }[f];
+        return '<button type="button" data-acc="func" data-f="' + f + '" aria-pressed="' + (fn === f) + '"' + (!est.c7 && f !== "sample" ? " disabled" : "") + ">" + nom + "</button>";
+      }).join("") + "</div>";
+      if (!est.c7) h += '<p class="esc-nota">El interruptor se abre cuando respondas el chequeo.</p>';
+      var pt = particion(123, fn);
+      if (fn !== "py") {
+        h += '<p class="esc-sub">La baraja de R con set.seed(123): ' + (fn === "sample" ? "sample(10, 3) se queda con las 3 primeras para prueba" : "initial_split llena primero entrenamiento con las 7 primeras") + "</p>";
+        h += fichasHtml(BARAJA[123], function (x, k) { return fn === "sample" ? (k < 3 ? "pru" : "ent") : (k < 7 ? "ent" : "pru"); });
+      } else {
+        h += '<p class="esc-sub">Python no usa la baraja de R</p><div class="consola">train_test_split(..., random_state=123) elige con el generador de NumPy:\nprueba = <span class="sal">[5 1 8]</span>\nentrenamiento = <span class="sal">[6 9 4 2 7 10 3]</span></div>';
+      }
+      h += planoSvg({ test: pt.test, fit: pt.fit, errores: true, alto: 220 });
+      h += tablaFilas([fn], [["función", function () { return { sample: "sample", split: "initial_split", py: "train_test_split" }[fn]; }], ["prueba", function () { return pt.test.join(" "); }], ["b0", function () { return f4(pt.fit.b0); }], ["b1", function () { return f4(pt.fit.b1); }], ["RMSE", function () { return f4(pt.rmse); }]]);
+      h += estacionesHtml(fn === "split" ? EST_LIN.split() : fn === "py" ? EST_LIN.py() : EST_LIN.lm(), 5);
+    }
+    $("escCuerpo").innerHTML = h;
+    pintarVivos();
+  }
+
+  function pintarVivos() {
+    var p = partActual();
+    var t4 = "\\hat y = " + f4(p.fit.b0) + " + " + f4(p.fit.b1) + "\\cdot \\text{horas}";
+    var h4 = "entrenamiento (" + p.train.join(", ") + "): " + B.texStr(t4);
+    if (S.fuga) h4 += "<br>con los diez (fuga): " + B.texStr("\\hat y = " + f4(p.todos.b0) + " + " + f4(p.todos.b1) + "\\cdot \\text{horas}");
+    h4 += "<br>semilla " + semTxt() + ", prueba " + p.test.join(", ");
+    $("vivo4").innerHTML = h4;
+    if (est.c5) {
+      var es = p.test.map(function (x) { return nota(x) - predecir(p.fit, x); });
+      var ss = es.reduce(function (a, e) { return a + e * e; }, 0);
+      $("vivo5").innerHTML = "Con la semilla " + semTxt() + ": " + B.texStr("\\sqrt{\\tfrac{" + es.map(function (e) { return "(" + f4(e) + ")^2"; }).join(" + ") + "}{3}} = \\sqrt{\\tfrac{" + f4(ss) + "}{3}} = " + f4(Math.sqrt(ss / 3)));
+    } else $("vivo5").innerHTML = "Los números de esta fórmula aparecen cuando resuelvas el chequeo.";
+  }
+
+  var animT = null;
+  function correrTodo() {
+    if (animT) return;
+    if (S.sem == null) S.oculta = eleg(SEMS);
+    S.vivo = 0;
+    render();
+    function sig() {
+      S.vivo++;
+      if (S.vivo >= 5) {
+        S.vivo = -1; animT = null;
+        anotarCorrida(S.corridas, partActual());
+        render();
+        return;
+      }
+      render();
+      animT = setTimeout(sig, 260);
+    }
+    animT = setTimeout(sig, 260);
+  }
+
+  $("escCuerpo").addEventListener("click", function (ev) {
+    var b = ev.target.closest("[data-acc]");
+    if (!b || b.tagName === "SELECT" || b.tagName === "INPUT") return;
+    var a = b.getAttribute("data-acc");
+    if (a === "repartir") {
+      S.reparto = eleg(SEMS);
+      var r = particion(S.reparto, "sample");
+      S.corr1.unshift({ n: (S.corr1.length ? S.corr1[0].n : 0) + 1, test: r.test, rmse: r.rmse });
+      if (S.corr1.length > 5) S.corr1.length = 5;
+      render();
+    } else if (a === "lanzar") {
+      if (S.sem == null) S.oculta = eleg(SEMS);
+      S.lanzado = true; S.segunda = false; render();
+    } else if (a === "segunda") { S.segunda = true; render(); }
+    else if (a === "correr") correrTodo();
+    else if (a === "func") { S.func = b.getAttribute("data-f"); render(); }
+  });
+  $("escCuerpo").addEventListener("change", function (ev) {
+    var a = ev.target.getAttribute("data-acc");
+    if (a === "sem") {
+      var v = ev.target.value;
+      if (v === "no") { S.sem = null; S.oculta = eleg(SEMS); } else S.sem = +v;
+      S.lanzado = false; S.segunda = false;
+      render();
+      semCambio();
+    } else if (a === "fuga") { S.fuga = ev.target.checked; render(); }
+  });
+
+  function entrar(i) {
+    modo = i;
+    var hints = [
+      est.c1 ? "Reparte varias veces y mira la pizarra" : "Predice antes de repartir",
+      "Elige una semilla y sortea",
+      "Mira las dos mesas",
+      "Activa y desactiva la fuga",
+      "Mira los errores de los tres de prueba",
+      "Semilla fija en 123",
+      est.c7 ? "Cambia de función" : "Predice antes de cambiar de función"
+    ];
+    $("escHint").textContent = hints[i];
+    render();
+  }
+
+  /* ---------------- chequeos ---------------- */
+  B.opcionMultiple(cuerpo("chk1"), {
+    pregunta: "Corres dos veces seguidas el mismo programa, con los mismos datos, y en cada corrida el programa elige al azar a 3 de los 10 para examinar al modelo. ¿Qué error obtienes?",
+    opciones: [
+      "Probablemente uno distinto cada vez: cambian los tres examinados, cambia la recta y cambia el error.",
+      "El mismo, porque los datos y el código son iguales.",
+      "Siempre el mismo trío, porque el azar de la computadora es fijo.",
+      "El programa da error."
+    ],
+    correcta: 0,
+    pistas: [null,
+      "El código incluye un sorteo. Si nadie lo fija, el sorteo cambia de una corrida a otra.",
+      "El azar de la computadora es fijo solo si tú se lo pides. Eso es el paso 2.",
+      "Nada falla: el programa simplemente reparte distinto."],
+    explicacion: "Los datos son los mismos, pero el sorteo no. <b>Ahora reparte</b> en el escenario y mira cómo cambia la pizarra.",
+    alResolver: function () { est.c1 = true; $("cierre1").hidden = false; if (pasos.actual() === 0) entrar(0); pasos.completar(0); }
+  });
+
+  B.opcionMultiple(cuerpo("chk2"), {
+    pregunta: "Escribes <code>set.seed(123)</code> una vez y luego <code>sample(10, 3)</code> dos veces seguidas. ¿Las dos llamadas dan los mismos tres números?",
+    opciones: [
+      "No: la primera da 3 10 2 y la segunda otra cosa. La semilla fija el comienzo, no cada llamada.",
+      "Sí, la semilla fija todas las llamadas.",
+      "No, y además la próxima vez que corra el script la primera también cambia.",
+      "Depende de la computadora."
+    ],
+    correcta: 0,
+    pistas: [null,
+      "Esa es justo la confusión de este paso. La semilla pone la sucesión en su punto de partida; la segunda llamada sigue desde donde quedó la primera.",
+      "La primera se repite siempre que la semilla vaya antes de ella.",
+      "En la misma versión de R, la sucesión es la misma en cualquier computadora."],
+    explicacion: "La segunda llamada da <code>2 6 3</code>. <b>Pruébalo</b> en el escenario con la semilla 123: sortea y después toca <b>sample(10, 3) otra vez</b>.",
+    alResolver: function () { est.c2 = true; $("trampa2").hidden = false; if (pasos.actual() === 1) entrar(1); pasos.completar(1); }
+  });
+
+  function crearChk3() {
+    if (est.c3) return;
+    var p = partActual();
+    var orden = p.train.join(" "), trio = p.test.join(" ");
+    var siete = "1 2 3 4 5 6 7";
+    B.opcionMultiple(cuerpo("chk3"), {
+      pregunta: "Con <code>prueba &lt;- sample(10, 3)</code> = " + trio + " (semilla " + semTxt() + "), ¿qué horas tiene <code>datos[-prueba, ]</code>?",
+      opciones: [orden, trio, orden === siete ? "8 9 10" : siete, "Da error: no se pueden usar números negativos como índice."],
+      correcta: 0,
+      pistas: [null,
+        "Esa es la prueba, <code>datos[prueba, ]</code>. El signo menos pide todas las demás.",
+        "No son las 7 primeras filas: son todas las que <b>no</b> están en <code>prueba</code>.",
+        "En R sí se puede: un índice negativo excluye esas filas."],
+      explicacion: "Todas las filas menos " + trio + ": <b>" + orden + "</b>. Como la fila coincide con las horas, se leen directo. <b>Mira el escenario:</b> la mesa de entrenamiento ya está destapada.",
+      alResolver: function () { est.c3 = true; if (pasos.actual() === 2) entrar(2); pasos.completar(2); }
+    });
+  }
+  function hMax() { return Math.max.apply(null, partActual().test); }
+  var chk4 = B.numerico(cuerpo("chk4"), {
+    pregunta: function () { var p = partActual(); return "Con la recta del entrenamiento ($\\hat y = " + f4(p.fit.b0) + " + " + f4(p.fit.b1) + "\\cdot \\text{horas}$, semilla " + semTxt() + "), ¿qué nota predice para el compañero de prueba que estudió " + hMax() + " horas?"; },
+    respuesta: function () { return predecir(partActual().fit, hMax()); },
+    tolerancia: 0.01,
+    pistas: ["Reemplaza las horas en la recta: $b_0 + b_1 \\cdot$ horas."],
+    diagnostico: function (v) {
+      var p = partActual(), h = hMax();
+      if (Math.abs(v - nota(h)) < 0.01) return "Ese es el valor real. La pregunta es qué dice la recta.";
+      if (Math.abs(v - predecir(p.todos, h)) < 0.01) return "Esa es la recta ajustada con todos (fuga). Usa la del entrenamiento.";
+      return null;
+    },
+    explicacion: function () { var p = partActual(), h = hMax(); return f4(p.fit.b0) + " + " + f4(p.fit.b1) + " · " + h + " = <b>" + f4(predecir(p.fit, h)) + "</b>. La nota real es " + nota(h) + ". <b>Ahora activa ajustar con todos</b> en el escenario y mira qué pasa con la recta y con el error."; },
+    alResolver: function () { est.c4 = true; $("trampa4").hidden = false; B.tex($("trampa4")); if (pasos.actual() === 3) entrar(3); pasos.completar(3); }
+  });
+
+  function erroresVivos() { var p = partActual(); return p.test.map(function (x) { return nota(x) - predecir(p.fit, x); }); }
+  var chk5 = B.numerico(cuerpo("chk5"), {
+    pregunta: function () { return "Con la recta del entrenamiento (semilla " + semTxt() + "), los errores de prueba son " + erroresVivos().map(f4).join(", ") + ". ¿Cuánto vale el RMSE? (dos decimales)"; },
+    respuesta: function () { return partActual().rmse; },
+    tolerancia: 0.011,
+    pistas: ["Eleva cada error al cuadrado, súmalos, divide entre 3 y saca la raíz."],
+    diagnostico: function (v) {
+      var es = erroresVivos(), ss = es.reduce(function (a, e) { return a + e * e; }, 0);
+      var media = es.reduce(function (a, e) { return a + e; }, 0) / 3;
+      if (Math.abs(v - media) < 0.011) return "Promediaste los errores sin elevarlos al cuadrado (y sin raíz). Así los positivos y negativos se compensan.";
+      if (Math.abs(v - ss / 3) < 0.011) return "Ese es el MSE: falta la raíz.";
+      if (Math.abs(v - Math.sqrt(ss / 10)) < 0.011) return "Dividiste entre 10 filas, no entre las 3 de prueba.";
+      return null;
+    },
+    explicacion: function () {
+      var es = erroresVivos(), ss = es.reduce(function (a, e) { return a + e * e; }, 0);
+      return "$\\sqrt{(" + es.map(f4).join("^2 + ") + "^2) / 3} = \\sqrt{" + f4(ss) + " / 3} = " + f4(Math.sqrt(ss / 3)) + "$. El RMSE de entrenamiento es " + f4(partActual().rmseEnt) + ": el de prueba suele salir algo mayor. <b>Mira el escenario:</b> ya están los cuadrados y el medidor.";
+    },
+    alResolver: function () { est.c5 = true; if (pasos.actual() === 4) entrar(4); else pintarVivos(); cerrar5(); }
+  });
+  function semCambio() {
+    if (!est.c3 && modo === 2) crearChk3();
+    if (!chk4.resuelto()) chk4.refrescar();
+    if (!chk5.resuelto()) chk5.refrescar();
+  }
+
+  function pintarDestacado() {
+    if (!est.c5b) return;
+    $("destExtra").hidden = false;
+    var h = '<table class="tv"><thead><tr><th>semilla</th><th>prueba</th><th>RMSE prueba</th><th>RMSE entreno</th></tr></thead><tbody>';
+    SEMS.forEach(function (s) { var p = particion(s, "sample"); h += "<tr" + (s === 123 ? ' class="on"' : "") + "><td>" + s + "</td><td>" + p.test.join(" ") + "</td><td>" + f4(p.rmse) + "</td><td>" + f4(p.rmseEnt) + "</td></tr>"; });
+    h += "</tbody></table>";
+    h += '<div class="esc-ctrl" style="margin-top:10px"><button type="button" id="btnHist"' + (S.hist ? " disabled" : "") + ">Ver las 120 particiones</button></div>";
+    if (S.hist) h += histHtml();
+    $("destTabla").innerHTML = h;
+    var bh = $("btnHist");
+    if (bh) bh.addEventListener("click", function () { S.hist = true; pintarDestacado(); });
+  }
+  function histHtml() {
+    var W = 420, H = 190, ml = 12, mr = 12, mt = 10, mb = 30, lo = 0.6, hi = 2.25, ancho = 0.05;
+    function X(v) { return ml + (v - lo) / (hi - lo) * (W - ml - mr); }
+    var cuentas = {}, s = '<svg class="hist" viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="RMSE de prueba de las 120 particiones">';
+    var vals = TODAS.map(function (t) { return t.rmse; }).sort(function (a, b) { return a - b; });
+    var r = 3.3;
+    vals.forEach(function (v) {
+      var k = Math.floor((v - lo) / ancho), n = cuentas[k] = (cuentas[k] || 0) + 1;
+      s += '<circle cx="' + X(lo + (k + 0.5) * ancho).toFixed(1) + '" cy="' + (H - mb - r - (n - 1) * (2 * r + 0.6)).toFixed(1) + '" r="' + r + '" fill="var(--k)" opacity=".8"/>';
+    });
+    s += '<line x1="' + ml + '" x2="' + (W - mr) + '" y1="' + (H - mb) + '" y2="' + (H - mb) + '" stroke="var(--line)"/>';
+    [0.75, 1, 1.25, 1.5, 1.75, 2].forEach(function (v) { s += '<text x="' + X(v) + '" y="' + (H - mb + 13) + '" text-anchor="middle">' + v + "</text>"; });
+    var m123 = particion(123, "sample").rmse;
+    s += '<line x1="' + X(m123) + '" x2="' + X(m123) + '" y1="' + mt + '" y2="' + (H - mb) + '" stroke="var(--accent)" stroke-width="2"/>';
+    s += '<text x="' + (X(m123) + 4) + '" y="' + (mt + 10) + '" style="fill:var(--accent)">semilla 123: ' + f2(m123) + "</text>";
+    s += '<text x="' + (W - mr) + '" y="' + (H - 3) + '" text-anchor="end">RMSE de prueba</text></svg>';
+    var med = (vals[59] + vals[60]) / 2, mayores = vals.filter(function (v) { return v > m123; }).length;
+    return s + '<p class="esc-nota">Cada punto es una de las 120 formas de elegir 3 de 10. Mínimo ' + f2(vals[0]) + " (prueba 7, 9, 10), mediana " + f2(med) + ", máximo " + f2(vals[119]) + " (prueba 1, 4, 6). " + mayores + " de 120 dan más que la semilla 123. Ninguna es la verdadera: todas son el mismo modelo examinado por tres compañeros distintos.</p>";
+  }
+  B.opcionMultiple(cuerpo("chk5b"), {
+    pregunta: "Cambias <code>set.seed(123)</code> por <code>set.seed(42)</code> sin tocar nada más. El RMSE de prueba...",
+    opciones: ["Cambia, y ninguno de los dos es el verdadero.", "Sigue en 1.36: el modelo es el mismo.", "Baja siempre, porque 42 es mejor semilla.", "Da error."],
+    correcta: 0,
+    pistas: [null, "El tipo de modelo es el mismo, pero con 42 entrenan otros 7 y se examinan otros 3: la recta y los errores cambian.", "No hay semillas mejores. Una semilla solo decide quién cae en cada mesa.", "Cualquier número entero sirve como semilla."],
+    explicacion: "Con 42 la prueba es 1, 5, 10 y el RMSE da 0.96. Con 123 daba 1.36. Ninguno es más verdadero que el otro: son dos sorteos.",
+    alResolver: function () { est.c5b = true; pintarDestacado(); cerrar5(); }
+  });
+  function cerrar5() { if (est.c5 && est.c5b) pasos.completar(4); }
+
+  B.numerico(cuerpo("chk6"), {
+    pregunta: "Clases predichas 0, 1, 0; reales 1, 1, 0. ¿Cuál es la accuracy? (puedes escribir una fracción)",
+    respuesta: 2 / 3,
+    tolerancia: 0.01,
+    pistas: ["Cuenta en cuántas posiciones coinciden la predicha y la real, y divide entre 3."],
+    diagnostico: function (v) {
+      if (Math.abs(v - 1 / 3) < 0.01) return "Cuenta los que coinciden, no los que fallan.";
+      if (Math.abs(v - 5 / 7) < 0.01) return "Esa es la accuracy de entrenamiento (5 de 7). Aquí se mide con los 3 de prueba.";
+      if (Math.abs(v - 2) < 0.01) return "Son 2 aciertos, pero la accuracy es una proporción: divide entre los 3 de prueba.";
+      return null;
+    },
+    explicacion: "Coinciden la segunda y la tercera: 2 de 3, <b>0.6666667</b> en R. Falla el de 3 horas, que aprobó con un 5. <b>Mira el escenario:</b> cada punto de prueba dice si acierta o falla.",
+    alResolver: function () { est.c6 = true; $("trampa6").hidden = false; if (pasos.actual() === 5) entrar(5); pasos.completar(5); }
+  });
+
+  B.opcionMultiple(cuerpo("chk7"), {
+    pregunta: "Con <code>set.seed(123)</code> y <code>initial_split(datos, prop = 0.7)</code>, ¿qué horas quedan en prueba?",
+    opciones: ["4, 5 y 7: las tres últimas de la misma baraja.", "3, 10 y 2, como con <code>sample</code>.", "1, 2 y 3.", "No se puede saber."],
+    correcta: 0,
+    pistas: [null,
+      "Misma semilla y misma baraja, pero <code>initial_split</code> la usa al revés: primero llena el entrenamiento.",
+      "<code>testing()</code> renumera las filas del resultado como 1, 2 y 3. Si miras los nombres de fila te engañas; mira la columna <code>horas</code>.",
+      "Con la semilla sí se puede, y siempre da lo mismo."],
+    explicacion: "<code>initial_split</code> baraja con la misma <code>sample(10)</code>, <code>3 10 2 8 6 9 1 7 5 4</code>, toma las 7 primeras para entrenamiento y deja las 3 últimas: <b>7, 5 y 4</b>. <b>Ahora usa el interruptor</b>: compara las dos funciones de R y la de Python.",
+    alResolver: function () { est.c7 = true; $("cierre7").hidden = false; if (pasos.actual() === 6) entrar(6); pasos.completar(6); }
+  });
+
+  pasos = B.pasos($("recorrido"), {
+    concepto: C,
+    alEntrar: function (i) { if (i === 2) crearChk3(); entrar(i); },
+    alTerminar: function () { location.hash = "retos"; }
+  });
+  est.c1 = pasos.hecho(0);
+  est.c2 = pasos.hecho(1);
+  est.c3 = pasos.hecho(2);
+  est.c4 = pasos.hecho(3);
+  est.c5 = est.c5b = pasos.hecho(4);
+  est.c6 = pasos.hecho(5);
+  est.c7 = pasos.hecho(6);
+  if (est.c1) $("cierre1").hidden = false;
+  if (est.c2) $("trampa2").hidden = false;
+  if (est.c4) $("trampa4").hidden = false;
+  if (est.c5b) pintarDestacado();
+  if (est.c6) $("trampa6").hidden = false;
+  if (est.c7) $("cierre7").hidden = false;
+  crearChk3();
+  entrar(pasos.actual());
+
+  /* ---------------- hipotesis inicial ---------------- */
+  (function () {
+    var ta = $("hipotesis"), t = null;
+    ta.value = B.nota("flujo-modelado-r", "hipotesis");
+    function cita() {
+      var v = ta.value.trim(), e = $("citaHipo");
+      e.hidden = !v;
+      if (v) { e.textContent = ""; e.appendChild(document.createTextNode("Al principio escribiste: «" + v + "». Los números 1.21 y 1.51 de esa pregunta son los de las semillas 1 y 2. Nadie se equivocó, y ninguno es el verdadero.")); }
+    }
+    cita();
+    ta.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { B.nota("flujo-modelado-r", "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; cita(); }, 500);
+    });
+  })();
+
+  /* ---------------- marcadores de estado de retos ---------------- */
+  function pintarEstados() {
+    [].forEach.call(document.querySelectorAll("[data-reto]"), function (e) {
+      var ok = C.retoOk(e.getAttribute("data-reto"));
+      e.textContent = ok ? "resuelto" : "pendiente";
+      e.classList.toggle("ok", ok);
+    });
+  }
+  C.alCambiar(pintarEstados);
+
+  /* ---------------- reto: ojo clinico ---------------- */
+  var OJO = [
+    { c: "set.seed(123); print(sample(10, 3))", s: true, x: "Hay azar y la semilla va antes: siempre <code>3 10 2</code>." },
+    { c: "print(sample(10, 3))", s: false, x: "Hay azar y no hay semilla: cada corrida arranca la sucesión en otro punto." },
+    { c: "print(sample(10, 3)); set.seed(123)", s: false, x: "La semilla llega tarde: el sorteo ya ocurrió. Con esta versión del programa de la vida real salieron 1.260045, 1.317284 y 1.530235 en tres corridas." },
+    { c: "set.seed(123); runif(1); print(sample(10, 3))", s: true, x: "<code>runif(1)</code> consume un número, así que el trío no es <code>3 10 2</code>, pero es el mismo en todas las corridas: las llamadas van en el mismo orden." },
+    { c: "train_test_split(X, y, test_size=3, random_state=123)", s: true, x: "<code>random_state</code> es la semilla de la partición en scikit-learn." },
+    { c: "train_test_split(X, y, test_size=3)", s: false, x: "Sin <code>random_state</code>, scikit-learn baraja distinto cada vez." },
+    { c: "np.random.seed(123); rng = np.random.default_rng(); rng.choice(10, 3, replace=False)", s: false, x: "<code>default_rng()</code> sin argumento no lee la semilla global de <code>np.random.seed</code>. Verificado: dio <code>[6 8 5]</code> y luego <code>[0 9 6]</code>." },
+    { c: "rng = np.random.default_rng(123); rng.choice(10, size=3, replace=False)", s: true, x: "La semilla va dentro del generador: siempre <code>[5 6 0]</code>." },
+    { c: "set.seed(123); initial_split(datos, prop = 0.7)", s: true, x: "rsample usa el generador de R: con la semilla antes, siempre deja 4, 5 y 7 en prueba." },
+    { c: "lm(nota ~ horas, data = datos)", s: true, x: "No hay azar en mínimos cuadrados: con los mismos datos, la misma recta." }
+  ];
+  (function () {
+    var cont = $("ojo");
+    cont.innerHTML = '<div class="ronda"></div><div class="codigo-linea" id="ojoCod"></div><p class="q">Corres el script completo dos veces. ¿Imprime lo mismo?</p>' +
+      '<div class="ojo-opts"><button type="button" class="opt" data-a="1">Siempre lo mismo</button><button type="button" class="opt" data-a="0">Puede cambiar</button></div>' +
+      '<div class="fb" aria-live="polite"></div><div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    var orden, ronda, aciertos, respondida;
+    function nueva() { orden = mezcla(OJO).slice(0, 8); ronda = 0; aciertos = 0; mostrar(); }
+    function mostrar() {
+      respondida = false;
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 8 · aciertos: " + aciertos;
+      $("ojoCod").textContent = orden[ronda].c;
+      [].forEach.call(cont.querySelectorAll(".opt"), function (b) { b.classList.remove("ok", "mal"); b.disabled = false; });
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+    }
+    cont.querySelector(".ojo-opts").addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || respondida) return;
+      respondida = true;
+      var it = orden[ronda], ok = (b.getAttribute("data-a") === "1") === it.s;
+      if (ok) aciertos++;
+      b.classList.add(ok ? "ok" : "mal");
+      [].forEach.call(cont.querySelectorAll(".opt"), function (x) { x.disabled = true; });
+      cont.querySelector(".fb").innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No.</span> ') + it.x;
+      var sig = cont.querySelector(".sig");
+      sig.hidden = false;
+      if (ronda === 7) {
+        var aprobo = aciertos >= 6;
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertos + " de 8.";
+        cont.querySelector(".fb").innerHTML += "<br><b>" + (aprobo ? "Aprobado: " + aciertos + " de 8." : aciertos + " de 8. Necesitas 6: prueba otra tanda.") + "</b>";
+        sig.textContent = "Otra tanda";
+        C.reto("ojo", aprobo);
+      } else sig.textContent = "Siguiente ronda";
+    });
+    cont.querySelector(".sig").addEventListener("click", function () { if (ronda === 7) nueva(); else { ronda++; mostrar(); } });
+    nueva();
+  })();
+
+  /* ---------------- reto: construir ---------------- */
+  (function () {
+    var cs = { sem: 1, fuga: false }, hechos = { a: false, b: false, c: false }, marcado = false;
+    var OBJ = [
+      ["a", "Una partición en la que el compañero de 10 horas quede en prueba."],
+      ["b", "Un RMSE de prueba menor que 1, sin ajustar con todos."],
+      ["c", "La semilla con la que <code>sample</code> deja en prueba a los mismos tres que <code>initial_split</code> con la semilla 123 (lo viste en el paso 7)."]
+    ];
+    function pintar() {
+      var p = particion(cs.sem, "sample"), msg = "";
+      if (p.test.indexOf(10) >= 0) hechos.a = true;
+      if (!cs.fuga && p.rmse < 1) hechos.b = true;
+      if (cs.fuga && p.rmseFuga < 1 && !hechos.b) msg = '<p class="cons-msg alerta">Ese número bajó porque la recta ya vio a los de prueba: eso es fuga, y no cuenta.</p>';
+      if (p.test.slice().sort(function (a, b) { return a - b; }).join(",") === "4,5,7") hechos.c = true;
+      $("objetivos").innerHTML = OBJ.map(function (o) { return '<li class="' + (hechos[o[0]] ? "hecho" : "") + '"><span class="m"></span><span>' + o[1] + "</span></li>"; }).join("");
+      var h = '<div class="semillas" role="group" aria-label="Semilla">' + SEMS.map(function (s) { return '<button type="button" data-s="' + s + '" aria-pressed="' + (s === cs.sem) + '">set.seed(' + s + ")</button>"; }).join("") + "</div>";
+      h += '<div class="esc-ctrl"><label><input type="checkbox" id="consFuga"' + (cs.fuga ? " checked" : "") + "> ajustar con todos</label></div>";
+      h += '<div class="consola">&gt; prueba &lt;- sample(10, 3)\n<span class="sal">' + rvec(p.test) + "</span>\nRMSE de prueba: <span class=\"sal\">" + f4(cs.fuga ? p.rmseFuga : p.rmse) + "</span>" + (cs.fuga ? " (fuga)" : "") + "</div>";
+      h += planoSvg({ test: p.test, fit: p.fit, fitTodos: p.todos, fuga: cs.fuga, errores: true, alto: 220 });
+      h += msg;
+      $("construir").innerHTML = h;
+      if (hechos.a && hechos.b && hechos.c && !marcado) {
+        marcado = true;
+        C.reto("construir", true);
+        $("construir").insertAdjacentHTML("beforeend", '<p class="cons-msg"><b>Los tres objetivos, cumplidos.</b> Con la semilla 3, <code>sample</code> elige 5, 7 y 4: el mismo trío que <code>initial_split</code> con 123, en otro orden.</p>');
+      }
+    }
+    $("construir").addEventListener("click", function (e) { var b = e.target.closest("[data-s]"); if (!b) return; cs.sem = +b.getAttribute("data-s"); pintar(); });
+    $("construir").addEventListener("change", function (e) { if (e.target.id === "consFuga") { cs.fuga = e.target.checked; pintar(); } });
+    pintar();
+  })();
+
+  /* ---------------- reto: a mano ---------------- */
+  (function () {
+    var T, okR, okA, hechoR, hechoA;
+    function gen() {
+      var b0 = eleg([1, 2]), b1 = eleg([0.5, 1]), hs = mezcla(HORAS).slice(0, 3).sort(function (a, b) { return a - b; });
+      var filas = hs.map(function (h) {
+        var pr = b0 + b1 * h, opc = [-2, -1, 1, 2].filter(function (e) { return pr + e >= 0 && pr + e <= 10; });
+        var e = eleg(opc);
+        return { h: h, pred: pr, real: pr + e, err: e };
+      });
+      var ss = filas.reduce(function (a, f) { return a + f.err * f.err; }, 0);
+      var pc = [], rc = [];
+      for (var i = 0; i < 5; i++) { pc.push(azar(2)); rc.push(azar(2)); }
+      var acc = pc.filter(function (v, i) { return v === rc[i]; }).length / 5;
+      return { b0: b0, b1: b1, filas: filas, ss: ss, rmse: Math.sqrt(ss / 3), pc: pc, rc: rc, acc: acc };
+    }
+    function armar() {
+      T = gen(); okR = okA = false; hechoR = hechoA = false;
+      var h = '<p class="q">Recta del entrenamiento: $\\hat y = ' + T.b0 + " + " + T.b1 + '\\cdot \\text{horas}$. Los tres de prueba:</p>';
+      h += '<div class="mano-tabla">' + tablaFilas(T.filas, [["horas", function (f) { return f.h; }], ["nota real", function (f) { return f2(f.real); }], ["predicha", function () { return '<span class="oc">?</span>'; }]]) + "</div>";
+      h += '<div id="manoR"></div><div class="mano-parte"><p class="q">Segunda parte. Clases predichas: <b>' + T.pc.join(", ") + "</b>. Reales: <b>" + T.rc.join(", ") + '</b>.</p><div id="manoA"></div></div>';
+      h += '<div class="btn-row" style="margin-top:10px"><button type="button" class="ghost" id="manoOtro">Otro ejercicio</button></div>';
+      $("mano").innerHTML = B.conTex(h);
+      B.numerico($("manoR"), {
+        pregunta: "¿Cuánto vale el RMSE de prueba? (dos decimales)",
+        respuesta: T.rmse,
+        tolerancia: 0.01,
+        pistas: ["Predicción = $b_0 + b_1 \\cdot$ horas, para cada uno de los tres.",
+          "Error = real menos predicha. Eleva cada error al cuadrado, suma y divide entre 3: eso es el MSE. Después, la raíz.",
+          function () { var f = T.filas[0]; return "El primero: " + T.b0 + " + " + T.b1 + " · " + f.h + " = " + f2(f.pred) + "; error " + f2(f.real) + " − " + f2(f.pred) + " = " + f.err + "; al cuadrado, " + f.err * f.err + "."; }],
+        diagnostico: function (v) {
+          if (Math.abs(v - T.ss / 3) < 0.01) return "Ese es el MSE: falta la raíz.";
+          var m = T.filas.reduce(function (a, f) { return a + f.err; }, 0) / 3;
+          if (Math.abs(v - m) < 0.01) return "Promediaste los errores sin elevarlos al cuadrado.";
+          return null;
+        },
+        explicacion: function () { return "Predicciones " + T.filas.map(function (f) { return f2(f.pred); }).join(", ") + "; errores " + T.filas.map(function (f) { return f.err; }).join(", ") + "; MSE = " + T.ss + " / 3 = " + f4(T.ss / 3) + "; RMSE = <b>" + f4(T.rmse) + "</b>."; },
+        alResolver: function (ok) { okR = ok; hechoR = true; cerrar(); }
+      });
+      B.numerico($("manoA"), {
+        pregunta: "¿Cuál es la accuracy? (puedes escribir una fracción)",
+        respuesta: T.acc,
+        tolerancia: 0.001,
+        pistas: ["Cuenta las posiciones en que coinciden y divide entre 5."],
+        diagnostico: function (v) { if (Math.abs(v - (1 - T.acc)) < 0.001) return "Contaste los que fallan, no los que aciertan."; if (Math.abs(v - T.acc * 5) < 0.001) return "Son los aciertos; la accuracy es una proporción: divide entre 5."; return null; },
+        explicacion: function () { return "Coinciden " + T.acc * 5 + " de 5: <b>" + T.acc + "</b>."; },
+        alResolver: function (ok) { okA = ok; hechoA = true; cerrar(); }
+      });
+      $("manoOtro").addEventListener("click", armar);
+    }
+    function cerrar() { if (hechoR && hechoA) C.reto("mano", okR && okA); }
+    armar();
+  })();
+
+  /* ---------------- reto: cazar el error ---------------- */
+  var L_BASE = [
+    "set.seed(123)",
+    "prueba <- sample(10, 3)",
+    "ajuste <- lm(nota ~ horas, data = datos[-prueba, ])",
+    "suma <- 0",
+    "for (i in prueba) {",
+    "  pred <- sum(coef(ajuste) * c(1, datos$horas[i]))",
+    "  suma <- suma + (datos$nota[i] - pred)^2",
+    "}",
+    "rmse <- sqrt(suma / length(prueba))",
+    "print(rmse)",
+    "print(yardstick::rmse_vec(datos$nota[prueba], predict(ajuste, datos[prueba, ])))",
+    "set.seed(123); print(identical(prueba, sample(10, 3)))"
+  ];
+  function variante(cambios, orden) {
+    var l = L_BASE.slice();
+    for (var k in cambios) l[+k] = cambios[k];
+    if (orden) l = orden.map(function (i) { return l[i]; });
+    return l.map(tt);
+  }
+  B.cazarError($("error"), {
+    variantes: [
+      {
+        intro: "Salida real: <code>[1] 0.8686281</code>, <code>[1] 0.8686281</code>, <code>[1] TRUE</code>. Todo coincide, y por eso engaña.",
+        lineas: variante({ 2: "ajuste <- lm(nota ~ horas, data = datos)" }),
+        erronea: 2,
+        explicacion: "El modelo se ajusta con las diez filas, incluidas las de prueba. El bucle y la librería coinciden porque los dos miden la misma recta, pero ese 0.87 es optimista: es fuga. Debe ser <code>data = datos[-prueba, ]</code>, que da 1.361678."
+      },
+      {
+        intro: "En tres corridas imprimió 1.260045, 1.317284 y 1.530235, y la última línea dio <code>[1] FALSE</code>. Hay una línea fuera de lugar.",
+        lineas: variante({}, [1, 0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]),
+        erronea: 1,
+        explicacion: "<code>set.seed(123)</code> llega después del sorteo: <code>sample</code> ya eligió con una sucesión cualquiera. La semilla tiene que ir antes de la primera línea que usa azar."
+      },
+      {
+        intro: "Salida real: <code>[1] 1.118034</code>, <code>[1] 1.361678</code>, <code>[1] TRUE</code>. El bucle y la librería ya no coinciden.",
+        lineas: variante({ 6: "  suma <- suma + (datos$nota[i] - pred)" }),
+        erronea: 6,
+        explicacion: "Falta el <code>^2</code>. Sin el cuadrado, los errores positivos y negativos se compensarían; aquí los tres son positivos y suman 3.75, y √(3.75 / 3) = 1.118034."
+      }
+    ],
+    alResolver: function (ok) { C.reto("error", ok); }
+  });
+
+  /* ---------------- retos: propiedades ---------------- */
+  function prop(id, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple($(id), cfg);
+  }
+  prop("prop1", {
+    pregunta: "¿Qué hace exactamente <code>set.seed(123)</code>?",
+    opciones: [
+      "Pone la sucesión pseudoaleatoria en un punto de partida fijo; cada llamada con azar consume números desde ahí.",
+      "Elige qué filas van a prueba.",
+      "Hace que todas las llamadas con azar den lo mismo.",
+      "Mejora el modelo."
+    ],
+    correcta: 0,
+    pistas: [null,
+      "No elige nada: <code>sample</code> elige. La semilla solo hace repetible la elección.",
+      "La segunda <code>sample(10, 3)</code> después de la semilla da <code>2 6 3</code>, no <code>3 10 2</code>.",
+      "El modelo no cambia de calidad: cambia qué datos le tocan."],
+    explicacion: "La semilla fija el comienzo de la sucesión. Mismas llamadas en el mismo orden dan lo mismo; la segunda llamada no repite a la primera."
+  });
+  prop("prop2", {
+    pregunta: "Tu RMSE de entrenamiento es 1.00 y el de prueba 1.36. ¿Qué dice eso?",
+    opciones: [
+      "Lo normal: el modelo se ajustó a los datos que vio y le va un poco peor con los que no vio. El de prueba es el que estima el error con datos nuevos.",
+      "El modelo está mal ajustado.",
+      "Hay que reportar el de entrenamiento, porque es más bajo.",
+      "La semilla está mal."
+    ],
+    correcta: 0,
+    pistas: [null,
+      "Una diferencia pequeña es lo esperado. Y mira la escala: la nota va de 0 a 10.",
+      "Ese es el optimista: mide al modelo con datos que ya conocía.",
+      "Otra semilla cambia el número, no su sentido."],
+    explicacion: "Los mínimos cuadrados eligen la recta que mejor pasa por los 7 de entrenamiento, así que con ellos el error tiende a ser menor. El de prueba es el honesto."
+  });
+  prop("prop3", {
+    pregunta: "Cambiaste la semilla y el RMSE de prueba bajó de 1.36 a 0.96. ¿Qué concluyes?",
+    opciones: [
+      "Nada sobre el modelo: es otra partición. Para comparar modelos, usa la misma partición o validación cruzada.",
+      "Que la semilla 42 es mejor.",
+      "Que el modelo aprendió más.",
+      "Que hay que buscar la semilla con menor error."
+    ],
+    correcta: 0,
+    pistas: [null,
+      "No hay semillas mejores: las 120 particiones dan de 0.65 a 2.18.",
+      "Es el mismo tipo de modelo, con otros 7 datos y examinado por otros 3.",
+      "Eso es elegir con la prueba: rompe la regla de oro de la UD0 (diapositiva 19)."],
+    explicacion: "Un RMSE de una sola partición depende de quién cayó en prueba. Para saber cuánto confiar, se promedia sobre varias particiones."
+  });
+
+  /* ---------------- formula de memoria ---------------- */
+  B.ordenar($("formula"), {
+    pregunta: "Arma el flujo en R, de la semilla a la métrica.",
+    piezas: [tt("set.seed(123)"), tt("prueba <- sample(10, 3)"), tt("ajuste <- lm(nota ~ horas, data = datos[-prueba, ])"), tt("pred <- predict(ajuste, datos[prueba, ])"), tt("sqrt(mean((datos$nota[prueba] - pred)^2))")],
+    distractores: [tt("ajuste <- lm(nota ~ horas, data = datos)"), tt("mean(datos$nota[prueba] - pred)"), tt("pred <- predict(ajuste, datos[-prueba, ])")],
+    soluciones: [[0, 1, 2, 3, 4]],
+    explicacion: "Da <code>1.361678</code>. Ajustar con <code>datos</code> es fuga; <code>mean(...)</code> sin cuadrado ni raíz da 1.25; y predecir <code>datos[-prueba, ]</code> mide al modelo con el entrenamiento.",
+    alResolver: function (ok) { C.reto("formula", ok); }
+  });
+
+  /* ---------------- vida real: el algoritmo en codigo ---------------- */
+  (function () {
+    var CODIGO = {
+      py: [
+        ["import", "import numpy as np"],
+        ["import", "from sklearn.linear_model import LinearRegression"],
+        ["import", "from sklearn.metrics import root_mean_squared_error"],
+        ["import", "from sklearn.model_selection import train_test_split"],
+        ["datos", "horas = np.arange(1, 11).reshape(-1, 1)"],
+        ["nota", "nota = np.array([2, 4, 5, 3, 6, 4, 7, 8, 7, 9])     # inventado"],
+        ["partir", "X_ent, X_pru, y_ent, y_pru = train_test_split(horas, nota, test_size=3, random_state=123)"],
+        ["ajustar", "ajuste = LinearRegression().fit(X_ent, y_ent)"],
+        ["suma0", "suma = 0"],
+        ["fori", "for i in range(len(y_pru)):"],
+        ["pred", "    pred = ajuste.intercept_ + ajuste.coef_[0] * X_pru[i, 0]"],
+        ["err", "    suma = suma + (y_pru[i] - pred) ** 2"],
+        ["rmse", "rmse = np.sqrt(suma / len(y_pru))"],
+        ["imp", "print(rmse)"],
+        ["lib", "print(root_mean_squared_error(y_pru, ajuste.predict(X_pru)))"],
+        ["repite", "print(np.array_equal(X_pru, train_test_split(horas, nota, test_size=3, random_state=123)[1]))"]
+      ],
+      r: [
+        ["datos", "horas <- 1:10"],
+        ["nota", "nota <- c(2, 4, 5, 3, 6, 4, 7, 8, 7, 9)     # inventado"],
+        ["tabla", "datos <- data.frame(horas, nota)"],
+        ["semilla", "set.seed(123)"],
+        ["partir", "prueba <- sample(10, 3)"],
+        ["ajustar", "ajuste <- lm(nota ~ horas, data = datos[-prueba, ])"],
+        ["suma0", "suma <- 0"],
+        ["fori", "for (i in prueba) {"],
+        ["pred", "  pred <- sum(coef(ajuste) * c(1, datos$horas[i]))"],
+        ["err", "  suma <- suma + (datos$nota[i] - pred)^2"],
+        [null, "}"],
+        ["rmse", "rmse <- sqrt(suma / length(prueba))"],
+        ["imp", "print(rmse)"],
+        ["lib", "print(yardstick::rmse_vec(datos$nota[prueba], predict(ajuste, datos[prueba, ])))"],
+        ["repite", "set.seed(123); print(identical(prueba, sample(10, 3)))"]
+      ]
+    };
+    var PART = {
+      r: { test: [3, 10, 2], b0: 1, b1: 0.75, idx: [3, 10, 2], sal: ["[1] 1.361678", "[1] 1.361678", "[1] TRUE"], rmse: "1.361678" },
+      py: { test: [5, 1, 8], b0: 2.09375, b1: 0.59375, idx: [0, 1, 2], sal: ["0.9466566717488801", "0.9466566717488801", "True"], rmse: "0.9466566717488801" }
+    };
+    function num(x, L) { return L === "r" ? String(+x.toPrecision(7)) : String(x); }
+    // eventos: una lista para los dos lenguajes; la foto de cada lenguaje va en e.r y e.py
+    var IDS = ["import", "datos", "nota", "tabla", "semilla", "partir", "ajustar", "suma0"];
+    var EV = IDS.map(function (id) { return { id: id }; });
+    for (var k = 0; k < 3; k++) ["fori", "pred", "err"].forEach(function (id) { EV.push({ id: id, k: k }); });
+    ["rmse", "imp", "lib", "repite"].forEach(function (id) { EV.push({ id: id }); });
+    EV.forEach(function (e) {
+      e.fase = e.id === "ajustar" ? 2 : ["suma0", "fori", "pred", "err", "rmse", "imp"].indexOf(e.id) >= 0 ? 3 : ["lib", "repite"].indexOf(e.id) >= 0 ? 4 : 1;
+    });
+    EV[EV.length - 1].fin = true;
+    ["r", "py"].forEach(function (L) {
+      var P = PART[L], st = { datos: false, nota: false, part: false, fit: false, suma: null, k: -1, pred: null, err: null, hechos: 0, rmse: false, sal: 0, seed: false };
+      EV.forEach(function (e) {
+        var id = e.id;
+        if (id === "datos") st.datos = true;
+        if (id === "nota") st.nota = true;
+        if (id === "semilla" && L === "r") st.seed = true;
+        if (id === "partir") st.part = true;
+        if (id === "ajustar") st.fit = true;
+        if (id === "suma0") st.suma = 0;
+        if (id === "fori") { st.k = e.k; st.pred = null; st.err = null; }
+        if (id === "pred") st.pred = P.b0 + P.b1 * P.test[e.k];
+        if (id === "err") { st.err = nota(P.test[e.k]) - st.pred; st.suma = st.suma + st.err * st.err; st.hechos = e.k + 1; }
+        if (id === "rmse") { st.rmse = true; st.k = -1; }
+        if (id === "imp") st.sal = 1;
+        if (id === "lib") st.sal = 2;
+        if (id === "repite") st.sal = 3;
+        e[L] = JSON.parse(JSON.stringify(st));
+      });
+    });
+    var SOLO_PY = { "import": 1 }, SOLO_R = { tabla: 1, semilla: 1 };
+    function narrar(e, ctx) {
+      var L = ctx.lang(), P = PART[L], s = e[L], py = L === "py";
+      if (py && SOLO_R[e.id]) return e.id === "tabla" ? "En Python no hace falta armar una tabla: <code>horas</code> y <code>nota</code> van separados a <code>train_test_split</code>." : "En Python la semilla va dentro de la partición: <code>random_state=123</code>, dos líneas más abajo.";
+      if (!py && SOLO_PY[e.id]) return "Esta línea solo existe en Python: R trae <code>lm</code>, <code>sample</code> y <code>set.seed</code> sin cargar nada, y yardstick se llama con <code>::</code> al final.";
+      switch (e.id) {
+        case "import": return "Se cargan NumPy y tres piezas de scikit-learn: el modelo, la métrica y la función que parte los datos.";
+        case "datos": return py ? "<code>horas</code> es una columna de 10 filas: scikit-learn pide una matriz, de ahí el <code>reshape(-1, 1)</code>." : "Las horas de los diez compañeros, de 1 a 10.";
+        case "nota": return "Las diez notas, las mismas del recorrido. Datos inventados.";
+        case "tabla": return "Una tabla con las dos columnas. La fila 3 es quien estudió 3 horas.";
+        case "semilla": return "La sucesión de azar vuelve a su punto de partida 123. Todo lo que use azar después depende de esto.";
+        case "partir": return py ? "Misma semilla 123 que en R, pero otro generador: <code>train_test_split</code> elige las horas <b>5, 1 y 8</b>. Por eso el RMSE de Python (0.95) no es el de R (1.36): no es un error, es otra partición." : "<code>sample(10, 3)</code> toma las tres primeras de la baraja: <b>3 10 2</b>. Esos son los números de fila de la prueba.";
+        case "ajustar": return "La recta sale solo del entrenamiento: b0 = " + num(P.b0, L) + ", b1 = " + num(P.b1, L) + ". Los tres de prueba no participan.";
+        case "suma0": return "La caja que va a acumular los errores al cuadrado empieza en 0.";
+        case "fori": return py ? "<code>i</code> = " + s.k + ": en Python, <code>i</code> cuenta posiciones 0, 1, 2 dentro de <code>X_pru</code>. Esta vuelta toca al de " + P.test[s.k] + " horas." : "<code>i</code> = " + P.test[s.k] + ": en R, <code>for (i in prueba)</code> toma directamente los números de fila 3, 10 y 2, no posiciones.";
+        case "pred": return "La recta predice para " + P.test[s.k] + " horas: " + num(P.b0, L) + " + " + num(P.b1, L) + " · " + P.test[s.k] + " = <b>" + num(s.pred, L) + "</b>.";
+        case "err": return "Error: real " + nota(P.test[s.k]) + " menos predicha " + num(s.pred, L) + " = " + num(s.err, L) + ". Al cuadrado se suma a la caja: <b>suma = " + num(s.suma, L) + "</b>.";
+        case "rmse": return "Raíz de la suma entre 3: √(" + num(s.suma, L) + " / 3) = <b>" + P.rmse + "</b>. El bucle corrió 3 veces, una por fila de prueba.";
+        case "imp": return "Se imprime el RMSE calculado a mano.";
+        case "lib": return py ? "<code>root_mean_squared_error</code> de scikit-learn da exactamente lo mismo." : "<code>yardstick::rmse_vec</code> da exactamente lo mismo.";
+        case "repite": return py ? "Se vuelve a partir con <code>random_state=123</code> y la prueba sale idéntica: <code>True</code>." : "Se vuelve a poner la semilla, se sortea otra vez y la prueba sale idéntica: <code>TRUE</code>. Eso es reproducible.";
+      }
+      return "";
+    }
+    function vars(e, ctx) {
+      var v = [];
+      if (!e) return v;
+      var L = ctx.lang(), P = PART[L], s = e[L], py = L === "py";
+      if (s.part) v.push("<span>" + (py ? "X_pru[:, 0]" : "prueba") + " = <b>" + (py ? "[" + P.test.join(" ") + "]" : P.test.join(" ")) + "</b></span>");
+      if (s.fit) v.push("<span>" + (py ? "intercept_, coef_[0]" : "coef(ajuste)") + " = <b>" + num(P.b0, L) + ", " + num(P.b1, L) + "</b></span>");
+      if (s.k >= 0) v.push('<span class="vk">i = <b>' + P.idx[s.k] + "</b></span>");
+      if (s.pred != null) v.push("<span>pred = <b>" + num(s.pred, L) + "</b></span>");
+      if (s.suma != null) v.push("<span>suma = <b>" + num(s.suma, L) + "</b></span>");
+      if (s.rmse) v.push("<span>rmse = <b>" + P.rmse + "</b></span>");
+      return v;
+    }
+    function visual(e, ant, ctx) {
+      var L = ctx.lang(), P = PART[L], py = L === "py";
+      var s = e ? e[L] : null;
+      var fit = { b0: P.b0, b1: P.b1 };
+      var cur = s && s.k >= 0 ? P.test[s.k] : null;
+      var hechos = s ? P.test.slice(0, s.hechos) : [];
+      if (s && s.k >= 0 && s.pred != null && hechos.indexOf(cur) < 0) hechos = hechos.concat([cur]);
+      $("vrPlano").innerHTML = s && s.datos ? planoSvg({ test: s.part ? P.test : [], sinPartir: !s.part, fit: s.fit ? fit : null, errores: hechos.length > 0, erroresDe: hechos, cur: cur, alto: 220 }) : '<p class="esc-nota">Todavía no hay datos.</p>';
+      var info = "";
+      if (s && s.seed && !s.part) info = "La baraja de R con la semilla 123: 3 10 2 8 6 9 1 7 5 4.";
+      if (s && s.part) info = py ? "train_test_split eligió para prueba las horas 5, 1 y 8 (generador de NumPy)." : "La baraja 3 10 2 8 6 9 1 7 5 4: las tres primeras van a prueba.";
+      $("vrInfo").textContent = info;
+      $("vrAcum").innerHTML = s && s.suma != null ? '<span class="acum">suma de errores al cuadrado = ' + num(s.suma, L) + (s.rmse ? "<br>rmse = √(suma / 3) = " + P.rmse : "") + "</span>" : "";
+      $("vrSal").textContent = s ? P.sal.slice(0, s.sal).join("\n") : "";
+    }
+    B.vidaReal($("vidareal"), {
+      codigo: CODIGO,
+      eventos: EV,
+      langInicial: "r",
+      narrar: narrar,
+      vars: vars,
+      visual: visual,
+      demora: function (e) { return !e ? 600 : e.id === "err" || e.id === "partir" || e.id === "ajustar" ? 1300 : e.id === "pred" ? 1000 : 750; }
+    });
+
+    B.numerico(cuerpo("vrPred"), {
+      pregunta: "En R, ¿cuántas veces se ejecuta la línea <code>suma &lt;- suma + (datos" + D + "nota[i] - pred)^2</code>?",
+      respuesta: 3,
+      tolerancia: 0,
+      pistas: ["El bucle recorre <code>prueba</code>, no <code>datos</code>."],
+      diagnostico: function (v) {
+        if (v === 10) return "Esas son las filas de <code>datos</code>. El bucle recorre <code>prueba</code>.";
+        if (v === 7) return "Esas son las de entrenamiento. El bucle mide con las de prueba.";
+        if (v === 1) return "Está dentro del bucle: se repite.";
+        return null;
+      },
+      explicacion: "<b>3 veces</b>, una por cada fila de prueba (3, 10 y 2). Ahora dale a reproducir y mira cómo crece la caja."
+    });
+
+    prop("codigo1", {
+      pregunta: "¿Por qué salen tríos distintos con la misma semilla?",
+      opciones: [
+        "Las dos barajan igual (3 10 2 8 6 9 1 7 5 4), pero <code>sample(10, 3)</code> se queda con las 3 primeras para prueba e <code>initial_split</code> usa las 7 primeras para entrenamiento y deja las 3 últimas.",
+        "<code>initial_split</code> ignora <code>set.seed</code>.",
+        "rsample usa otro generador de números al azar.",
+        "<code>prop = 0.7</code> redondea mal."
+      ],
+      correcta: 0,
+      pistas: [null, "No: con la semilla siempre da 4 5 7. Si la ignorara, cambiaría en cada corrida.", "Usa el de R: la misma baraja.", "Deja exactamente 7 y 3."],
+      explicacion: "Misma semilla, misma baraja, distinto uso. Lo reproducible es la combinación de semilla y función: si cambias de función, cambia el reparto."
+    });
+    prop("codigo2", {
+      pregunta: "¿Por qué <code>mal</code> da un error más bajo?",
+      opciones: [
+        "El modelo ya vio las notas de prueba al ajustarse: el error es optimista y no mide cómo le va con datos nuevos.",
+        "Con más datos el modelo es mejor, así que 0.87 es el número honesto.",
+        "La diferencia es por la semilla.",
+        "<code>lm</code> con <code>data = datos</code> ignora la prueba."
+      ],
+      correcta: 0,
+      pistas: [null, "Más datos ayudan, pero aquí se mide con datos que el modelo ya usó. Ese número no dice nada de datos nuevos.", "La partición es la misma en las dos: una sola semilla, un solo <code>prueba</code>.", "No la ignora: usa las 10 filas, prueba incluida."],
+      explicacion: "Es fuga de datos: el examen tenía las respuestas. El honesto es 1.36."
+    });
+    prop("codigo3", {
+      pregunta: "¿Por qué el modelo de scikit-learn por defecto no coincide con <code>glm</code>?",
+      opciones: [
+        "<code>LogisticRegression</code> agrega una penalización L2 (<code>C=1.0</code>) que encoge los coeficientes; sin penalizar coincide con <code>glm</code>.",
+        "Porque Python parte los datos distinto.",
+        "Porque <code>glm</code> usa otra fórmula de la sigmoide.",
+        "Por la semilla."
+      ],
+      correcta: 0,
+      pistas: [null, "Aquí se le pasó el mismo entrenamiento de R, a mano.", "La sigmoide es la misma; la segunda línea de la salida lo muestra.", "<code>LogisticRegression</code> con <code>lbfgs</code> no usa azar."],
+      explicacion: "Con <code>penalty=None</code> da −6.342 y 1.168, como <code>glm</code>. Las clases de prueba salen iguales (0, 1, 0) en los dos, pero las probabilidades no: 0.147, 0.974 y 0.074 frente a 0.055, 0.995 y 0.018."
+    });
+  })();
+
+  /* ---------------- tarjetas ---------------- */
+  B.tarjetas($("tarjetas"), [
+    ["¿Qué fija <code>set.seed(123)</code>?", "El punto de partida del azar. Mismas llamadas en el mismo orden dan lo mismo; la segunda llamada no repite a la primera."],
+    ["¿Dónde va la semilla?", "Antes de la primera línea que usa azar (<code>sample</code>, <code>initial_split</code>, <code>runif</code>). Después no sirve."],
+    ["¿Qué significa <code>datos[-prueba, ]</code>?", "Todas las filas menos las de <code>prueba</code>: el entrenamiento."],
+    ["¿Con qué datos se ajusta el modelo?", "Solo con entrenamiento. Si ve la prueba, el error sale optimista (fuga): 0.87 en vez de 1.36."],
+    ["RMSE", "$\\sqrt{\\tfrac1n\\sum(y_i - \\hat y_i)^2}$ sobre la prueba, en las unidades de $y$. En R, <code>yardstick::rmse_vec</code>; en Python, <code>root_mean_squared_error</code>."],
+    ["Accuracy", "Proporción de aciertos: <code>mean(clase == real)</code>. Con probabilidades, primero <code>type = \"response\"</code> y un umbral."],
+    ["¿Por qué <code>initial_split</code> con 123 no da lo mismo que <code>sample(10, 3)</code> con 123?", "Misma baraja, distinto uso: <code>initial_split</code> llena primero el entrenamiento y deja las 3 últimas para prueba."],
+    ["¿La semilla hace que el error sea el verdadero?", "No: lo hace repetible. Para saber cuánto confiar, varias particiones (validación cruzada)."]
+  ]);
+
+  /* ---------------- conexiones ---------------- */
+  B.conexiones("flujo-modelado-r");
+})();
+</script>
+</body>
+</html>

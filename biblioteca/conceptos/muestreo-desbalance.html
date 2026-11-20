@@ -1,0 +1,1528 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Muestreo estratificado y desbalance de clases</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<link rel="stylesheet" href="../nucleo/estilo.css">
+<style>
+/* ---------- escenario ---------- */
+.esc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.esc-head .hint { font-size: 12.5px; color: var(--ink-2); }
+.esc-ctrl { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin: 0 0 10px; }
+.esc-ctrl button { font-size: 12.5px; padding: 6px 9px; }
+.esc-ctrl button[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.esc-nota { font-size: 12.5px; color: var(--ink-3); margin: 8px 0 0; }
+.esc-frase { font-size: 13.5px; color: var(--ink); margin: 10px 0 0; padding: 8px 10px; border-left: 3px solid var(--ok); background: var(--ok-soft); border-radius: 0 6px 6px 0; }
+.esc-alerta { font-size: 13.5px; color: var(--ink); margin: 10px 0 0; padding: 8px 10px; border-left: 3px solid var(--bad); background: var(--bad-soft); border-radius: 0 6px 6px 0; }
+.desliz { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin: 0 0 10px; font-size: 13px; color: var(--ink-2); }
+.desliz label { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.desliz input[type="range"] { accent-color: var(--accent); width: 130px; max-width: 100%; }
+.desliz b { font-family: var(--f-mono); color: var(--ink); }
+.segm { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.segm button { font-family: var(--f-mono); font-size: 12px; padding: 4px 8px; }
+.segm button[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+
+/* casillas: una compra cada una */
+.tira { display: flex; flex-wrap: wrap; gap: 3px; }
+.tira.diez { display: grid; grid-template-columns: repeat(10, 22px); gap: 3px; }
+.cas { width: 22px; height: 22px; box-sizing: border-box; border-radius: 4px; display: inline-grid; place-items: center; font-family: var(--f-mono); font-size: 9px; color: var(--ink-3); background: var(--surface-2); border: 1px solid var(--line); flex: none; }
+.cas.f { background: var(--neg); border-color: var(--neg); color: #fff; font-weight: 600; }
+.cas.t { box-shadow: 0 0 0 2px var(--accent); }
+.cas.off { opacity: .22; }
+.cas.copia { background: var(--bad-soft); border: 1.5px dashed var(--neg); color: var(--neg); font-weight: 600; }
+.cas.on { box-shadow: 0 0 0 2px var(--accent); transform: scale(1.12); }
+.cas.chica { width: 14px; height: 14px; font-size: 0; border-radius: 3px; }
+.caja { border: 1.5px solid var(--line); border-radius: 10px; padding: 8px; background: var(--surface); min-width: 0; }
+.caja h4 { margin: 0 0 6px; font-family: var(--f-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); font-weight: 500; }
+.caja h4 b { color: var(--ink); }
+.caja.prueba { border-color: var(--accent); }
+.caja.candado { border-style: dashed; }
+.cajas { display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(0, 1fr); gap: 8px; margin-top: 10px; }
+@media (max-width: 560px) { .cajas { grid-template-columns: minmax(0, 1fr); } }
+.estrato { margin-top: 8px; }
+.estrato .ojo-t { margin-bottom: 4px; }
+.contador { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin: 4px 0 6px; }
+.contador span { font-size: 13px; color: var(--ink-2); }
+.contador b { font-family: var(--f-mono); font-size: 30px; color: var(--accent); line-height: 1; }
+.contador small { font-size: 12px; color: var(--ink-3); }
+.ojo-t { font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 4px; }
+.histo { width: 100%; max-width: 420px; height: auto; display: block; margin-top: 10px; }
+.histo text { font-family: var(--f-mono); font-size: 10px; fill: var(--ink-2); }
+.leyenda { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--ink-2); margin-top: 4px; }
+.leyenda i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.formula-viva { font-family: var(--f-mono); font-size: 13px; padding: 8px 10px; background: var(--accent-soft); border-radius: 8px; margin-top: 10px; overflow-wrap: anywhere; }
+.formula-viva div + div { margin-top: 4px; }
+
+/* matriz de confusion pequena */
+.mc { border-collapse: collapse; font-size: 12px; margin-top: 6px; width: 100%; }
+.mc th, .mc td { border: 1px solid var(--line); padding: 4px 5px; text-align: center; }
+.mc th { font-weight: 500; color: var(--ink-2); font-size: 11px; }
+.mc td { font-family: var(--f-mono); font-size: 13px; }
+.mc td.tp { background: var(--ok-soft); color: var(--ok); }
+.mc td.fn { background: var(--bad-soft); color: var(--bad); }
+.metr { list-style: none; padding: 0; margin: 8px 0 0; font-size: 12.5px; color: var(--ink-2); }
+.metr li { display: flex; justify-content: space-between; gap: 8px; border-bottom: 1px dashed var(--line); padding: 3px 0; }
+.metr li b { font-family: var(--f-mono); color: var(--ink); }
+.metr li.gana b { color: var(--ok); }
+.modelos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 560px) { .modelos { grid-template-columns: minmax(0, 1fr); } }
+
+/* pliegues */
+.pliegues { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 6px; margin-top: 10px; }
+.pliegue { border: 1.5px solid var(--line); border-radius: 8px; padding: 6px; min-width: 0; }
+.pliegue.vacio { border-color: var(--bad); background: var(--bad-soft); }
+.pliegue p { margin: 0 0 4px; font-size: 11.5px; color: var(--ink-2); }
+.pliegue p b { font-family: var(--f-mono); color: var(--ink); }
+.pliegue .tira { gap: 2px; }
+.aviso-sk { font-family: var(--f-mono); font-size: 11px; color: var(--bad); margin-top: 8px; overflow-wrap: anywhere; }
+
+/* balanza */
+.balanza { width: 100%; max-width: 420px; height: auto; display: block; margin-top: 6px; }
+.balanza text { font-family: var(--f-mono); font-size: 11px; fill: var(--ink-2); }
+
+/* chequeos y retos */
+.ronda { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.situacion { font-size: 14px; color: var(--ink); padding: 10px 12px; background: var(--surface-2); border-radius: 8px; margin: 8px 0; }
+.ojo-opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 6px; margin-top: 10px; }
+.ojo-opts .opt { text-align: center; }
+.objetivos { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.objetivos li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.objetivos .m { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.objetivos li.hecho { color: var(--ink); }
+.objetivos li.hecho .m { background: var(--ok); border-color: var(--ok); box-shadow: inset 0 0 0 3px var(--surface); }
+.constr { display: grid; gap: 10px; margin-top: 10px; }
+.constr .caja p { margin: 6px 0 0; font-size: 13px; color: var(--ink-2); }
+.constr .caja p b { font-family: var(--f-mono); color: var(--ink); }
+.campos-fila { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-top: 6px; }
+.campo { display: inline-flex; align-items: center; gap: 4px; font-size: 13.5px; color: var(--ink-2); flex-wrap: wrap; }
+.campo input.num { width: 80px; }
+.dato-mano { font-size: 14px; padding: 8px 10px; background: var(--surface-2); border-radius: 8px; margin: 6px 0 10px; }
+.lec { border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); overflow: hidden; margin: 6px 0 10px; }
+.lec-t { display: block; font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); padding: 5px 10px 0; }
+.lec pre { margin: 0; padding: 4px 10px 8px; font-family: var(--f-mono); font-size: 12px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink-2); }
+.lec pre .sal { color: var(--ink); font-weight: 500; }
+.lec pre .err { color: var(--bad); font-weight: 500; }
+
+/* vida real */
+.vr-sal { margin: 4px 0 0; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); font-family: var(--f-mono); font-size: 12px; line-height: 1.55; white-space: pre; overflow-x: auto; min-height: 3em; color: var(--ink); }
+.vr-cuentas { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 6px; }
+.vr-cuentas span { font-family: var(--f-mono); font-size: 12.5px; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--line); color: var(--ink-2); }
+.vr-cuentas span b { color: var(--ink); }
+.vr-cuentas span.sube { border: 2px solid var(--accent); background: var(--accent-soft); }
+.vr-cuentas span.fr b { color: var(--neg); }
+
+/* piezas largas de B.ordenar y cazar el error: que se partan a 375 px */
+.chip { max-width: 100%; white-space: normal; text-align: left; }
+.chip .katex-html { white-space: normal; }
+.chip .mord.texttt { white-space: normal; overflow-wrap: anywhere; }
+.linea .katex-html { white-space: normal; }
+.linea .mord.texttt { white-space: normal; overflow-wrap: anywhere; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Biblioteca <span>/ Muestreo estratificado y desbalance de clases</span></a>
+    <nav class="subnav" aria-label="Secciones">
+      <a href="#recorrido">Paso a paso</a>
+      <a href="#vidareal">Vida real</a>
+      <a href="#retos">Retos</a>
+      <a href="#memoria">Memoria</a>
+      <a href="#lecturas">Lecturas</a>
+      <a href="#conexiones">Conexiones</a>
+    </nav>
+    <span class="spacer"></span>
+    <div id="medidor"></div>
+    <button type="button" class="ghost" id="btnTema">Tema</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">Aprendizaje automático · Clasificaciones y agrupaciones (SM142003) · UD0, diapositivas 22 a 24</p>
+    <h1>Muestreo estratificado y desbalance de clases</h1>
+    <p class="lede">
+      Cuando una clase es rara, como el fraude entre compras con tarjeta, partir los datos al azar puede dejar la prueba <b>sin un solo caso raro</b>.
+      Esta página mira el desbalance desde el lado del <b>muestreo</b>: qué le pasa a la clase rara cuando partes en entrenamiento y prueba, y otra vez en pliegues;
+      cómo lo arregla la <b>estratificación</b>; por qué estratificar <b>no</b> balancea; cómo se rebalancea el entrenamiento sin contaminar la prueba; y con qué métrica se mide al final.
+      Todo gira alrededor de una tira de 50 compras y un corte.
+    </p>
+    <div class="hook">
+      <p><b>Antes de empezar, piénsalo tú.</b> Tienes 50 compras y 5 son fraude. Separas 10 al azar para probar tu detector al final. ¿Cuántos fraudes crees que caerán en esas 10? ¿Puede pasar que no caiga ninguno? Si pasa, ¿qué te diría esa prueba sobre tu detector? Escribe tu idea.</p>
+      <textarea id="hipotesis" placeholder="Por ejemplo: creo que..."></textarea>
+      <div class="guardado" id="hipoEstado"></div>
+    </div>
+  </header>
+
+  <!-- ===================== 1. RECORRIDO ===================== -->
+  <section class="bloque" id="recorrido">
+    <div class="bloque-head">
+      <span class="num">Parte 1 · Paso a paso</span>
+      <h2>La tira de 50 compras y el corte</h2>
+      <p>Siete pasos. Cada uno termina con un chequeo: hasta que no lo resuelves, el siguiente queda cerrado. Equivocarte aquí no resta nada, es parte del método. Las 50 compras son inventadas: 45 legítimas (en gris) y 5 fraudes (en rojo), las compras número 4, 13, 22, 37 y 46.</p>
+    </div>
+
+    <nav class="rail" aria-label="Pasos"></nav>
+    <div class="recorrido">
+      <div class="pasos-col">
+
+        <section class="paso card" data-titulo="Diez de cincuenta">
+          <span class="etapa">Paso 1</span>
+          <h3>Diez de cincuenta</h3>
+          <p>En el escenario están las 50 compras, cada una con su número. Vas a guardar 10 para el final: son la <b>prueba</b>. Las otras 40 son el <b>entrenamiento</b>, con las que el detector aprende.</p>
+          <p>El botón <b>Partir al azar</b> elige 10 compras sin mirar cuáles son fraude. Un contador grande dice cuántos fraudes cayeron en la prueba, y debajo se va armando un conteo: cuántas veces salió 0, 1, 2 fraudes.</p>
+          <p>Como hay 5 fraudes en 50, uno de cada diez, uno espera que en 10 compras caiga más o menos 1. Pero "más o menos" puede ser mucho. Antes de tocar nada, predice.</p>
+          <div class="check" id="chk1">
+            <p class="check-tit">Predice antes de tocar</p>
+            <div class="cuerpo"></div>
+          </div>
+          <div id="post1" hidden>
+            <p>Ahora parte varias veces y usa <b>Repetir 100 veces</b>. Los puntos morados sobre el conteo son la probabilidad exacta de cada resultado: las barras se acercan a ellos a medida que repites. Puedes mover también el número de fraudes y el tamaño de la prueba.</p>
+          </div>
+          <p>La UD0 llama a esto <b>muestreo aleatorio simple</b>: cada compra tiene la misma probabilidad de ir a la prueba, y nadie controla cómo queda repartida la respuesta. Para que la partición sea reproducible se fija una semilla, <code>set.seed(123)</code>
+          <cite class="cita" data-fuente="intro3" data-pag="22" data-ancla="5/7" data-seccion="4.3.1 Simple random sampling" data-que="El muestreo aleatorio simple: no controla la distribución de la respuesta, y la semilla set.seed(123) para repetir la partición. Dice que es ideal cuando los datos siguen una distribución normal: eso no es un criterio, ver abajo." data-cuando="Al terminar este paso"></cite>.
+          Un detalle al leer esa diapositiva: dice que el muestreo simple es ideal "cuando los datos siguen una distribución normal". La normalidad no tiene nada que ver. Lo que importa es el tamaño de la muestra y qué tan balanceada está la respuesta, que es justo lo que ves en el contador. La diapositiva anterior lo plantea mejor: muestreo simple cuando los datos son parejos, estratificado cuando hay que mantener proporciones
+          <cite class="cita" data-fuente="intro3" data-pag="21" data-ancla="5/6" data-seccion="Practical Considerations" data-que="Cuándo usar muestreo simple y cuándo estratificado, con el ejemplo de un problema de abandono de clientes (churn) donde hay que mantener la proporción." data-cuando="Al terminar este paso, antes del siguiente"></cite>.</p>
+        </section>
+
+        <section class="paso card" data-titulo="Una prueba sin fraudes">
+          <span class="etapa">Paso 2</span>
+          <h3>Una prueba sin fraudes no mide nada</h3>
+          <p>Imagina el detector más perezoso posible: dice <b>siempre "legítima"</b>. Nunca detecta un fraude. En el escenario, la caja Prueba se volvió su matriz de confusión: filas por lo que la compra es, columnas por lo que el modelo dice.</p>
+          <p>Aquí entra la notación, la mínima. La exactitud es la parte de aciertos, y el recall es la parte de fraudes que el modelo atrapa (las definiciones están en la página "Matriz de confusión, precisión, recall y F1"):</p>
+          <div class="fbloque"><div data-tex="\text{exactitud} = \frac{\text{aciertos}}{n} \qquad \text{recall} = \frac{TP}{TP + FN}" data-display></div></div>
+          <p>Si la prueba no trae ningún fraude, el modelo perezoso acierta todo: exactitud 1. Y el recall queda <span data-tex="\frac{0}{0}"></span>: no hay ningún fraude que atrapar, así que no se puede medir. Una prueba sin casos raros no dice nada de cómo los detectas.</p>
+          <p>Raschka lo muestra con un ejemplo médico: si el 90 % de los pacientes están sanos, predecir siempre "sano" ya da 90 % de exactitud sin aprender nada
+          <cite class="cita" data-fuente="raschka6" data-pag="31" data-pimp="201" data-seccion="Dealing with class imbalance" data-que="Con 90 % de sanos, predecir siempre la clase mayoritaria da 90 % de exactitud. Después arma un conjunto desbalanceado con los 357 tumores benignos y 40 de los 212 malignos." data-cuando="Al leer este paso"></cite>.
+          Que la exactitud engaña con clases raras se ve en detalle en la página "Umbral, precisión contra recall y desbalance". Aquí importa otra cosa: <b>con qué prueba</b> lo mides.</p>
+          <details class="profundizar">
+            <summary>¿Qué hace scikit-learn con un recall de 0/0?</summary>
+            <div>
+              <p>No da error: devuelve <code>0.0</code> y avisa por la salida de errores, en inglés: <code>UndefinedMetricWarning: Recall is ill-defined and being set to 0.0 due to no true samples.</code> (salida real con scikit-learn 1.6.1). El argumento <code>zero_division</code> de <code>recall_score</code> decide qué número poner en ese caso. Es un número que parece una medida, pero no lo es: si solo miras la tabla final de resultados, el aviso se pierde.</p>
+            </div>
+          </details>
+          <div class="check" id="chk2"><p class="check-tit">Calcula con los datos en vivo</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="Estratificar">
+          <span class="etapa">Paso 3</span>
+          <h3>Estratificar: partir cada clase por separado</h3>
+          <p>El <b>muestreo estratificado</b> separa primero los datos por clase, en <b>estratos</b>, y toma el mismo porcentaje de cada uno. Con 20 % de prueba:</p>
+          <div class="fbloque"><div data-tex="\underbrace{45 \cdot 0.2}_{\text{legítimas}} = 9 \qquad \underbrace{5 \cdot 0.2}_{\text{fraudes}} = 1" data-display></div></div>
+          <p>La prueba repite la proporción del total, 9 a 1, y el entrenamiento también: 36 a 4. En el escenario, <b>Partir estratificado</b> separa la tira en dos filas, una por clase, y de cada fila salta su 20 %. El contador siempre dice 1. Compara el conteo con el de las particiones al azar.</p>
+          <p>La diapositiva 23 de la UD0 lo explica para clasificación y para regresión, y recomienda el paquete <code>{rsample}</code>
+          <cite class="cita" data-fuente="intro3" data-pag="23" data-ancla="5/8" data-seccion="4.3.2 Stratified sampling" data-que="El muestreo estratificado en clasificación (separar por clase y muestrear dentro de cada una) y en regresión (por cuantiles de la respuesta), con rsample y el ejemplo de attrition 16/84." data-cuando="Al leer este paso"></cite>.
+          Ojo con su primer ejemplo: pone "90 % Yes y 10 % No", así que ahí la clase rara es "No"; en el de attrition, la rara es "Yes", con 16 %.</p>
+          <p>En código es un argumento: <code>train_test_split(X, y, test_size=0.2, stratify=y)</code> en scikit-learn; <code>initial_split(df, prop = 0.8, strata = y)</code> en rsample; y <code>createDataPartition(y, p = 0.8)</code> en caret, que estratifica por defecto. Raschka parte Iris con <code>stratify=y</code> y comprueba con <code>np.bincount</code> que cada parte tiene las mismas proporciones de clase
+          <cite class="cita" data-fuente="raschka3" data-pag="3" data-pimp="55" data-seccion="First steps with scikit-learn" data-que="train_test_split con stratify=y, y np.bincount para contar cada clase en y, y_train y y_test: 50/50/50, 35/35/35 y 15/15/15." data-cuando="Al terminar este paso"></cite>,
+          y el caso real de la UD3 hace lo mismo en R con los datos de diabetes Pima
+          <cite class="cita" data-fuente="knn3real" data-pag="6" data-ancla="subconjuntos-de-entrenamiento-y-test" data-seccion="Subconjuntos de entrenamiento y test" data-que="initial_split(prop = 0.75, strata = diabetes): la partición estratificada en R, con training() y testing()." data-cuando="Al terminar este paso"></cite>.</p>
+          <details class="profundizar">
+            <summary>¿Y si la respuesta es un número? ¿Y si la cuenta no da entera?</summary>
+            <div>
+              <p><b>Regresión.</b> No hay clases, pero se puede estratificar igual: se corta la respuesta en tramos por sus cuantiles (por ejemplo 4 tramos) y se muestrea el mismo porcentaje de cada tramo. Es lo que propone la diapositiva 23 y lo que hace <code>strata</code> en rsample cuando la variable es numérica.</p>
+              <p><b>Redondeo.</b> Con 5 fraudes y 30 % de prueba, la cuenta da <span data-tex="5 \cdot 0.3 = 1.5"></span>. No se puede mandar media compra. scikit-learn reparte los sobrantes entre las clases para que la prueba tenga exactamente el tamaño pedido, 15, así que una clase recibe 1 o 2 según la semilla. Pruébalo con el deslizador: el escenario dice "1 o 2" y el contador cambia entre particiones.</p>
+            </div>
+          </details>
+          <div class="check" id="chk3"><p class="check-tit">Calcula antes de mover el deslizador</p><div class="cuerpo"></div></div>
+
+          <div class="destacado" id="destacado">
+            <p class="dest-tit">Una confusión muy común</p>
+            <h4>¿Estratificar arregla el desbalance?</h4>
+            <div class="cita" id="citaHipo" hidden></div>
+            <p>Partes con <code>stratify=y</code>. El nombre suena a "equilibrar", y es fácil creer que la clase rara sale reforzada.</p>
+            <div class="check" id="chk3b"><p class="check-tit">Predice antes de seguir</p><div class="cuerpo"></div></div>
+            <div id="dest3" hidden>
+              <p>Estratificar <b>conserva</b> la proporción, no la cambia. El entrenamiento sigue 9 a 1: 36 legítimas y 4 fraudes. Lo que gana es que la proporción sea la misma en las dos partes, y que la prueba nunca se quede sin fraudes. Balancear es otra cosa, y llega en los pasos 5 y 6.</p>
+              <p>Un aviso sobre un libro: Nield usa <code>stratify=Y</code> y escribe que eso duplica la clase minoritaria hasta igualarla con la mayoritaria
+              <cite class="cita" data-fuente="nield6" data-pag="38" data-seccion="Class Imbalance" data-que="El Example 6-19 con train_test_split(..., stratify=Y). El texto dice que stratify duplica la clase minoritaria hasta igualarla: no es así, solo mantiene la proporción." data-cuando="Después de resolver esta predicción"></cite>.
+              No es así: <code>stratify</code> no duplica nada. Solo hace que entrenamiento y prueba tengan la misma proporción que el total. Lo que describe Nield es el sobremuestreo del paso 5.</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Los pliegues">
+          <span class="etapa">Paso 4</span>
+          <h3>Los pliegues también se reparten</h3>
+          <p>La validación cruzada vuelve a partir el <b>entrenamiento</b>, ahora en <span data-tex="k"></span> pliegues: cada pliegue valida una vez mientras los demás entrenan (el mecanismo está en la página "Validación cruzada"). El problema de la clase rara vuelve, y más fuerte: el entrenamiento tiene solo <b>4 fraudes</b> para repartir.</p>
+          <p>En el escenario están las 40 compras del entrenamiento, con los fraudes 4, 13, 22 y 37. Puedes elegir <span data-tex="k"></span> y la forma de repartir:</p>
+          <ul>
+            <li><b>orden del archivo</b>: <code>KFold</code> sin barajar, en el orden en que vienen las filas.</li>
+            <li><b>ordenado por clase</b>: lo mismo, pero con un archivo que trae todas las legítimas primero, como muchos CSV.</li>
+            <li><b>barajado</b>: <code>KFold(shuffle=True)</code>, cada vez distinto.</li>
+            <li><b>estratificado</b>: <code>StratifiedKFold</code>, que reparte cada clase por separado, como en el paso 3.</li>
+          </ul>
+          <div class="check" id="chk4"><p class="check-tit">Predice antes de tocar</p><div class="cuerpo"></div></div>
+          <div id="post4" hidden>
+            <p><b>La trampa de los datos ordenados.</b> Con el archivo ordenado por clase y <code>KFold</code> sin barajar, los 4 fraudes caen todos en el último pliegue: <code>[0, 0, 0, 0, 4]</code>. Cuatro de los cinco pliegues validan sin ver un solo fraude, y el quinto entrena sin ninguno. Con <code>StratifiedKFold(n_splits=4)</code> sale <code>[1, 1, 1, 1]</code>: con 4 fraudes, a lo sumo 4 pliegues (salidas reales, ver la tercera trampa de la vida real).</p>
+          </div>
+          <p>Raschka presenta el k-fold estratificado como la mejora natural cuando las clases no son parejas: conserva la proporción en cada pliegue, y en la página siguiente imprime la distribución de clases de cada uno
+          <cite class="cita" data-fuente="raschka6" data-pag="8" data-pimp="178" data-seccion="K-fold cross-validation" data-que="El k-fold estratificado conserva la proporción de clases en cada pliegue. Sigue en la página 9 (impresa 179) con el bucle sobre StratifiedKFold y la distribución [256 153] de cada pliegue." data-cuando="Al terminar este paso"></cite>.
+          Y la UD3 tiene un ejemplo de qué no hacer, avisado por la misma diapositiva: parte los datos tomando las primeras 469 filas para entrenar y las últimas 100 para probar, y dice que lo correcto sería una partición aleatoria estratificada
+          <cite class="cita" data-fuente="knn3" data-pag="24" data-ancla="5/7" data-seccion="4.3.4 Train y test" data-que="Una partición secuencial (primeras 469 filas para entrenar, últimas 100 para probar) con la advertencia de que lo correcto es una partición aleatoria estratificada." data-cuando="Después de probar el modo ordenado por clase"></cite>.
+          Si el archivo viniera ordenado por diagnóstico, esas últimas 100 filas serían todas de una clase.</p>
+        </section>
+
+        <section class="paso card" data-titulo="Rebalancear el entrenamiento">
+          <span class="etapa">Paso 5</span>
+          <h3>Rebalancear solo el entrenamiento</h3>
+          <p>Con 36 legítimas y 4 fraudes, el modelo ve muy pocos fraudes para aprender cómo son. Se puede <b>rebalancear el entrenamiento</b> de dos formas:</p>
+          <ul>
+            <li><b>Submuestrear</b> (down-sampling): quitar legítimas al azar hasta igualar. Quedan 4 + 4 = 8 filas; se descartan 32 de 36 legítimas, el 89 %.</li>
+            <li><b>Sobremuestrear</b> (up-sampling): repetir fraudes con reemplazo hasta igualar. Quedan 36 + 36 = 72 filas; cada fraude aparece unas 9 veces.</li>
+          </ul>
+          <p>La prueba <b>no se toca</b>: tiene que parecerse al mundo real, donde los fraudes son raros. En el escenario la prueba tiene un candado. Mueve el deslizador de fraudes del entrenamiento y mira los contadores.</p>
+          <p>La UD0 presenta los dos con un 5 % de impagos: submuestrear cuando sobran datos (además aligera el cómputo), sobremuestrear cuando no se puede tirar nada; ninguno gana siempre
+          <cite class="cita" data-fuente="intro3" data-pag="24" data-ancla="5/9" data-seccion="4.3.3 Class imbalances" data-que="Down-sampling y up-sampling con un ejemplo de 5 % de impagos. Solo menciona repetición o bootstrap para sobremuestrear; no nombra SMOTE." data-cuando="Al leer este paso"></cite>.
+          Raschka sobremuestrea con <code>resample(..., replace=True, n_samples=357)</code>: de 40 tumores malignos a 357, tantos como benignos
+          <cite class="cita" data-fuente="raschka6" data-pag="32" data-pimp="202" data-seccion="Dealing with class imbalance" data-que="Elegir la métrica según la aplicación, la pérdida que se inclina hacia la mayoría, class_weight='balanced' y resample para sobremuestrear de 40 a 357. Sigue en la página 33 (impresa 203)." data-cuando="Al terminar este paso"></cite>.
+          Su salida impresa es <code>50</code>; con NumPy actual se imprime <code>50.0</code>. Y lo hace sobre el conjunto entero, solo para mostrar la cuenta: no es un flujo de evaluación, como vas a ver en la trampa de abajo.</p>
+          <p>Hay una tercera vía: <b>SMOTE</b> no copia fraudes, inventa fraudes nuevos entre un fraude y sus vecinos
+          <cite class="cita" data-fuente="raschka6" data-pag="33" data-pimp="203" data-seccion="Generating new training data to address class imbalance" data-que="El recuadro sobre SMOTE (Chawla y otros, 2002) y la librería imbalanced-learn." data-cuando="Al terminar este paso, si quieres ir más allá"></cite>.
+          La diapositiva 24 no lo nombra, pero el caso real de la UD3 lo usa dentro de la receta, con <code>step_smote(over_ratio = 0.8)</code>
+          <cite class="cita" data-fuente="knn3real" data-pag="7" data-ancla="preprocesamiento-de-datos-feature-engineering" data-seccion="Preprocesamiento de datos (feature engineering)" data-que="La receta de tidymodels del caso Pima con step_smote(over_ratio = 0.8): al ir dentro de la receta, se aplica solo al entrenamiento." data-cuando="Después de la trampa de este paso"></cite>,
+          y el caso 3 de la UD2 también. Esa función es del paquete <code>themis</code>, que esta página no ejecuta.</p>
+          <div class="check" id="chk5"><p class="check-tit">Calcula con los datos en vivo</p><div class="cuerpo"></div></div>
+          <div class="esc-alerta" style="margin-top:14px">
+            <p style="margin:0"><b>La trampa: sobremuestrear antes de partir.</b> Toca <b>Sobremuestrear ANTES de partir</b> en el escenario. Si repites los 5 fraudes hasta 45 y <b>después</b> partes, la prueba recibe 9 fraudes, y los 9 son copias de fraudes que también están en el entrenamiento: <code>[12, 12, 12, 21, 36, 36, 36, 36, 45]</code> en índices de Python, "9 de 9 tienen su gemelo en train" (salida real). Un modelo que memoriza los acierta todos: la prueba mide memoria, no detección. El orden correcto es partir primero y rebalancear después, solo el entrenamiento. En validación cruzada, dentro de cada pliegue: por eso <code>step_smote</code> va dentro de la receta en tidymodels, y en Python se usa <code>imblearn.pipeline.Pipeline</code>.</p>
+          </div>
+        </section>
+
+        <section class="paso card" data-titulo="Pesos de clase">
+          <span class="etapa">Paso 6</span>
+          <h3>Pesos de clase: rebalancear sin copiar</h3>
+          <p>En vez de copiar filas, se le dice al modelo que <b>cada error con un fraude cuesta más</b>. La pérdida que el modelo minimiza suma un término por ejemplo; con 36 legítimas y 4 fraudes, las legítimas dominan la suma y el modelo se inclina hacia ellas. Raschka lo explica en la misma página del paso anterior, junto a <code>class_weight='balanced'</code>.</p>
+          <p>Con <code>class_weight="balanced"</code>, scikit-learn le da a cada fila de la clase <span data-tex="c"></span> el peso</p>
+          <div class="fbloque"><div data-tex="w_c = \frac{n}{k \cdot n_c}" data-display></div></div>
+          <p>donde <span data-tex="n"></span> es el número de filas, <span data-tex="k"></span> el número de clases y <span data-tex="n_c"></span> las filas de la clase <span data-tex="c"></span>. En el escenario, las 40 fichas del entrenamiento están en una balanza: sin pesos, el platillo de las legítimas se hunde. Mueve el deslizador de fraudes y predice el peso antes de aplicar.</p>
+          <p>Es como sobremuestrear sin agrandar los datos. La página "Umbral, precisión contra recall y desbalance" (paso Remedios) muestra que en la regresión logística los pesos, el sobremuestreo y bajar el corte llevan a la misma matriz, y que los pesos estropean las probabilidades.</p>
+          <details class="profundizar">
+            <summary>¿De dónde sale la fórmula?</summary>
+            <div>
+              <p>Con <span data-tex="w_c = \frac{n}{k\, n_c}"></span>, lo que pesa la clase entera es <span data-tex="n_c \cdot \frac{n}{k\, n_c} = \frac{n}{k}"></span>: igual para todas las clases. Y la suma de todos los pesos sigue siendo <span data-tex="k \cdot \frac{n}{k} = n"></span>, como si no hubiera pesos. Con 36 y 4: <span data-tex="36 \cdot 0.5556 = 20"></span> y <span data-tex="4 \cdot 5 = 20"></span>. Verificado con <code>compute_class_weight('balanced', classes=[0, 1], y=y_train)</code>, que devuelve <code>[0.55555556 5.]</code>.</p>
+              <p>En R no hay un argumento único: <code>glm(..., weights = w)</code> recibe un peso por fila, y en tidymodels se usan <code>importance_weights</code>. La fórmula de <code>class_weight</code> no viene en el material de la unidad.</p>
+            </div>
+          </details>
+          <div class="check" id="chk6"><p class="check-tit">Calcula con los datos en vivo</p><div class="cuerpo"></div></div>
+        </section>
+
+        <section class="paso card" data-titulo="La métrica correcta">
+          <span class="etapa">Paso 7</span>
+          <h3>Medir con la métrica correcta</h3>
+          <p>Con clases raras, la exactitud premia ignorar la clase rara. La <b>exactitud balanceada</b> promedia el acierto de cada clase por separado:</p>
+          <div class="fbloque"><div data-tex="\text{bal} = \frac{TPR + TNR}{2} = \frac{1}{2}\left(\frac{TP}{TP+FN} + \frac{TN}{TN+FP}\right)" data-display></div></div>
+          <p><span data-tex="TPR"></span> es el recall de los fraudes y <span data-tex="TNR"></span> la especificidad, el acierto con las legítimas. En el escenario, dos modelos sobre la prueba estratificada (9 legítimas y 1 fraude): el perezoso que dice siempre "legítima" y un <b>detector</b> que atrapa el fraude pero da algunas falsas alarmas. Por exactitud gana el inútil. Mueve las falsas alarmas.</p>
+          <p>La UD0 usa la idea al revés, como error: el <b>error medio por clase</b> (mean per class error) es el promedio de los errores de cada clase. Su ejemplo con tres clases da <span data-tex="\tfrac{1}{3}\left(\tfrac{3}{25} + \tfrac{6}{30} + \tfrac{4}{35}\right) = 0.1448"></span>, que la diapositiva redondea a 14.5 %
+          <cite class="cita" data-fuente="intro3" data-pag="43" data-ancla="classification-models" data-seccion="6.2 Classification models" data-que="El error de clasificación y el error medio por clase (mean per class error) con tres clases: 3/25, 6/30 y 4/35, que promedian 14.5 %." data-cuando="Al terminar este paso"></cite>.
+          La exactitud balanceada es 1 menos ese error. El nombre "exactitud balanceada" no viene en el material de la unidad. Raschka, en la página del paso 5, recuerda que la métrica se elige según la aplicación: recall si perder un fraude es caro, precisión si lo caro son las falsas alarmas.</p>
+          <p>Y una regla que une toda la página: <b>la métrica se calcula en una prueba con la proporción real</b>, nunca en una prueba rebalanceada.</p>
+          <details class="profundizar">
+            <summary>¿Y el F1 o el MCC?</summary>
+            <div>
+              <p>El F1 combina precisión y recall de la clase rara (está en "Matriz de confusión, precisión, recall y F1"). El coeficiente de correlación de Matthews (MCC) usa las cuatro casillas de la matriz y tampoco se deja engañar por la clase mayoritaria: el modelo perezoso saca MCC 0. Raschka lo presenta junto con las demás métricas en la página 26 del capítulo 6 (impresa 196).</p>
+            </div>
+          </details>
+          <div class="check" id="chk7"><p class="check-tit">Calcula con los datos en vivo</p><div class="cuerpo"></div></div>
+        </section>
+
+      </div>
+
+      <aside class="escenario card" aria-label="Escenario interactivo">
+        <div class="esc-head">
+          <h2 class="mini-tit">Escenario</h2>
+          <span class="hint" id="escHint"></span>
+        </div>
+        <div id="escCtrl"></div>
+        <div id="escDyn"></div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== 2. VIDA REAL ===================== -->
+  <section class="bloque" id="vidareal">
+    <div class="bloque-head">
+      <span class="num">Parte 2 · En la vida real</span>
+      <h2>Así funciona en la vida real</h2>
+      <p>La partición estratificada a mano: se recorre la lista una vez, se lleva un contador por clase, y una de cada cinco compras <b>de su clase</b> va a la prueba. Así cada clase aporta su 20 %. La función de la librería además baraja antes de elegir; aquí no se baraja, para que el recorrido sea idéntico en los dos lenguajes. Al final se compara con la librería: la misma proporción, 9 y 1. Mismas 50 compras del recorrido. El programa tiene 220 líneas ejecutadas: usa <b>Ir al final</b> o una velocidad alta si no quieres ver las 50 vueltas.</p>
+    </div>
+
+    <div class="check vr-pred" id="vrPred">
+      <p class="check-tit">Predice antes de reproducir</p>
+      <div class="cuerpo"></div>
+    </div>
+
+    <div class="vr-barra card">
+      <button type="button" class="primary" id="vrPlay">Reproducir</button>
+      <button type="button" id="vrAnt">Anterior</button>
+      <button type="button" id="vrSig">Paso</button>
+      <button type="button" id="vrFin">Ir al final</button>
+      <button type="button" class="ghost" id="vrReset">Reiniciar</button>
+      <span class="seg-lab">Velocidad</span>
+      <div class="seg" id="vrVel" role="group" aria-label="Velocidad"></div>
+      <span class="vr-prog" id="vrProg"></span>
+    </div>
+
+    <div class="vr-grid">
+      <div class="card vr-codigo">
+        <div class="vr-tabs">
+          <div class="seg" id="vrLang" role="group" aria-label="Lenguaje">
+            <button type="button" data-lang="py" aria-pressed="true">Python</button>
+            <button type="button" data-lang="r" aria-pressed="false">R</button>
+          </div>
+          <button type="button" class="ghost" id="vrCopiar">Copiar código</button>
+        </div>
+        <pre class="vr-pre" id="vrCode" aria-label="Código"></pre>
+        <div class="vr-narra" id="vrNarra" aria-live="polite"></div>
+        <div class="vr-vars" id="vrVars"></div>
+      </div>
+
+      <div class="card vr-visual">
+        <div class="vr-fases" id="vrFases">
+          <span data-f="1">1 · los datos</span><span data-f="2">2 · el bucle</span><span data-f="3">3 · el resultado</span><span data-f="4">4 · la librería</span>
+        </div>
+        <h3 class="mini-tit vr-tit">y: las 50 compras (con su índice)</h3>
+        <div id="vrTira"></div>
+        <h3 class="mini-tit vr-tit">cuenta: un contador por clase</h3>
+        <div class="vr-cuentas" id="vrCuenta"></div>
+        <h3 class="mini-tit vr-tit">test</h3>
+        <div id="vrTest"></div>
+        <h3 class="mini-tit vr-tit">Salida del programa</h3>
+        <pre class="vr-sal" id="vrSal"></pre>
+      </div>
+    </div>
+
+    <p class="vr-nota">En la práctica nadie escribe el bucle: en Python, <code>train_test_split(X, y, test_size=0.2, stratify=y)</code>; en R, <code>initial_split(df, prop = 0.8, strata = y)</code> con rsample, o <code>createDataPartition(y, p = 0.8)</code> con caret, que estratifica por defecto. Las tres barajan dentro de cada clase antes de elegir, así que las compras elegidas cambian con la semilla, pero la cuenta de cada clase no.</p>
+
+    <details class="profundizar">
+      <summary>La forma vectorizada</summary>
+      <div>
+        <p>Por clase: tomar los índices de esa clase y quedarse con uno de cada cinco, empezando por el quinto. En Python, <code>[i for c in (0, 1) for i in [j for j in range(50) if y[j] == c][4::5]]</code>; en R, <code>unlist(lapply(c(0, 1), function(c) which(y == c)[c(FALSE, FALSE, FALSE, FALSE, TRUE)]))</code>. El vector lógico de R se recicla a lo largo de todos los índices: marca el quinto, el décimo, y así. Envueltas en <code>sorted(...)</code> y <code>sort(...)</code> dan exactamente los mismos índices que el bucle: <code>[5, 10, 16, 22, 27, 32, 38, 43, 45, 49]</code> y <code>[1]  6 11 17 23 28 33 39 44 46 50</code> (verificado).</p>
+      </div>
+    </details>
+
+    <div class="retos" style="margin-top:18px">
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Sobremuestrear antes de partir</h3><span class="estado" data-reto="codigo1"></span></div>
+        <div class="lec"><span class="lec-t">Python</span><pre>import numpy as np
+from sklearn.utils import resample
+from sklearn.model_selection import train_test_split
+fraudes = [3, 12, 21, 36, 45]
+y = np.array([1 if i in fraudes else 0 for i in range(50)])
+ids = np.arange(50)
+copias = resample(ids[y == 1], replace=True, n_samples=45, random_state=123)
+todo = np.concatenate([ids[y == 0], copias])          # sobremuestreo ANTES de partir
+tr, te = train_test_split(todo, test_size=0.2, stratify=y[todo], random_state=1)
+fraude_test = te[y[te] == 1]
+print(sorted(fraude_test.tolist()))
+print(sum(f in tr for f in fraude_test), "de", len(fraude_test), "tienen su gemelo en train")
+<span class="sal">[12, 12, 12, 21, 36, 36, 36, 36, 45]
+9 de 9 tienen su gemelo en train</span></pre></div>
+        <p class="desc">Raschka sobremuestrea el conjunto entero en su ejemplo, pero solo para mostrar la cuenta de clases, no para evaluar. Si lo copias así en un flujo real, cae en esta trampa.</p>
+        <div id="codigo1"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Un strata que no estratifica</h3><span class="estado" data-reto="codigo2"></span></div>
+        <div class="lec"><span class="lec-t">R</span><pre>suppressPackageStartupMessages(library(rsample))
+y &lt;- rep(0, 100)
+y[c(4, 13, 22, 37, 46)] &lt;- 1                 # 5 fraudes en 100: el 5 %
+df &lt;- data.frame(y = factor(y))
+set.seed(3)
+p1 &lt;- initial_split(df, prop = 0.8, strata = y)
+print(table(testing(p1)$y))
+set.seed(3)
+p2 &lt;- initial_split(df, prop = 0.8, strata = y, pool = 0)
+print(table(testing(p2)$y))
+<span class="sal">
+ 0  1 
+20  0 </span>
+<span class="err">Warning message:
+Stratifying groups that make up 0% of the data may be statistically risky.
+&#8505; Consider increasing `pool` to at least 0.1. </span>
+<span class="sal">
+ 0  1 
+19  1 </span></pre></div>
+        <p class="desc">El aviso lo produce la línea de <code>p2</code>, con <code>pool = 0</code>, y R lo imprime al terminar esa línea. El "0%" del aviso es el valor de <code>pool</code> que pusiste, no la proporción de fraudes. Con 1000 semillas, <code>strata = y</code> con el <code>pool</code> por defecto dejó la prueba sin fraudes 310 veces, igual que al azar; con <code>pool = 0</code>, las 1000 veces con 1 fraude. Con los datos de la página (10 % de fraudes) no pasa: 1000 de 1000 con 1.</p>
+        <div id="codigo2"></div>
+      </article>
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Trampa real</span><h3>Pliegues sin fraudes</h3><span class="estado" data-reto="codigo3"></span></div>
+        <div class="lec"><span class="lec-t">Python</span><pre>import numpy as np
+from sklearn.model_selection import KFold, StratifiedKFold
+y_train = np.array([0] * 36 + [1] * 4)                 # ordenado por clase, como un CSV
+print([int(y_train[v].sum()) for _, v in KFold(n_splits=5).split(y_train)])
+print([int(y_train[v].sum()) for _, v in StratifiedKFold(n_splits=5).split(y_train, y_train)])
+print([int(y_train[v].sum()) for _, v in StratifiedKFold(n_splits=4).split(y_train, y_train)])
+<span class="sal">[0, 0, 0, 0, 4]</span>
+<span class="err">UserWarning: The least populated class in y has only 4 members, which is less than n_splits=5.</span>
+<span class="sal">[0, 1, 1, 1, 1]
+[1, 1, 1, 1]</span></pre></div>
+        <p class="desc">El aviso sale por la salida de errores con la ruta del archivo de scikit-learn; aquí va solo el mensaje. Con el entrenamiento de la página, que no viene ordenado (fraudes en las posiciones 3, 10, 18 y 30), <code>KFold(n_splits=5)</code> sin barajar da <code>[1, 1, 1, 1, 0]</code>: el orden ayudó por suerte, pero nada lo garantiza.</p>
+        <div id="codigo3"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 3. RETOS ===================== -->
+  <section class="bloque" id="retos">
+    <div class="bloque-head">
+      <span class="num">Parte 3 · Retos</span>
+      <h2>Ahora sin red</h2>
+      <p>Cada reto resuelto suma al dominio de la barra de arriba. Vuelve en unos días y hazlos de nuevo: la biblioteca te avisa en el índice cuándo toca repasar.</p>
+    </div>
+    <div class="retos">
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Ojo clínico</span><h3>¿Esta prueba sirve?</h3><span class="estado" data-reto="ojo"></span></div>
+        <p class="desc">Ocho rondas al azar. Cada una describe cómo se armó la prueba. Decide sin calcular si esa prueba sirve para medir el detector. Apruebas con 7 de 8.</p>
+        <div id="ojo"></div>
+      </article>
+
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Construir</span><h3>Tres cosas con los controles</h3><span class="estado" data-reto="construir"></span></div>
+        <p class="desc">Consigue los tres objetivos, en cualquier orden. Se marcan solos.</p>
+        <ul class="objetivos" id="objetivos"></ul>
+        <div id="construir"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">A mano</span><h3>Partir, sobremuestrear y pesar</h3><span class="estado" data-reto="mano"></span></div>
+        <p class="desc">Datos nuevos al azar. Con papel: tres cuentas seguidas.</p>
+        <div id="mano"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Encuentra el error</span><h3>Una línea mal</h3><span class="estado" data-reto="error"></span></div>
+        <p class="desc">Tres desarrollos. En cada uno, una línea está mal. Tócala.</p>
+        <div id="error"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Qué hace stratify</h3><span class="estado" data-reto="prop1"></span></div>
+        <div id="prop1"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Solo el entrenamiento</h3><span class="estado" data-reto="prop2"></span></div>
+        <div id="prop2"></div>
+      </article>
+
+      <article class="reto">
+        <div class="reto-head"><span class="tipo">Propiedad</span><h3>Cuántos pliegues</h3><span class="estado" data-reto="prop3"></span></div>
+        <div id="prop3"></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===================== 4. MEMORIA ===================== -->
+  <section class="bloque" id="memoria">
+    <div class="bloque-head">
+      <span class="num">Parte 4 · Memoria</span>
+      <h2>Que se quede</h2>
+      <p>Recordar a la fuerza es lo que fija. Arma la fórmula y después repasa las tarjetas: responde en voz alta antes de voltearlas.</p>
+    </div>
+    <div class="retos">
+      <article class="reto ancho">
+        <div class="reto-head"><span class="tipo">Fórmula de memoria</span><h3>El peso de una clase</h3><span class="estado" data-reto="formula"></span></div>
+        <p class="desc">Hay piezas de más que no pertenecen. No mires arriba.</p>
+        <div id="formula"></div>
+      </article>
+    </div>
+    <h3 class="mini-tit" style="margin:26px 0 12px">Tarjetas para repasar</h3>
+    <div id="tarjetas"></div>
+  </section>
+
+  <!-- ===================== 5. LECTURAS ===================== -->
+  <section class="bloque" id="lecturas">
+    <div class="bloque-head">
+      <span class="num">Parte 5 · Para cerrar el círculo</span>
+      <h2>Léelo ahora en el material</h2>
+      <p class="lecturas-intro">Ya viste qué le pasa a la clase rara cuando partes. Ahora ve a las diapositivas de la UD0, al caso real de la UD3 y a los libros, y comprueba que lo reconoces. Cada entrada dice qué vas a encontrar y en qué momento conviene leerla. Si abres la biblioteca con doble clic, el enlace abre el archivo en esa página. No vienen en el material de la unidad: el nombre "exactitud balanceada", la fórmula de <code>class_weight</code>, el <code>pool</code> de rsample y el aviso de <code>StratifiedKFold</code>.</p>
+    </div>
+    <div class="lecturas" id="lecturasLista"></div>
+  </section>
+
+  <!-- ===================== 6. CONEXIONES ===================== -->
+  <section class="bloque" id="conexiones">
+    <div class="bloque-head">
+      <span class="num">Parte 6 · Conexiones</span>
+      <h2>De dónde viene y adónde va</h2>
+    </div>
+    <div class="conexiones">
+      <div class="card"><h3 class="mini-tit">Conviene tener antes</h3><div class="pills" id="prereq"></div></div>
+      <div class="card"><h3 class="mini-tit">Se apoya en esto</h3><div class="pills" id="siguen"></div></div>
+    </div>
+  </section>
+
+  <p class="pie">
+    <b>Sobre los datos.</b> Las 50 compras y sus 5 fraudes son inventados; los números se eligieron para que las cuentas den limpias (10 % de fraudes, 20 % de prueba). Los retos generan otros datos al azar.
+    Las salidas de código se obtuvieron ejecutando el código en Python 3.13 con NumPy 2.1.3 y scikit-learn 1.6.1, y en R 4.6.1 con rsample 1.3.2. Los avisos salen en inglés porque así los imprimen las librerías.
+    El escenario no ejecuta Python ni R: parte al azar con una baraja en el navegador, y las probabilidades exactas del conteo salen de la distribución hipergeométrica. Tu progreso se guarda solo en este navegador.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="../catalogo.js"></script>
+<script src="../fuentes.js"></script>
+<script src="../nucleo/nucleo.js"></script>
+<script>
+(function () {
+  "use strict";
+  var B = window.Biblioteca;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var RETOS = ["ojo", "construir", "mano", "error", "prop1", "prop2", "prop3", "codigo1", "codigo2", "codigo3", "formula"];
+  var C = B.concepto({ id: "muestreo-desbalance", retos: RETOS, pasos: 7 });
+  B.medidor($("medidor"), C);
+  B.botonTema($("btnTema"));
+  B.tex();
+  B.citas();
+  B.lecturas($("lecturasLista"));
+
+  /* ---------------- utilidades ---------------- */
+  function azar(n) { return Math.floor(Math.random() * n); }
+  function eleg(a) { return a[azar(a.length)]; }
+  function escH(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+  function rango(n) { var a = []; for (var i = 0; i < n; i++) a.push(i); return a; }
+  function barajar(a) { for (var i = a.length - 1; i > 0; i--) { var j = azar(i + 1), t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
+  function f2(x) { return B.fmt(x, 2); }
+  function f3(x) { return B.fmt(x, 3); }
+  function f4(x) { return B.fmt(x, 4); }
+  function nEnt(x) { return Math.abs(x - Math.round(x)) < 1e-9; }
+  function numTxt(x) { return nEnt(x) ? String(Math.round(x)) : String(Math.round(x * 100) / 100); }
+  function pct(x) { return (Math.round(x * 1000) / 10) + " %"; }
+  function cuerpo(id) { return $(id).querySelector(".cuerpo"); }
+  function tt(s) {
+    var m = /^( *)(.*)$/.exec(s), sang = Math.round(m[1].length / 4);
+    var t = m[2].replace(/\\/g, "").replace(/([_#%&{}$])/g, "\\$1");
+    return new Array(sang + 1).join("\\quad ") + "\\texttt{" + t + "}";
+  }
+  function comb(n, k) { if (k < 0 || k > n) return 0; var r = 1; for (var i = 1; i <= k; i++) r = r * (n - k + i) / i; return r; }
+  function hiper(N, K, n, k) { return comb(K, k) * comb(N - K, n - k) / comb(N, n); }
+
+  /* ---------------- los datos ---------------- */
+  var N = 50;
+  var POS = [3, 12, 21, 36, 45, 8, 17, 28, 31, 41];     // indices de Python de los fraudes (los 5 primeros son los de la pagina)
+  var TEST_VR = [5, 10, 16, 22, 27, 32, 38, 43, 45, 49]; // la prueba de la vida real (indices de Python)
+  function fraudesDe(K) { return POS.slice(0, K).sort(function (a, b) { return a - b; }); }
+  function etiquetas(K) { var fr = fraudesDe(K); return rango(N).map(function (i) { return fr.indexOf(i) >= 0 ? 1 : 0; }); }
+  var Y5 = etiquetas(5);
+  var TRAIN = rango(N).filter(function (i) { return TEST_VR.indexOf(i) < 0; });   // 40 compras: 36 legitimas y 4 fraudes
+
+  var ST = { K: 5, f: 0.2, ult: null, hist: { azar: [], estrat: [] }, kf: 5, plieg: "estrat", perm: null, nf: 4, remu: "orig", antes: false, copias: [], pesos: false, fa: 2 };
+  var est = {};
+  var modo = 0, pasos = null;
+  var chk2 = null, chk5 = null, chk6 = null, chk7 = null;
+
+  function nTest() { return Math.round(N * ST.f); }
+  function reiniciarConteo() { ST.hist = { azar: [], estrat: [] }; ST.ult = null; }
+  function genCopias() { ST.copias = rango(Math.max(0, 36 - ST.nf)).map(function () { return 1 + azar(ST.nf); }); }
+  genCopias();
+
+  // una particion: al azar (baraja de las 50) o estratificada (baraja dentro de cada clase)
+  function partir(tipo) {
+    var y = etiquetas(ST.K), n = nTest(), test;
+    if (tipo === "azar") test = barajar(rango(N)).slice(0, n);
+    else {
+      var fr = [], le = [];
+      y.forEach(function (v, i) { (v ? fr : le).push(i); });
+      var x = ST.K * ST.f, nf = Math.floor(x + 1e-9);
+      if (x - nf > 1e-9 && Math.random() < x - nf) nf++;
+      test = barajar(fr.slice()).slice(0, nf).concat(barajar(le.slice()).slice(0, n - nf));
+    }
+    var k = test.filter(function (i) { return y[i] === 1; }).length;
+    var h = ST.hist[tipo];
+    h[k] = (h[k] || 0) + 1;
+    return { tipo: tipo, test: test, k: k };
+  }
+  function total(h) { return h.reduce(function (s, v) { return s + (v || 0); }, 0); }
+
+  /* ---------------- dibujo: casillas ---------------- */
+  function cas(i, y, extra, lab) {
+    return '<span class="cas' + (y ? " f" : "") + (extra || "") + '">' + (lab == null ? i + 1 : lab) + "</span>";
+  }
+  function btn(acc, txt, cls, des, val, pres) {
+    return '<button type="button" data-acc="' + acc + '"' + (val != null ? ' data-v="' + val + '"' : "") + (cls ? ' class="' + cls + '"' : "") +
+      (des ? " disabled" : "") + (pres != null ? ' aria-pressed="' + (pres ? "true" : "false") + '"' : "") + ">" + txt + "</button>";
+  }
+
+  /* ---------------- dibujo: histograma del conteo ---------------- */
+  function histo() {
+    var K = ST.K, n = nTest(), m = Math.min(K, n), W = 320, H = 160, x0 = 34, y0 = 128, alto = 108;
+    var ha = ST.hist.azar, he = ST.hist.estrat, ta = total(ha), te = total(he);
+    var vals = [], P = [];
+    for (var j = 0; j <= m; j++) { P.push(hiper(N, K, n, j)); vals.push(ta ? (ha[j] || 0) / ta : 0, te ? (he[j] || 0) / te : 0); }
+    var ymax = te ? 1 : Math.max(0.5, Math.max.apply(null, vals.concat(est.c1 ? P : [0])));
+    ymax = ymax > 0.5 ? 1 : 0.5;
+    var bw = (W - x0 - 6) / (m + 1);
+    var s = '<svg class="histo" viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Conteo de fraudes en la prueba">';
+    [0, 0.5, 1].forEach(function (t) {
+      var v = t * ymax, yy = y0 - t * alto;
+      s += '<line x1="' + x0 + '" x2="' + (W - 4) + '" y1="' + yy + '" y2="' + yy + '" stroke="var(--line)" stroke-width="1"/>';
+      s += '<text x="' + (x0 - 4) + '" y="' + (yy + 3) + '" text-anchor="end">' + Math.round(v * 100) + "%</text>";
+    });
+    for (var k = 0; k <= m; k++) {
+      var cx = x0 + k * bw, va = ta ? (ha[k] || 0) / ta : 0, ve = te ? (he[k] || 0) / te : 0;
+      var bwi = bw * 0.34;
+      if (ta) s += '<rect x="' + (cx + bw * 0.14) + '" y="' + (y0 - va / ymax * alto) + '" width="' + bwi + '" height="' + (va / ymax * alto) + '" fill="var(--j)" rx="2"/>';
+      if (te) s += '<rect x="' + (cx + bw * 0.52) + '" y="' + (y0 - ve / ymax * alto) + '" width="' + bwi + '" height="' + (ve / ymax * alto) + '" fill="var(--k)" rx="2"/>';
+      if (est.c1) {
+        var py = y0 - Math.min(P[k], ymax) / ymax * alto;
+        s += '<circle cx="' + (cx + bw * 0.5) + '" cy="' + py + '" r="4" fill="var(--accent)" stroke="var(--surface)" stroke-width="1.5"/>';
+        if (m <= 6) s += '<text x="' + (cx + bw * 0.5) + '" y="' + (py - 7) + '" text-anchor="middle" style="fill:var(--accent)">' + (P[k] < 0.001 ? "<0.1" : (Math.round(P[k] * 1000) / 10)) + "</text>";
+      }
+      s += '<text x="' + (cx + bw * 0.5) + '" y="' + (y0 + 14) + '" text-anchor="middle">' + k + "</text>";
+    }
+    s += '<text x="' + (x0 + (W - x0) / 2) + '" y="' + (H - 2) + '" text-anchor="middle">fraudes en la prueba</text></svg>';
+    s += '<div class="leyenda"><span><i style="background:var(--j)"></i>al azar: ' + ta + " particiones</span>" +
+      (te || modo === 2 ? '<span><i style="background:var(--k)"></i>estratificadas: ' + te + "</span>" : "") +
+      (est.c1 ? '<span><i style="background:var(--accent);border-radius:50%"></i>probabilidad exacta (%)</span>' : "") + "</div>";
+    return s;
+  }
+
+  /* ---------------- escenario: controles por modo ---------------- */
+  var HINTS = ["Parte al azar y mira el contador", "La prueba es la matriz del modelo perezoso", "Parte cada clase por separado", "Los pliegues del entrenamiento", "Rebalancea el entrenamiento", "Los pesos en la balanza", "Dos modelos, la misma prueba"];
+  function sliderK() {
+    var bloq = modo === 2 && !est.c3;
+    return '<div class="desliz"><label>Fraudes en las 50: <b id="lblK">' + ST.K + '</b><input type="range" min="2" max="10" step="1" value="' + ST.K + '" data-sl="K" aria-label="Número de fraudes"' + (bloq ? " disabled" : "") + "></label>" +
+      '<span>Prueba: <span class="segm">' + [0.1, 0.2, 0.3].map(function (f) { return btn("f", Math.round(f * 100) + "%", "", bloq, f, Math.abs(ST.f - f) < 1e-9); }).join("") + "</span></span>" +
+      (bloq ? '<span class="esc-nota" style="margin:0">Fijo en 5 fraudes y 20 % hasta resolver el chequeo.</span>' : "") + "</div>";
+  }
+  function sliderNf(max) {
+    return '<div class="desliz"><label>Fraudes en el entrenamiento: <b id="lblNf">' + ST.nf + '</b><input type="range" min="1" max="' + max + '" step="1" value="' + ST.nf + '" data-sl="nf" aria-label="Fraudes en el entrenamiento"></label><span>legítimas: <b>36</b></span></div>';
+  }
+  function renderCtrl() {
+    var h = "";
+    if (modo <= 2) {
+      h += '<div class="esc-ctrl">';
+      if (modo === 2) h += btn("estrat", "Partir estratificado", "primary") + btn("azar", "Partir al azar");
+      else h += btn("azar", "Partir al azar", "primary");
+      h += btn("rep-azar", modo === 2 ? "100 al azar" : "Repetir 100 veces", "", !est.c1);
+      if (modo === 2) h += btn("rep-estrat", "100 estratificadas");
+      h += btn("reset", "Reiniciar conteo", "ghost") + "</div>";
+      if (est.c1) h += sliderK();
+    } else if (modo === 3) {
+      var dis = !est.c4;
+      h += '<div class="esc-ctrl"><span class="esc-nota" style="margin:0">Pliegues:</span><span class="segm">' +
+        [2, 3, 4, 5, 6, 7, 8, 9, 10].map(function (k) { return btn("kf", String(k), "", dis, k, ST.kf === k); }).join("") + "</span></div>";
+      h += '<div class="esc-ctrl"><span class="segm">' +
+        [["archivo", "orden del archivo"], ["clase", "ordenado por clase"], ["barajar", "barajado"], ["estrat", "estratificado"]].map(function (o) { return btn("plieg", o[1], "", dis, o[0], ST.plieg === o[0]); }).join("") +
+        "</span>" + (ST.plieg === "barajar" ? btn("rebarajar", "Barajar otra vez", "ghost", dis) : "") + "</div>";
+    } else if (modo === 4) {
+      h += sliderNf(20);
+      h += '<div class="esc-ctrl"><span class="segm">' + btn("remu", "Original", "", ST.antes, "orig", ST.remu === "orig") + btn("remu", "Submuestrear", "", ST.antes, "sub", ST.remu === "sub") +
+        btn("remu", "Sobremuestrear", "", ST.antes || !est.c5, "sobre", ST.remu === "sobre") + "</span>" +
+        btn("antes", ST.antes ? "Volver al orden correcto" : "Sobremuestrear ANTES de partir", ST.antes ? "primary" : "ghost") + "</div>";
+      if (!est.c5) h += '<p class="esc-nota" style="margin-top:0">Sobremuestrear se activa al resolver el chequeo.</p>';
+    } else if (modo === 5) {
+      h += sliderNf(20);
+      h += '<div class="esc-ctrl">' + btn("pesos", ST.pesos ? "Quitar los pesos" : 'Aplicar class_weight="balanced"', ST.pesos ? "ghost" : "primary", !est.c6) + "</div>";
+      if (!est.c6) h += '<p class="esc-nota" style="margin-top:0">Los pesos se aplican al resolver el chequeo.</p>';
+    } else if (modo === 6) {
+      h += '<div class="esc-ctrl"><span class="esc-nota" style="margin:0">Falsas alarmas del detector:</span><span class="segm">' +
+        rango(10).map(function (k) { return btn("fa", String(k), "", false, k, ST.fa === k); }).join("") + "</span></div>";
+    }
+    $("escCtrl").innerHTML = h;
+  }
+
+  /* ---------------- escenario: contenido por modo ---------------- */
+  function dynParticion() {
+    var K = ST.K, n = nTest(), y = etiquetas(K), u = ST.ult, enT = {};
+    if (u) u.test.forEach(function (i) { enT[i] = true; });
+    var h = '<div class="contador"><span>fraudes en la prueba:</span><b>' + (u ? u.k : "–") + "</b><small>" +
+      (u ? (u.tipo === "azar" ? "partición al azar" : "partición estratificada") + ", prueba de " + n + " compras" : "todavía no partiste") + "</small></div>";
+    if (modo === 2) {
+      var le = [], fr = [];
+      y.forEach(function (v, i) { (v ? fr : le).push(i); });
+      h += '<div class="estrato"><p class="ojo-t">estrato legítimas (' + le.length + ")</p><div class=\"tira\">" + le.map(function (i) { return cas(i, 0, enT[i] && u.tipo === "estrat" ? " t" : ""); }).join("") + "</div></div>";
+      h += '<div class="estrato"><p class="ojo-t">estrato fraudes (' + fr.length + ")</p><div class=\"tira\">" + fr.map(function (i) { return cas(i, 1, enT[i] && u.tipo === "estrat" ? " t" : ""); }).join("") + "</div></div>";
+      var xl = (N - K) * ST.f, xf = K * ST.f;
+      function cuenta(x) { return nEnt(x) ? String(Math.round(x)) : numTxt(x) + " → " + Math.floor(x) + " o " + Math.ceil(x); }
+      h += '<div class="formula-viva"><div>legítimas: ' + (N - K) + " · " + ST.f + " = <b>" + cuenta(xl) + "</b></div><div>fraudes: " + K + " · " + ST.f + " = <b>" + cuenta(xf) + "</b></div></div>";
+      if (!nEnt(xf)) h += '<p class="esc-nota">La cuenta no da entera: la librería manda ' + Math.floor(xf) + " o " + Math.ceil(xf) + " fraudes para que la prueba tenga justo " + n + " compras.</p>";
+    }
+    if (u) {
+      var tr = rango(N).filter(function (i) { return !enT[i]; }), te = u.test.slice().sort(function (a, b) { return a - b; });
+      var nfTr = tr.filter(function (i) { return y[i]; }).length;
+      h += '<div class="cajas"><div class="caja"><h4>Entrenamiento <b>' + tr.length + "</b> · fraudes <b>" + nfTr + '</b></h4><div class="tira">' + tr.map(function (i) { return cas(i, y[i]); }).join("") + "</div></div>";
+      if (modo === 1) {
+        var k = u.k;
+        h += '<div class="caja prueba"><h4>Prueba <b>' + n + "</b> · fraudes <b>" + k + '</b></h4><div class="tira">' + te.map(function (i) { return cas(i, y[i]); }).join("") + "</div></div></div>" +
+          '<div class="caja prueba" style="margin-top:8px"><p class="ojo-t">la prueba según el modelo que dice siempre "legítima"</p>' +
+          '<table class="mc"><tr><th></th><th>dice fraude</th><th>dice legítima</th></tr><tr><th>es fraude</th><td class="tp">0</td><td class="fn">' + k + '</td></tr><tr><th>es legítima</th><td>0</td><td class="tp">' + (n - k) + "</td></tr></table>" +
+          '<ul class="metr"><li>exactitud <b>' + (est.c2 ? numTxt((n - k) / n) : "?") + "</b></li><li>recall <b>" + (k ? "0/" + k + " = 0" : "0/0: no se puede") + "</b></li></ul></div>";
+      } else {
+        h += '<div class="caja prueba"><h4>Prueba <b>' + n + "</b> · fraudes <b>" + u.k + '</b></h4><div class="tira">' + te.map(function (i) { return cas(i, y[i]); }).join("") + "</div></div></div>";
+      }
+      if (modo === 1 && u.k === 0) h += '<p class="esc-alerta">Esta prueba no trae fraudes: el modelo perezoso parece perfecto, y el recall no se puede calcular.</p>';
+    } else {
+      h += '<div class="caja" style="margin-top:10px"><h4>Las <b>50</b> compras · fraudes <b>' + K + '</b></h4><div class="tira diez">' + rango(N).map(function (i) { return cas(i, y[i]); }).join("") + "</div></div>";
+    }
+    h += histo();
+    if (modo === 0 && !est.c1) h += '<p class="esc-nota">Las probabilidades exactas aparecen al resolver el chequeo.</p>';
+    return h;
+  }
+
+  // reparto en pliegues como lo hace scikit-learn
+  function trozos(seq, k) {
+    var n = seq.length, out = [], p = 0;
+    for (var j = 0; j < k; j++) { var t = Math.floor(n / k) + (j < n % k ? 1 : 0); out.push(seq.slice(p, p + t)); p += t; }
+    return out;
+  }
+  function pliegues(k, modoP) {
+    var base = TRAIN.map(function (i) { return { f: Y5[i] === 1, lab: i + 1 }; });
+    if (modoP === "archivo") return trozos(base, k);
+    if (modoP === "clase") return trozos(base.filter(function (x) { return !x.f; }).concat(base.filter(function (x) { return x.f; })), k);
+    if (modoP === "barajar") {
+      if (!ST.perm) ST.perm = barajar(rango(base.length));
+      return trozos(ST.perm.map(function (j) { return base[j]; }), k);
+    }
+    // StratifiedKFold: allocation[j][c] = cuantos de la clase c caen en y_order[j::k]
+    var yOrd = base.map(function (x) { return x.f ? 1 : 0; }).sort(), folds = rango(k).map(function () { return []; });
+    [0, 1].forEach(function (c) {
+      var miembros = base.filter(function (x) { return (x.f ? 1 : 0) === c; }), q = 0;
+      for (var j = 0; j < k; j++) {
+        var cnt = 0;
+        for (var t = j; t < yOrd.length; t += k) if (yOrd[t] === c) cnt++;
+        for (var r = 0; r < cnt; r++) folds[j].push(miembros[q++]);
+      }
+    });
+    folds.forEach(function (f) { f.sort(function (a, b) { return a.lab - b.lab; }); });
+    return folds;
+  }
+  function dynPliegues() {
+    var h = '<div class="caja"><h4>Entrenamiento <b>40</b> · fraudes <b>4</b></h4><div class="tira">' + TRAIN.map(function (i) { return cas(i, Y5[i]); }).join("") + "</div></div>";
+    if (!est.c4) return h + '<p class="esc-nota">Responde la predicción para repartir los pliegues.</p>';
+    var fs = pliegues(ST.kf, ST.plieg), cuentas = fs.map(function (f) { return f.filter(function (x) { return x.f; }).length; });
+    h += '<div class="pliegues">' + fs.map(function (f, j) {
+      var c = cuentas[j];
+      return '<div class="pliegue' + (c === 0 ? " vacio" : "") + '"><p>pliegue ' + (j + 1) + ": <b>" + c + "</b> fraude" + (c === 1 ? "" : "s") + '</p><div class="tira">' +
+        f.map(function (x) { return '<span class="cas chica' + (x.f ? " f" : "") + '" title="compra ' + x.lab + '"></span>'; }).join("") + "</div></div>";
+    }).join("") + "</div>";
+    var vacios = cuentas.filter(function (c) { return c === 0; }).length;
+    h += '<p class="esc-nota">Fraudes por pliegue: <code>[' + cuentas.join(", ") + "]</code>. " + (vacios ? "<b>" + vacios + "</b> pliegue" + (vacios === 1 ? " valida" : "s validan") + " sin ningún fraude." : "Todos los pliegues validan con al menos un fraude.") + "</p>";
+    if (ST.plieg === "estrat" && ST.kf > 4) h += '<p class="aviso-sk">UserWarning: The least populated class in y has only 4 members, which is less than n_splits=' + ST.kf + ".</p>";
+    return h;
+  }
+  function cajaPrueba() {
+    return '<div class="caja prueba candado"><h4>Prueba <b>10</b> · candado</h4><div class="tira">' + TEST_VR.map(function (i) { return cas(i, Y5[i]); }).join("") +
+      '</div><p class="esc-nota">9 legítimas y 1 fraude. No se toca: tiene que parecerse al mundo real.</p></div>';
+  }
+  function dynRemuestreo() {
+    var h = "";
+    if (ST.antes) {
+      var copiasTest = [13, 13, 13, 22, 37, 37, 37, 37, 46];
+      h += '<div class="caja"><h4>1. Sobremuestreo de las 50: <b>45 + 45 = 90</b> filas</h4><p class="esc-nota" style="margin-top:0">Los 5 fraudes se repiten con reemplazo hasta 45.</p></div>';
+      h += '<div class="caja prueba" style="margin-top:8px"><h4>2. Partición 80/20 estratificada: prueba <b>18</b> · fraudes <b>9</b></h4><div class="tira">' +
+        copiasTest.map(function (c) { return '<span class="cas copia" title="copia de la compra ' + c + '">' + c + "</span>"; }).join("") +
+        '</div><p class="esc-nota">Los 9 fraudes de la prueba son copias de las compras 13, 22, 37 y 46, y todas tienen su gemelo en el entrenamiento.</p></div>';
+      h += '<p class="esc-alerta">Un modelo que memoriza los acierta todos. La prueba mide memoria, no detección. Salida real de scikit-learn (primera trampa de la vida real).</p>';
+      return h;
+    }
+    var nf = ST.nf, nl = 36, cops = ST.remu === "sobre" ? ST.copias : [], descart = ST.remu === "sub" ? nl - Math.min(nl, nf) : 0;
+    var filasL = nl - descart, filasF = nf + cops.length, tot = filasL + filasF;
+    h += '<div class="cajas"><div class="caja"><h4>Entrenamiento <b>' + tot + "</b> filas · " + filasL + " + " + filasF + '</h4><div class="tira">';
+    for (var i = 0; i < nl; i++) h += '<span class="cas' + (i < descart ? " off" : "") + '"></span>';
+    for (var j = 1; j <= nf; j++) h += '<span class="cas f">F' + j + "</span>";
+    cops.forEach(function (c) { h += '<span class="cas copia" title="copia del fraude F' + c + '">F' + c + "</span>"; });
+    h += '</div><p class="esc-nota">Fraudes: ' + pct(filasF / tot) + " de las filas" +
+      (ST.remu === "sub" ? ". Se descartaron " + descart + " legítimas (apagadas)." : ST.remu === "sobre" ? ". Copias con borde punteado: dicen de qué fraude son copia." : ".") + "</p></div>" + cajaPrueba() + "</div>";
+    return h;
+  }
+  function balanza() {
+    var nl = 36, nf = ST.nf, n = nl + nf, wl = ST.pesos ? n / (2 * nl) : 1, wf = ST.pesos ? n / (2 * nf) : 1;
+    var sL = nl * wl, sF = nf * wf, ang = (sL - sF) / (sL + sF) * 14, rad = ang * Math.PI / 180;
+    var W = 320, H = 200, cx = 160, cy = 46, L = 112;
+    var xl = cx - L * Math.cos(rad), yl = cy + L * Math.sin(rad), xr = cx + L * Math.cos(rad), yr = cy - L * Math.sin(rad);
+    var s = '<svg class="balanza" viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Balanza con las fichas del entrenamiento">';
+    s += '<polygon points="' + cx + "," + (cy + 4) + " " + (cx - 12) + "," + (H - 8) + " " + (cx + 12) + "," + (H - 8) + '" fill="var(--surface-2)" stroke="var(--line)"/>';
+    s += '<line x1="' + xl + '" y1="' + yl + '" x2="' + xr + '" y2="' + yr + '" stroke="var(--ink-2)" stroke-width="4" stroke-linecap="round"/>';
+    s += '<circle cx="' + cx + '" cy="' + cy + '" r="5" fill="var(--ink)"/>';
+    function plato(x, y, cnt, w, col, rmax) {
+      var py = y + 92, out = '<line x1="' + x + '" y1="' + y + '" x2="' + (x - 40) + '" y2="' + py + '" stroke="var(--line)"/><line x1="' + x + '" y1="' + y + '" x2="' + (x + 40) + '" y2="' + py + '" stroke="var(--line)"/>';
+      out += '<line x1="' + (x - 48) + '" y1="' + py + '" x2="' + (x + 48) + '" y2="' + py + '" stroke="var(--ink-2)" stroke-width="3" stroke-linecap="round"/>';
+      var r = Math.max(2.4, Math.min(rmax, 3 * Math.sqrt(w))), paso = 2 * r + 1.5, porFila = Math.max(1, Math.floor(92 / paso));
+      for (var t = 0; t < cnt; t++) {
+        var fila = Math.floor(t / porFila), col2 = t % porFila, ancho = Math.min(cnt - fila * porFila, porFila) * paso;
+        out += '<circle cx="' + (x - ancho / 2 + paso / 2 + col2 * paso) + '" cy="' + (py - r - 2 - fila * paso) + '" r="' + r + '" fill="' + col + '"/>';
+      }
+      return out;
+    }
+    s += plato(xl, yl, nl, wl, "var(--ink-3)", 9) + plato(xr, yr, nf, wf, "var(--neg)", 11);
+    s += "</svg>";
+    var ver = ST.pesos;
+    s += '<ul class="metr"><li>legítimas: 36 fichas × peso <b>' + (ver ? f4(wl) : "1") + "</b> = <b>" + (ver ? numTxt(sL) : 36) + "</b></li>" +
+      "<li>fraudes: " + nf + " fichas × peso <b>" + (ver ? f4(wf) : "1") + "</b> = <b>" + (ver ? numTxt(sF) : nf) + "</b></li></ul>";
+    if (ver) s += '<div class="formula-viva">w = n / (k · n_c): legítima ' + n + " / (2 · 36) = " + f4(wl) + "; fraude " + n + " / (2 · " + nf + ") = " + f4(wf) + ". Cada platillo pesa n / k = " + numTxt(n / 2) + ".</div>";
+    else s += '<p class="esc-nota">Sin pesos, cada ficha pesa 1: el platillo de las legítimas se hunde.</p>';
+    return s;
+  }
+  function metricas(tp, fn, fp, tn) {
+    return { exa: (tp + tn) / (tp + fn + fp + tn), rec: tp / (tp + fn), esp: tn / (tn + fp), bal: (tp / (tp + fn) + tn / (tn + fp)) / 2 };
+  }
+  function tarjetaModelo(nombre, tp, fn, fp, tn, ocultarBal) {
+    var m = metricas(tp, fn, fp, tn);
+    return '<div class="caja"><h4>' + nombre + '</h4><table class="mc"><tr><th></th><th>dice fraude</th><th>dice legítima</th></tr><tr><th>es fraude</th><td class="' + (tp ? "tp" : "") + '">' + tp + '</td><td class="' + (fn ? "fn" : "") + '">' + fn +
+      '</td></tr><tr><th>es legítima</th><td class="' + (fp ? "fn" : "") + '">' + fp + '</td><td class="tp">' + tn + "</td></tr></table>" +
+      '<ul class="metr"><li>exactitud <b>' + f3(m.exa) + "</b></li><li>recall (TPR) <b>" + f3(m.rec) + "</b></li><li>especificidad (TNR) <b>" + f3(m.esp) + "</b></li><li>exactitud balanceada <b>" + (ocultarBal ? "?" : f3(m.bal)) + "</b></li></ul></div>";
+  }
+  function dynMetricas() {
+    var fa = ST.fa;
+    var h = '<p class="esc-nota" style="margin-top:0">Prueba estratificada: 9 legítimas y 1 fraude.</p><div class="modelos">' +
+      tarjetaModelo('Siempre "legítima"', 0, 1, 0, 9, false) + tarjetaModelo("Detector", 1, 0, fa, 9 - fa, !est.c7) + "</div>";
+    var a = metricas(0, 1, 0, 9), d = metricas(1, 0, fa, 9 - fa);
+    h += '<p class="esc-frase">Por exactitud gana ' + (a.exa > d.exa ? 'el perezoso (' + f3(a.exa) + " contra " + f3(d.exa) + ")" : a.exa < d.exa ? "el detector" : "nadie: empatan") + "." +
+      (est.c7 ? " Por exactitud balanceada gana " + (d.bal > a.bal ? "el detector (" + f3(d.bal) + " contra 0.500)." : d.bal < a.bal ? "el perezoso." : "nadie: empatan en 0.500.") : " La exactitud balanceada del detector aparece al resolver el chequeo.") + "</p>";
+    return h;
+  }
+  function renderDyn() {
+    var h = "";
+    if (modo <= 2) h = dynParticion();
+    else if (modo === 3) h = dynPliegues();
+    else if (modo === 4) h = dynRemuestreo();
+    else if (modo === 5) h = balanza();
+    else h = dynMetricas();
+    $("escDyn").innerHTML = h;
+  }
+  function render() { renderCtrl(); renderDyn(); }
+  function refrescarChecks() { [chk2, chk5, chk6, chk7].forEach(function (c) { if (c) c.refrescar(); }); }
+
+  function entrar(i) {
+    modo = i;
+    if (i === 2 && !est.c3 && (ST.K !== 5 || Math.abs(ST.f - 0.2) > 1e-9)) { ST.K = 5; ST.f = 0.2; reiniciarConteo(); }
+    if (i === 1 && !ST.ult) ST.ult = partir("azar");
+    $("escHint").textContent = HINTS[i];
+    render();
+    refrescarChecks();
+  }
+
+  $("escCtrl").addEventListener("click", function (e) {
+    var b = e.target.closest("button[data-acc]");
+    if (!b || b.disabled) return;
+    var acc = b.getAttribute("data-acc"), v = b.getAttribute("data-v");
+    if (acc === "azar" || acc === "estrat") ST.ult = partir(acc);
+    else if (acc === "rep-azar") { for (var i = 0; i < 100; i++) ST.ult = partir("azar"); }
+    else if (acc === "rep-estrat") { for (var j = 0; j < 100; j++) ST.ult = partir("estrat"); }
+    else if (acc === "reset") reiniciarConteo();
+    else if (acc === "f") { ST.f = +v; reiniciarConteo(); }
+    else if (acc === "kf") ST.kf = +v;
+    else if (acc === "plieg") { ST.plieg = v; ST.perm = null; }
+    else if (acc === "rebarajar") ST.perm = null;
+    else if (acc === "remu") ST.remu = v;
+    else if (acc === "antes") ST.antes = !ST.antes;
+    else if (acc === "pesos") ST.pesos = !ST.pesos;
+    else if (acc === "fa") ST.fa = +v;
+    render();
+    refrescarChecks();
+  });
+  $("escCtrl").addEventListener("input", function (e) {
+    var t = e.target, sl = t.getAttribute && t.getAttribute("data-sl");
+    if (!sl) return;
+    if (sl === "K") { ST.K = +t.value; reiniciarConteo(); $("lblK").textContent = ST.K; }
+    else if (sl === "nf") { ST.nf = +t.value; genCopias(); $("lblNf").textContent = ST.nf; }
+    renderDyn();
+    refrescarChecks();
+  });
+
+  /* ---------------- chequeos de cada paso ---------------- */
+  B.opcionMultiple(cuerpo("chk1"), {
+    pregunta: "Partes al azar muchas veces. ¿Con qué frecuencia la prueba de 10 compras no trae ningún fraude?",
+    opciones: ["Más o menos una de cada tres veces.", "Casi nunca, menos de 1 de cada 20.", "Una de cada diez.", "La mitad de las veces."],
+    correcta: 0,
+    pistas: [null,
+      "La intuición dice que el 10 % de 10 es 1. Pero 1 es solo el promedio: con 5 fraudes repartidos entre 50, quedar fuera de 10 elegidas no es raro para ninguno.",
+      "Ese es el 10 % de fraudes del total. La pregunta es otra: que los 5 fraudes queden todos en las 40 que no elegiste.",
+      "Demasiado. Lo más frecuente es que caiga justo 1 fraude."],
+    explicacion: "La probabilidad exacta es <b>31.1 %</b>: casi una de cada tres particiones deja la prueba sin fraudes. Lo más frecuente es 1 fraude (43.1 %), pero 2 o más también pasa (25.8 %). <b>Ahora parte y repite 100 veces</b>: los puntos morados son esas probabilidades.",
+    alResolver: function () { est.c1 = true; $("post1").hidden = false; if (pasos && pasos.actual() === 0) entrar(0); if (pasos) pasos.completar(0); }
+  });
+
+  chk2 = B.numerico(cuerpo("chk2"), {
+    pregunta: function () {
+      var u = ST.ult;
+      if (!u) return "Primero toca <b>Partir al azar</b> en el escenario.";
+      return "En esta partición la prueba tiene <b>" + u.k + "</b> fraude" + (u.k === 1 ? "" : "s") + " (el número del contador) entre " + u.test.length + " compras. ¿Qué exactitud saca el modelo que dice siempre \"legítima\"?";
+    },
+    respuesta: function () { var u = ST.ult; return u ? (u.test.length - u.k) / u.test.length : NaN; },
+    tolerancia: 0.001,
+    pistas: ["Cuenta los aciertos: el modelo acierta todas las legítimas y ningún fraude.", function () { var u = ST.ult; return u ? "Acierta " + (u.test.length - u.k) + " de " + u.test.length + "." : "Parte primero."; }],
+    diagnostico: function (v) {
+      var u = ST.ult;
+      if (!u) return "Primero parte al azar en el escenario.";
+      if (Math.abs(v - u.k / u.test.length) < 0.001) return "Esa es la parte de fraudes. El modelo acierta todas las legítimas, no los fraudes.";
+      if (Math.abs(v - (u.test.length - u.k)) < 0.001) return "Ese es el número de aciertos. La exactitud es la parte: divide entre " + u.test.length + ".";
+      return null;
+    },
+    explicacion: function () {
+      var u = ST.ult, n = u ? u.test.length : 10, k = u ? u.k : 0;
+      return "Acierta las " + (n - k) + " legítimas y " + (k === 1 ? "falla el fraude" : k ? "falla los " + k + " fraudes" : "no hay ningún fraude que fallar") + ": exactitud <b>" + numTxt((n - k) / n) + "</b>. " +
+        (k === 0 ? "Exactitud perfecta para un modelo que no detecta nada, y un recall de 0/0." : "Su recall es 0: no atrapa ninguno. Si la partición hubiera salido sin fraudes, la exactitud sería 1.") + " <b>Mira el escenario:</b> ya se ve la exactitud; parte otra vez y mira cómo cambia.";
+    },
+    alResolver: function () { est.c2 = true; if (pasos.actual() === 1) entrar(1); pasos.completar(1); }
+  });
+
+  B.numerico(cuerpo("chk3"), {
+    pregunta: "Supón ahora 10 fraudes en las 50 compras y prueba de 20 %. ¿Cuántos fraudes van a la prueba estratificada?",
+    respuesta: 2,
+    tolerancia: 0,
+    pistas: ["Cada clase aporta su 20 % por separado.", "Fraudes: 10 · 0.2."],
+    diagnostico: function (v) {
+      if (v === 1) return "Así sería con 5 fraudes. Con 10, la clase rara es el doble: su 20 % también.";
+      if (v === 8) return "Ese es el número de legítimas que van a la prueba: 40 · 0.2. La pregunta es por los fraudes.";
+      if (v === 10) return "Ese es el tamaño de toda la prueba. ¿Qué parte de ella son fraudes?";
+      return null;
+    },
+    explicacion: "$10 \\cdot 0.2 = 2$ fraudes y $40 \\cdot 0.2 = 8$ legítimas: la prueba repite la proporción 1 a 4 del total. <b>Ahora el deslizador está libre:</b> pon 10 fraudes y parte estratificado.",
+    alResolver: function () { est.c3 = true; if (pasos.actual() === 2) entrar(2); cerrar3(); }
+  });
+  B.opcionMultiple(cuerpo("chk3b"), {
+    pregunta: "Partes las 50 compras originales con <code>stratify=y</code>. ¿Qué porcentaje de fraudes queda en el entrenamiento?",
+    opciones: ["10 %: 4 de 40.", "50 %: estratificar iguala las clases.", "0 %: los fraudes se van a la prueba.", "20 %: la fracción de prueba."],
+    correcta: 0,
+    pistas: [null, "Estratificar no agrega ni quita fraudes. ¿Cuántos fraudes quedan en las 40 compras del entrenamiento?", "Solo 1 de los 5 fraudes va a la prueba; los otros 4 se quedan.", "El 20 % es la parte de cada clase que va a la prueba, no la proporción de fraudes."],
+    explicacion: "Quedan <b>4 fraudes en 40</b>: el 10 %, igual que en el total y que en la prueba (1 de 10). Estratificar conserva la proporción.",
+    alResolver: function () { est.c3b = true; $("dest3").hidden = false; cerrar3(); }
+  });
+  function cerrar3() { if (est.c3 && est.c3b) pasos.completar(2); }
+
+  B.opcionMultiple(cuerpo("chk4"), {
+    pregunta: "Entrenamiento con 4 fraudes y <code>StratifiedKFold</code> con 5 pliegues. ¿Cuántos pliegues validan sin ningún fraude?",
+    opciones: ["1: cuatro fraudes no alcanzan para cinco pliegues.", "0: estratificar asegura un fraude por pliegue.", "4", "5"],
+    correcta: 0,
+    pistas: [null, "Estratificar reparte lo que hay, pero no puede partir un fraude en pedazos. ¿Cuántos pliegues hay y cuántos fraudes?", "Eso pasa con <code>KFold</code> sin barajar sobre un archivo ordenado por clase, no con el estratificado.", "Estratificado reparte un fraude por pliegue mientras haya."],
+    explicacion: "Sale <code>[0, 1, 1, 1, 1]</code>: <b>un pliegue</b> valida sin fraudes, y scikit-learn avisa que la clase menos poblada tiene solo 4 miembros. <b>Ahora prueba en el escenario</b> los cuatro modos y varios valores de k.",
+    alResolver: function () { est.c4 = true; $("post4").hidden = false; if (pasos.actual() === 3) entrar(3); pasos.completar(3); }
+  });
+
+  chk5 = B.numerico(cuerpo("chk5"), {
+    pregunta: function () { return "El entrenamiento tiene 36 legítimas y <b>" + ST.nf + "</b> fraude" + (ST.nf === 1 ? "" : "s") + " (el deslizador). Sobremuestreas los fraudes hasta igualar a las legítimas. ¿Cuántas <b>copias nuevas</b> agregas?"; },
+    respuesta: function () { return Math.max(0, 36 - ST.nf); },
+    tolerancia: 0,
+    pistas: ["¿Cuántos fraudes tiene que haber al final? ¿Cuántos hay ya?"],
+    diagnostico: function (v) {
+      if (v === 36) return "36 es el total de fraudes después de sobremuestrear. Algunos ya estaban: ¿cuántas copias son nuevas?";
+      if (v === 72) return "72 son todas las filas después. La pregunta es por las copias nuevas.";
+      return null;
+    },
+    explicacion: function () { var c = Math.max(0, 36 - ST.nf); return "Hay que llegar a 36 fraudes y ya hay " + ST.nf + ": <b>" + c + " copias</b>. El entrenamiento queda en 36 + 36 = 72 filas. Con submuestreo la cuenta es la misma, al revés: descartas " + c + " legítimas y quedan " + (2 * ST.nf) + " filas. <b>Ahora prueba Sobremuestrear</b> en el escenario."; },
+    alResolver: function () { est.c5 = true; if (pasos.actual() === 4) entrar(4); pasos.completar(4); }
+  });
+
+  chk6 = B.numerico(cuerpo("chk6"), {
+    pregunta: function () { return "Con 36 legítimas y <b>" + ST.nf + "</b> fraude" + (ST.nf === 1 ? "" : "s") + " en el entrenamiento, ¿qué peso recibe cada fraude con <code>class_weight=\"balanced\"</code>? (dos decimales)"; },
+    respuesta: function () { return (36 + ST.nf) / (2 * ST.nf); },
+    tolerancia: 0.01,
+    pistas: [function () { return "n = " + (36 + ST.nf) + " filas, k = 2 clases, n_c = " + ST.nf + " fraudes."; }],
+    diagnostico: function (v) {
+      if (Math.abs(v - 36 / ST.nf) < 0.01) return "Eso es la razón entre clases, 36 / " + ST.nf + ". Divide n entre k · n_c, no entre la otra clase.";
+      if (Math.abs(v - (36 + ST.nf) / ST.nf) < 0.01) return "Falta la k: hay 2 clases, divide también entre 2.";
+      return null;
+    },
+    explicacion: function () { var n = 36 + ST.nf; return "<span>w = " + n + " / (2 · " + ST.nf + ") = <b>" + f2(n / (2 * ST.nf)) + "</b></span>, y cada legítima pesa " + n + " / (2 · 36) = " + f4(n / 72) + ". Los dos platillos pesan " + numTxt(n / 2) + ". <b>Ahora aplica los pesos</b> en el escenario."; },
+    alResolver: function () { est.c6 = true; ST.pesos = true; if (pasos.actual() === 5) entrar(5); pasos.completar(5); }
+  });
+
+  chk7 = B.numerico(cuerpo("chk7"), {
+    pregunta: function () { return "El detector atrapa el fraude y da <b>" + ST.fa + "</b> falsa" + (ST.fa === 1 ? "" : "s") + " alarma" + (ST.fa === 1 ? "" : "s") + ". ¿Cuál es su exactitud balanceada? (tres decimales)"; },
+    respuesta: function () { return (1 + (9 - ST.fa) / 9) / 2; },
+    tolerancia: 0.002,
+    pistas: ["TPR: ¿qué parte de los fraudes atrapa? TNR: ¿qué parte de las 9 legítimas deja pasar como legítimas?", function () { return "TPR = 1/1 = 1 y TNR = " + (9 - ST.fa) + "/9. Promedia."; }],
+    diagnostico: function (v) {
+      if (Math.abs(v - (10 - ST.fa) / 10) < 0.002) return "Esa es la exactitud. La balanceada promedia el acierto de cada clase por separado.";
+      if (Math.abs(v - (9 - ST.fa) / 9) < 0.002) return "Esa es solo la especificidad. Falta promediarla con el recall.";
+      return null;
+    },
+    explicacion: function () { return "(1 + " + (9 - ST.fa) + "/9) / 2 = <b>" + f3((1 + (9 - ST.fa) / 9) / 2) + "</b>. El perezoso saca 0.5, porque acierta todas las legítimas y ningún fraude. Por exactitud balanceada, el detector gana mientras tenga menos de 9 falsas alarmas."; },
+    alResolver: function () { est.c7 = true; if (pasos.actual() === 6) entrar(6); pasos.completar(6); }
+  });
+
+  pasos = B.pasos($("recorrido"), {
+    concepto: C,
+    alEntrar: entrar,
+    alTerminar: function () { location.hash = "retos"; }
+  });
+  est.c1 = pasos.hecho(0);
+  est.c2 = pasos.hecho(1);
+  est.c3 = est.c3b = pasos.hecho(2);
+  est.c4 = pasos.hecho(3);
+  est.c5 = pasos.hecho(4);
+  est.c6 = pasos.hecho(5);
+  est.c7 = pasos.hecho(6);
+  if (est.c1) $("post1").hidden = false;
+  if (est.c3b) $("dest3").hidden = false;
+  if (est.c4) $("post4").hidden = false;
+  entrar(pasos.actual());
+
+  /* ---------------- hipotesis inicial ---------------- */
+  (function () {
+    var ta = $("hipotesis"), t = null;
+    ta.value = B.nota("muestreo-desbalance", "hipotesis");
+    function cita() {
+      var v = ta.value.trim(), e = $("citaHipo");
+      e.hidden = !v;
+      if (v) { e.textContent = ""; e.appendChild(document.createTextNode("Al principio escribiste: «" + v + "». Ya viste que al azar la prueba queda sin fraudes casi una de cada tres veces, y que estratificar lo evita. La pregunta ahora es si estratificar también cambia la proporción.")); }
+    }
+    cita();
+    ta.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { B.nota("muestreo-desbalance", "hipotesis", ta.value); $("hipoEstado").textContent = "Guardado en este navegador."; cita(); }, 500);
+    });
+  })();
+
+  /* ---------------- marcadores de estado de retos ---------------- */
+  function pintarEstados() {
+    [].forEach.call(document.querySelectorAll("[data-reto]"), function (e) {
+      var ok = C.retoOk(e.getAttribute("data-reto"));
+      e.textContent = ok ? "resuelto" : "pendiente";
+      e.classList.toggle("ok", ok);
+    });
+  }
+  C.alCambiar(pintarEstados);
+
+  /* ---------------- reto: ojo clinico ---------------- */
+  var SITUACIONES = [
+    function () { var n = eleg([50, 100, 200]), K = Math.round(n * eleg([0.06, 0.08, 0.1])); return { t: "Partes al azar " + n + " compras con " + K + " fraudes. La prueba de " + n / 5 + " salió con <b>0 fraudes</b>. Mides la exactitud del detector en esa prueba.", ok: false, e: "Una prueba sin casos raros no puede medir cómo se detectan: el modelo perezoso saca exactitud 1 y el recall es 0/0. Regla: estratifica al partir." }; },
+    function () { var n = eleg([50, 100, 200]), K = Math.round(n * eleg([0.1, 0.2])); return { t: "Partes " + n + " compras con " + K + " fraudes con <code>stratify=y</code>, 20 % de prueba. La prueba trae " + K / 5 + " fraude" + (K / 5 === 1 ? "" : "s") + ".", ok: true, e: "La prueba tiene la proporción real y trae casos raros. Regla: estratificar conserva la proporción." }; },
+    function () { var K = eleg([4, 5, 6]); return { t: "Tienes " + K + " fraudes. Los repites con reemplazo hasta igualar a las legítimas y <b>después</b> partes 80/20 estratificado.", ok: false, e: "Las copias de un mismo fraude quedan a los dos lados: la prueba mide memoria. Regla: primero partir, después rebalancear solo el entrenamiento." }; },
+    function () { return { t: "Partes estratificado. Después sobremuestreas los fraudes <b>solo en el entrenamiento</b>. La prueba queda como salió.", ok: true, e: "Es el orden correcto: la prueba no tiene copias y mantiene la proporción real." }; },
+    function () { var k = eleg([5, 10, 20]); return { t: "Para que la prueba sea \"justa\", la armas a mano con " + k + " fraudes y " + k + " legítimas: 50/50.", ok: false, e: "Una prueba rebalanceada no se parece al mundo real: la exactitud y la precisión que midas ahí no son las que vas a ver. Regla: la prueba lleva la proporción real." }; },
+    function () { var k = eleg([5, 10]); return { t: "El archivo viene con todas las legítimas primero. Validas con <code>KFold(n_splits=" + k + ")</code>, sin barajar.", ok: false, e: "Los fraudes caen todos en los últimos pliegues: los demás validan sin ningún fraude. Regla: baraja o usa StratifiedKFold." }; },
+    function () { return { t: "Partes estratificado y <b>submuestreas</b> las legítimas solo en el entrenamiento, hasta igualar a los fraudes.", ok: true, e: "El entrenamiento queda balanceado y la prueba conserva la proporción real." }; },
+    function () { var p = eleg([3, 5, 8]); return { t: "Prueba estratificada con " + p + " % de fraudes. El detector saca exactitud " + (100 - p) + " % y recall 0.", ok: true, e: "La prueba sirve: por eso descubre que el <b>modelo</b> no sirve, porque no atrapa ningún fraude. No confundas una prueba mala con un modelo malo." }; },
+    function () { return { t: "Entrenas con <code>class_weight=\"balanced\"</code> y mides en una prueba estratificada que no tocaste.", ok: true, e: "Los pesos cambian el entrenamiento, no la prueba: la medición es honesta." }; },
+    function () { var f = eleg([3, 4]), k = eleg([5, 8, 10]); return { t: "El entrenamiento tiene " + f + " fraudes y validas con <code>StratifiedKFold(n_splits=" + k + ")</code>.", ok: false, e: "Con " + f + " fraudes y " + k + " pliegues, " + (k - f) + " pliegues validan sin fraudes. Regla: a lo sumo tantos pliegues como casos raros." }; }
+  ];
+  (function () {
+    var cont = $("ojo");
+    cont.innerHTML = '<div class="ronda"></div><div class="situacion" id="ojoSit"></div>' +
+      '<div class="ojo-opts"><button type="button" class="opt" data-a="1">La prueba sirve</button><button type="button" class="opt" data-a="0">La prueba no sirve</button></div>' +
+      '<div class="fb" aria-live="polite"></div><div class="btn-row" style="margin-top:10px"><button type="button" class="primary sig" hidden>Siguiente ronda</button></div>';
+    var ronda, aciertos, respondida, actual, orden;
+    function nueva() { ronda = 0; aciertos = 0; orden = barajar(rango(SITUACIONES.length)).slice(0, 8); mostrar(); }
+    function mostrar() {
+      respondida = false;
+      actual = SITUACIONES[orden[ronda]]();
+      cont.querySelector(".ronda").textContent = "Ronda " + (ronda + 1) + " de 8 · aciertos " + aciertos;
+      $("ojoSit").innerHTML = actual.t;
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (b) { b.disabled = false; b.className = "opt"; });
+      cont.querySelector(".fb").innerHTML = "";
+      cont.querySelector(".sig").hidden = true;
+    }
+    cont.querySelector(".ojo-opts").addEventListener("click", function (e) {
+      var b = e.target.closest(".opt");
+      if (!b || respondida) return;
+      respondida = true;
+      var ok = (b.getAttribute("data-a") === "1") === actual.ok;
+      if (ok) aciertos++;
+      b.classList.add(ok ? "ok" : "mal");
+      if (!ok) cont.querySelector('.ojo-opts [data-a="' + (actual.ok ? "1" : "0") + '"]').classList.add("ok");
+      [].forEach.call(cont.querySelectorAll(".ojo-opts .opt"), function (x) { x.disabled = true; });
+      cont.querySelector(".fb").innerHTML = (ok ? '<span class="si">Bien.</span> ' : '<span class="no">No.</span> ') + actual.e;
+      var sig = cont.querySelector(".sig");
+      sig.hidden = false;
+      if (ronda === 7) {
+        var aprobo = aciertos >= 7;
+        C.reto("ojo", aprobo);
+        cont.querySelector(".ronda").textContent = "Terminaste: " + aciertos + " de 8" + (aprobo ? ". Aprobado." : ". Necesitas 7 para aprobar.");
+        sig.textContent = "Otra tanda";
+      } else sig.textContent = "Siguiente ronda";
+    });
+    cont.querySelector(".sig").addEventListener("click", function () { if (ronda === 7) nueva(); else { ronda++; mostrar(); } });
+    nueva();
+  })();
+
+  /* ---------------- reto: construir ---------------- */
+  (function () {
+    var s = { K: 5, f: 0.2, remu: "orig", nf: 4 };
+    var OBJ = [
+      { t: "Una prueba estratificada con 2 fraudes (de 50 compras).", ok: function () { return Math.round(s.K * s.f) === 2 && Math.abs(s.K * s.f - 2) < 0.5; } },
+      { t: "Un entrenamiento balanceado de 8 filas, partiendo de 36 legítimas y 4 fraudes.", ok: function () { return s.remu === "sub"; } },
+      { t: "Pesos balanced donde cada fraude valga 10, en un entrenamiento de 40 filas.", ok: function () { return Math.abs(40 / (2 * s.nf) - 10) < 1e-9; } }
+    ];
+    var hechos = [false, false, false], ul = $("objetivos");
+    OBJ.forEach(function (o) { var li = document.createElement("li"); li.innerHTML = '<span class="m"></span><span>' + o.t + "</span>"; ul.appendChild(li); });
+    var el = $("construir");
+    el.innerHTML = '<div class="constr">' +
+      '<div class="caja"><h4>a. Partición estratificada de 50 compras</h4><div class="desliz"><label>Fraudes: <b data-l="K">5</b><input type="range" min="2" max="10" value="5" data-c="K" aria-label="Fraudes en las 50"></label>' +
+      '<span>Prueba: <span class="segm" data-g="f">' + [0.1, 0.2, 0.3].map(function (f) { return '<button type="button" data-f="' + f + '" aria-pressed="' + (f === 0.2) + '">' + Math.round(f * 100) + "%</button>"; }).join("") + "</span></span></div><p data-o=\"a\"></p></div>" +
+      '<div class="caja"><h4>b. Entrenamiento de 36 legítimas y 4 fraudes</h4><span class="segm" data-g="remu"><button type="button" data-r="orig" aria-pressed="true">Original</button><button type="button" data-r="sub" aria-pressed="false">Submuestrear</button><button type="button" data-r="sobre" aria-pressed="false">Sobremuestrear</button></span><p data-o="b"></p></div>' +
+      '<div class="caja"><h4>c. Pesos en un entrenamiento de 40 filas</h4><div class="desliz"><label>Fraudes: <b data-l="nf">4</b><input type="range" min="1" max="20" value="4" data-c="nf" aria-label="Fraudes en el entrenamiento de 40"></label></div><p data-o="c"></p></div></div>';
+    function pintar() {
+      var x = s.K * s.f, n = Math.round(50 * s.f);
+      el.querySelector('[data-o="a"]').innerHTML = "Prueba de <b>" + n + "</b> compras; fraudes: " + s.K + " · " + s.f + " = <b>" + numTxt(x) + "</b>" + (nEnt(x) ? "" : " (la librería manda " + Math.floor(x) + " o " + Math.ceil(x) + ")") + ".";
+      var filas = s.remu === "sub" ? "4 + 4 = 8" : s.remu === "sobre" ? "36 + 36 = 72" : "36 + 4 = 40";
+      el.querySelector('[data-o="b"]').innerHTML = "Filas: <b>" + filas + "</b>.";
+      el.querySelector('[data-o="c"]').innerHTML = "Legítimas " + (40 - s.nf) + ", fraudes " + s.nf + ". Peso de un fraude: 40 / (2 · " + s.nf + ") = <b>" + numTxt(40 / (2 * s.nf)) + "</b>.";
+      OBJ.forEach(function (o, i) { if (o.ok()) hechos[i] = true; });
+      [].forEach.call(ul.children, function (li, i) { li.classList.toggle("hecho", hechos[i]); });
+      if (hechos.every(Boolean) && !pintar.listo) { pintar.listo = true; C.reto("construir", true); }
+    }
+    el.addEventListener("input", function (e) {
+      var c = e.target.getAttribute("data-c");
+      if (!c) return;
+      s[c] = +e.target.value;
+      el.querySelector('[data-l="' + c + '"]').textContent = s[c];
+      pintar();
+    });
+    el.addEventListener("click", function (e) {
+      var b = e.target.closest("button");
+      if (!b) return;
+      var g = b.parentNode.getAttribute("data-g");
+      if (g === "f") s.f = +b.getAttribute("data-f");
+      else if (g === "remu") s.remu = b.getAttribute("data-r");
+      else return;
+      [].forEach.call(b.parentNode.children, function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+      pintar();
+    });
+    pintar();
+  })();
+
+  /* ---------------- reto: a mano ---------------- */
+  function campos(el, cfg) {
+    var fallos = 0, nP = 0, hecho = false;
+    function v(x) { return typeof x === "function" ? x() : x; }
+    el.innerHTML = '<div class="dato-mano">' + v(cfg.datos) + '</div><p class="q">' + B.conTex(v(cfg.pregunta)) + '</p><div class="campos-fila">' +
+      cfg.campos.map(function (c, i) {
+        return '<label class="campo"><span>' + (c.pre || "") + '</span><input class="num" data-k="' + i + '" inputmode="decimal" autocomplete="off" aria-label="' + escH(c.aria) + '"></label>';
+      }).join("") + '</div><div class="num-row" style="margin-top:8px"><button type="button" class="primary comprobar">Comprobar</button>' +
+      '<button type="button" class="pedir">Pista</button><button type="button" class="ver ghost" hidden>Ver solución</button></div>' +
+      '<div class="pistas"></div><div class="fb" aria-live="polite"></div>';
+    var ins = [].slice.call(el.querySelectorAll("input")), fb = el.querySelector(".fb"), ver = el.querySelector(".ver"), pedir = el.querySelector(".pedir");
+    function cerrar(ok) {
+      hecho = true;
+      ins.forEach(function (i) { i.disabled = true; });
+      el.querySelector(".comprobar").disabled = true;
+      pedir.disabled = true;
+      ver.hidden = true;
+      var r = document.createElement("button");
+      r.type = "button";
+      r.className = "reintentar ghost";
+      r.textContent = "Otro ejercicio";
+      r.addEventListener("click", function () { if (cfg.antesDeReintentar) cfg.antesDeReintentar(); campos(el, cfg); });
+      el.appendChild(r);
+      if (cfg.alResolver) cfg.alResolver(ok);
+    }
+    function comprobar() {
+      if (hecho) return;
+      var vals = ins.map(function (i) { return i.value.trim(); });
+      if (vals.some(function (x) { return x === ""; })) { fb.innerHTML = "Completa todos los espacios antes de comprobar."; return; }
+      var r = cfg.revisar(vals);
+      if (r.ok) {
+        ins.forEach(function (i) { i.classList.remove("mal"); i.classList.add("ok"); });
+        fb.innerHTML = '<span class="si">Correcto.</span> ' + B.conTex(v(cfg.solucion));
+        cerrar(true);
+        return;
+      }
+      fallos++;
+      (r.malos || ins.map(function (_, k) { return k; })).forEach(function (k) { ins[k].classList.add("mal"); });
+      fb.innerHTML = '<span class="no">Todavía no.</span> ' + B.conTex(r.msg);
+      if (fallos >= 3) ver.hidden = false;
+    }
+    el.querySelector(".comprobar").addEventListener("click", comprobar);
+    ins.forEach(function (i) {
+      i.addEventListener("keydown", function (e) { if (e.key === "Enter") comprobar(); });
+      i.addEventListener("input", function () { i.classList.remove("mal"); });
+    });
+    pedir.addEventListener("click", function () {
+      if (nP >= cfg.pistas.length) return;
+      var d = document.createElement("div");
+      d.className = "pista";
+      d.innerHTML = "<b>Pista " + (nP + 1) + ".</b> " + B.conTex(v(cfg.pistas[nP]));
+      el.querySelector(".pistas").appendChild(d);
+      nP++;
+      if (nP >= cfg.pistas.length) { pedir.disabled = true; ver.hidden = false; }
+    });
+    ver.addEventListener("click", function () {
+      fb.innerHTML = '<span class="no">Solución.</span> ' + B.conTex(v(cfg.solucion));
+      cerrar(false);
+    });
+  }
+  function genMano() {
+    var n = 60 + 10 * azar(15), opciones = [];
+    for (var F = 5; F <= n * 0.2; F += 5) if (F >= n * 0.05) opciones.push(F);
+    var F2 = eleg(opciones), Ltr = Math.round(0.8 * (n - F2)), Ftr = Math.round(0.8 * F2);
+    return { n: n, F: F2, r1: Math.round(F2 * 0.2), Ltr: Ltr, Ftr: Ftr, r2: 2 * Ltr, r3: (Ltr + Ftr) / (2 * Ftr) };
+  }
+  (function () {
+    var T = genMano();
+    campos($("mano"), {
+      datos: function () { return "<b>" + T.n + "</b> compras, de las cuales <b>" + T.F + "</b> son fraude. Partición estratificada con 20 % de prueba."; },
+      pregunta: "Responde las tres: (1) fraudes en la prueba; (2) filas del entrenamiento después de sobremuestrear los fraudes hasta igualar a las legítimas; (3) peso balanced de un fraude en el entrenamiento original, con dos decimales.",
+      campos: [{ pre: "(1)", aria: "Fraudes en la prueba" }, { pre: "(2)", aria: "Filas del entrenamiento sobremuestreado" }, { pre: "(3)", aria: "Peso de un fraude" }],
+      revisar: function (v) {
+        var a = B.aNumero(v[0]), b = B.aNumero(v[1]), c = B.aNumero(v[2]);
+        var ok = [a === T.r1, b === T.r2, Math.abs(c - T.r3) < 0.01], malos = [];
+        ok.forEach(function (x, i) { if (!x) malos.push(i); });
+        if (!malos.length) return { ok: true };
+        var msg = "";
+        if (!ok[0]) msg += (a === Math.round(T.F * 0.1) ? "(1) Usaste el 10 %: la prueba es el 20 % de cada clase. " : "(1) Toma el 20 % de los fraudes. ");
+        if (!ok[1]) msg += (b === T.Ltr + T.Ftr ? "(2) Ese es el entrenamiento sin sobremuestrear. " : b === T.Ltr ? "(2) Eso son solo las legítimas: suma los fraudes ya igualados. " : "(2) Primero las legítimas del entrenamiento (80 % de ellas); los fraudes suben hasta ese mismo número. ");
+        if (!ok[2]) msg += (Math.abs(c - T.Ltr / T.Ftr) < 0.01 ? "(3) Esa es la razón de clases. Usa n / (k · n_c) con las filas del entrenamiento." : "(3) n y n_c son del entrenamiento: el 80 % de cada cosa.");
+        return { msg: msg, malos: malos };
+      },
+      pistas: [
+        "20 % de cada clase por separado. El entrenamiento es el 80 % restante de cada clase.",
+        "Para sobremuestrear, iguala la minoría a la mayoría del entrenamiento: las filas finales son el doble de las legítimas.",
+        function () { return "Entrenamiento: " + T.Ltr + " legítimas y " + T.Ftr + " fraudes, n = " + (T.Ltr + T.Ftr) + ". (1) = " + T.F + " · 0.2 = " + T.r1 + "."; }
+      ],
+      solucion: function () { return "(1) " + T.F + " · 0.2 = <b>" + T.r1 + "</b>. (2) Entrenamiento: " + T.Ltr + " legítimas y " + T.Ftr + " fraudes; sobremuestreado, " + T.Ltr + " + " + T.Ltr + " = <b>" + T.r2 + "</b>. (3) " + (T.Ltr + T.Ftr) + " / (2 · " + T.Ftr + ") = <b>" + f2(T.r3) + "</b>."; },
+      antesDeReintentar: function () { T = genMano(); },
+      alResolver: function (ok) { C.reto("mano", ok); }
+    });
+  })();
+
+  /* ---------------- reto: cazar el error ---------------- */
+  B.cazarError($("error"), {
+    variantes: [
+      {
+        intro: "En Python, la partición a mano de la vida real con una línea cambiada. Imprime <code>10 0</code> y <code>[4, 9, 14, 19, 24, 29, 34, 39, 44, 49]</code>: la prueba quedó sin fraudes.",
+        lineas: [tt("cuenta = [0, 0]"), tt("test = []"), tt("for i in range(len(y)):"), tt("    k = y[i]"), tt("    cuenta[k] = cuenta[k] + 1"), tt("    if i % 5 == 4:"), tt("        test.append(i)")],
+        erronea: 5,
+        explicacion: "<code>i % 5 == 4</code> toma una de cada cinco <b>posiciones</b>, sin mirar la clase: ya no es estratificada. Lo correcto es <code>cuenta[k] % 5 == 0</code>, una de cada cinco <b>de su clase</b>. Con <code>i % 5 == 0</code> habría salido <code>10 1</code> por pura casualidad."
+      },
+      {
+        intro: "El peso balanced de un fraude, con 36 legítimas y 4 fraudes en el entrenamiento.",
+        lineas: ["n = 36 + 4 = 40,\\quad k = 2,\\quad n_{\\text{fraude}} = 4", "w_{\\text{fraude}} = \\frac{36}{4} = 9", "w_{\\text{legítima}} = \\frac{40}{2 \\cdot 36} = 0.5556", "36 \\cdot 0.5556 = 20"],
+        erronea: 1,
+        explicacion: "La razón entre clases no es el peso. Lo correcto es <span>w = n / (k · n_c) = 40 / (2 · 4) = 5</span>, y así cada clase suma 20."
+      },
+      {
+        intro: "Un flujo para evaluar un detector de fraude con 5 fraudes en 50 compras.",
+        lineas: ["1.\\ \\text{Sobremuestrear los fraudes hasta 45.}", "2.\\ \\text{Partir 80/20 estratificado.}", "3.\\ \\text{Entrenar el detector.}", "4.\\ \\text{Medir el recall en la prueba.}"],
+        erronea: 0,
+        explicacion: "Sobremuestrear va <b>después</b> de partir, y solo en el entrenamiento. Así, la prueba recibe copias de fraudes que el modelo ya vio y mide memoria."
+      }
+    ],
+    alResolver: function (ok) { C.reto("error", ok); }
+  });
+
+  /* ---------------- retos: propiedades ---------------- */
+  function prop(id, cfg) {
+    cfg.reintentable = true;
+    cfg.mezclar = true;
+    cfg.alResolver = function (ok) { C.reto(id, ok); };
+    B.opcionMultiple($(id), cfg);
+  }
+  prop("prop1", {
+    pregunta: "¿Qué hace <code>stratify=y</code> en <code>train_test_split</code>?",
+    opciones: ["Mantiene la misma proporción de clases en entrenamiento y prueba.", "Duplica la clase rara hasta igualarla con la grande.", "Pone la mitad de cada clase en la prueba.", "Elimina filas de la clase grande."],
+    correcta: 0,
+    pistas: [null, "Eso es sobremuestrear. Es justo el error del libro de Nield en la página 38.", "La fracción de prueba es la misma para cada clase, pero es la que pediste (20 %), no la mitad.", "Eso es submuestrear."],
+    explicacion: "Parte cada clase por separado con la misma fracción: la prueba y el entrenamiento repiten la proporción del total. No agrega ni quita filas."
+  });
+  prop("prop2", {
+    pregunta: "¿Por qué el remuestreo se aplica solo al entrenamiento?",
+    opciones: ["Porque la prueba tiene que parecerse a los datos reales y no puede contener copias de casos del entrenamiento.", "Porque la prueba es más chica.", "Porque scikit-learn no deja remuestrear la prueba.", "Para que la exactitud suba."],
+    correcta: 0,
+    pistas: [null, "El tamaño no importa: importa la fuga de información y la proporción real.", "Sí deja: <code>resample</code> acepta cualquier arreglo. Por eso es una trampa.", "Al revés: rebalancear la prueba deforma la métrica."],
+    explicacion: "La prueba simula el mundo real, donde el fraude es raro. Rebalancearla cambia lo que mides, y sobremuestrear antes de partir mete copias de casos de entrenamiento en la prueba."
+  });
+  prop("prop3", {
+    pregunta: "Tienes 3 fraudes en el entrenamiento y quieres validación cruzada estratificada. ¿Cuántos pliegues como máximo para que todos validen con al menos un fraude?",
+    opciones: ["3", "5", "10", "Los que quieras: estratificado reparte."],
+    correcta: 0,
+    pistas: [null, "Cinco pliegues y tres fraudes: dos pliegues quedan vacíos.", "Peor aún, y scikit-learn te avisa que la clase menos poblada tiene menos miembros que pliegues.", "Estratificar no parte un fraude en pedazos."],
+    explicacion: "Cada pliegue necesita al menos un fraude entero: a lo sumo tantos pliegues como casos raros. Con 3 fraudes, 3 pliegues."
+  });
+
+  /* ---------------- formula de memoria ---------------- */
+  B.ordenar($("formula"), {
+    pregunta: "Arma el peso que <code>class_weight=\"balanced\"</code> le da a cada fila de la clase c.",
+    piezas: ["w_c =", "n", "/", "(", "k", "\\cdot", "n_c", ")"],
+    distractores: ["n_{\\text{otra}}", "n - n_c", "\\sqrt{\\ }"],
+    soluciones: [[0, 1, 2, 3, 4, 5, 6, 7]],
+    explicacion: "<span>w_c = n / (k · n_c)</span>. Con n = 40, k = 2 y n_c = 4 da 5. La razón 36 / 4 = 9 no es la fórmula: con ella las clases no sumarían lo mismo.",
+    alResolver: function (ok) { C.reto("formula", ok); }
+  });
+
+  /* ---------------- vida real: la particion estratificada a mano ---------------- */
+  (function () {
+    var CODIGO = {
+      py: [
+        ["lib", "from sklearn.model_selection import train_test_split"],
+        ["datos", "fraudes = [3, 12, 21, 36, 45]                # inventado: 5 fraudes en 50 compras"],
+        ["etiq", "y = [1 if i in fraudes else 0 for i in range(50)]"],
+        ["cuenta0", "cuenta = [0, 0]"],
+        ["test0", "test = []"],
+        ["fori", "for i in range(len(y)):"],
+        ["clase", "    k = y[i]"],
+        ["suma", "    cuenta[k] = cuenta[k] + 1"],
+        ["si", "    if cuenta[k] % 5 == 0:                   # uno de cada cinco de SU clase"],
+        ["mete", "        test.append(i)"],
+        ["imp1", "print(len(test), sum(y[i] for i in test))"],
+        ["imp2", "print(test)"],
+        ["lib2", "y_train, y_test = train_test_split(y, test_size=0.2, stratify=y, random_state=1)"],
+        ["imp3", "print(len(y_test) - sum(y_test), sum(y_test))"]
+      ],
+      r: [
+        ["lib", "suppressPackageStartupMessages(library(rsample))"],
+        ["datos", "fraudes <- c(4, 13, 22, 37, 46)              # inventado: 5 fraudes en 50 compras"],
+        ["etiq", "y <- ifelse(seq_len(50) %in% fraudes, 1, 0)"],
+        ["cuenta0", "cuenta <- c(0, 0)"],
+        ["test0", "test <- c()"],
+        ["fori", "for (i in seq_along(y)) {"],
+        ["clase", "  k <- y[i]"],
+        ["suma", "  cuenta[k + 1] <- cuenta[k + 1] + 1"],
+        ["si", "  if (cuenta[k + 1] %% 5 == 0) {             # uno de cada cinco de SU clase"],
+        ["mete", "    test <- c(test, i)"],
+        [null, "  }"],
+        [null, "}"],
+        ["imp1", "print(c(length(test), sum(y[test])))"],
+        ["imp2", "print(test)"],
+        ["semilla", "set.seed(1)"],
+        ["lib2", "p <- initial_split(data.frame(y = factor(y)), prop = 0.8, strata = y)"],
+        ["imp3", "print(table(testing(p)$y))"]
+      ]
+    };
+    var SAL = {
+      py: { imp1: ["10 1"], imp2: ["[5, 10, 16, 22, 27, 32, 38, 43, 45, 49]"], imp3: ["9 1"] },
+      r: { imp1: ["[1] 10  1"], imp2: [" [1]  6 11 17 23 28 33 39 44 46 50"], imp3: ["", "0 1 ", "9 1 "] }
+    };
+
+    // una foto del estado por linea ejecutada
+    var EV = [];
+    (function () {
+      var st = { fase: 1, i: null, k: null, c: [0, 0], test: [], datos: false, etiq: false, cuentaExiste: false, testExiste: false, sal: [], cond: null, lib: false };
+      function foto(id, extra) {
+        var e = { id: id, fase: st.fase, i: st.i, k: st.k, c: st.c.slice(), test: st.test.slice(), datos: st.datos, etiq: st.etiq, cuentaExiste: st.cuentaExiste, testExiste: st.testExiste, sal: st.sal.slice(), cond: st.cond, lib: st.lib };
+        for (var x in extra || {}) e[x] = extra[x];
+        EV.push(e);
+      }
+      foto("lib");
+      st.datos = true; foto("datos");
+      st.etiq = true; foto("etiq");
+      st.cuentaExiste = true; foto("cuenta0");
+      st.testExiste = true; foto("test0");
+      st.fase = 2;
+      for (var i = 0; i < N; i++) {
+        st.i = i; st.k = null; st.cond = null;
+        foto("fori");
+        st.k = Y5[i]; foto("clase");
+        st.c[st.k]++; foto("suma", { sube: st.k });
+        st.cond = st.c[st.k] % 5 === 0; foto("si");
+        if (st.cond) { st.test.push(i); foto("mete"); }
+      }
+      st.fase = 3; st.i = null; st.k = null; st.cond = null;
+      st.sal.push("imp1"); foto("imp1");
+      st.sal.push("imp2"); foto("imp2");
+      st.fase = 4; foto("semilla");
+      st.lib = true; foto("lib2");
+      st.sal.push("imp3"); foto("imp3", { fin: true });
+    })();
+
+    function narrar(e, ctx) {
+      var py = ctx.lang() === "py", ix = ctx.ix;
+      switch (e.id) {
+        case "lib": return py ? "Carga <code>train_test_split</code> de scikit-learn. Se usa solo al final, para comparar." : "Carga rsample, el paquete de particiones que recomienda la UD0. <code>suppressPackageStartupMessages</code> solo calla los mensajes al cargarlo.";
+        case "datos": return py ? "Las posiciones de los 5 fraudes, contando desde 0 como Python: 3, 12, 21, 36 y 45." : "Las posiciones de los 5 fraudes, contando desde 1 como R: 4, 13, 22, 37 y 46. Son las mismas compras que en Python.";
+        case "etiq": return "<code>y</code> tiene 50 etiquetas: 1 si la compra es fraude, 0 si es legítima. Así se ve la tira del recorrido.";
+        case "cuenta0": return "Un contador por clase. " + (py ? "<code>cuenta[0]</code> cuenta legítimas y <code>cuenta[1]</code> fraudes." : "<code>cuenta[1]</code> cuenta legítimas y <code>cuenta[2]</code> fraudes: en R los índices empiezan en 1.");
+        case "test0": return "La lista de la prueba, vacía. Va a guardar índices de compras.";
+        case "fori": return "Vuelta " + (e.i + 1) + " de 50: la compra de índice <b>" + ix(e.i) + "</b>." + (e.i === 0 ? " El bucle recorre la lista una sola vez." : "");
+        case "clase": return "<code>k</code> es su clase: <b>" + e.k + "</b> (" + (e.k ? "fraude" : "legítima") + ").";
+        case "suma": return py ? "Sube el contador de su clase: <code>cuenta[" + e.k + "]</code> pasa a <b>" + e.c[e.k] + "</b>." : "<code>cuenta[k + 1]</code>: en R los índices empiezan en 1, así que la clase " + e.k + " vive en la casilla " + (e.k + 1) + ". Pasa a <b>" + e.c[e.k] + "</b>.";
+        case "si": return "¿El contador de la clase de esta compra llegó a un múltiplo de 5? Entonces es una de cada cinco de <b>su</b> clase. " + e.c[e.k] + (py ? " % " : " %% ") + "5 = " + (e.c[e.k] % 5) + ": <b>" + (e.cond ? "sí" : "no") + "</b>.";
+        case "mete": return "La compra " + ix(e.i) + " va a la prueba: es la " + e.c[e.k] + ".ª " + (e.k ? "fraude" : "legítima") + ". La prueba lleva " + e.test.length + ".";
+        case "imp1": return "10 compras en la prueba, y la suma de sus etiquetas dice cuántas son fraude: <b>1</b>. Nueve de las 45 legítimas y uno de los 5 fraudes: el 20 % de cada clase.";
+        case "imp2": return "Los índices de la prueba. " + (py ? "El 45" : "El 46") + " es el único fraude: el quinto fraude hizo llegar su contador a 5.";
+        case "semilla": return py ? "Esta línea solo existe en R: en Python la semilla va dentro de la llamada, <code>random_state=1</code>." : "Fija la semilla para que la partición al azar de la línea siguiente sea reproducible.";
+        case "lib2": return py ? "La librería: <code>stratify=y</code> baraja dentro de cada clase y toma el 20 % de cada una." : "La librería: <code>strata = y</code> baraja dentro de cada clase y toma el 20 % de cada una. <code>prop = 0.8</code> es la parte del entrenamiento.";
+        case "imp3": return py ? "9 legítimas y 1 fraude en la prueba: la misma proporción que el bucle, aunque las compras elegidas son otras porque la librería baraja." : "<code>table</code> cuenta cada clase en la prueba: 9 y 1, la misma proporción que el bucle. La línea vacía de arriba es el nombre de la tabla, que no tiene.";
+      }
+      return "";
+    }
+    function visual(e, anterior, ctx) {
+      var py = ctx.lang() === "py";
+      if (!e || !e.etiq) $("vrTira").innerHTML = '<p class="esc-nota">' + (e && e.datos ? "Todavía no hay etiquetas: solo la lista de posiciones." : "Todavía no hay datos.") + "</p>";
+      else {
+        var enT = {};
+        e.test.forEach(function (i) { enT[i] = true; });
+        $("vrTira").innerHTML = '<div class="tira diez">' + rango(N).map(function (i) { return cas(i, Y5[i], (enT[i] ? " t" : "") + (e.i === i ? " on" : ""), ctx.ix(i)); }).join("") + "</div>";
+      }
+      $("vrCuenta").innerHTML = e && e.cuentaExiste ?
+        '<span class="' + (e.id === "suma" && e.sube === 0 ? "sube" : "") + '">legítimas <b>' + e.c[0] + '</b></span><span class="fr ' + (e.id === "suma" && e.sube === 1 ? "sube" : "") + '">fraudes <b>' + e.c[1] + "</b></span>" :
+        '<span>todavía no existe</span>';
+      $("vrTest").innerHTML = e && e.testExiste ? (e.test.length ? '<div class="tira">' + e.test.map(function (i) { return cas(i, Y5[i], "", ctx.ix(i)); }).join("") + "</div>" : '<p class="esc-nota">vacía</p>') +
+        (e.lib ? '<p class="esc-nota">La librería eligió otras compras, pero la misma cuenta: 9 legítimas y 1 fraude.</p>' : "") : '<p class="esc-nota">todavía no existe</p>';
+      var L = py ? "py" : "r", lineas = [];
+      (e ? e.sal : []).forEach(function (id) { lineas = lineas.concat(SAL[L][id]); });
+      $("vrSal").textContent = lineas.join("\n");
+    }
+    B.vidaReal($("vidareal"), {
+      codigo: CODIGO,
+      eventos: EV,
+      narrar: narrar,
+      vars: function (e, ctx) {
+        var v = [];
+        if (!e) return v;
+        if (e.i !== null) v.push('<span class="vk">i = <b>' + ctx.ix(e.i) + "</b></span>");
+        if (e.k !== null) v.push("<span>k = <b>" + e.k + "</b></span>");
+        if (e.cuentaExiste) v.push("<span>cuenta = <b>" + (ctx.lang() === "py" ? "[" + e.c.join(", ") + "]" : e.c.join(" ")) + "</b></span>");
+        if (e.testExiste) v.push("<span>" + (ctx.lang() === "py" ? "len(test)" : "length(test)") + " = <b>" + e.test.length + "</b></span>");
+        return v;
+      },
+      visual: visual,
+      demora: function (e) { return !e ? 600 : (e.fase === 2 ? (e.id === "mete" ? 700 : 260) : 1100); }
+    });
+
+    B.numerico(cuerpo("vrPred"), {
+      pregunta: "¿Cuántas veces se ejecuta la línea <code>test.append(i)</code> (en R, <code>test &lt;- c(test, i)</code>)?",
+      respuesta: 10,
+      tolerancia: 0,
+      pistas: ["Una de cada cinco de cada clase: 45/5 + 5/5."],
+      diagnostico: function (v) {
+        if (v === 50) return "Esas son las vueltas del <code>for</code>. La línea está dentro del <code>if</code>.";
+        if (v === 1) return "Ese es el número de fraudes que van a la prueba. Las legítimas también entran.";
+        if (v === 5) return "Esos son los fraudes. La línea se ejecuta una vez por cada compra que va a la prueba.";
+        return null;
+      },
+      explicacion: "<b>10 veces</b>: 9 legítimas (45 / 5) y 1 fraude (5 / 5). Es el tamaño de la prueba. Ahora dale a reproducir, o a <b>Ir al final</b>."
+    });
+
+    prop("codigo1", {
+      pregunta: "¿Por qué un detector entrenado así puede sacar un recall perfecto en la prueba aunque no sepa detectar nada?",
+      opciones: ["Porque los 9 fraudes de la prueba son copias de fraudes que el modelo ya vio en el entrenamiento: la prueba mide memoria.", "Porque la prueba quedó balanceada.", "Porque <code>random_state</code> está fijo.", "Porque <code>stratify</code> duplica los fraudes."],
+      correcta: 0,
+      pistas: [null, "La proporción no es el problema; lo son las copias. Una prueba balanceada con fraudes nuevos no daría recall perfecto gratis.", "Con cualquier semilla pasa lo mismo: solo hay 5 fraudes distintos repartidos en 45 filas.", "No: el que duplica es <code>resample</code>. <code>stratify</code> solo mantiene la proporción."],
+      explicacion: "Solo hay 5 fraudes distintos y 45 copias: cualquier fraude de la prueba tiene un gemelo en el entrenamiento. Un modelo que memoriza los acierta todos. Primero se parte, después se sobremuestrea solo el entrenamiento."
+    });
+    prop("codigo2", {
+      pregunta: "¿Por qué <code>p1</code> dejó la prueba sin fraudes si pediste <code>strata = y</code>?",
+      opciones: ["Los fraudes son el 5 % y <code>pool = 0.1</code> (por defecto) junta ese estrato con el otro: la partición vuelve a ser al azar.", "La semilla 3 está mal.", "<code>strata</code> solo funciona con números.", "<code>prop = 0.8</code> no deja sitio para un fraude."],
+      correcta: 0,
+      pistas: [null, "La semilla solo elige cuál partición al azar sale; con <code>pool = 0</code> y la misma semilla sí hay un fraude.", "Funciona con factores: <code>p2</code> usa el mismo factor y estratifica bien.", "La prueba tiene 20 filas: alcanza para un fraude."],
+      explicacion: "rsample junta los estratos que tienen menos de <code>pool</code> (10 %) de los datos, sin avisar. Con 5 % de fraudes, el estrato desaparece. Con <code>pool = 0</code> estratifica, y avisa que puede ser arriesgado."
+    });
+    prop("codigo3", {
+      pregunta: "¿Qué arregla el problema del primer <code>print</code>?",
+      opciones: ["<code>StratifiedKFold</code> (o <code>KFold(shuffle=True)</code>), y con 4 fraudes, a lo sumo 4 pliegues.", "Más pliegues.", "Agregar <code>random_state</code> a <code>KFold</code>.", "Nada: es normal."],
+      correcta: 0,
+      pistas: [null, "Más pliegues empeora: más pliegues sin fraudes.", "Sin <code>shuffle=True</code>, <code>KFold</code> no baraja, y <code>random_state</code> no hace nada.", "Cuatro pliegues validan sin un solo fraude: esas medidas no dicen nada del detector."],
+      explicacion: "Con <code>StratifiedKFold(n_splits=4)</code> sale <code>[1, 1, 1, 1]</code>. Barajar también ayuda, pero no garantiza que cada pliegue tenga un fraude."
+    });
+  })();
+
+  /* ---------------- tarjetas ---------------- */
+  B.tarjetas($("tarjetas"), [
+    ["¿Qué garantiza partir al azar con 5 fraudes en 50?", "Nada: en una de cada tres particiones la prueba de 10 no trae ningún fraude (31 %)."],
+    ["¿Qué hace el muestreo estratificado?", "Parte cada clase por separado con la misma fracción: la prueba repite la proporción del total (9 y 1)."],
+    ["¿Estratificar balancea las clases?", "No. Mantiene la proporción (10 % en entrenamiento y en prueba). Balancear es remuestrear o pesar."],
+    ["Submuestreo frente a sobremuestreo", "Submuestrear quita filas de la clase grande (4 + 4); sobremuestrear repite la rara (36 + 36). Ninguno gana siempre."],
+    ["¿Cuándo se remuestrea?", "Después de partir, solo en el entrenamiento (y dentro de cada pliegue). Antes, las copias se cuelan en la prueba."],
+    ['<code>class_weight="balanced"</code>', "$w_c = \\frac{n}{k \\cdot n_c}$: con 36 y 4, pesos 0.5556 y 5; cada clase suma 20."],
+    ["¿Por qué un pliegue sin fraudes?", "Con 4 fraudes y 5 pliegues no alcanza. Usa a lo sumo tantos pliegues como casos raros, y <code>StratifiedKFold</code>."],
+    ["¿Qué métrica con clases raras?", "Exactitud balanceada $\\frac{TPR + TNR}{2}$, recall, precisión o F1, medidas en una prueba con la proporción real."]
+  ]);
+
+  /* ---------------- conexiones ---------------- */
+  B.conexiones("muestreo-desbalance");
+})();
+</script>
+</body>
+</html>
